@@ -1,6 +1,8 @@
 {
   "name": "住まいログ",
   "short_name": "住まいログ",
+  "lang": "ja",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
