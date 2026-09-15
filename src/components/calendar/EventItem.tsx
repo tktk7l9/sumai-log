@@ -9,12 +9,14 @@ import type { EventWithLinks } from '../../server/repository'
 export function EventItem({
   event,
   recorded,
+  canRecord,
   onEdit,
   onDelete,
   onRecord,
 }: {
   event: EventWithLinks
   recorded: boolean
+  canRecord: boolean
   onEdit: (e: EventWithLinks) => void
   onDelete: (e: EventWithLinks) => void
   onRecord?: (e: EventWithLinks) => void
@@ -70,7 +72,7 @@ export function EventItem({
             <Badge color="teal" variant="light" size="xs">
               記録あり
             </Badge>
-          ) : onRecord ? (
+          ) : onRecord && canRecord ? (
             <Button size="compact-xs" variant="light" onClick={() => onRecord(event)}>
               記録を書く
             </Button>
