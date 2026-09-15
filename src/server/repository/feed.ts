@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import {
@@ -126,54 +126,53 @@ export async function recentVideos(db: Db, n: number): Promise<FeedItem[]> {
   }))
 }
 
-/** コメント対象の表示名。消えていれば null（呼び出し側で「（削除済み）」にする） */
-async function targetName(
+/**
+ * targetType ごとの対象 id → 表示名。コメントごとに 1 クエリ投げると N+1 になるため、
+ * recentComments では targetType ごとにまとめて（`inArray`）1 クエリで引く。
+ * 見つからない id は Map に入らない（呼び出し側で「（削除済み）」にする）
+ */
+async function targetNamesByType(
   db: Db,
   targetType: Comment['targetType'],
-  targetId: string,
-): Promise<string | null> {
+  ids: string[],
+): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map()
   switch (targetType) {
     case 'vendor': {
-      const [row] = await db
-        .select({ name: vendors.name })
+      const rows = await db
+        .select({ id: vendors.id, name: vendors.name })
         .from(vendors)
-        .where(eq(vendors.id, targetId))
-        .limit(1)
-      return row?.name ?? null
+        .where(inArray(vendors.id, ids))
+      return new Map(rows.map((r) => [r.id, r.name]))
     }
     case 'property': {
-      const [row] = await db
-        .select({ name: properties.name })
+      const rows = await db
+        .select({ id: properties.id, name: properties.name })
         .from(properties)
-        .where(eq(properties.id, targetId))
-        .limit(1)
-      return row?.name ?? null
+        .where(inArray(properties.id, ids))
+      return new Map(rows.map((r) => [r.id, r.name]))
     }
     case 'place': {
-      const [row] = await db
-        .select({ name: places.name })
+      const rows = await db
+        .select({ id: places.id, name: places.name })
         .from(places)
-        .where(eq(places.id, targetId))
-        .limit(1)
-      return row?.name ?? null
+        .where(inArray(places.id, ids))
+      return new Map(rows.map((r) => [r.id, r.name]))
     }
     case 'video': {
-      const [row] = await db
-        .select({ name: videos.title })
+      const rows = await db
+        .select({ id: videos.id, name: videos.title })
         .from(videos)
-        .where(eq(videos.id, targetId))
-        .limit(1)
-      return row?.name ?? null
+        .where(inArray(videos.id, ids))
+      return new Map(rows.map((r) => [r.id, r.name]))
     }
     case 'visit': {
-      const [row] = await db
-        .select({ visitedOn: visits.visitedOn, placeName: places.name })
+      const rows = await db
+        .select({ id: visits.id, visitedOn: visits.visitedOn, placeName: places.name })
         .from(visits)
         .leftJoin(places, eq(visits.placeId, places.id))
-        .where(eq(visits.id, targetId))
-        .limit(1)
-      if (!row) return null
-      return row.placeName ?? `見学記録（${row.visitedOn}）`
+        .where(inArray(visits.id, ids))
+      return new Map(rows.map((r) => [r.id, r.placeName ?? `見学記録（${r.visitedOn}）`]))
     }
   }
 }
@@ -196,17 +195,33 @@ function targetHref(targetType: Comment['targetType'], targetId: string): FeedIt
 
 export async function recentComments(db: Db, n: number): Promise<FeedItem[]> {
   const rows = await db.select().from(comments).orderBy(desc(comments.createdAt)).limit(n)
-  return Promise.all(
-    rows.map(async (c) => ({
-      kind: 'comment' as const,
-      id: c.id,
-      title: c.body,
-      subtitle: (await targetName(db, c.targetType, c.targetId)) ?? '（削除済み）',
-      at: c.createdAt,
-      by: c.createdBy,
-      href: targetHref(c.targetType, c.targetId),
-    })),
+
+  // targetType ごとに対象 id をまとめて、targetType の種類の数だけクエリを投げる
+  // （コメント 1 件につき 1 クエリだった N+1 を避ける）
+  const idsByType = new Map<Comment['targetType'], string[]>()
+  for (const c of rows) {
+    const ids = idsByType.get(c.targetType)
+    if (ids) ids.push(c.targetId)
+    else idsByType.set(c.targetType, [c.targetId])
+  }
+  const nameMaps = new Map(
+    await Promise.all(
+      [...idsByType.entries()].map(
+        async ([targetType, ids]) =>
+          [targetType, await targetNamesByType(db, targetType, ids)] as const,
+      ),
+    ),
   )
+
+  return rows.map((c) => ({
+    kind: 'comment' as const,
+    id: c.id,
+    title: c.body,
+    subtitle: nameMaps.get(c.targetType)?.get(c.targetId) ?? '（削除済み）',
+    at: c.createdAt,
+    by: c.createdBy,
+    href: targetHref(c.targetType, c.targetId),
+  }))
 }
 
 export async function recentPhotos(db: Db, n: number): Promise<FeedItem[]> {

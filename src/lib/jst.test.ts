@@ -66,6 +66,10 @@ describe('formatJst', () => {
     expect(formatJst('not-a-date')).toBe('not-a-date')
     expect(formatJst('')).toBe('')
   })
+
+  it('時刻の無い日付だけの文字列（watchedOn 等）は withTime: false ならそのまま通る', () => {
+    expect(formatJst('2030-01-05', { withTime: false })).toBe('2030-01-05')
+  })
 })
 
 describe('toJstDateKey', () => {

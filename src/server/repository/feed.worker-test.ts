@@ -112,16 +112,13 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     expect(rows.map((r) => r.title)).toEqual(['B', 'C', 'A'])
   })
 
-  it('リポジトリの upsert で更新された行（ミリ秒付き ISO の updatedAt）が先頭に来て at が読める', async () => {
+  it('リポジトリの upsert で更新された行が先頭に来て at が読める（挿入・更新とも同じ書式）', async () => {
     const oldId = await upsertVendor(
       db,
       { name: '古い方', kind: 'koumuten', serviceAreas: [] },
       actorA,
     )
-    await db
-      .update(vendors)
-      .set({ updatedAt: '2020-01-01T00:00:00.000Z' })
-      .where(eq(vendors.id, oldId))
+    await db.update(vendors).set({ updatedAt: '2020-01-01 00:00:00' }).where(eq(vendors.id, oldId))
 
     const freshId = await upsertVendor(
       db,
@@ -129,7 +126,7 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
       actorA,
     )
     // 更新経路を通す（repository/candidates.ts の upsertVendor は
-    // updatedAt: new Date().toISOString() を書く＝ミリ秒付き ISO になる）
+    // updatedAt: sql`(datetime('now'))` を書く＝挿入の datetime('now') 既定値と同じ書式になる）
     await upsertVendor(
       db,
       { id: freshId, name: '新しい方', kind: 'koumuten', serviceAreas: [] },
@@ -141,6 +138,81 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     expect(parseToUtcMs(rows[0].at)).not.toBeNull()
     expect(parseToUtcMs(rows[0].at)).not.toBe(0)
     expect(rows.map((r) => r.id)).toEqual([freshId, oldId])
+  })
+
+  it('同じ日の後刻に挿入されたまま触れていない行が、それより前の実時刻に更新された行より先に並ぶ（書式が揃っているので実時刻どおりになる）', async () => {
+    // 挿入は D1 の datetime('now')（'YYYY-MM-DD HH:MM:SS'）、更新も同じ書式で書かれる前提。
+    // 修正前は更新側だけミリ秒付き ISO（'YYYY-MM-DDTHH:MM:SS.sssZ'）で、同じ日付なら
+    // 'T' が常に空白より大きく並ぶため、実時刻に関わらず「更新した行」が先頭に来ていた
+    // （このテストは旧実装なら rows[0] が updatedThenId になり失敗する）。
+    const todayKey = new Date().toISOString().slice(0, 10)
+    const insertedLaterTodayId = crypto.randomUUID()
+    await db.insert(vendors).values({
+      id: insertedLaterTodayId,
+      name: '同日の後刻に挿入されたまま',
+      kind: 'koumuten',
+      serviceAreas: [],
+      createdBy: actorA,
+      updatedAt: `${todayKey} 23:59:59`,
+    })
+    const updatedThenId = await upsertVendor(
+      db,
+      { name: '直前に更新', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+    await upsertVendor(
+      db,
+      { id: updatedThenId, name: '直前に更新', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+
+    const rows = await recentVendors(db, 10)
+    const ats = rows.map((r) => parseToUtcMs(r.at))
+    expect(ats.every((ms) => ms !== null)).toBe(true)
+    for (let i = 1; i < ats.length; i += 1) {
+      expect(ats[i - 1]!).toBeGreaterThanOrEqual(ats[i]!)
+    }
+    expect(rows[0].id).toBe(insertedLaterTodayId)
+  })
+
+  it('recentVideos も同じ日の後刻に挿入されたまま触れていない行が、直前に更新した行より先に並ぶ', async () => {
+    const todayKey = new Date().toISOString().slice(0, 10)
+    const insertedLaterTodayId = crypto.randomUUID()
+    await db.insert(videos).values({
+      id: insertedLaterTodayId,
+      url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+      videoId: 'aaaaaaaaaaa',
+      title: '同日の後刻に挿入されたまま',
+      createdBy: actorA,
+      updatedAt: `${todayKey} 23:59:59`,
+    })
+    const updatedThenId = await upsertVideo(
+      db,
+      {
+        url: 'https://www.youtube.com/watch?v=bbbbbbbbbbb',
+        videoId: 'bbbbbbbbbbb',
+        title: '直前に更新',
+      },
+      actorA,
+    )
+    await upsertVideo(
+      db,
+      {
+        id: updatedThenId,
+        url: 'https://www.youtube.com/watch?v=bbbbbbbbbbb',
+        videoId: 'bbbbbbbbbbb',
+        title: '直前に更新',
+      },
+      actorA,
+    )
+
+    const rows = await recentVideos(db, 10)
+    const ats = rows.map((r) => parseToUtcMs(r.at))
+    expect(ats.every((ms) => ms !== null)).toBe(true)
+    for (let i = 1; i < ats.length; i += 1) {
+      expect(ats[i - 1]!).toBeGreaterThanOrEqual(ats[i]!)
+    }
+    expect(rows[0].id).toBe(insertedLaterTodayId)
   })
 })
 

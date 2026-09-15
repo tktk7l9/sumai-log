@@ -13,6 +13,7 @@ export const Route = createFileRoute('/api/oembed')({
         const headers = securityHeadersInit({ 'content-type': 'application/json; charset=utf-8' })
 
         if (raw.length > 500) {
+          headers.set('cache-control', 'no-store')
           return new Response(JSON.stringify({ error: 'YouTube の URL を入れてください' }), {
             status: 400,
             headers,
@@ -21,6 +22,7 @@ export const Route = createFileRoute('/api/oembed')({
 
         const videoId = parseYouTubeId(raw)
         if (!videoId) {
+          headers.set('cache-control', 'no-store')
           return new Response(JSON.stringify({ error: 'YouTube の URL を入れてください' }), {
             status: 400,
             headers,
@@ -29,6 +31,7 @@ export const Route = createFileRoute('/api/oembed')({
 
         const hit = await fetchYouTubeOEmbed(videoId)
         if (!hit) {
+          headers.set('cache-control', 'no-store')
           return new Response(JSON.stringify({ error: '自動取得できませんでした' }), {
             status: 404,
             headers,

@@ -14,7 +14,7 @@ export async function upsertEvent(db: Db, input: EventInput, actorEmail: string)
   }
   await db
     .update(events)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(events.id, id))
   return id
 }

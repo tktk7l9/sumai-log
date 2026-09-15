@@ -1,10 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
-import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { ATTENDEES, vendors } from '../db/schema'
-import { canonicalYouTubeUrl, parseYouTubeId } from '../lib/youtube'
 import { currentActorEmail } from './members'
+import { listLinkTargets } from './places'
 import {
   deleteVideoCascade,
   ensureTags,
@@ -13,42 +11,13 @@ import {
   upsertVideo,
 } from './repository'
 import { listTagNames } from './tags'
-import { dateField, idField, idInput, optionalUrl } from './zod'
+import { videoInput } from './videos.schema'
+import { idInput } from './zod'
 
-export const videoInput = z
-  .object({
-    id: idField.optional(),
-    url: z.string().trim().max(500),
-    title: z.string().trim().min(1, '題名は必須です').max(300),
-    // optionalText はヘルパの形固定（max 2000）のためここでは使えない（G3-R2）。
-    // 同じ null/空文字の意味論を維持したまま上限だけ変える。
-    channel: z
-      .string()
-      .trim()
-      .max(200)
-      .transform((v) => (v === '' ? null : v))
-      .nullable(),
-    thumbnailUrl: optionalUrl,
-    watchedOn: dateField.nullable(),
-    watchedBy: z.enum(ATTENDEES),
-    tags: z.array(z.string().trim().min(1).max(30)).max(10),
-    takeaways: z
-      .string()
-      .trim()
-      .max(4000)
-      .transform((v) => (v === '' ? null : v))
-      .nullable(),
-    vendorId: idField.nullable(),
-  })
-  .transform((v, ctx) => {
-    const videoId = parseYouTubeId(v.url)
-    if (!videoId) {
-      ctx.addIssue({ code: 'custom', message: 'YouTube の URL を入れてください', path: ['url'] })
-      return z.NEVER
-    }
-    return { ...v, videoId, url: canonicalYouTubeUrl(videoId) }
-  })
-export type VideoInput = z.input<typeof videoInput>
+// videoInput は videos.schema.ts から（テストの都合で分離した理由はそちら参照）。
+// 公開する import パス（'./videos' から videoInput/VideoInput を取れる）は変えない。
+export { videoInput }
+export type { VideoInput } from './videos.schema'
 
 export const listVideos = createServerFn().handler(async () => listVideosWithLinks(getDb()))
 
@@ -77,9 +46,8 @@ export const deleteVideo = createServerFn({ method: 'POST' })
 
 /** 動画フォームの選択肢: タグ候補（無ければ既定タグを仕込む）と業者一覧 */
 export const videoFormOptions = createServerFn().handler(async () => {
-  const [tags, vendorRows] = await Promise.all([
-    listTagNames(),
-    getDb().select({ id: vendors.id, name: vendors.name }).from(vendors).orderBy(vendors.name),
-  ])
-  return { tags, vendors: vendorRows }
+  // 業者一覧は候補フォームと同じ listLinkTargets（src/server/places.ts）を使う
+  // （properties も一緒に返るが videoFormOptions では使わない）
+  const [tags, targets] = await Promise.all([listTagNames(), listLinkTargets()])
+  return { tags, vendors: targets.vendors }
 })

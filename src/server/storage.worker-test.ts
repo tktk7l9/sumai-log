@@ -31,7 +31,7 @@ describe('cleanupFailedUpload', () => {
 
   it('片付け自体が失敗しても、片付けの失敗は握りつぶして元のエラーを投げ直す', async () => {
     const originalError = new Error('put に失敗')
-    const { bucket } = fakeBucket(async () => {
+    const { bucket, del } = fakeBucket(async () => {
       throw new Error('R2 delete も失敗')
     })
     await expect(
@@ -41,5 +41,7 @@ describe('cleanupFailedUpload', () => {
         bucket,
       ),
     ).rejects.toBe(originalError)
+    // 片付けは呼ばれている（＝キーは渡っている）。失敗したのはその中身だけ
+    expect(del).toHaveBeenCalledWith(['photos/a/x-display.jpg', 'photos/a/x-thumb.jpg'])
   })
 })

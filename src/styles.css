@@ -53,7 +53,10 @@ a {
 }
 
 /* カード全体がリンクになっている箇所は Mantine のフォーカス輪郭が付かないので、ここで付ける。
-   輪郭は中身の角丸に沿わせる（inherit なので、角丸を持たないリンクでは素直に四角になる） */
+   border-radius: inherit は <a> 自身に角丸指定があるときだけ効く。カード全体を覆う
+   <a>（Card 自身に角丸があり <a> には無い場合）では効かず、輪郭は四角のままになる
+   （見た目の破綻はないため許容している。角丸に揃えたければ var(--mantine-radius-md) 等を
+   直接指定する） */
 a:focus-visible {
   outline: 2px solid var(--sumai-ring);
   outline-offset: 2px;

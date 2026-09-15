@@ -19,6 +19,7 @@ import { useState } from 'react'
 import { MemberChip } from '../components/MemberChip'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
+import { extractErrorMessage } from '../lib/formError'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 
@@ -29,33 +30,6 @@ export const Route = createFileRoute('/settings')({
     return { ...settings, tags }
   },
 })
-
-// 日本語の文字（ひらがな・カタカナ・漢字）を含むか。zod の既定メッセージ（英語）と、
-// サーバー側で日本語に差し替えた issue（例:「タグは 1 つ以上必要です」）を見分けるのに使う。
-const JAPANESE_CHAR = /[぀-ヿ㐀-鿿]/
-
-// タグ保存が失敗したときのサーバー側メッセージを取り出す。標準スキーマ（zod）の
-// バリデーション失敗は Error#message が issues の JSON 文字列になるため、その形なら
-// 先頭 issue の message を使う。ただし zod の既定メッセージ（英語。例: タグ 1 件が 30
-// 文字を超えたときの "Too big: expected string to have <=30 characters"）は日本語に
-// 言い換える。サーバーが明示的に日本語で投げたメッセージはそのまま使う。
-function extractErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return '保存できませんでした'
-  try {
-    const issues = JSON.parse(error.message) as unknown
-    if (Array.isArray(issues)) {
-      const first = issues[0] as { message?: unknown } | undefined
-      if (typeof first?.message === 'string' && first.message) {
-        return JAPANESE_CHAR.test(first.message)
-          ? first.message
-          : 'タグは 1〜30 文字で入力してください'
-      }
-    }
-  } catch {
-    // JSON でなければ message をそのまま使う
-  }
-  return error.message || '保存できませんでした'
-}
 
 function Page() {
   const { homeAreas, actorEmail, members, environment, photosReady, tags } = Route.useLoaderData()

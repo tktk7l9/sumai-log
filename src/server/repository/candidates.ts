@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { comments, properties, vendors, type NewProperty, type NewVendor } from '../../db/schema'
@@ -19,7 +19,7 @@ export async function upsertVendor(
   }
   await db
     .update(vendors)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(vendors.id, id))
   return id
 }
@@ -47,7 +47,7 @@ export async function upsertProperty(
   }
   await db
     .update(properties)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(properties.id, id))
   return id
 }

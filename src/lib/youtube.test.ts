@@ -45,6 +45,14 @@ describe('parseYouTubeId', () => {
     expect(parseYouTubeId('https://example.com/watch?v=abcdefghijk')).toBeNull()
   })
 
+  it('youtube.com を含むだけのなりすましホストは null（サフィックス一致させない）', () => {
+    expect(parseYouTubeId(`https://www.youtube.com.evil.example/watch?v=${ID}`)).toBeNull()
+  })
+
+  it('youtu.be の URL をパスに埋め込んだだけのなりすましは null（ホストで判定する）', () => {
+    expect(parseYouTubeId(`https://evil.example/https://youtu.be/${ID}`)).toBeNull()
+  })
+
   it('11 文字でない id は null', () => {
     expect(parseYouTubeId('https://youtu.be/abcdefghij')).toBeNull() // 10 文字
   })

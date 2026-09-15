@@ -21,6 +21,7 @@ import dayjs from 'dayjs'
 import { useEffect, useRef, useState } from 'react'
 
 import { ATTENDEES, ATTENDEES_LABEL, type Video } from '../../db/schema'
+import { extractFormError } from '../../lib/formError'
 import { parseYouTubeId } from '../../lib/youtube'
 import { saveVideo, type VideoInput } from '../../server/videos'
 
@@ -101,7 +102,9 @@ export function VideoForm({
     }
     form.clearFieldError('url')
     if (lastFetchedUrl.current === url) return
-    lastFetchedUrl.current = url
+    // lastFetchedUrl は成功時だけ更新する（下の setFetchState('ok') の直前）。
+    // ここで先に立てると、本当に oEmbed が失敗したあと同じ URL を貼り直しても
+    // 「もう取得済み」扱いでリトライできなくなるため
 
     // 前のリクエストがまだ飛んでいれば打ち切り、この呼び出しだけを「最新」として扱う
     abortRef.current?.abort()
@@ -143,8 +146,10 @@ export function VideoForm({
       await router.invalidate()
       notifications.show({ message: initial ? '更新しました' : '保存しました' })
       onSaved(id)
-    } catch {
-      notifications.show({ message: '保存できませんでした', color: 'red' })
+    } catch (error) {
+      const { message, path } = extractFormError(error)
+      notifications.show({ message, color: 'red' })
+      if (path) form.setFieldError(path, message)
     } finally {
       setSaving(false)
     }
@@ -203,6 +208,7 @@ export function VideoForm({
         />
         <SegmentedControl
           fullWidth
+          aria-label="観た人"
           data={ATTENDEES.map((a) => ({ value: a, label: ATTENDEES_LABEL[a] }))}
           value={form.values.watchedBy}
           onChange={(v) => form.setFieldValue('watchedBy', v as Values['watchedBy'])}
@@ -213,6 +219,8 @@ export function VideoForm({
           value={form.values.tags}
           onChange={(tags) => form.setFieldValue('tags', tags)}
           maxTags={10}
+          maxLength={30}
+          error={form.errors.tags}
         />
         <Select
           label="業者"

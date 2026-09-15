@@ -185,7 +185,7 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
 `src/routes/api.photos.$.tsx` の TanStack Start server route（＝ミドルウェアを通る経路）
 として実装済み。
 
-### 所有者の作業
+### 6. 所有者の作業
 
 自動化しない、人がやる一回きり／随時の作業。
 
@@ -206,7 +206,7 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
   できること・20 枚同時アップロードが通ることを実機で確認する（開発環境では確認できないため
   デプロイ後に行う）
 
-### 6. Keyway（secret のチーム共有）
+### 7. Keyway（secret のチーム共有）
 
 ```bash
 keyway pull -e development -f .dev.vars -y   # 開発用の実値を取得
@@ -217,7 +217,7 @@ keyway pull -e development -f .dev.vars -y   # 開発用の実値を取得
 
 本番の正本は Cloudflare の secret。Keyway の production 環境は新しい機械で復旧するための控え。
 
-### 7. Workers Builds（GitHub 連携・ダッシュボード）
+### 8. Workers Builds（GitHub 連携・ダッシュボード）
 
 Workers & Pages → `sumai-log` → Settings → Build → Connect to GitHub:
 
@@ -237,7 +237,7 @@ Workers Builds が無音で止まる既知の事故があるため（他プロ�
 **✅ 接続済み。** `main` への push（PR マージ含む）で自動的にビルド・デプロイされる
 （GitHub の PR チェックにも `Workers Builds: sumai-log` として出る）。
 
-### 8. バックアップ
+### 9. バックアップ
 
 月次: `npm run db:export`（`backups/sumai-log-YYYYMMDD.sql` を出力・gitignore 済み）→
 Google Drive の `backups/sumai-log` へコピー。

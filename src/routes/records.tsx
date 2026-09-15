@@ -71,10 +71,11 @@ function Page() {
   }
 
   return (
-    <PageShell title="記録">
+    <PageShell title="記録" fab>
       <Stack gap="md">
         <SegmentedControl
           fullWidth
+          aria-label="表示の切替"
           value={tab}
           onChange={(v) =>
             navigate({
@@ -84,7 +85,7 @@ function Page() {
           }
           data={[
             { value: 'visits', label: `見学記録 ${visits.length}` },
-            { value: 'videos', label: 'YouTube' },
+            { value: 'videos', label: `YouTube ${videos.length}` },
           ]}
         />
         {tab === 'videos' ? (

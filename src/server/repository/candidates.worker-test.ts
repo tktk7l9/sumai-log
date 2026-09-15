@@ -1,8 +1,13 @@
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { places, vendors } from '../../db/schema'
-import { deleteVendorCascade, upsertVendor } from './candidates'
+import { comments, places, vendors } from '../../db/schema'
+import {
+  deletePropertyCascade,
+  deleteVendorCascade,
+  upsertProperty,
+  upsertVendor,
+} from './candidates'
 import { upsertPlace } from './places'
 import { actor, db, reset } from './test-helpers'
 
@@ -36,5 +41,36 @@ describe('vendors', () => {
     await deleteVendorCascade(db, id)
     const [place] = await db.select().from(places).where(eq(places.id, placeId))
     expect(place.vendorId).toBeNull()
+  })
+})
+
+describe('properties', () => {
+  it('作成→削除。紐づく場所の propertyId が外れ、物件へのコメントも消える', async () => {
+    const id = await upsertProperty(
+      db,
+      { name: 'テストマンション', address: '東京都渋谷区' },
+      actor,
+    )
+
+    const placeId = await upsertPlace(
+      db,
+      { name: 'テストギャラリー', kind: 'gallery', propertyId: id },
+      actor,
+    )
+    const commentId = crypto.randomUUID()
+    await db.insert(comments).values({
+      id: commentId,
+      targetType: 'property',
+      targetId: id,
+      body: '感想です',
+      createdBy: actor,
+    })
+
+    await deletePropertyCascade(db, id)
+
+    const [place] = await db.select().from(places).where(eq(places.id, placeId))
+    expect(place.propertyId).toBeNull()
+    const [comment] = await db.select().from(comments).where(eq(comments.id, commentId))
+    expect(comment).toBeUndefined()
   })
 })

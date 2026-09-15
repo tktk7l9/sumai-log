@@ -15,6 +15,7 @@ const YOUTUBE_HOSTS = new Set([
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{11}$/
 
+/** アプリ内の呼び出し元は今は無い。lib の公開 API として維持 */
 export function isYouTubeHost(hostname: string): boolean {
   return YOUTUBE_HOSTS.has(hostname.toLowerCase())
 }
