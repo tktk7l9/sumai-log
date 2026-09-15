@@ -23,6 +23,18 @@ describe('parseToUtcMs', () => {
     expect(parseToUtcMs('not-a-date')).toBeNull()
     expect(parseToUtcMs('')).toBeNull()
   })
+
+  it('秒の小数部（new Date().toISOString() の形）付き Z を UTC ミリ秒に直す', () => {
+    expect(parseToUtcMs('2030-01-05T17:04:28.333Z')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 333))
+  })
+
+  it('秒の小数部付き +09:00 オフセットも同じ瞬間になる', () => {
+    expect(parseToUtcMs('2030-01-06T02:04:28.333+09:00')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 333))
+  })
+
+  it('秒の小数部付き・D1 の空白区切り（オフセット無し=UTC）も読む', () => {
+    expect(parseToUtcMs('2030-01-05 17:04:28.100')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 100))
+  })
 })
 
 describe('formatJst', () => {

@@ -70,7 +70,7 @@ export async function recentEvents(db: Db, n: number): Promise<FeedItem[]> {
     subtitle: r.placeName ?? r.vendorName ?? r.propertyName ?? EVENT_KIND_LABEL[r.event.kind],
     at: r.event.updatedAt,
     by: r.event.createdBy,
-    href: { to: '/calendar', params: { d: dateKey(r.event.startsAt) } },
+    href: { to: '/calendar', search: { d: dateKey(r.event.startsAt) } },
   }))
 }
 

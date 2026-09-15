@@ -67,6 +67,18 @@ describe('mergeFeed', () => {
     expect(mergeFeed(groups, 10).map((i) => i.id)).toEqual(['good', 'bad'])
   })
 
+  it('href.search を持つ項目もそのまま素通しする（予定の /calendar 遷移用）', () => {
+    const withSearch: FeedItem = {
+      kind: 'event',
+      id: 'e1',
+      title: 'イベント',
+      at: '2030-01-01T00:00:00Z',
+      by: 'owner@example.com',
+      href: { to: '/calendar', search: { d: '2030-01-01' } },
+    }
+    expect(mergeFeed([[withSearch]], 10)).toEqual([withSearch])
+  })
+
   it('入力の配列・要素を書き換えない', () => {
     const groupA: readonly FeedItem[] = Object.freeze([item('visit', 'a', '2030-01-02T00:00:00Z')])
     const groupB: readonly FeedItem[] = Object.freeze([item('event', 'b', '2030-01-01T00:00:00Z')])

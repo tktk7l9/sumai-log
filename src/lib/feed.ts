@@ -17,7 +17,10 @@ export type FeedItem = {
   at: string
   /** メールアドレス */
   by: string
-  href: { to: string; params?: Record<string, string> }
+  /** params はパスパラメータ（`/records/visits/$id` の id 等）、search はクエリ
+   * パラメータ（`/calendar?d=...` の d 等）。TanStack Router の `<Link>` にそのまま
+   * `params`/`search` として渡す想定 */
+  href: { to: string; params?: Record<string, string>; search?: Record<string, string> }
 }
 
 export const FEED_KIND_LABEL: Record<FeedKind, string> = {

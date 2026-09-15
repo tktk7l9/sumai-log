@@ -1,6 +1,8 @@
+import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { comments, photos, properties, visits } from '../../db/schema'
+import { comments, photos, properties, vendors, videos, visits } from '../../db/schema'
+import { parseToUtcMs } from '../../lib/jst'
 import { upsertVendor } from './candidates'
 import { upsertEvent } from './events'
 import {
@@ -78,6 +80,68 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     }
     expect(await recentVendors(db, 2)).toHaveLength(2)
   })
+
+  it('recentVideos は updatedAt の新しい順（明示タイムスタンプ）', async () => {
+    await db.insert(videos).values([
+      {
+        id: crypto.randomUUID(),
+        url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+        videoId: 'aaaaaaaaaaa',
+        title: 'A',
+        createdBy: actorA,
+        updatedAt: '2030-01-01T00:00:00.000Z',
+      },
+      {
+        id: crypto.randomUUID(),
+        url: 'https://www.youtube.com/watch?v=bbbbbbbbbbb',
+        videoId: 'bbbbbbbbbbb',
+        title: 'B',
+        createdBy: actorA,
+        updatedAt: '2030-01-03T00:00:00.000Z',
+      },
+      {
+        id: crypto.randomUUID(),
+        url: 'https://www.youtube.com/watch?v=ccccccccccc',
+        videoId: 'ccccccccccc',
+        title: 'C',
+        createdBy: actorA,
+        updatedAt: '2030-01-02T00:00:00.000Z',
+      },
+    ])
+    const rows = await recentVideos(db, 10)
+    expect(rows.map((r) => r.title)).toEqual(['B', 'C', 'A'])
+  })
+
+  it('リポジトリの upsert で更新された行（ミリ秒付き ISO の updatedAt）が先頭に来て at が読める', async () => {
+    const oldId = await upsertVendor(
+      db,
+      { name: '古い方', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+    await db
+      .update(vendors)
+      .set({ updatedAt: '2020-01-01T00:00:00.000Z' })
+      .where(eq(vendors.id, oldId))
+
+    const freshId = await upsertVendor(
+      db,
+      { name: '新しい方', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+    // 更新経路を通す（repository/candidates.ts の upsertVendor は
+    // updatedAt: new Date().toISOString() を書く＝ミリ秒付き ISO になる）
+    await upsertVendor(
+      db,
+      { id: freshId, name: '新しい方', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+
+    const rows = await recentVendors(db, 10)
+    expect(rows[0].id).toBe(freshId)
+    expect(parseToUtcMs(rows[0].at)).not.toBeNull()
+    expect(parseToUtcMs(rows[0].at)).not.toBe(0)
+    expect(rows.map((r) => r.id)).toEqual([freshId, oldId])
+  })
 })
 
 describe('recentVisits / recentEvents', () => {
@@ -107,7 +171,36 @@ describe('recentVisits / recentEvents', () => {
     expect(item.title).toBe('見学記録')
   })
 
-  it('予定は /calendar への href に日付が入る', async () => {
+  it('recentVisits は updatedAt の新しい順（明示タイムスタンプ）', async () => {
+    await db.insert(visits).values([
+      {
+        id: crypto.randomUUID(),
+        visitedOn: '2030-01-01',
+        createdBy: actorA,
+        updatedAt: '2030-01-01T00:00:00.000Z',
+      },
+      {
+        id: crypto.randomUUID(),
+        visitedOn: '2030-01-01',
+        createdBy: actorA,
+        updatedAt: '2030-01-03T00:00:00.000Z',
+      },
+      {
+        id: crypto.randomUUID(),
+        visitedOn: '2030-01-01',
+        createdBy: actorA,
+        updatedAt: '2030-01-02T00:00:00.000Z',
+      },
+    ])
+    const rows = await recentVisits(db, 10)
+    expect(rows.map((r) => r.at)).toEqual([
+      '2030-01-03T00:00:00.000Z',
+      '2030-01-02T00:00:00.000Z',
+      '2030-01-01T00:00:00.000Z',
+    ])
+  })
+
+  it('予定は /calendar への href.search に日付が入る（params ではない）', async () => {
     const id = await upsertEvent(
       db,
       {
@@ -124,8 +217,9 @@ describe('recentVisits / recentEvents', () => {
       kind: 'event',
       id,
       title: '見学会',
-      href: { to: '/calendar', params: { d: '2030-02-03' } },
+      href: { to: '/calendar', search: { d: '2030-02-03' } },
     })
+    expect(item.href.params).toBeUndefined()
   })
 })
 
