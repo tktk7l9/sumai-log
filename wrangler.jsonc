@@ -19,8 +19,8 @@
     {
       "binding": "DB",
       "database_name": "sumai-log",
-      // Task 10 で `wrangler d1 create sumai-log` の出力に置き換える
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Task 10 で `wrangler d1 create sumai-log` を実行して置き換え済み
+      "database_id": "607a2569-fecb-45a4-a0eb-a60e8784096a",
       "migrations_dir": "drizzle/migrations",
     },
   ],
@@ -35,7 +35,8 @@
    */
   "vars": {
     "ENVIRONMENT": "production",
-    "ACCESS_TEAM_DOMAIN": "",
-    "ACCESS_POLICY_AUD": "",
+    // Task 10 で作成した Access アプリ（Zero Trust API 経由）の値。AUD は公開識別子。
+    "ACCESS_TEAM_DOMAIN": "https://odd-bush-1f0d.cloudflareaccess.com",
+    "ACCESS_POLICY_AUD": "5635dc6786c82c3d06c1e7942ae8a9e80b275acdd127e85fc3be3bec23300ba3",
   },
 }
