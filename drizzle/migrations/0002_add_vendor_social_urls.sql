@@ -1,0 +1,1 @@
+ALTER TABLE `vendors` ADD `social_urls` text DEFAULT '[]' NOT NULL;

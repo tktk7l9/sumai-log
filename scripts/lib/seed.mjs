@@ -151,6 +151,7 @@ export function buildStatements(seed, opts) {
         status: v.status,
         source_url: v.sourceUrl ?? null,
         website_url: v.websiteUrl ?? null,
+        social_urls: JSON.stringify(v.socialUrls ?? []),
         created_by: actorEmail,
         created_at: now,
         updated_at: now,

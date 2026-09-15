@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
+import { normalizeSocialUrls } from '../lib/social'
 import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
 import { currentActorEmail } from './members'
 import {
@@ -34,6 +35,7 @@ export const vendorInput = z.object({
   status: z.enum(CANDIDATE_STATUSES),
   sourceUrl: optionalUrl,
   websiteUrl: optionalUrl,
+  socialUrls: z.array(z.string().trim().max(500)).max(10).transform(normalizeSocialUrls),
 })
 export type VendorInput = z.infer<typeof vendorInput>
 

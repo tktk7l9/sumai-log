@@ -60,6 +60,8 @@ export const vendors = sqliteTable(
     status: text('status', { enum: CANDIDATE_STATUSES }).notNull().default('interested'),
     sourceUrl: text('source_url'),
     websiteUrl: text('website_url'),
+    /** SNS のプロフィール URL（Instagram/X/YouTube/Facebook/TikTok/LINE/Threads/note など） */
+    socialUrls: jsonList('social_urls'),
     createdBy: createdBy(),
     ...timestamps,
   },
