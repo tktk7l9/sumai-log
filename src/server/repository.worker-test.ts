@@ -9,6 +9,7 @@ import {
   deletePlaceCascade,
   deleteVendorCascade,
   getCachedGeocode,
+  hasVisits,
   listPlacesWithLinks,
   putCachedGeocode,
   readHomeAreas,
@@ -112,6 +113,15 @@ describe('places', () => {
       ['A', '乙建設', true],
       ['B', null, false],
     ])
+  })
+
+  it('hasVisits は見学記録の有無を返す', async () => {
+    const placeId = await upsertPlace(db, { name: 'テスト展示場2', kind: 'showroom' }, actor)
+    expect(await hasVisits(db, placeId)).toBe(false)
+    await db
+      .insert(visits)
+      .values({ id: crypto.randomUUID(), placeId, visitedOn: '2030-01-01', createdBy: actor })
+    expect(await hasVisits(db, placeId)).toBe(true)
   })
 })
 

@@ -6,7 +6,7 @@ import { getDb } from '../db/client'
 import { GEOCODE_SOURCES, PLACE_KINDS, places, properties, vendors } from '../db/schema'
 import { parseCoordinate } from '../lib/coords'
 import { currentActorEmail } from './members'
-import { deletePlaceCascade, listPlacesWithLinks, upsertPlace } from './repository'
+import { deletePlaceCascade, hasVisits, listPlacesWithLinks, upsertPlace } from './repository'
 
 const idInput = z.object({ id: z.string().uuid() })
 const optionalText = z
@@ -56,7 +56,8 @@ export const getPlace = createServerFn()
     const [property] = place.propertyId
       ? await db.select().from(properties).where(eq(properties.id, place.propertyId)).limit(1)
       : []
-    return { place, vendor: vendor ?? null, property: property ?? null }
+    const visited = await hasVisits(db, place.id)
+    return { place, vendor: vendor ?? null, property: property ?? null, visited }
   })
 
 export const savePlace = createServerFn({ method: 'POST' })

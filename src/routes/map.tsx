@@ -79,7 +79,9 @@ function Page() {
         radius="xl"
         aria-label="現在地"
         onClick={locateMe}
-        style={{ position: 'absolute', top: 8, right: 8, zIndex: 1000 }}
+        // 右上には Leaflet のズームコントロール（PlacesMap で position: 'topright'）が
+        // 高さ約 64px + 上マージン 10px で乗るため、その下に配置して重なりを避ける
+        style={{ position: 'absolute', top: 82, right: 8, zIndex: 1000 }}
       >
         <LocateFixed size={18} aria-hidden />
       </ActionIcon>

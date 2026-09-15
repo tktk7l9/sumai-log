@@ -25,7 +25,7 @@ export const Route = createFileRoute('/places/$id')({
 })
 
 function Page() {
-  const { place, vendor, property, targets } = Route.useLoaderData()
+  const { place, vendor, property, visited, targets } = Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deletePlace)
   const [editing, setEditing] = useState(false)
@@ -82,7 +82,7 @@ function Page() {
         </Stack>
       </Card>
 
-      <PlaceLocation place={place} />
+      <PlaceLocation place={place} visited={visited} />
 
       {place.note ? <Text style={{ whiteSpace: 'pre-wrap' }}>{place.note}</Text> : null}
 
