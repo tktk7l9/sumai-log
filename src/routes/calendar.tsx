@@ -128,7 +128,9 @@ function Page() {
             recordedEventIds={recorded}
             onEdit={setEditing}
             onDelete={handleDelete}
-            onRecord={undefined}
+            onRecord={(e) =>
+              navigate({ to: '/records', search: { tab: 'visits', fromEvent: e.id } })
+            }
           />
         )}
       </Stack>
