@@ -45,9 +45,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="ja" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="auto" />
-        {/* 地色は src/theme.ts（clay[0]）と Mantine 既定の dark-7 に合わせる */}
-        <meta name="theme-color" content="#fbf3ef" media="(prefers-color-scheme: light)" />
-        <meta name="theme-color" content="#242424" media="(prefers-color-scheme: dark)" />
+        {/* 地色は src/styles.css の --mantine-color-body と src/theme.ts の dark[7] に合わせる */}
+        <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)" />
         <HeadContent />
       </head>
       <body>

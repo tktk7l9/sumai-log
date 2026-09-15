@@ -22,19 +22,17 @@ export function PropertyCard({ property }: { property: Property }) {
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       <Card withBorder padding="md">
-        <Stack gap={6}>
-          <Group justify="space-between" wrap="nowrap">
-            <Text fw={700} lineClamp={1}>
+        <Stack gap={8}>
+          <Group justify="space-between" wrap="nowrap" align="flex-start" gap="xs">
+            <Text fw={700} lineClamp={2} lh={1.4}>
               {property.name}
             </Text>
             <StatusBadge status={property.status} />
           </Group>
           {stationText ? (
-            <Group gap={4}>
+            <Group gap={4} c="dimmed">
               <MapPin size={14} aria-hidden />
-              <Text size="sm" c="dimmed">
-                {stationText}
-              </Text>
+              <Text size="sm">{stationText}</Text>
             </Group>
           ) : null}
           <Group gap="md">

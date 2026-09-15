@@ -17,19 +17,27 @@ export function VideoCard({ video }: { video: VideoRow }) {
     >
       <Card withBorder padding="md">
         <Stack gap="xs">
+          {/* 動画のサムネは 16:9。YouTube が返す 4:3 の画像は上下を切って使う */}
           <AspectRatio ratio={16 / 9}>
             {video.thumbnailUrl ? (
-              <Image src={video.thumbnailUrl} alt={video.title} radius="md" loading="lazy" />
+              <Image
+                src={video.thumbnailUrl}
+                alt={video.title}
+                radius="sm"
+                fit="cover"
+                loading="lazy"
+              />
             ) : (
               <Center
-                bg="var(--mantine-color-default-hover)"
-                style={{ borderRadius: 'var(--mantine-radius-md)' }}
+                className="sunken"
+                c="dimmed"
+                style={{ borderRadius: 'var(--mantine-radius-sm)' }}
               >
                 <Film size={28} aria-hidden />
               </Center>
             )}
           </AspectRatio>
-          <Text fw={700} lineClamp={2}>
+          <Text fw={700} lineClamp={2} lh={1.4}>
             {video.title}
           </Text>
           {video.channel ? (

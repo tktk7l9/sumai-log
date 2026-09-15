@@ -15,7 +15,7 @@ import { FEED_KIND_LABEL, type FeedItem, type FeedKind } from '../../lib/feed'
 import { formatJst } from '../../lib/jst'
 import type { Member } from '../../lib/members'
 import { EmptyState } from '../EmptyState'
-import { MemberChip } from '../MemberChip'
+import { MemberChip, authorBandColor } from '../MemberChip'
 
 // lucide-react のこのバージョンにはブランドアイコン（Youtube 等）が無いため、
 // 動画は汎用の Video アイコンで代用する。
@@ -161,23 +161,32 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
 
 export function RecentFeed({ items, members }: { items: FeedItem[]; members: Member[] }) {
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       <Title order={2}>最近の更新</Title>
       {items.length === 0 ? (
-        <EmptyState title="まだ更新がありません" />
+        <EmptyState emoji="🪴" title="まだ更新がありません" />
       ) : (
-        <Stack gap="xs">
+        <Stack gap="sm">
           {items.map((item) => {
             const Icon = FEED_KIND_ICON[item.kind]
             return (
               <FeedRowLink key={`${item.kind}-${item.id}`} item={item}>
-                <Card withBorder padding="sm">
+                {/* 左端 3px の帯は書いた人の色。丸いイニシャルと同じ色で揃える */}
+                <Card
+                  withBorder
+                  padding="md"
+                  className="author-band"
+                  style={
+                    { '--author-color': authorBandColor(members, item.by) } as React.CSSProperties
+                  }
+                >
                   <Group wrap="nowrap" align="flex-start" gap="sm">
-                    <ThemeIcon variant="light" size="lg" radius="xl" style={{ flexShrink: 0 }}>
+                    {/* 種別の印は静かに。色を持つのは左端の帯だけにする */}
+                    <ThemeIcon variant="default" size={34} radius="md" style={{ flexShrink: 0 }}>
                       <Icon size={18} aria-hidden />
                     </ThemeIcon>
                     <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                      <Text fw={600} lineClamp={1}>
+                      <Text fw={600} lineClamp={2} lh={1.4}>
                         {item.title}
                       </Text>
                       {item.subtitle ? (
@@ -185,10 +194,10 @@ export function RecentFeed({ items, members }: { items: FeedItem[]; members: Mem
                           {item.subtitle}
                         </Text>
                       ) : null}
-                      <Group gap={6} wrap="nowrap">
+                      <Group gap="xs" wrap="nowrap" pt={2}>
                         <MemberChip email={item.by} members={members} />
                         <Text size="xs" c="dimmed">
-                          ・{formatJst(item.at)}
+                          {formatJst(item.at)}
                         </Text>
                       </Group>
                     </Stack>

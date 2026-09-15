@@ -1,4 +1,3 @@
-import { Stack } from '@mantine/core'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageShell } from '../components/PageShell'
@@ -27,12 +26,11 @@ export const Route = createFileRoute('/')({
 function Home() {
   const { upcoming, pending, feed, members } = Route.useLoaderData()
   return (
+    // 節と節の間は PageShell の Stack（24px）が引き受ける。ここで入れ子にしない
     <PageShell title="住まいログ" description="二人の家探しの記録">
-      <Stack gap="lg">
-        <UpcomingEvents events={upcoming} />
-        <PendingVisits events={pending} />
-        <RecentFeed items={feed} members={members} />
-      </Stack>
+      <UpcomingEvents events={upcoming} />
+      <PendingVisits events={pending} />
+      <RecentFeed items={feed} members={members} />
     </PageShell>
   )
 }

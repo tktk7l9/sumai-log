@@ -19,7 +19,7 @@ export function EventList({
   onRecord?: (e: EventWithLinks) => void
 }) {
   return (
-    <Stack gap="xs" w="100%">
+    <Stack gap="sm" w="100%">
       {events.map((e) => (
         <EventItem
           key={e.id}
