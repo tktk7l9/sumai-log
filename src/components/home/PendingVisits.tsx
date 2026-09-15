@@ -7,19 +7,19 @@ import type { EventWithLinks } from '../../server/repository'
 export function PendingVisits({ events }: { events: EventWithLinks[] }) {
   if (events.length === 0) return null
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       <Title order={2}>記録を書きませんか</Title>
-      <Stack gap="xs">
+      <Stack gap="sm">
         {events.map((e) => {
           const who = e.placeName ?? e.vendorName ?? e.propertyName
           return (
-            <Card key={e.id} withBorder padding="sm">
-              <Group justify="space-between" wrap="nowrap" align="center">
+            <Card key={e.id} withBorder padding="md">
+              <Group justify="space-between" wrap="nowrap" align="center" gap="sm">
                 <Stack gap={2} style={{ minWidth: 0 }}>
-                  <Text size="sm" c="dimmed">
+                  <Text size="xs" c="dimmed">
                     {dateKey(e.startsAt)}
                   </Text>
-                  <Text fw={600} lineClamp={1}>
+                  <Text fw={600} lineClamp={2} lh={1.4}>
                     {e.title}
                   </Text>
                   {who ? (

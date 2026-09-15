@@ -14,6 +14,7 @@ export function PageShell({
 }) {
   return (
     <Container size="sm" px={0}>
+      {/* 見出しと中身の間は 24px（セクション間と同じ）。見出しの中は 4px で束ねる */}
       <Stack gap="lg">
         <Stack gap={4}>
           <Title order={1}>{title}</Title>
@@ -22,7 +23,7 @@ export function PageShell({
               {description}
             </Text>
           ) : null}
-          {actions}
+          {actions ? <Stack pt={4}>{actions}</Stack> : null}
         </Stack>
         {children}
       </Stack>

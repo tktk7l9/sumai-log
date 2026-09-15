@@ -9,7 +9,7 @@ import type { COMMENT_TARGETS, Comment } from '../../db/schema'
 import { formatJst } from '../../lib/jst'
 import type { Member } from '../../lib/members'
 import { addComment, deleteComment } from '../../server/comments'
-import { MemberChip } from '../MemberChip'
+import { MemberChip, authorBandColor } from '../MemberChip'
 
 export function CommentThread({
   targetType,
@@ -64,7 +64,15 @@ export function CommentThread({
         </Text>
       ) : (
         comments.map((c) => (
-          <Card key={c.id} withBorder padding="sm">
+          <Card
+            key={c.id}
+            withBorder
+            padding="sm"
+            className="author-band"
+            style={
+              { '--author-color': authorBandColor(members, c.createdBy) } as React.CSSProperties
+            }
+          >
             <Group justify="space-between" wrap="nowrap" align="flex-start">
               <Stack gap={4} style={{ minWidth: 0 }}>
                 <Group gap="xs">
