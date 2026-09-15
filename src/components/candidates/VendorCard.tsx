@@ -1,7 +1,6 @@
 import { Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
 
 import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { formatTsubo } from '../../lib/format'
@@ -20,23 +19,8 @@ export function VendorCard({
     navigate({ to: '/candidates/vendors/$id', params })
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      goToDetail()
-    }
-  }
-
   return (
-    <Card
-      withBorder
-      padding="md"
-      role="link"
-      tabIndex={0}
-      onClick={goToDetail}
-      onKeyDown={onKeyDown}
-      style={{ cursor: 'pointer' }}
-    >
+    <Card withBorder padding="md" onClick={goToDetail} style={{ cursor: 'pointer' }}>
       <Stack gap={6}>
         <Group justify="space-between" wrap="nowrap">
           <Link

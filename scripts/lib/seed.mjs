@@ -58,6 +58,23 @@ export function normalizeAddress(address) {
     .replace(/(\d+)丁目(\d+)番地?(?!\d)/u, '$1-$2')
 }
 
+/**
+ * 業者の SNS URL を正規化する。trim・空除去・重複除去・`http(s)://` 以外は除外・最大 10 件。
+ *
+ * src/lib/social.ts の normalizeSocialUrls と同一に保つ（plain .mjs から TS を import
+ * できないためロジックを重複させている。変えるときは両方直す）。
+ */
+export function normalizeSocialUrls(list) {
+  const seen = new Set()
+  for (const raw of list ?? []) {
+    const v = String(raw).trim()
+    if (!/^https?:\/\//i.test(v)) continue
+    if (!seen.has(v)) seen.add(v)
+    if (seen.size >= 10) break
+  }
+  return [...seen]
+}
+
 function inRange(lat, lng) {
   return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }
@@ -151,7 +168,7 @@ export function buildStatements(seed, opts) {
         status: v.status,
         source_url: v.sourceUrl ?? null,
         website_url: v.websiteUrl ?? null,
-        social_urls: JSON.stringify(v.socialUrls ?? []),
+        social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
         created_by: actorEmail,
         created_at: now,
         updated_at: now,

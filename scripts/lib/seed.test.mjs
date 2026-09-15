@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import {
   buildStatements,
   normalizeAddress,
+  normalizeSocialUrls,
   parseGsiResponse,
   slugToId,
   sqlString,
@@ -73,6 +74,29 @@ test('normalizeAddress: 全角英数を半角に、空白を除き、丁目・�
 test('normalizeAddress: 「号」「地」が省略された表記も丁目番地表記に揃える', () => {
   assert.equal(normalizeAddress('架空町1丁目2番3'), '架空町1-2-3')
   assert.equal(normalizeAddress('架空町1丁目2番地'), '架空町1-2')
+})
+
+// normalizeSocialUrls も src/lib/social.ts と同じ挙動にする（trim・空/非 http 除外・重複除去・最大 10 件）。
+test('normalizeSocialUrls: 空白除去・空と非 http を除外・重複除去・10 件まで（src/lib/social.ts と同じ挙動）', () => {
+  assert.deepEqual(
+    normalizeSocialUrls([
+      ' https://www.instagram.com/example/ ',
+      '',
+      'ftp://example.com',
+      'https://www.instagram.com/example/',
+      'https://x.com/example',
+    ]),
+    ['https://www.instagram.com/example/', 'https://x.com/example'],
+  )
+  assert.equal(
+    normalizeSocialUrls(Array.from({ length: 12 }, (_, i) => `https://example.com/${i}`)).length,
+    10,
+  )
+})
+
+test('normalizeSocialUrls: 未指定（undefined/null）は空配列を返す', () => {
+  assert.deepEqual(normalizeSocialUrls(undefined), [])
+  assert.deepEqual(normalizeSocialUrls(null), [])
 })
 
 // parseGsiResponse も src/lib/geocode.ts と同じ判定（範囲チェック込み）にする。

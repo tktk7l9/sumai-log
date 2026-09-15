@@ -35,7 +35,7 @@ export const vendorInput = z.object({
   status: z.enum(CANDIDATE_STATUSES),
   sourceUrl: optionalUrl,
   websiteUrl: optionalUrl,
-  socialUrls: z.array(z.string().trim().max(500)).max(10).transform(normalizeSocialUrls),
+  socialUrls: z.array(z.string().trim().max(500)).transform(normalizeSocialUrls),
 })
 export type VendorInput = z.infer<typeof vendorInput>
 
