@@ -19,7 +19,8 @@ import { VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 
-type Values = Omit<VendorInput, 'id'>
+/** socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ */
+type Values = Omit<VendorInput, 'id' | 'socialUrls'> & { socialUrls: string }
 
 const empty: Values = {
   name: '',
@@ -37,6 +38,7 @@ const empty: Values = {
   status: 'interested',
   sourceUrl: null,
   websiteUrl: null,
+  socialUrls: '',
 }
 
 export function VendorForm({
@@ -52,14 +54,22 @@ export function VendorForm({
   const save = useServerFn(saveVendor)
   const [saving, setSaving] = useState(false)
   const form = useForm<Values>({
-    initialValues: vendor ? { ...empty, ...vendor } : empty,
+    initialValues: vendor
+      ? { ...empty, ...vendor, socialUrls: vendor.socialUrls.join('\n') }
+      : empty,
     validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
   })
 
   async function submit(values: Values) {
     setSaving(true)
     try {
-      const { id } = await save({ data: { ...(vendor ? { id: vendor.id } : {}), ...values } })
+      const { id } = await save({
+        data: {
+          ...(vendor ? { id: vendor.id } : {}),
+          ...values,
+          socialUrls: values.socialUrls.split('\n'),
+        },
+      })
       await router.invalidate()
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
       onSaved(id)
@@ -152,6 +162,13 @@ export function VendorForm({
           type="url"
           {...form.getInputProps('sourceUrl')}
           value={form.values.sourceUrl ?? ''}
+        />
+        <Textarea
+          label="SNS の URL（1 行に 1 つ）"
+          description="Instagram / X / YouTube / Facebook / TikTok / LINE / Threads / note のプロフィール URL を 1 行に 1 つ"
+          autosize
+          minRows={2}
+          {...form.getInputProps('socialUrls')}
         />
         <Button type="submit" loading={saving} fullWidth>
           保存

@@ -124,6 +124,7 @@ function fictionalSeed(overrides = {}) {
         status: 'shortlisted',
         websiteUrl: 'https://vendor-a.example.com',
         sourceUrl: 'https://vendor-a.example.com/source',
+        socialUrls: ['https://www.instagram.com/example/', 'https://x.com/example'],
       },
       {
         slug: 'vendor-b',
@@ -218,6 +219,19 @@ test('buildStatements: serviceAreas/tags は JSON 文字列としてシリアラ
   assert.match(vendorStmt, /\["架空市","隣町"\]/)
   const videoStmt = sql.find((s) => s.includes('INTO videos'))
   assert.match(videoStmt, /\["タグ1","タグ2"\]/)
+})
+
+test('buildStatements: vendor の socialUrls は JSON 文字列になり、無指定なら空配列になる', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(
+    vendorAStmt,
+    /\["https:\/\/www\.instagram\.com\/example\/","https:\/\/x\.com\/example"\]/,
+  )
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorBStmt, /'\[\]'/)
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {

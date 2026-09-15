@@ -11,6 +11,7 @@ import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { StatusBadge } from '../components/candidates/StatusBadge'
 import { VendorForm } from '../components/candidates/VendorForm'
+import { VendorLinks } from '../components/candidates/VendorLinks'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { formatTsubo } from '../lib/format'
@@ -63,6 +64,7 @@ function Page() {
               建築予定地が施工エリア内
             </Badge>
           ) : null}
+          <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="md" />
           <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
             <Pencil size={16} />
           </ActionIcon>
