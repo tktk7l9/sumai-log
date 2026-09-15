@@ -30,6 +30,9 @@
 ## 設計の約束
 
 - 副作用は `src/server/`、DB は `src/db/`、UI は `src/components/` と `src/routes/`
+- D1 アクセスは `src/server/repository/<domain>.ts`（candidates/places/events/visits/photos/
+  comments/settings/geocode）にテーブル単位で分割。`src/server/repository.ts` は
+  `export * from './repository/index'` の再エクスポートのみで、既存の import パスは変えずに済む
 - 日付は TEXT の ISO-8601、金額は円の整数、面積は小数、id は text（`crypto.randomUUID()`）
 - スマホ優先。下タブ＋FAB＋全画面 Drawer。デスクトップは左ナビ
 - 地図に出せない場所は「出せない理由」を画面に書く（空の枠を出さない）
