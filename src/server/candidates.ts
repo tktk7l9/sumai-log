@@ -1,0 +1,149 @@
+import { createServerFn } from '@tanstack/react-start'
+import { asc, eq } from 'drizzle-orm'
+import { z } from 'zod'
+
+import { getDb } from '../db/client'
+import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
+import { matchesHomeAreas } from '../lib/serviceArea'
+import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
+import { currentActorEmail } from './members'
+import {
+  countPlacesByVendor,
+  deletePropertyCascade,
+  deleteVendorCascade,
+  readHomeAreas,
+  upsertProperty,
+  upsertVendor,
+} from './repository'
+
+const idInput = z.object({ id: z.string().uuid() })
+
+const optionalText = z
+  .string()
+  .trim()
+  .max(2000)
+  .transform((v) => (v === '' ? null : v))
+  .nullable()
+const optionalUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .transform((v) => (v === '' ? null : v))
+  .nullable()
+  .refine((v) => v === null || /^https?:\/\//.test(v), 'URL は http(s):// で始めてください')
+const optionalInt = z.number().int().nullable()
+
+export const vendorInput = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1, '名前は必須です').max(200),
+  kind: z.enum(VENDOR_KINDS),
+  hq: optionalText,
+  serviceAreas: z.array(z.string().trim().min(1).max(50)).max(100),
+  uaValue: z.number().min(0).max(5).nullable(),
+  cValuePublished: z.boolean(),
+  seismicGrade: z.number().int().min(1).max(3).nullable(),
+  longTermCertified: z.boolean(),
+  pricePerTsuboMin: optionalInt,
+  pricePerTsuboMax: optionalInt,
+  structure: optionalText,
+  features: optionalText,
+  status: z.enum(CANDIDATE_STATUSES),
+  sourceUrl: optionalUrl,
+  websiteUrl: optionalUrl,
+})
+export type VendorInput = z.infer<typeof vendorInput>
+
+export const propertyInput = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1, '名前は必須です').max(200),
+  address: optionalText,
+  station: optionalText,
+  walkMinutes: optionalInt,
+  price: optionalInt,
+  areaSqm: z.number().min(0).nullable(),
+  layout: optionalText,
+  builtYear: optionalInt,
+  completionDate: optionalText,
+  managementFee: optionalInt,
+  repairReserve: optionalInt,
+  listingUrl: optionalUrl,
+  note: optionalText,
+  status: z.enum(CANDIDATE_STATUSES),
+})
+export type PropertyInput = z.infer<typeof propertyInput>
+
+export const listCandidates = createServerFn().handler(async () => {
+  const db = getDb()
+  const [vendorRows, propertyRows, homeAreas, placeCounts] = await Promise.all([
+    db.select().from(vendors).orderBy(asc(vendors.name)),
+    db.select().from(properties).orderBy(asc(properties.name)),
+    readHomeAreas(db),
+    countPlacesByVendor(db),
+  ])
+  const byStatus = <T extends { status: (typeof CANDIDATE_STATUSES)[number] }>(a: T, b: T) =>
+    statusRank(a.status) - statusRank(b.status)
+  return {
+    homeAreas,
+    vendors: vendorRows
+      .map((v) => ({
+        ...v,
+        coversHome: matchesHomeAreas(v.serviceAreas, homeAreas),
+        placeCount: placeCounts.get(v.id) ?? 0,
+      }))
+      .sort(byStatus),
+    properties: propertyRows.sort(byStatus),
+  }
+})
+
+export const getVendor = createServerFn()
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, data.id)).limit(1)
+    if (!vendor) throw new Response('Not Found', { status: 404 })
+    const [placeRows, homeAreas] = await Promise.all([
+      db.select().from(places).where(eq(places.vendorId, data.id)).orderBy(asc(places.name)),
+      readHomeAreas(db),
+    ])
+    return {
+      vendor,
+      places: placeRows,
+      coversHome: matchesHomeAreas(vendor.serviceAreas, homeAreas),
+    }
+  })
+
+export const saveVendor = createServerFn({ method: 'POST' })
+  .validator(vendorInput)
+  .handler(async ({ data }) => ({
+    id: await upsertVendor(getDb(), data, await currentActorEmail()),
+  }))
+
+export const deleteVendor = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    await deleteVendorCascade(getDb(), data.id)
+    return { ok: true as const }
+  })
+
+export const getProperty = createServerFn()
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [property] = await db.select().from(properties).where(eq(properties.id, data.id)).limit(1)
+    if (!property) throw new Response('Not Found', { status: 404 })
+    const placeRows = await db.select().from(places).where(eq(places.propertyId, data.id))
+    return { property, places: placeRows }
+  })
+
+export const saveProperty = createServerFn({ method: 'POST' })
+  .validator(propertyInput)
+  .handler(async ({ data }) => ({
+    id: await upsertProperty(getDb(), data, await currentActorEmail()),
+  }))
+
+export const deleteProperty = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    await deletePropertyCascade(getDb(), data.id)
+    return { ok: true as const }
+  })
