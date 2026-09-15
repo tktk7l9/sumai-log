@@ -114,6 +114,21 @@ npm run deploy
 （gitignore 済み）。`npm run check:pii` で実データがコミット対象に混入していないか
 毎回確認する。
 
+Cloudflare の secret と Access ポリシーを更新したら、**Keyway vault も同時に更新して
+古いままにしない**。手順:
+
+```bash
+# .dev.vars の ACCESS_ALLOWED_EMAILS / MEMBERS を上と同じカンマ区切りの新しい値に
+# 書き換えてから
+keyway push -e development -f .dev.vars -y
+
+# 本番用の一時ファイルを作って push し、すぐ消す
+printf 'ENVIRONMENT=production\nACCESS_ALLOWED_EMAILS=%s\nMEMBERS=%s\n' \
+  '<実値>' '<実値>' > .dev.vars.production
+keyway push -e production -f .dev.vars.production -y
+rm .dev.vars.production
+```
+
 ### 5. 認証の確認
 
 - シークレットウィンドウで `https://sumai-log.saitotakuya0719.workers.dev/` を開く →
@@ -131,6 +146,8 @@ keyway pull -e development -f .dev.vars -y   # 開発用の実値を取得
 
 本番値は `production` 環境に入っている（`ACCESS_ALLOWED_EMAILS` / `MEMBERS` /
 `ENVIRONMENT=production`）。Vault: https://app.keyway.sh/vaults/tktk7l9/sumai-log
+
+本番の正本は Cloudflare の secret。Keyway の production 環境は新しい機械で復旧するための控え。
 
 ### 7. Workers Builds（GitHub 連携・ダッシュボード）
 

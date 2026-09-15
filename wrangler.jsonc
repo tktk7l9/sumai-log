@@ -30,7 +30,7 @@
 
   /**
    * 既定を production にして、設定漏れは必ず「拒否」側に倒す。
-   * ACCESS_TEAM_DOMAIN / ACCESS_POLICY_AUD は非秘密（Task 10 で埋める）。
+   * ACCESS_TEAM_DOMAIN / ACCESS_POLICY_AUD は非秘密（Task 10 で Access アプリ作成時の値に置き換え済み）。
    * ACCESS_ALLOWED_EMAILS と MEMBERS は secret（`wrangler secret put`）。ここに書かない。
    */
   "vars": {
