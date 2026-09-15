@@ -21,11 +21,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { buildStatements, normalizeAddress, sqlString } from './lib/seed.mjs'
+import { buildStatements, normalizeAddress, parseGsiResponse, sqlString } from './lib/seed.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DATABASE = 'sumai-log'
 const R2_BUCKET = 'sumai-log-photos'
+// src/lib/geocode.ts の GSI_ADDRESS_SEARCH と同じ値。plain .mjs から TS を import できないため
+// 値を重複させている。変えるときは両方直す。
 const GSI_ENDPOINT = 'https://msearch.gsi.go.jp/address-search/AddressSearch'
 const GSI_PAUSE_MS = 1200
 
@@ -94,29 +96,31 @@ async function sleep(ms) {
  * 場所（住所つき）を国土地理院 住所検索 API で座標に変換する。
  * 見つからない/住所が無い場所は coords に含めない（呼び出し側で lat/lng が NULL のまま残る）。
  * 見つかった分は geocode_cache への INSERT 文も返す。
+ *
+ * レスポンス解析（範囲チェック込み）は seed.mjs の parseGsiResponse に委ねる。
+ * アプリ本体の src/server/geocode.ts と同じ判定にするため。
  */
 async function geocodePlaces(places, now) {
   const coords = {}
   const geocodeCacheSql = []
   const withAddress = places.filter((p) => p.address)
-  let skippedNoAddress = places.length - withAddress.length
+  const skippedNoAddress = places.length - withAddress.length
 
   for (const place of withAddress) {
     const query = normalizeAddress(place.address)
-    let features = []
+    let json = []
     try {
       const res = await fetch(`${GSI_ENDPOINT}?q=${encodeURIComponent(query)}`)
-      if (res.ok) features = await res.json()
+      if (res.ok) json = await res.json()
     } catch {
-      features = []
+      json = []
     }
+    const hit = parseGsiResponse(json)
 
-    if (features.length > 0) {
-      const [lng, lat] = features[0].geometry.coordinates
-      const title = features[0].properties?.title ?? null
-      coords[place.slug] = { lat, lng }
+    if (hit) {
+      coords[place.slug] = { lat: hit.lat, lng: hit.lng }
       geocodeCacheSql.push(
-        `INSERT OR REPLACE INTO geocode_cache (query, lat, lng, title, fetched_at) VALUES (${sqlString(query)}, ${sqlString(lat)}, ${sqlString(lng)}, ${sqlString(title)}, ${sqlString(now)});`,
+        `INSERT OR REPLACE INTO geocode_cache (query, lat, lng, title, fetched_at) VALUES (${sqlString(query)}, ${sqlString(hit.lat)}, ${sqlString(hit.lng)}, ${sqlString(hit.title)}, ${sqlString(now)});`,
       )
     }
 

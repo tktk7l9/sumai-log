@@ -35,26 +35,48 @@ export function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`
 }
 
-/** 住所文字列の中でダッシュ相当として使われる文字（全角ハイフン・波ダッシュ類・長音符など） */
-const DASH_CHARS = /[‐‑‒–—―−〜ー－]/g
-
 /**
  * 住所を国土地理院 API に投げる前後で揺れが出ないように正規化する。
  * - NFKC で全角英数・全角記号を半角に寄せる
  * - 空白（全角含む）を削る
  * - ダッシュ類を半角ハイフンに揃える
- * - 「N丁目M番K号」→「N-M-K」、「N丁目M番」→「N-M」
+ * - 「N丁目M番K号」→「N-M-K」、「N丁目M番地」→「N-M」
  *
  * geocode_cache.query のキーにもこの正規化後の文字列を使う。
+ *
+ * src/lib/geocode.ts の normalizeAddress と同一に保つ（geocode_cache のキーが一致しなくなる）。
+ * null/undefined だけそのまま返す（アプリ側は呼び出し元の型で string を保証しているが、
+ * こちらは JSON から読む値を渡すことがあるため防御的に扱う。実際の文字列変換ロジックは同じ）。
  */
 export function normalizeAddress(address) {
-  if (address === null || address === undefined || address === '') return address
-  let s = address.normalize('NFKC')
-  s = s.replace(/\s+/g, '')
-  s = s.replace(DASH_CHARS, '-')
-  s = s.replace(/(\d+)丁目(\d+)番(\d+)号/g, '$1-$2-$3')
-  s = s.replace(/(\d+)丁目(\d+)番/g, '$1-$2')
-  return s
+  if (address === null || address === undefined) return address
+  return address
+    .normalize('NFKC')
+    .replace(/\s+/g, '')
+    .replace(/[－ー―‐]/g, '-')
+    .replace(/(\d+)丁目(\d+)番(\d+)号?/u, '$1-$2-$3')
+    .replace(/(\d+)丁目(\d+)番地?(?!\d)/u, '$1-$2')
+}
+
+function inRange(lat, lng) {
+  return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+}
+
+/**
+ * 国土地理院 住所検索 API のレスポンス（JSON）から先頭の Feature の座標と title を取り出す。
+ * src/lib/geocode.ts の parseGsiResponse と同一に保つ。
+ * 空配列・配列でない・座標が数値でない・緯度経度が範囲外（lat: -90〜90, lng: -180〜180）は
+ * すべて「該当なし」として null を返す。
+ */
+export function parseGsiResponse(json) {
+  if (!Array.isArray(json) || json.length === 0) return null
+  const first = json[0]
+  const coords = first?.geometry?.coordinates
+  if (!Array.isArray(coords) || coords.length < 2) return null
+  const [lng, lat] = coords
+  if (typeof lat !== 'number' || typeof lng !== 'number' || !inRange(lat, lng)) return null
+  const title = typeof first.properties?.title === 'string' ? first.properties.title : null
+  return { lat, lng, title }
 }
 
 function insertStatement(table, row) {
