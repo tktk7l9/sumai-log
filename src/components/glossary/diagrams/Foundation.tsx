@@ -13,20 +13,10 @@ export function FoundationDiagram() {
         地面
       </Label>
 
-      {/* ベタ基礎: 切れ目のない塗り（面） */}
-      <rect
-        x={30}
-        y={155}
-        width={120}
-        height={15}
-        fill="var(--mantine-color-clay-3)"
-        fillOpacity={0.7}
-      />
-      <rect
-        x={70}
-        y={115}
-        width={40}
-        height={40}
+      {/* ベタ基礎: 切れ目のない塗り（面）。2つの <rect> を重ねると境界に
+          継ぎ目の線が浮くため、土台と立ち上がりを 1 本の <path> にしている */}
+      <path
+        d="M30 170 L30 155 L70 155 L70 115 L110 115 L110 155 L150 155 L150 170 Z"
         fill="var(--mantine-color-clay-3)"
         fillOpacity={0.7}
       />
