@@ -22,7 +22,8 @@ export function SunEaveDiagram() {
 
       <circle cx={262} cy={20} r={6} />
       <Arrow x1={257} y1={26} x2={215} y2={69} dashed />
-      <Label x={272} y={18} size={13}>
+      {/* 「夏」ラベルが太陽の丸と少し重なっていたため右へ離した */}
+      <Label x={284} y={18} size={13}>
         夏
       </Label>
 
