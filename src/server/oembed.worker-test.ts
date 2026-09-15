@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchYouTubeOEmbed } from './oembed'
 
@@ -7,6 +7,10 @@ const VIDEO_ID = 'dQw4w9WgXcQ'
 const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status })
 
 describe('fetchYouTubeOEmbed', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('200 なら題名・チャンネル・サムネを返す', async () => {
     const fetchImpl = (async () =>
       jsonResponse({
@@ -60,21 +64,42 @@ describe('fetchYouTubeOEmbed', () => {
     expect(await fetchYouTubeOEmbed(VIDEO_ID, fetchImpl)).toBeNull()
   })
 
-  it('5 秒の AbortSignal を渡す（実際には待たず、signal だけ確認する）', async () => {
-    let capturedInit: RequestInit | undefined
-    const neverResolves = new Promise<Response>(() => {})
-    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-      capturedInit = init
-      return neverResolves
-    }) as typeof fetch
+  it('title は videoInput の上限（300 文字）を超えないよう切り詰める', async () => {
+    const fetchImpl = (async () => jsonResponse({ title: 'あ'.repeat(400) })) as typeof fetch
+    const result = await fetchYouTubeOEmbed(VIDEO_ID, fetchImpl)
+    expect(result?.title).toHaveLength(300)
+  })
 
-    // 呼び出しだけ開始し、内側の fetchImpl が呼ばれるまでマイクロタスクを進める。
-    // Promise 自体は待たない（5 秒のタイムアウトを実際に待たないため）。
+  it('channel は videoInput の上限（200 文字）を超えないよう切り詰める', async () => {
+    const fetchImpl = (async () =>
+      jsonResponse({ title: 'x', author_name: 'い'.repeat(300) })) as typeof fetch
+    const result = await fetchYouTubeOEmbed(VIDEO_ID, fetchImpl)
+    expect(result?.channel).toHaveLength(200)
+  })
+
+  it('timeoutMs を小さくすると実際にすぐタイムアウトして null を返す（5 秒は待たない）', async () => {
+    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted', 'AbortError'))
+        })
+      })) as typeof fetch
+    const result = await fetchYouTubeOEmbed(VIDEO_ID, fetchImpl, 20)
+    expect(result).toBeNull()
+  })
+
+  it('timeoutMs を省略すると既定の 5000ms で AbortSignal.timeout を呼ぶ', async () => {
+    const spy = vi.spyOn(AbortSignal, 'timeout')
+    const neverResolves = new Promise<Response>(() => {})
+    const fetchImpl = (async () => neverResolves) as typeof fetch
+
+    // Promise 自体は待たない（実際に 5 秒のタイムアウトを待たないため）。
+    // fetchImpl が呼ばれ、その中で AbortSignal.timeout が呼ばれるところまで
+    // マイクロタスクを進めれば spy の呼び出し引数は確認できる。
     void fetchYouTubeOEmbed(VIDEO_ID, fetchImpl)
     await Promise.resolve()
     await Promise.resolve()
 
-    expect(capturedInit?.signal).toBeInstanceOf(AbortSignal)
-    expect(capturedInit?.signal?.aborted).toBe(false)
+    expect(spy).toHaveBeenCalledWith(5000)
   })
 })

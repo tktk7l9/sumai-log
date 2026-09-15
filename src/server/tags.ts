@@ -13,7 +13,9 @@ export const listTagNames = createServerFn().handler(async () => {
 })
 
 export const tagsInput = z.object({
-  names: z.array(z.string().trim().min(1).max(30)).max(100),
+  // 0 件を許すと次回アクセスで seedDefaultTags が再発火してしまう（「全部消したい」を
+  // UI からは表現できないようにする）
+  names: z.array(z.string().trim().min(1).max(30)).min(1, 'タグは 1 つ以上必要です').max(100),
 })
 
 export const saveTags = createServerFn({ method: 'POST' })

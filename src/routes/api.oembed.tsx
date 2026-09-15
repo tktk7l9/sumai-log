@@ -12,6 +12,13 @@ export const Route = createFileRoute('/api/oembed')({
         const raw = new URL(request.url).searchParams.get('url')?.trim() ?? ''
         const headers = securityHeadersInit({ 'content-type': 'application/json; charset=utf-8' })
 
+        if (raw.length > 500) {
+          return new Response(JSON.stringify({ error: 'YouTube の URL を入れてください' }), {
+            status: 400,
+            headers,
+          })
+        }
+
         const videoId = parseYouTubeId(raw)
         if (!videoId) {
           return new Response(JSON.stringify({ error: 'YouTube の URL を入れてください' }), {
