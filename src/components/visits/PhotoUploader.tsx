@@ -67,11 +67,15 @@ export function PhotoUploader({
     }
     setProgress({ done: 0, total: batch.length })
     let failed = 0
+    let firstError: string | undefined
     for (const [i, file] of batch.entries()) {
       try {
         await uploadOne(visitId, file)
-      } catch {
+      } catch (error) {
         failed += 1
+        if (firstError === undefined) {
+          firstError = error instanceof Error ? error.message : String(error)
+        }
       }
       setProgress({ done: i + 1, total: batch.length })
     }
@@ -80,7 +84,7 @@ export function PhotoUploader({
       message:
         failed === 0
           ? `${batch.length} 枚を追加しました`
-          : `${batch.length - failed} 枚を追加、${failed} 枚は失敗しました`,
+          : `${batch.length - failed} 枚を追加、${failed} 枚は失敗しました（${firstError}）`,
       color: failed === 0 ? undefined : 'red',
     })
     onUploaded()
