@@ -24,6 +24,11 @@ export function isManagedPhotoKey(key: string): boolean {
   return MANAGED.test(key)
 }
 
+/** 配信ルート（GET /api/photos/<key>）の URL。ルート側が photos/ を付け直す */
+export function photoUrl(key: string): string {
+  return `/api/photos/${key.replace(/^photos\//, '')}`
+}
+
 export function sniffImageType(
   bytes: Uint8Array,
 ): 'image/jpeg' | 'image/png' | 'image/webp' | null {

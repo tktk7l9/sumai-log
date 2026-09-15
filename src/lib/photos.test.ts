@@ -5,6 +5,7 @@ import {
   MAX_PHOTOS_PER_UPLOAD,
   isManagedPhotoKey,
   photoKeys,
+  photoUrl,
   sniffImageType,
   validatePhotoUpload,
 } from './photos'
@@ -25,6 +26,12 @@ describe('photoKeys / isManagedPhotoKey', () => {
     expect(isManagedPhotoKey(`photos/${V}/${P}-original.jpg`)).toBe(false)
     expect(isManagedPhotoKey(`photos/../${P}-display.jpg`)).toBe(false)
     expect(isManagedPhotoKey('')).toBe(false)
+  })
+})
+
+describe('photoUrl', () => {
+  it('photos/ を剥がして配信ルートの URL にする', () => {
+    expect(photoUrl('photos/a/b-thumb.jpg')).toBe('/api/photos/a/b-thumb.jpg')
   })
 })
 
