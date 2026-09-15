@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildStatements, normalizeAddress, slugToId, sqlString } from './seed.mjs'
+import {
+  buildStatements,
+  normalizeAddress,
+  parseGsiResponse,
+  slugToId,
+  sqlString,
+} from './seed.mjs'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
@@ -54,6 +60,49 @@ test('normalizeAddress は null/undefined/空文字をそのまま返す', () =>
   assert.equal(normalizeAddress(null), null)
   assert.equal(normalizeAddress(undefined), undefined)
   assert.equal(normalizeAddress(''), '')
+})
+
+// 以下 3 件は src/lib/geocode.ts の normalizeAddress.test.ts と同じケース。
+// geocode_cache のキーがアプリ本体と一致し続けることを保証するため、挙動を丸ごと揃える。
+test('normalizeAddress: 全角英数を半角に、空白を除き、丁目・番地の表記ゆれを揃える（src/lib/geocode.ts と同じ挙動）', () => {
+  assert.equal(normalizeAddress(' 仮想県 テスト市 １－２－３ '), '仮想県テスト市1-2-3')
+  assert.equal(normalizeAddress('仮想県テスト市1丁目2番3号'), '仮想県テスト市1-2-3')
+  assert.equal(normalizeAddress('仮想県テスト市1丁目'), '仮想県テスト市1丁目')
+})
+
+test('normalizeAddress: 「号」「地」が省略された表記も丁目番地表記に揃える', () => {
+  assert.equal(normalizeAddress('架空町1丁目2番3'), '架空町1-2-3')
+  assert.equal(normalizeAddress('架空町1丁目2番地'), '架空町1-2')
+})
+
+// parseGsiResponse も src/lib/geocode.ts と同じ判定（範囲チェック込み）にする。
+test('parseGsiResponse: 先頭の Feature の座標（[lng, lat]）と title を返す', () => {
+  const json = [
+    {
+      geometry: { type: 'Point', coordinates: [139.5, 35.5] },
+      properties: { title: '仮想県テスト市' },
+    },
+    { geometry: { type: 'Point', coordinates: [140, 36] }, properties: { title: '別の候補' } },
+  ]
+  assert.deepEqual(parseGsiResponse(json), { lat: 35.5, lng: 139.5, title: '仮想県テスト市' })
+})
+
+test('parseGsiResponse: title が無ければ null にする', () => {
+  assert.deepEqual(parseGsiResponse([{ geometry: { coordinates: [139.5, 35.5] } }]), {
+    lat: 35.5,
+    lng: 139.5,
+    title: null,
+  })
+})
+
+test('parseGsiResponse: 空配列・配列でない・座標が数値でない・範囲外は null', () => {
+  assert.equal(parseGsiResponse([]), null)
+  assert.equal(parseGsiResponse({}), null)
+  assert.equal(parseGsiResponse(null), null)
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: ['a', 'b'] } }]), null)
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: [139.5] } }]), null)
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: [200, 35] } }]), null) // lng 範囲外
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: [139.5, 95] } }]), null) // lat 範囲外
 })
 
 function fictionalSeed(overrides = {}) {
