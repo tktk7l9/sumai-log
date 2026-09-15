@@ -126,6 +126,23 @@ describe('termIdForMetric', () => {
 
 describe('GLOSSARY（データの体裁）', () => {
   const ids = new Set(GLOSSARY.map((t) => t.id))
+
+  it('46 語・14 図解で、どの図解も少なくとも 1 語から使われている', () => {
+    expect(GLOSSARY).toHaveLength(46)
+    expect(DIAGRAM_IDS).toHaveLength(14)
+    const used = new Set(GLOSSARY.map((t) => t.diagram).filter(Boolean))
+    expect([...DIAGRAM_IDS].filter((d) => !used.has(d))).toEqual([])
+  })
+
+  it('目安の label は用語内で重複しない（key に使う）', () => {
+    for (const term of GLOSSARY) {
+      const labels = (term.numbers ?? []).map((n) => n.label)
+      expect({ id: term.id, ok: new Set(labels).size === labels.length }).toEqual({
+        id: term.id,
+        ok: true,
+      })
+    }
+  })
   const categoryIds = new Set<CategoryId>(GLOSSARY_CATEGORIES.map((c) => c.id))
 
   it('id は重複しない', () => {

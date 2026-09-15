@@ -12,7 +12,7 @@ export function SetbackDiagram() {
         fill="var(--mantine-color-gray-3)"
         fillOpacity={0.5}
       />
-      <Label x={160} y={175} size={12}>
+      <Label x={160} y={186} size={12}>
         道路 3m
       </Label>
 

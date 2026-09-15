@@ -49,6 +49,12 @@ function Page() {
     return () => window.clearTimeout(timer)
   }, [location.hash])
 
+  // 検索・絞り込みを変えたら、畳んであった分類も開き直す（「性能 2」と出ているのに
+  // 中身が見えず 0 件と誤解しないように）。
+  useEffect(() => {
+    if (q || c) setOpenCategories([...CATEGORY_IDS])
+  }, [q, c])
+
   return (
     <PageShell
       title="用語集"
@@ -74,6 +80,7 @@ function Page() {
         ) : (
           <Accordion
             multiple
+            order={2}
             variant="separated"
             value={openCategories}
             onChange={setOpenCategories}

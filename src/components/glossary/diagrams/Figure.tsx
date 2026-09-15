@@ -41,7 +41,8 @@ function ArrowMarker({ id }: { id: string }) {
 
 export function Figure({ label, children }: { label: string; children: ReactNode }) {
   // 複数の図が同じページに並んでも <marker id> が衝突しないよう useId で作る。
-  // useId() は ":r0:" のような id を返すため、URL フラグメントとして安全な形に削る。
+  // useId() の形式は React の版で変わる（18 は ":r0:"、19 は "_R_1_"）ので、
+  // URL フラグメントとして安全なように ':' を落としておく。
   const rawId = useId().replace(/:/g, '')
   const markerIds: Record<ArrowVariant, string> = {
     thin: `glossary-arrow-${rawId}`,
