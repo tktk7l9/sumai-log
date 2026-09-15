@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as CandidatesRouteImport } from './routes/candidates'
+import { Route as GlossaryRouteImport } from './routes/glossary'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -35,6 +36,11 @@ const CalendarRoute = CalendarRouteImport.update({
 const CandidatesRoute = CandidatesRouteImport.update({
   id: '/candidates',
   path: '/candidates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GlossaryRoute = GlossaryRouteImport.update({
+  id: '/glossary',
+  path: '/glossary',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapRoute = MapRouteImport.update({
@@ -87,6 +93,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
   '/candidates': typeof CandidatesRoute
+  '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
@@ -101,6 +108,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
   '/candidates': typeof CandidatesRoute
+  '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
   '/candidates': typeof CandidatesRoute
+  '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
@@ -132,6 +141,7 @@ export interface FileRouteTypes {
     | '/'
     | '/calendar'
     | '/candidates'
+    | '/glossary'
     | '/map'
     | '/records'
     | '/settings'
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/'
     | '/calendar'
     | '/candidates'
+    | '/glossary'
     | '/map'
     | '/records'
     | '/settings'
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '/'
     | '/calendar'
     | '/candidates'
+    | '/glossary'
     | '/map'
     | '/records'
     | '/settings'
@@ -175,6 +187,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalendarRoute: typeof CalendarRoute
   CandidatesRoute: typeof CandidatesRoute
+  GlossaryRoute: typeof GlossaryRoute
   MapRoute: typeof MapRoute
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
@@ -207,6 +220,13 @@ declare module '@tanstack/react-router' {
       path: '/candidates'
       fullPath: '/candidates'
       preLoaderRoute: typeof CandidatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/glossary': {
+      id: '/glossary'
+      path: '/glossary'
+      fullPath: '/glossary'
+      preLoaderRoute: typeof GlossaryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/map': {
@@ -279,6 +299,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalendarRoute: CalendarRoute,
   CandidatesRoute: CandidatesRoute,
+  GlossaryRoute: GlossaryRoute,
   MapRoute: MapRoute,
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,

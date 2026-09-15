@@ -1,6 +1,6 @@
 import { AppShell, Group, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
 import { Link, useLocation } from '@tanstack/react-router'
-import { Building2, CalendarDays, House, Map, NotebookPen, Settings } from 'lucide-react'
+import { BookOpen, Building2, CalendarDays, House, Map, NotebookPen, Settings } from 'lucide-react'
 
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
 import { ColorSchemeToggle } from './ColorSchemeToggle'
@@ -34,6 +34,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Text>
           <Group gap="xs" wrap="nowrap">
             <ColorSchemeToggle />
+            <NavLink
+              component={Link}
+              to="/glossary"
+              label="用語集"
+              leftSection={<BookOpen size={18} aria-hidden />}
+              active={isNavItemActive(pathname, '/glossary')}
+              aria-current={isNavItemActive(pathname, '/glossary') ? 'page' : undefined}
+              w="auto"
+              px="xs"
+            />
             <NavLink
               component={Link}
               to="/settings"

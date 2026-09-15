@@ -15,10 +15,31 @@ import { VendorLinks } from '../components/candidates/VendorLinks'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { formatTsubo } from '../lib/format'
+import { termIdForMetric } from '../lib/glossary'
 import { deleteVendor, getVendor } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
 import { getHomeAreas } from '../server/settings'
+
+/** DetailRow のラベルに添える「用語集で見る」リンク。見出し語自体をリンクにする */
+function MetricLabel({
+  metric,
+  text,
+}: {
+  metric: Parameters<typeof termIdForMetric>[0]
+  text: string
+}) {
+  return (
+    <Link
+      to="/glossary"
+      hash={`term-${termIdForMetric(metric)}`}
+      aria-label={`用語集で ${text} を見る`}
+      style={{ color: 'inherit' }}
+    >
+      {text}
+    </Link>
+  )
+}
 
 export const Route = createFileRoute('/candidates_/vendors/$id')({
   component: Page,
@@ -82,11 +103,27 @@ function Page() {
             value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}
           />
           <Row
-            label="UA値 / C値"
+            label={
+              <Group component="span" gap={4} wrap="nowrap">
+                <MetricLabel metric="ua" text="UA値" />
+                <Text span size="sm" c="dimmed">
+                  /
+                </Text>
+                <MetricLabel metric="c" text="C値" />
+              </Group>
+            }
             value={`${vendor.uaValue ?? '—'} / ${vendor.cValuePublished ? '実測公開' : '非公開'}`}
           />
           <Row
-            label="耐震等級 / 長期優良"
+            label={
+              <Group component="span" gap={4} wrap="nowrap">
+                <MetricLabel metric="seismic" text="耐震等級" />
+                <Text span size="sm" c="dimmed">
+                  /
+                </Text>
+                <MetricLabel metric="longTerm" text="長期優良" />
+              </Group>
+            }
             value={`${vendor.seismicGrade ?? '—'} / ${vendor.longTermCertified ? '対応' : '—'}`}
           />
           <Row
