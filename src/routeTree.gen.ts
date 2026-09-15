@@ -16,6 +16,8 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
+import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
+import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +54,16 @@ const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
   path: '/api/geocode',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CandidatesPropertiesIdRoute = CandidatesPropertiesIdRouteImport.update({
+  id: '/candidates_/properties/$id',
+  path: '/candidates/properties/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CandidatesVendorsIdRoute = CandidatesVendorsIdRouteImport.update({
+  id: '/candidates_/vendors/$id',
+  path: '/candidates/vendors/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +73,8 @@ export interface FileRoutesByFullPath {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
+  '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +84,8 @@ export interface FileRoutesByTo {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
+  '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +96,8 @@ export interface FileRoutesById {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
+  '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +109,8 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/candidates/properties/$id'
+    | '/candidates/vendors/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +120,8 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/candidates/properties/$id'
+    | '/candidates/vendors/$id'
   id:
     | '__root__'
     | '/'
@@ -109,6 +131,8 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/candidates_/properties/$id'
+    | '/candidates_/vendors/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +143,8 @@ export interface RootRouteChildren {
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
+  CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
+  CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +198,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGeocodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/candidates_/properties/$id': {
+      id: '/candidates_/properties/$id'
+      path: '/candidates/properties/$id'
+      fullPath: '/candidates/properties/$id'
+      preLoaderRoute: typeof CandidatesPropertiesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/candidates_/vendors/$id': {
+      id: '/candidates_/vendors/$id'
+      path: '/candidates/vendors/$id'
+      fullPath: '/candidates/vendors/$id'
+      preLoaderRoute: typeof CandidatesVendorsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,6 +223,8 @@ const rootRouteChildren: RootRouteChildren = {
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
+  CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
+  CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
