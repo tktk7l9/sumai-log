@@ -14,6 +14,7 @@
     "test": "vitest run && vitest run --config vitest.workers.config.ts",
     "test:coverage": "vitest run --coverage",
     "test:server": "vitest run --config vitest.workers.config.ts",
+    "test:scripts": "node --test scripts/lib/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -23,7 +24,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply sumai-log --local",
     "db:migrate:remote": "wrangler d1 migrations apply sumai-log --remote",
-    "db:export": "wrangler d1 export sumai-log --remote --output backups/sumai-log-$(date +%Y%m%d).sql"
+    "db:export": "wrangler d1 export sumai-log --remote --output backups/sumai-log-$(date +%Y%m%d).sql",
+    "import:seed": "node scripts/import-seed.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.54.5",

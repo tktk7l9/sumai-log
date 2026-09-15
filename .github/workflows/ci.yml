@@ -46,6 +46,8 @@ jobs:
       - run: npm run test:coverage
       # 実 Workers ランタイム＋D1 に対するサーバー層のテスト
       - run: npm run test:server
+      # scripts/lib（seed.local.json → D1/R2 取り込みの純粋部分）のテスト
+      - run: npm run test:scripts
       - run: npm run build
 
       # スキーマ変更とマイグレーションの取り違えを防ぐ。
