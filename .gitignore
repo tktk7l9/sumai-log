@@ -1,0 +1,25 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+.tanstack
+.wrangler
+.output
+__unconfig*
+coverage
+/backups/
+
+# 秘密・個人情報（Keyway が書き出す .env.* も含めて塞ぐ）
+.dev.vars*
+!.dev.vars.example
+.env
+.env.*
+!.env*.example
+
+# 実データ（見学先・写真・動画メモ）はコミットしない
+seed.local.json
+seed.local/
+
+# サブエージェント駆動の作業ファイル
+.superpowers/
