@@ -1,7 +1,8 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../db/client'
 import {
+  comments,
   events,
   geocodeCache,
   photos,
@@ -10,10 +11,12 @@ import {
   settings,
   vendors,
   visits,
+  type Comment,
   type NewEvent,
   type NewPlace,
   type NewProperty,
   type NewVendor,
+  type NewVisit,
   type Photo,
 } from '../db/schema'
 import type { GeocodeHit } from '../lib/geocode'
@@ -299,4 +302,116 @@ export async function photoKeysOfVisit(db: Db, visitId: string): Promise<string[
     .from(photos)
     .where(eq(photos.visitId, visitId))
   return rows.flatMap((r) => [r.d, r.t])
+}
+
+type VisitInput = Omit<NewVisit, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string }
+
+export async function upsertVisit(db: Db, input: VisitInput, actorEmail: string): Promise<string> {
+  const { id, ...values } = input
+  if (!id) {
+    const newId = crypto.randomUUID()
+    await db.insert(visits).values({ ...values, id: newId, createdBy: actorEmail })
+    return newId
+  }
+  await db
+    .update(visits)
+    .set({ ...values, updatedAt: new Date().toISOString() })
+    .where(eq(visits.id, id))
+  return id
+}
+
+/** 見学記録を消す。写真行は FK cascade。R2 のキーを返すので呼び側で消す */
+export async function deleteVisitCascade(db: Db, id: string): Promise<string[]> {
+  const keys = await photoKeysOfVisit(db, id)
+  await db.delete(visits).where(eq(visits.id, id))
+  return keys
+}
+
+export async function listVisitsWithLinks(db: Db) {
+  const rows = await db
+    .select({
+      visit: visits,
+      placeName: places.name,
+      vendorName: vendors.name,
+      propertyName: properties.name,
+      photoCount: sql<number>`(select count(*) from photos p where p.visit_id = ${visits.id})`,
+      firstThumbKey: sql<
+        string | null
+      >`(select p.thumb_key from photos p where p.visit_id = ${visits.id} order by p.sort_order asc, p.created_at asc limit 1)`,
+    })
+    .from(visits)
+    .leftJoin(places, eq(visits.placeId, places.id))
+    .leftJoin(vendors, eq(visits.vendorId, vendors.id))
+    .leftJoin(properties, eq(visits.propertyId, properties.id))
+    .orderBy(desc(visits.visitedOn), desc(visits.createdAt))
+  return rows.map((r) => ({
+    ...r.visit,
+    placeName: r.placeName ?? null,
+    vendorName: r.vendorName ?? null,
+    propertyName: r.propertyName ?? null,
+    photoCount: Number(r.photoCount ?? 0),
+    firstThumbKey: r.firstThumbKey ?? null,
+  }))
+}
+export type VisitWithLinks = Awaited<ReturnType<typeof listVisitsWithLinks>>[number]
+
+export async function getVisitDetail(db: Db, id: string) {
+  const [visit] = await db.select().from(visits).where(eq(visits.id, id)).limit(1)
+  if (!visit) return null
+  const [place] = visit.placeId
+    ? await db.select().from(places).where(eq(places.id, visit.placeId)).limit(1)
+    : []
+  const [vendor] = visit.vendorId
+    ? await db.select().from(vendors).where(eq(vendors.id, visit.vendorId)).limit(1)
+    : []
+  const [property] = visit.propertyId
+    ? await db.select().from(properties).where(eq(properties.id, visit.propertyId)).limit(1)
+    : []
+  const [event] = visit.eventId
+    ? await db.select().from(events).where(eq(events.id, visit.eventId)).limit(1)
+    : []
+  const photoRows = await listPhotos(db, id)
+  return {
+    visit,
+    place: place ?? null,
+    vendor: vendor ?? null,
+    property: property ?? null,
+    event: event ?? null,
+    photos: photoRows,
+  }
+}
+export type VisitDetail = NonNullable<Awaited<ReturnType<typeof getVisitDetail>>>
+
+export async function listComments(
+  db: Db,
+  targetType: Comment['targetType'],
+  targetId: string,
+): Promise<Comment[]> {
+  return db
+    .select()
+    .from(comments)
+    .where(and(eq(comments.targetType, targetType), eq(comments.targetId, targetId)))
+    .orderBy(asc(comments.createdAt))
+}
+
+export async function insertComment(
+  db: Db,
+  input: { targetType: Comment['targetType']; targetId: string; body: string },
+  actorEmail: string,
+): Promise<string> {
+  const id = crypto.randomUUID()
+  await db.insert(comments).values({ ...input, id, createdBy: actorEmail })
+  return id
+}
+
+/** 自分のコメントだけ消せる。消せたら true */
+export async function deleteOwnComment(db: Db, id: string, actorEmail: string): Promise<boolean> {
+  const [row] = await db
+    .select({ createdBy: comments.createdBy })
+    .from(comments)
+    .where(eq(comments.id, id))
+    .limit(1)
+  if (!row || row.createdBy !== actorEmail) return false
+  await db.delete(comments).where(eq(comments.id, id))
+  return true
 }

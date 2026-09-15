@@ -1,0 +1,81 @@
+import { createServerFn } from '@tanstack/react-start'
+import { z } from 'zod'
+
+import { getDb } from '../db/client'
+import { ATTENDEES } from '../db/schema'
+import { dateKey } from '../lib/calendar'
+import { nowJstIso } from './events'
+import { currentActorEmail } from './members'
+import {
+  deletePhotoRow,
+  deleteVisitCascade,
+  getVisitDetail,
+  listEventsBetween,
+  listPlacesWithLinks,
+  listVisitsWithLinks,
+  upsertVisit,
+} from './repository'
+import { deletePhotoObjects } from './storage'
+import { dateField, idField, idInput, optionalText } from './zod'
+import { listLinkTargets } from './places'
+
+export const visitInput = z.object({
+  id: idField.optional(),
+  eventId: idField.nullable(),
+  placeId: idField.nullable(),
+  vendorId: idField.nullable(),
+  propertyId: idField.nullable(),
+  visitedOn: dateField,
+  attendees: z.enum(ATTENDEES),
+  good: optionalText,
+  concerns: optionalText,
+  qa: optionalText,
+  nextActions: optionalText,
+})
+export type VisitInput = z.input<typeof visitInput>
+
+export const listVisits = createServerFn().handler(async () => listVisitsWithLinks(getDb()))
+
+export const getVisit = createServerFn()
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const detail = await getVisitDetail(getDb(), data.id)
+    if (!detail) throw new Response('Not Found', { status: 404 })
+    return detail
+  })
+
+export const saveVisit = createServerFn({ method: 'POST' })
+  .validator(visitInput)
+  .handler(async ({ data }) => ({
+    id: await upsertVisit(getDb(), data, await currentActorEmail()),
+  }))
+
+export const deleteVisit = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const keys = await deleteVisitCascade(getDb(), data.id)
+    await deletePhotoObjects(keys)
+    return { ok: true as const }
+  })
+
+export const deletePhoto = createServerFn({ method: 'POST' })
+  .validator(idInput)
+  .handler(async ({ data }) => {
+    const row = await deletePhotoRow(getDb(), data.id)
+    if (row) await deletePhotoObjects([row.displayKey, row.thumbKey])
+    return { ok: row !== null }
+  })
+
+/** 見学記録フォームの選択肢。予定は直近 180 日 */
+export const visitFormOptions = createServerFn().handler(async () => {
+  const db = getDb()
+  const today = dateKey(nowJstIso())
+  const from = dateKey(new Date(Date.parse(today) - 180 * 86400000).toISOString())
+  const to = dateKey(new Date(Date.parse(today) + 30 * 86400000).toISOString())
+  const [targets, places, events] = await Promise.all([
+    listLinkTargets(),
+    listPlacesWithLinks(db),
+    listEventsBetween(db, from, to),
+  ])
+  return { targets, places, events }
+})
