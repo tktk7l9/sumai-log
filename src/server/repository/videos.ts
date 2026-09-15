@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { comments, vendors, videos, type NewVideo, type Video } from '../../db/schema'
@@ -15,7 +15,7 @@ export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string)
   }
   await db
     .update(videos)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(videos.id, id))
   return id
 }

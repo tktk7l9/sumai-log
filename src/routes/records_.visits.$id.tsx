@@ -119,7 +119,9 @@ function Page() {
 
       {BLOCKS.map((b) => (
         <Stack key={b.key} gap={4}>
-          <Title order={3}>{b.label}</Title>
+          <Title order={2} size="h3">
+            {b.label}
+          </Title>
           <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
             {visit[b.key] || '—'}
           </Text>

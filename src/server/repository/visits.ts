@@ -40,7 +40,7 @@ export async function upsertVisit(db: Db, input: VisitInput, actorEmail: string)
   }
   await db
     .update(visits)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(visits.id, id))
   return id
 }

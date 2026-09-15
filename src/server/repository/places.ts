@@ -14,7 +14,7 @@ export async function upsertPlace(db: Db, input: PlaceInput, actorEmail: string)
   }
   await db
     .update(places)
-    .set({ ...values, updatedAt: new Date().toISOString() })
+    .set({ ...values, updatedAt: sql`(datetime('now'))` })
     .where(eq(places.id, id))
   return id
 }

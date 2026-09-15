@@ -120,6 +120,7 @@ export function VisitForm({
         />
         <SegmentedControl
           fullWidth
+          aria-label="同行者"
           data={ATTENDEES.map((a) => ({ value: a, label: ATTENDEES_LABEL[a] }))}
           {...form.getInputProps('attendees')}
         />

@@ -83,7 +83,7 @@ export function VideoDetail({
     >
       {video.thumbnailUrl ? (
         <AspectRatio ratio={16 / 9}>
-          <Image src={video.thumbnailUrl} alt={video.title} radius="sm" />
+          <Image src={video.thumbnailUrl} alt="" radius="sm" />
         </AspectRatio>
       ) : null}
 
@@ -129,7 +129,9 @@ export function VideoDetail({
       ) : null}
 
       <Stack gap={4}>
-        <Title order={3}>学び</Title>
+        <Title order={2} size="h3">
+          学び
+        </Title>
         <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
           {video.takeaways || '—'}
         </Text>

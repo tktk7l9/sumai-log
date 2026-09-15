@@ -58,7 +58,7 @@ export function formatJst(value: string, opts?: { withTime?: boolean }): string 
   return `${datePart} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
 }
 
-/** JST の 'YYYY-MM-DD' キー */
+/** JST の 'YYYY-MM-DD' キー。アプリ内の呼び出し元は今は無い。lib の公開 API として維持 */
 export function toJstDateKey(value: string): string {
   return formatJst(value, { withTime: false })
 }

@@ -17,7 +17,7 @@ import {
 import { idInput } from './zod'
 
 // eventInput は events.schema.ts から（テストの都合で分離した理由はそちら参照）。
-// 公開する import パス（'./events' から eventInput/EventInput を取れる)は変えない。
+// 公開する import パス（'./events' から eventInput/EventInput を取れる）は変えない。
 export { eventInput }
 export type { EventInput } from './events.schema'
 

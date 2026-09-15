@@ -34,7 +34,7 @@ type PrefillEvent = {
  * 直すときはこの `?? null` を崩さないこと。
  */
 export function buildVisitPrefill(
-  search: { placeId?: string; eventId?: string },
+  search: { eventId?: string },
   event: PrefillEvent | null,
 ): Partial<VisitFormValues> | undefined {
   if (!event) return undefined
