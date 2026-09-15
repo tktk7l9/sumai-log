@@ -58,8 +58,12 @@ function Page() {
         <GlossaryFilters
           q={q}
           category={c}
-          onQueryChange={(v) => navigate({ search: (s) => ({ ...s, q: v || undefined }) })}
-          onCategoryChange={(v) => navigate({ search: (s) => ({ ...s, c: v ?? undefined }) })}
+          onQueryChange={(v) =>
+            navigate({ search: (s) => ({ ...s, q: v || undefined }), replace: true })
+          }
+          onCategoryChange={(v) =>
+            navigate({ search: (s) => ({ ...s, c: v ?? undefined }), replace: true })
+          }
         />
 
         {groups.length === 0 ? (

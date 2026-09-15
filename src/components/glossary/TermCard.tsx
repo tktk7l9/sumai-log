@@ -1,4 +1,4 @@
-import { Alert, Chip, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Alert, Badge, Group, Stack, Table, Text, Title } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
 import type { GlossaryTerm } from '../../content/glossary'
@@ -71,15 +71,19 @@ export function TermCard({ term, related }: { term: GlossaryTerm; related: Gloss
       {related.length > 0 ? (
         <Group gap={6}>
           {related.map((r) => (
+            // Chip はチェックボックス入力を内包するため Link の中に置くと二重フォーカス
+            // ストップになる。Badge はただの装飾要素なので、Link 自体だけが
+            // フォーカス・読み上げ対象になる（VendorCard のバッジリンクと同じ形）。
             <Link
               key={r.id}
               to="/glossary"
               hash={`term-${r.id}`}
+              aria-label={`用語集で ${r.term} を見る`}
               style={{ textDecoration: 'none' }}
             >
-              <Chip size="xs" variant="outline" checked={false} onChange={() => {}}>
+              <Badge variant="light" size="sm">
                 {r.term}
-              </Chip>
+              </Badge>
             </Link>
           ))}
         </Group>
