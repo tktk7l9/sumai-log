@@ -162,6 +162,11 @@ keyway push -e production -f .dev.vars.production -y
 rm .dev.vars.production
 ```
 
+**スマホのホーム画面に追加**（二人とも1回だけ）:
+
+- iPhone（Safari）: 下の共有アイコン → 「ホーム画面に追加」
+- Android（Chrome）: 右上のメニュー → 「ホーム画面に追加」
+
 ### 5. 認証の確認
 
 - シークレットウィンドウで `https://sumai-log.saitotakuya0719.workers.dev/` を開く →
