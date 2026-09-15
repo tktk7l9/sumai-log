@@ -11,6 +11,8 @@ import { VisitCard } from '../components/visits/VisitCard'
 import { VisitForm } from '../components/visits/VisitForm'
 import { dateKey } from '../lib/calendar'
 import { UUID_SHAPE } from '../lib/ids'
+import type { Event } from '../db/schema'
+import { getEvent } from '../server/events'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
@@ -22,18 +24,31 @@ const search = z.object({
 export const Route = createFileRoute('/records')({
   component: Page,
   validateSearch: (s) => search.parse(s),
-  loader: async () => {
+  loaderDeps: ({ search }) => ({ fromEvent: search.fromEvent }),
+  loader: async ({ deps }) => {
     const [visits, options] = await Promise.all([listVisits(), visitFormOptions()])
-    return { visits, options }
+    // visitFormOptions の予定一覧は直近 180 日の窓に限られる。窓の外の予定から
+    // 「記録を書く」で来た場合はここで個別に引く（無ければ無視して既定値のまま）
+    let fromEventRow: Event | undefined
+    if (deps.fromEvent && !options.events.some((e) => e.id === deps.fromEvent)) {
+      try {
+        fromEventRow = (await getEvent({ data: { id: deps.fromEvent } })).event
+      } catch {
+        // 404: 予定が既に削除されている等。既定値のまま進める
+      }
+    }
+    return { visits, options, fromEventRow }
   },
 })
 
 function Page() {
-  const { visits, options } = Route.useLoaderData()
+  const { visits, options, fromEventRow: loadedFromEventRow } = Route.useLoaderData()
   const { tab, fromEvent } = Route.useSearch()
   const navigate = useNavigate({ from: '/records' })
   const [opened, setOpened] = useState(fromEvent !== undefined)
-  const fromEventRow = fromEvent ? options.events.find((e) => e.id === fromEvent) : undefined
+  const fromEventRow = fromEvent
+    ? (options.events.find((e) => e.id === fromEvent) ?? loadedFromEventRow)
+    : undefined
 
   function close() {
     setOpened(false)
