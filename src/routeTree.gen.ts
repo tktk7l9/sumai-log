@@ -17,6 +17,7 @@ import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
+import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
 import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
 
@@ -60,6 +61,11 @@ const PlacesIdRoute = PlacesIdRouteImport.update({
   path: '/places/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPhotosSplatRoute = ApiPhotosSplatRouteImport.update({
+  id: '/api/photos/$',
+  path: '/api/photos/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CandidatesPropertiesIdRoute = CandidatesPropertiesIdRouteImport.update({
   id: '/candidates_/properties/$id',
   path: '/candidates/properties/$id',
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/places/$id': typeof PlacesIdRoute
+  '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
 }
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/places/$id': typeof PlacesIdRoute
+  '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
 }
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/places/$id': typeof PlacesIdRoute
+  '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
 }
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/geocode'
     | '/places/$id'
+    | '/api/photos/$'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -131,6 +141,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/geocode'
     | '/places/$id'
+    | '/api/photos/$'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
   id:
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/api/geocode'
     | '/places/$id'
+    | '/api/photos/$'
     | '/candidates_/properties/$id'
     | '/candidates_/vendors/$id'
   fileRoutesById: FileRoutesById
@@ -156,6 +168,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   PlacesIdRoute: typeof PlacesIdRoute
+  ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
   CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
 }
@@ -218,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlacesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/photos/$': {
+      id: '/api/photos/$'
+      path: '/api/photos/$'
+      fullPath: '/api/photos/$'
+      preLoaderRoute: typeof ApiPhotosSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/candidates_/properties/$id': {
       id: '/candidates_/properties/$id'
       path: '/candidates/properties/$id'
@@ -244,6 +264,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   PlacesIdRoute: PlacesIdRoute,
+  ApiPhotosSplatRoute: ApiPhotosSplatRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
   CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
 }
