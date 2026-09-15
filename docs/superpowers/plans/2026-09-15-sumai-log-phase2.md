@@ -2141,3 +2141,150 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - 本番で: 予定タブ（月・日別・追加/編集/削除）／記録タブ（一覧・詳細・写真の追加/閲覧/削除）／コメント／ホームの 2 セクション
 - 投入済みの予定 4・見学記録 3・写真 4 が画面で見える
 - 次: Phase 3（YouTube メモ・ホームのフィード・PWA・デザイン仕上げ）
+
+---
+
+### Task 10: 業者の SNS / 公式サイトをアイコンリンクで出す（追加要望・Task 8 の後、Task 9 の前に実行）
+
+**Files:**
+- Modify: `src/db/schema.ts`（`vendors.socialUrls` JSON 配列を追加）→ `npm run db:generate -- --name add_vendor_social_urls` → `drizzle/migrations/0002_*.sql`
+- Create: `src/lib/social.ts` `src/lib/social.test.ts` `src/components/candidates/VendorLinks.tsx` `src/components/icons/BrandIcon.tsx`
+- Modify: `src/server/candidates.ts`（`vendorInput.socialUrls`）`src/components/candidates/VendorForm.tsx`（SNS の URL 入力）`src/components/candidates/VendorCard.tsx`（アイコン行）`src/routes/candidates_.vendors.$id.tsx`（アイコン行）`scripts/lib/seed.mjs` `scripts/import-seed.mjs`（`socialUrls` を `social_urls` に書く）`scripts/lib/seed.test.mjs`
+
+**Interfaces:**
+- Produces（`src/lib/social.ts`）: `SOCIAL_PLATFORMS = ['instagram','x','youtube','facebook','tiktok','line','threads','note','other'] as const`／`detectPlatform(url: string): SocialPlatform`（ホスト名で判定: `instagram.com`→instagram、`x.com`/`twitter.com`→x、`youtube.com`/`youtu.be`→youtube、`facebook.com`/`fb.com`→facebook、`tiktok.com`→tiktok、`line.me`/`lin.ee`→line、`threads.net`→threads、`note.com`→note、それ以外→other；`www.` は無視；不正 URL→other）／`PLATFORM_LABEL: Record<SocialPlatform,string>`（Instagram / X / YouTube / Facebook / TikTok / LINE / Threads / note / リンク）／`normalizeSocialUrls(list: string[]): string[]`（trim・空除去・重複除去・`http(s)://` 以外は除外・最大 10 件）
+- Produces（`BrandIcon({ platform, size? })`）: インライン SVG（simple-icons の path を使用。CC0。8 ブランド + `other` は lucide `Link`）。`aria-hidden`
+- Produces（`VendorLinks({ vendor, size? })`）: `websiteUrl` があれば lucide `Globe` の `ActionIcon`（`aria-label="公式サイト"`）、`socialUrls` の各 URL を `BrandIcon` の `ActionIcon`（`aria-label={PLATFORM_LABEL}`）で並べる。`component="a" href target="_blank" rel="noopener noreferrer"`、`onClick={(e) => e.stopPropagation()}`。どちらも無ければ何も描かない
+
+- [ ] **Step 1: `src/lib/social.test.ts` → `social.ts`（TDD）**
+
+```ts
+// social.test.ts
+import { describe, expect, it } from 'vitest'
+import { PLATFORM_LABEL, detectPlatform, normalizeSocialUrls } from './social'
+describe('detectPlatform', () => {
+  it('ホスト名で判定し www. と大文字を無視する', () => {
+    expect(detectPlatform('https://www.instagram.com/example/')).toBe('instagram')
+    expect(detectPlatform('https://x.com/Example_')).toBe('x')
+    expect(detectPlatform('https://twitter.com/example')).toBe('x')
+    expect(detectPlatform('https://www.youtube.com/@example')).toBe('youtube')
+    expect(detectPlatform('https://youtu.be/abc')).toBe('youtube')
+    expect(detectPlatform('https://www.facebook.com/example/')).toBe('facebook')
+    expect(detectPlatform('https://www.tiktok.com/@example')).toBe('tiktok')
+    expect(detectPlatform('https://lin.ee/abc')).toBe('line')
+    expect(detectPlatform('https://www.threads.net/@example')).toBe('threads')
+    expect(detectPlatform('https://note.com/example')).toBe('note')
+    expect(detectPlatform('HTTPS://WWW.INSTAGRAM.COM/x')).toBe('instagram')
+  })
+  it('不明・不正は other', () => {
+    expect(detectPlatform('https://example.com/')).toBe('other')
+    expect(detectPlatform('not a url')).toBe('other')
+    expect(PLATFORM_LABEL.other).toBe('リンク')
+  })
+})
+describe('normalizeSocialUrls', () => {
+  it('空白除去・空と非 http を除外・重複除去・10 件まで', () => {
+    expect(normalizeSocialUrls([' https://x.com/a ', '', 'ftp://x', 'https://x.com/a', 'https://note.com/b'])).toEqual(['https://x.com/a', 'https://note.com/b'])
+    expect(normalizeSocialUrls(Array.from({ length: 12 }, (_, i) => `https://example.com/${i}`))).toHaveLength(10)
+  })
+})
+```
+
+```ts
+// social.ts
+export const SOCIAL_PLATFORMS = ['instagram', 'x', 'youtube', 'facebook', 'tiktok', 'line', 'threads', 'note', 'other'] as const
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number]
+export const PLATFORM_LABEL: Record<SocialPlatform, string> = {
+  instagram: 'Instagram', x: 'X', youtube: 'YouTube', facebook: 'Facebook', tiktok: 'TikTok', line: 'LINE', threads: 'Threads', note: 'note', other: 'リンク',
+}
+const HOSTS: [RegExp, SocialPlatform][] = [
+  [/(^|\.)instagram\.com$/, 'instagram'],
+  [/(^|\.)(x|twitter)\.com$/, 'x'],
+  [/(^|\.)(youtube\.com|youtu\.be)$/, 'youtube'],
+  [/(^|\.)(facebook|fb)\.com$/, 'facebook'],
+  [/(^|\.)tiktok\.com$/, 'tiktok'],
+  [/(^|\.)(line\.me|lin\.ee)$/, 'line'],
+  [/(^|\.)threads\.net$/, 'threads'],
+  [/(^|\.)note\.com$/, 'note'],
+]
+export function detectPlatform(url: string): SocialPlatform {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, '')
+  } catch {
+    return 'other'
+  }
+  for (const [re, platform] of HOSTS) if (re.test(host)) return platform
+  return 'other'
+}
+export function normalizeSocialUrls(list: readonly string[]): string[] {
+  const seen = new Set<string>()
+  for (const raw of list) {
+    const v = raw.trim()
+    if (!/^https?:\/\//i.test(v)) continue
+    if (!seen.has(v)) seen.add(v)
+    if (seen.size >= 10) break
+  }
+  return [...seen]
+}
+```
+
+- [ ] **Step 2: スキーマとマイグレーション**
+
+`vendors` に `socialUrls: jsonList('social_urls')` を追加（`jsonList` は既存ヘルパ）。`npm run db:generate -- --name add_vendor_social_urls`、`npm run db:migrate:local`。生成 SQL は `ALTER TABLE vendors ADD social_urls text DEFAULT '[]' NOT NULL` 相当。
+
+- [ ] **Step 3: server と seed**
+
+`src/server/candidates.ts` `vendorInput` に `socialUrls: z.array(z.string().trim().max(500)).max(10).transform(normalizeSocialUrls)`（`normalizeSocialUrls` を lib から import）。`scripts/lib/seed.mjs` の vendors INSERT に `social_urls`（`JSON.stringify(v.socialUrls ?? [])`）を足し、テストに 1 件（`socialUrls` あり／なし）。`scripts/import-seed.mjs` は列が増えるだけ（変更不要なら不要と報告）。
+
+- [ ] **Step 4: UI**
+
+`BrandIcon.tsx`: `platform` ごとの `<svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden><path d="…"/></svg>`。path は simple-icons（https://simpleicons.org・CC0）の `instagram` `x` `youtube` `facebook` `tiktok` `line` `threads` `note` を使う（`node_modules` に無いので path 文字列を貼る。出典コメントを付ける）。`other` は lucide `Link`。
+
+`VendorLinks.tsx`:
+```tsx
+import { ActionIcon, Group } from '@mantine/core'
+import { Globe } from 'lucide-react'
+import { PLATFORM_LABEL, detectPlatform } from '../../lib/social'
+import { BrandIcon } from '../icons/BrandIcon'
+export function VendorLinks({ websiteUrl, socialUrls, size = 'sm' }: { websiteUrl: string | null; socialUrls: string[]; size?: 'sm' | 'md' }) {
+  if (!websiteUrl && socialUrls.length === 0) return null
+  const px = size === 'sm' ? 16 : 20
+  return (
+    <Group gap={4} wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+      {websiteUrl ? (
+        <ActionIcon component="a" href={websiteUrl} target="_blank" rel="noopener noreferrer" variant="subtle" size={size} aria-label="公式サイト">
+          <Globe size={px} aria-hidden />
+        </ActionIcon>
+      ) : null}
+      {socialUrls.map((url) => {
+        const p = detectPlatform(url)
+        return (
+          <ActionIcon key={url} component="a" href={url} target="_blank" rel="noopener noreferrer" variant="subtle" size={size} aria-label={PLATFORM_LABEL[p]}>
+            <BrandIcon platform={p} size={px} />
+          </ActionIcon>
+        )
+      })}
+    </Group>
+  )
+}
+```
+
+`VendorCard.tsx`: カード全体を `Link` で包む構造をやめ、`Card` に `onClick={() => navigate({ to: '/candidates/vendors/$id', params })}` と `style={{ cursor: 'pointer' }}` を付け、名前は `<Link><Text component="span" fw={700}>` にし、右下（坪単価の行の右）に `VendorLinks`（アンカーの入れ子を避けるため）。`role="link"` と `tabIndex={0}`・Enter で遷移も付ける（アクセシビリティ）。`candidates_.vendors.$id.tsx`: 見出し下のバッジ行に `VendorLinks size="md"`。既存の「公式」「参照 URL」の `Row` は残す。
+
+`VendorForm.tsx`: 「SNS の URL」`Textarea`（1 行 1 URL、`autosize minRows={2}`、説明「Instagram / X / YouTube / Facebook / TikTok / LINE / Threads / note のプロフィール URL を 1 行に 1 つ」）。値は `socialUrls.join('\n')` ↔ 送信時 `split('\n')`。
+
+- [ ] **Step 5: seed に SNS を入れて取り込む**（実データは `seed.local.json` のみ。計画には書かない）
+
+コントローラが `seed.local.json` の各業者に `socialUrls` を足す。`npm run import:seed -- --local` → 候補タブで各業者カードにアイコンが並ぶ（件数のみ報告）→ `--remote`。
+
+- [ ] **Step 6: 動作確認・検証・コミット**
+
+Playwright（390×844）: 業者カードにアイコン（Globe＋SNS）が出て、アイコンをタップすると新しいタブで開き、カード本体のタップで詳細へ行く（両方）。詳細にも同じアイコン行。編集フォームで SNS URL を 1 行足して保存→アイコンが増える。不正な行（`abc`）は保存時に捨てられる。コンソール clean。
+
+```bash
+npm run db:generate -- --name ci_check   # 差分なしを確認（CI と同じ）
+npm run typecheck && npm run test:coverage && npm run test:server && npm run test:scripts && npm run format:check && npm run build && npm run check:pii
+git add -A
+git commit -m "feat(candidates): 業者の公式サイトと SNS をアイコンリンクで表示"
+```
