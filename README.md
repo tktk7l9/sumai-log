@@ -206,8 +206,8 @@ npx wrangler deployments list   # 先頭の Created が push 時刻（UTC）と�
 Workers Builds が無音で止まる既知の事故があるため（他プロジェクトで実例あり）、接続直後は
 必ずこの突合をする。ずれていたら手元から `npm run deploy` で応急し、原因を調べる。
 
-**⚠️ この項目は本タスクではダッシュボード操作が必要なため未実施。上記手順どおりに
-オーナーが設定すること。**
+**✅ 接続済み。** `main` への push（PR マージ含む）で自動的にビルド・デプロイされる
+（GitHub の PR チェックにも `Workers Builds: sumai-log` として出る）。
 
 ### 8. バックアップ
 
