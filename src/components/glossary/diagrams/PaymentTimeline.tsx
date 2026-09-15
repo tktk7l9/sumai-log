@@ -35,8 +35,8 @@ export function PaymentTimelineDiagram() {
       <Label x={200} y={175} size={13}>
         つなぎ融資の期間
       </Label>
-      <Label x={200} y={205} size={12}>
-        着工〜引渡しの間、着工金・中間金を立て替える
+      <Label x={160} y={205} size={12}>
+        着工〜引渡しの立替え（着工金・中間金）
       </Label>
     </Figure>
   )

@@ -63,7 +63,7 @@ export function TermCard({ term, related }: { term: GlossaryTerm; related: Gloss
       ) : null}
 
       {term.forUs ? (
-        <Alert variant="light" title="我が家への効き方">
+        <Alert variant="light" role="note" title="我が家への効き方">
           {term.forUs}
         </Alert>
       ) : null}
