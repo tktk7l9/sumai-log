@@ -28,6 +28,8 @@ function Page() {
       const { areas } = await save({ data: { areas: values.areas } })
       await router.invalidate()
       notifications.show({ message: `照合に使う市区町村: ${areas.join('、') || 'なし'}` })
+    } catch {
+      notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
       setSaving(false)
     }

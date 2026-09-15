@@ -63,6 +63,8 @@ export function VendorForm({
       await router.invalidate()
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
       onSaved(id)
+    } catch {
+      notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
       setSaving(false)
     }

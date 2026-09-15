@@ -38,9 +38,13 @@ function Page() {
 
   async function handleDelete() {
     if (!window.confirm(`「${vendor.name}」を削除します。場所・予定・記録は残ります。`)) return
-    await remove({ data: { id: vendor.id } })
-    notifications.show({ message: '業者を削除しました' })
-    navigate({ to: '/candidates', search: { tab: 'vendors', coversHome: false } })
+    try {
+      await remove({ data: { id: vendor.id } })
+      notifications.show({ message: '業者を削除しました' })
+      navigate({ to: '/candidates', search: { tab: 'vendors', coversHome: false } })
+    } catch {
+      notifications.show({ message: '削除できませんでした', color: 'red' })
+    }
   }
 
   return (
@@ -89,6 +93,16 @@ function Page() {
               label="公式"
               value={
                 <Anchor href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink size={14} aria-hidden /> 開く
+                </Anchor>
+              }
+            />
+          ) : null}
+          {vendor.sourceUrl ? (
+            <Row
+              label="参照 URL"
+              value={
+                <Anchor href={vendor.sourceUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink size={14} aria-hidden /> 開く
                 </Anchor>
               }
