@@ -1,4 +1,4 @@
-import { ActionIcon, Image, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
+import { ActionIcon, Image, Modal, SimpleGrid, Stack, Text, UnstyledButton } from '@mantine/core'
 import { Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 
@@ -18,17 +18,22 @@ export function PhotoGrid({ photos, onDelete }: { photos: Photo[]; onDelete: (p:
     <>
       <SimpleGrid cols={{ base: 3, sm: 4 }} spacing="xs">
         {photos.map((p) => (
-          <Image
+          <UnstyledButton
             key={p.id}
-            src={photoUrl(p.thumbKey)}
-            alt={p.caption ?? '見学の写真'}
-            radius="md"
-            fit="cover"
-            h={110}
-            loading="lazy"
-            style={{ cursor: 'zoom-in' }}
+            type="button"
+            aria-label="写真を大きく表示"
             onClick={() => setOpen(p)}
-          />
+            style={{ display: 'block', width: '100%' }}
+          >
+            <Image
+              src={photoUrl(p.thumbKey)}
+              alt={p.caption ?? '見学の写真'}
+              radius="md"
+              fit="cover"
+              h={110}
+              loading="lazy"
+            />
+          </UnstyledButton>
         ))}
       </SimpleGrid>
       <Modal
