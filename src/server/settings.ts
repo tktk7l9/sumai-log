@@ -15,7 +15,7 @@ export const getSettings = createServerFn().handler(async () => {
     actorEmail,
     members: allMembers(),
     environment: env.ENVIRONMENT ?? 'unknown',
-    photosReady: Boolean((env as unknown as { PHOTOS?: unknown }).PHOTOS),
+    photosReady: Boolean(env.PHOTOS),
   }
 })
 

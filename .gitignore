@@ -28,6 +28,7 @@ seed.local/out/
 
 # git worktree（superpowers:using-git-worktrees）
 .worktrees/
+.claude/
 
 # Playwright MCP のスクリーンショット出力
 .playwright-mcp/

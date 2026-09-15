@@ -26,9 +26,19 @@ const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   }
 
   const user = await requireUser(request)
-  const result = await next({ context: { user } })
-  applySecurityHeaders(result.response.headers)
-  return result
+  try {
+    const result = await next({ context: { user } })
+    applySecurityHeaders(result.response.headers)
+    return result
+  } catch (e) {
+    // ルートハンドラが throw new Response(...)（404 など）で抜けると、通常の
+    // return と違ってここを通らずセキュリティヘッダが付かずに配信されてしまう。
+    if (e instanceof Response) {
+      applySecurityHeaders(e.headers)
+      throw e
+    }
+    throw e
+  }
 })
 
 export const startInstance = createStart(() => {

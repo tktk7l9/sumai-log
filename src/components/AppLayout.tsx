@@ -40,6 +40,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               label="設定"
               leftSection={<Settings size={18} aria-hidden />}
               active={isNavItemActive(pathname, '/settings')}
+              aria-current={isNavItemActive(pathname, '/settings') ? 'page' : undefined}
               w="auto"
               px="xs"
             />
@@ -50,6 +51,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <AppShell.Navbar p="xs">
         {NAV_ITEMS.map(({ to, label, icon }) => {
           const Icon = ICONS[icon]
+          const active = isNavItemActive(pathname, to)
           return (
             <NavLink
               key={to}
@@ -57,7 +59,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               to={to}
               label={label}
               leftSection={<Icon size={18} aria-hidden />}
-              active={isNavItemActive(pathname, to)}
+              active={active}
+              aria-current={active ? 'page' : undefined}
             />
           )
         })}

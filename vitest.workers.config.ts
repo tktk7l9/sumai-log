@@ -27,7 +27,5 @@ export default defineConfig({
   test: {
     include: ['src/server/**/*.worker-test.ts'],
     setupFiles: ['./test/apply-migrations.ts'],
-    // Task 1 の時点では src/server 配下にテスト対象が無いので、無ければ成功にする
-    passWithNoTests: true,
   },
 })
