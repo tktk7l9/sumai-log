@@ -116,7 +116,19 @@ export function PlaceForm({
           placeholder="都道府県から。番地まで無くても町名で引けます"
           {...form.getInputProps('address')}
           value={form.values.address ?? ''}
+          onChange={(event) => {
+            form.setFieldValue('address', event.currentTarget.value)
+            if (form.values.geocodeSource === 'gsi') {
+              form.setValues({ lat: null, lng: null, geocodeSource: null })
+            }
+            setLookup({ state: 'idle' })
+          }}
         />
+        {form.values.geocodeSource === 'gsi' && lookup.state !== 'hit' ? (
+          <Text size="xs" c="dimmed">
+            座標は前回の住所検索の結果です。住所を変えたら引き直してください。
+          </Text>
+        ) : null}
         <Button
           variant="default"
           leftSection={<Search size={16} aria-hidden />}
