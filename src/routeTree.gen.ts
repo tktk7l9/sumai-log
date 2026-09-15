@@ -20,6 +20,7 @@ import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
 import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
+import { Route as RecordsVisitsIdRouteImport } from './routes/records_.visits.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -76,6 +77,11 @@ const CandidatesVendorsIdRoute = CandidatesVendorsIdRouteImport.update({
   path: '/candidates/vendors/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecordsVisitsIdRoute = RecordsVisitsIdRouteImport.update({
+  id: '/records_/visits/$id',
+  path: '/records/visits/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
+  '/records/visits/$id': typeof RecordsVisitsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
+  '/records/visits/$id': typeof RecordsVisitsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +124,7 @@ export interface FileRoutesById {
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
+  '/records_/visits/$id': typeof RecordsVisitsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/api/photos/$'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
+    | '/records/visits/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
     | '/api/photos/$'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
+    | '/records/visits/$id'
   id:
     | '__root__'
     | '/'
@@ -157,6 +168,7 @@ export interface FileRouteTypes {
     | '/api/photos/$'
     | '/candidates_/properties/$id'
     | '/candidates_/vendors/$id'
+    | '/records_/visits/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -171,6 +183,7 @@ export interface RootRouteChildren {
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
   CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
+  RecordsVisitsIdRoute: typeof RecordsVisitsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CandidatesVendorsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/records_/visits/$id': {
+      id: '/records_/visits/$id'
+      path: '/records/visits/$id'
+      fullPath: '/records/visits/$id'
+      preLoaderRoute: typeof RecordsVisitsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -267,6 +287,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
   CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
+  RecordsVisitsIdRoute: RecordsVisitsIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
