@@ -189,4 +189,20 @@ describe('GLOSSARY（データの体裁）', () => {
       expect({ id: term.id, ok: Boolean(term.forUs) }).toEqual({ id: term.id, ok: true })
     }
   })
+
+  it('本文の各段落は空でない', () => {
+    for (const term of GLOSSARY) {
+      const ok = term.body.every((paragraph) => paragraph.trim().length > 0)
+      expect({ id: term.id, ok }).toEqual({ id: term.id, ok: true })
+    }
+  })
+
+  it('numbers の label と value は空でない', () => {
+    for (const term of GLOSSARY) {
+      const ok = (term.numbers ?? []).every(
+        (n) => n.label.trim().length > 0 && n.value.trim().length > 0,
+      )
+      expect({ id: term.id, ok }).toEqual({ id: term.id, ok: true })
+    }
+  })
 })
