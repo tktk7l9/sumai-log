@@ -17,6 +17,7 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
+import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
@@ -63,6 +64,11 @@ const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
   path: '/api/geocode',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOembedRoute = ApiOembedRouteImport.update({
+  id: '/api/oembed',
+  path: '/api/oembed',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlacesIdRoute = PlacesIdRouteImport.update({
   id: '/places/$id',
   path: '/places/$id',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/api/oembed': typeof ApiOembedRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByTo {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/api/oembed': typeof ApiOembedRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
@@ -129,6 +137,7 @@ export interface FileRoutesById {
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
+  '/api/oembed': typeof ApiOembedRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
@@ -146,6 +155,7 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/api/oembed'
     | '/places/$id'
     | '/api/photos/$'
     | '/candidates/properties/$id'
@@ -161,6 +171,7 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/api/oembed'
     | '/places/$id'
     | '/api/photos/$'
     | '/candidates/properties/$id'
@@ -176,6 +187,7 @@ export interface FileRouteTypes {
     | '/records'
     | '/settings'
     | '/api/geocode'
+    | '/api/oembed'
     | '/places/$id'
     | '/api/photos/$'
     | '/candidates_/properties/$id'
@@ -192,6 +204,7 @@ export interface RootRouteChildren {
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
+  ApiOembedRoute: typeof ApiOembedRoute
   PlacesIdRoute: typeof PlacesIdRoute
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
@@ -257,6 +270,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGeocodeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/oembed': {
+      id: '/api/oembed'
+      path: '/api/oembed'
+      fullPath: '/api/oembed'
+      preLoaderRoute: typeof ApiOembedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/places/$id': {
       id: '/places/$id'
       path: '/places/$id'
@@ -304,6 +324,7 @@ const rootRouteChildren: RootRouteChildren = {
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
+  ApiOembedRoute: ApiOembedRoute,
   PlacesIdRoute: PlacesIdRoute,
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
