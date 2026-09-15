@@ -13,7 +13,7 @@ export function PageShell({
   children?: React.ReactNode
 }) {
   return (
-    <Container size="sm" px={0}>
+    <Container size="sm" px={0} className="fab-clearance">
       {/* 見出しと中身の間は 24px（セクション間と同じ）。見出しの中は 4px で束ねる */}
       <Stack gap="lg">
         <Stack gap={4}>
