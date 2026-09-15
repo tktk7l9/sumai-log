@@ -12,8 +12,14 @@
    `src/start.ts` のグローバルミドルウェアで全リクエストに適用する。fail closed。
    例外: 静的アセット（クライアントバンドル・favicon・manifest・robots.txt）は Workers Assets
    層が配信し `src/start.ts` を経由しない。Cloudflare Access の背後ではあるが、アプリ側
-   allowlist は通らない。Phase 2 の写真配信（`/api/photos`）はこの例外に乗せず、必ず
-   `src/server/` の server route（＝ミドルウェアを通る経路）として実装すること。
+   allowlist は通らない。写真のアップロード（`POST /api/photos`）と配信
+   （`GET /api/photos/<key>`）はこの例外に乗せず、`src/routes/api.photos.$.tsx` の
+   TanStack Start server route（＝ミドルウェアを通る経路）として実装している。この 2 つは
+   `api.photos.tsx`（完全一致）と `api.photos.$.tsx`（スプラット）に分けず、必ず 1 ファイル
+   にまとめること。このバージョンの TanStack Router はスプラット `$` を「0 文字にもマッチ
+   しうる」ものとして扱い、一致度が同点のとき子ノード（スプラット）を親の完全一致ノードより
+   優先するため、分けると `POST /api/photos` がスプラット側の GET ハンドラ（実装なし）に化けて
+   SSR フォールバックの 200 HTML に流れ、アップロードが無言で失敗する（実機で確認済み）。
 4. **秘密は `.dev.vars`（ローカル）と `wrangler secret`（本番）だけ。** `wrangler.jsonc` の `vars` に
    メールを書かない。Keyway は `keyway pull -e development -f .dev.vars -y`（`keyway run` は wrangler に効かない）。
 5. **`src/lib/` は純粋関数のみ。** カバレッジ 100% ゲートの対象。
@@ -24,6 +30,15 @@
 - 日付は TEXT の ISO-8601、金額は円の整数、面積は小数、id は text（`crypto.randomUUID()`）
 - スマホ優先。下タブ＋FAB＋全画面 Drawer。デスクトップは左ナビ
 - 地図に出せない場所は「出せない理由」を画面に書く（空の枠を出さない）
+- 写真は端末で縮小してから送る（表示用 1600px・サムネ 400px の JPEG）。R2 は非公開バケットで、
+  配信は認証後に Worker 経由でストリームする。扱ってよいキーは `src/lib/photos.ts` の
+  `isManagedPhotoKey` を通ったものだけ
+- 予定の日時（`startsAt`）は終日なら `YYYY-MM-DD`、時刻ありなら `YYYY-MM-DDTHH:MM:00+09:00`
+  （日本時間のオフセットを明示）。日付キーは先頭 10 文字（`src/lib/calendar.ts`）。Date
+  オブジェクトへ変換しない
+- `normalizeAddress`（住所の表記ゆれ吸収）と `normalizeSocialUrls`（SNS URL の正規化）は
+  `src/lib/`（`geocode.ts` / `social.ts`）と `scripts/lib/seed.mjs` の両方に同じ実装がある。
+  片方だけ変えない（seed 側は plain `.mjs` で TS を import できないため、あえて重複させている）
 
 ## スキーマを変えたら
 

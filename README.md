@@ -6,6 +6,34 @@
 候補ごとにメモ・写真・地図つきで残していく。リポジトリは public だが、実データ
 （二人のメール・表示名・見学先の住所や座標など）は D1 / R2 にしか置かず、コードには書かない。
 
+## できること
+
+- **予定**: 月カレンダーで見学・打合せなどの予定を追加・編集・削除。場所を選ぶと業者／物件を
+  自動で補完する
+- **記録**: 見学記録の一覧・詳細・フォーム。良かった点・気になる点・聞いたこと/答え・次の
+  アクションを残す
+- **写真**: 見学記録に写真を追加。全画面表示・削除ができる（仕様は下記）
+- **コメント**: 見学記録・業者・物件・場所それぞれの詳細に、二人が一言ずつ残せる。削除できる
+  のは自分のコメントだけ
+- **ホーム**: 次の予定 3 件と、「記録を書きませんか」（終わった予定のうち見学記録が無いもの）
+  を表示
+- **候補（業者/物件）**: 業者の公式サイト・SNS をアイコンリンクで表示する（詳細は下記）
+- **地図**: Leaflet + 地理院タイルで見学した場所・予定の場所を表示
+
+### 写真の仕様
+
+- アップロード前に端末（ブラウザの Canvas）で表示用 1600px・サムネ 400px の JPEG（quality
+  0.8）に縮小してから送信する。**元の画像はサーバーに保存しない**（スマホ側にそのまま残る）
+- 1 回のアップロードは最大 20 枚、縮小後のファイルは 1 枚あたり 2MB まで
+- 受け付ける形式は JPEG / PNG / WebP（マジックバイトで判定し、それ以外は拒否する）
+- R2 バケットは非公開。配信は認証後に Worker がストリームする
+
+### 業者の SNS リンク
+
+公式サイト・SNS の URL は 1 行に 1 件で入力する。`http://` または `https://` で始まらない行は
+保存時に無視される。ドメインから Instagram / X / YouTube / Facebook / TikTok / LINE / Threads /
+note を自動判定してアイコン付きリンクを出し、それ以外は汎用リンクアイコンになる。
+
 ## 技術構成
 
 | 領域           | 採用                                                |
@@ -69,6 +97,11 @@ npm run db:migrate:remote                   # drizzle/migrations の全件を本
 
 同名の資源が既にあれば `npx wrangler d1 list` / `npx wrangler r2 bucket list` で確認して使い回す
 （重複作成しない）。
+
+スキーマを変更したとき（`npm run db:generate` で新しいマイグレーションを生成したとき）は、
+`npm run db:migrate:remote` を手動で本番 D1 に適用する（自動適用の仕組みは無い。マージの前後
+どちらでもよいが、忘れると本番だけスキーマが古いままになる）。Phase 2 で追加した
+`0002_add_vendor_social_urls` は適用済み。
 
 ### 2. 初回デプロイ（Access 設定前）
 
@@ -140,8 +173,10 @@ rm .dev.vars.production
 
 例外: 静的アセット（クライアントバンドル・favicon・manifest・robots.txt）は Cloudflare
 Workers Assets が直接配信し、アプリのコード（`src/start.ts` のミドルウェア）を経由しない。
-Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らない。Phase 2 で追加する
-写真配信（`/api/photos`）はこの経路に乗せず、必ず `src/server/` の server route にすること。
+Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らない。写真のアップロード
+（`POST /api/photos`）と配信（`GET /api/photos/<key>`）はこの経路に乗せず、
+`src/routes/api.photos.$.tsx` の TanStack Start server route（＝ミドルウェアを通る経路）
+として実装済み。
 
 ### 6. Keyway（secret のチーム共有）
 
@@ -178,3 +213,12 @@ Workers Builds が無音で止まる既知の事故があるため（他プロ�
 
 月次: `npm run db:export`（`backups/sumai-log-YYYYMMDD.sql` を出力・gitignore 済み）→
 Google Drive の `backups/sumai-log` へコピー。
+
+**R2 の写真は `db:export` の対象外。** D1 のバックアップとは別に、取込スクリプトが変換した
+JPEG（`seed.local/out/*.jpg`・gitignore 済み）と、アプリから追加した写真を月次で同じ Drive
+フォルダへコピーする。1 件だけ取り出す例:
+
+```bash
+npx wrangler r2 object get sumai-log-photos/photos/<visitId>/<photoId>-display.jpg \
+  --file ./backups/<photoId>-display.jpg --remote
+```
