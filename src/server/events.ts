@@ -33,6 +33,10 @@ export const eventInput = z
     message: '開始時刻を入れてください',
     path: ['startTime'],
   })
+  .refine((v) => v.allDay || !v.startTime || !v.endTime || v.endTime > v.startTime, {
+    message: '終了時刻は開始より後にしてください',
+    path: ['endTime'],
+  })
   .transform(({ date, startTime, endTime, ...rest }) => ({
     ...rest,
     startsAt: composeStartsAt(date, rest.allDay ? null : startTime),
@@ -60,7 +64,13 @@ export const listMonthEvents = createServerFn()
       listEventsWithLinks(db, keys[0], keys[keys.length - 1]),
       listRecordedEventIds(db),
     ])
-    return { events: rows, recordedEventIds: [...recorded], todayKey: dateKey(nowJstIso()) }
+    const now = nowJstIso()
+    return {
+      events: rows,
+      recordedEventIds: [...recorded],
+      todayKey: dateKey(now),
+      nowIso: now,
+    }
   })
 
 export const getEvent = createServerFn()

@@ -15,6 +15,7 @@ import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { groupByDay } from '../lib/calendar'
 import { holidayName } from '../lib/holidays'
+import { pendingVisitEvents } from '../lib/pending'
 import { deleteEvent, listMonthEvents } from '../server/events'
 import { listLinkTargets, listPlaces } from '../server/places'
 import type { EventWithLinks } from '../server/repository'
@@ -56,7 +57,7 @@ function currentYearMonth() {
 }
 
 function Page() {
-  const { events, recordedEventIds, todayKey, targets, places, ym } = Route.useLoaderData()
+  const { events, recordedEventIds, todayKey, nowIso, targets, places, ym } = Route.useLoaderData()
   const { d } = Route.useSearch()
   const navigate = useNavigate({ from: '/calendar' })
   const router = useRouter()
@@ -66,7 +67,12 @@ function Page() {
 
   const byDay = useMemo(() => groupByDay(events), [events])
   const recorded = useMemo(() => new Set(recordedEventIds), [recordedEventIds])
-  const selected = d ?? todayKey
+  const recordable = useMemo(
+    () => new Set(pendingVisitEvents(events, recorded, nowIso).map((e) => e.id)),
+    [events, recorded, nowIso],
+  )
+  const ymKey = `${ym.year}-${String(ym.month).padStart(2, '0')}`
+  const selected = d?.startsWith(ymKey) ? d : todayKey.startsWith(ymKey) ? todayKey : `${ymKey}-01`
   const dayEvents = byDay.get(selected) ?? []
   const monthDate = new Date(Date.UTC(ym.year, ym.month - 1, 1))
 
@@ -126,6 +132,7 @@ function Page() {
           <EventList
             events={dayEvents}
             recordedEventIds={recorded}
+            recordable={recordable}
             onEdit={setEditing}
             onDelete={handleDelete}
             onRecord={(e) =>

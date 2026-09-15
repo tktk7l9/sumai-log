@@ -6,12 +6,14 @@ import { EventItem } from './EventItem'
 export function EventList({
   events,
   recordedEventIds,
+  recordable,
   onEdit,
   onDelete,
   onRecord,
 }: {
   events: EventWithLinks[]
   recordedEventIds: ReadonlySet<string>
+  recordable: ReadonlySet<string>
   onEdit: (e: EventWithLinks) => void
   onDelete: (e: EventWithLinks) => void
   onRecord?: (e: EventWithLinks) => void
@@ -23,6 +25,7 @@ export function EventList({
           key={e.id}
           event={e}
           recorded={recordedEventIds.has(e.id)}
+          canRecord={recordable.has(e.id)}
           onEdit={onEdit}
           onDelete={onDelete}
           onRecord={onRecord}
