@@ -8,7 +8,7 @@ import { isManagedPhotoKey, photoKeys, sniffImageType, validatePhotoUpload } fro
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { currentActorEmail } from '../server/members'
 import { insertPhoto } from '../server/repository'
-import { deletePhotoObjects, getPhotosBucket } from '../server/storage'
+import { cleanupFailedUpload, getPhotosBucket } from '../server/storage'
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -96,8 +96,7 @@ export const Route = createFileRoute('/api/photos/$')({
           await bucket.put(keys.thumbKey, thumbBytes, { httpMetadata: { contentType: thumbType } })
           await insertPhoto(db, { id: photoId, visitId, ...keys, width, height }, actor)
         } catch (error) {
-          await deletePhotoObjects([keys.displayKey, keys.thumbKey])
-          throw error
+          await cleanupFailedUpload([keys.displayKey, keys.thumbKey], error)
         }
         return json(200, { id: photoId, ...keys })
       },

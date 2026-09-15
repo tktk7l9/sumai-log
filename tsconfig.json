@@ -4,6 +4,10 @@
     "target": "ES2022",
     "jsx": "react-jsx",
     "module": "ESNext",
+    // src/lib/normalize-parity.test.ts が scripts/lib/normalize.mjs（プレーン JS）を
+    // import して一致テストするため。checkJs は付けない（.mjs 自体の型検査はせず、
+    // .ts 側からの import 解決だけ通す）
+    "allowJs": true,
     "paths": {
       "#/*": ["./src/*"],
       "@/*": ["./src/*"]

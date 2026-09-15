@@ -43,8 +43,10 @@
   （日本時間のオフセットを明示）。日付キーは先頭 10 文字（`src/lib/calendar.ts`）。Date
   オブジェクトへ変換しない
 - `normalizeAddress`（住所の表記ゆれ吸収）と `normalizeSocialUrls`（SNS URL の正規化）は
-  `src/lib/`（`geocode.ts` / `social.ts`）と `scripts/lib/seed.mjs` の両方に同じ実装がある。
-  片方だけ変えない（seed 側は plain `.mjs` で TS を import できないため、あえて重複させている）
+  `src/lib/`（`geocode.ts` / `social.ts`）と `scripts/lib/normalize.mjs`（`seed.mjs` が
+  import して使う）の両方に同じ実装がある。片方だけ変えない（seed 側は plain `.mjs` で
+  TS を import できないため、あえて重複させている）。一致は `src/lib/normalize-parity.test.ts`
+  が両実装に同じケースを流して固定している。直すときは両方直してこのテストを green に保つ
 
 ## スキーマを変えたら
 
