@@ -70,8 +70,9 @@ export async function upsertVendor(
   return id
 }
 
-/** 業者を消す。場所・予定・見学・動画の vendorId は FK の SET NULL で外れる */
+/** 業者を消す。場所・予定・見学・動画の vendorId は FK の SET NULL で外れる。コメントは消す */
 export async function deleteVendorCascade(db: Db, id: string): Promise<void> {
+  await db.delete(comments).where(and(eq(comments.targetType, 'vendor'), eq(comments.targetId, id)))
   await db.delete(vendors).where(eq(vendors.id, id))
 }
 
@@ -97,7 +98,11 @@ export async function upsertProperty(
   return id
 }
 
+/** 物件を消す。コメントは消す */
 export async function deletePropertyCascade(db: Db, id: string): Promise<void> {
+  await db
+    .delete(comments)
+    .where(and(eq(comments.targetType, 'property'), eq(comments.targetId, id)))
   await db.delete(properties).where(eq(properties.id, id))
 }
 
@@ -117,7 +122,7 @@ export async function upsertPlace(db: Db, input: PlaceInput, actorEmail: string)
   return id
 }
 
-/** 場所を消す。見学記録が紐づいていたら消さない（記録の方が大事） */
+/** 場所を消す。見学記録が紐づいていたら消さない（記録の方が大事）。消すときはコメントも消す */
 export async function deletePlaceCascade(
   db: Db,
   id: string,
@@ -127,6 +132,7 @@ export async function deletePlaceCascade(
     .from(visits)
     .where(eq(visits.placeId, id))
   if ((used?.n ?? 0) > 0) return { ok: false, reason: 'has_visits' }
+  await db.delete(comments).where(and(eq(comments.targetType, 'place'), eq(comments.targetId, id)))
   await db.delete(places).where(eq(places.id, id))
   return { ok: true }
 }
@@ -263,15 +269,15 @@ export async function insertPhoto(
   },
   actorEmail: string,
 ): Promise<string> {
-  const [{ n }] = await db
-    .select({ n: sql<number>`count(*)` })
+  const [{ next }] = await db
+    .select({ next: sql<number>`coalesce(max(${photos.sortOrder}), -1) + 1` })
     .from(photos)
     .where(eq(photos.visitId, input.visitId))
   const { id: givenId, ...values } = input
   const id = givenId ?? crypto.randomUUID()
   await db
     .insert(photos)
-    .values({ ...values, id, sortOrder: Number(n ?? 0), createdBy: actorEmail })
+    .values({ ...values, id, sortOrder: Number(next ?? 0), createdBy: actorEmail })
   return id
 }
 
@@ -320,9 +326,10 @@ export async function upsertVisit(db: Db, input: VisitInput, actorEmail: string)
   return id
 }
 
-/** 見学記録を消す。写真行は FK cascade。R2 のキーを返すので呼び側で消す */
+/** 見学記録を消す。写真行は FK cascade。コメントは消す。R2 のキーを返すので呼び側で消す */
 export async function deleteVisitCascade(db: Db, id: string): Promise<string[]> {
   const keys = await photoKeysOfVisit(db, id)
+  await db.delete(comments).where(and(eq(comments.targetType, 'visit'), eq(comments.targetId, id)))
   await db.delete(visits).where(eq(visits.id, id))
   return keys
 }

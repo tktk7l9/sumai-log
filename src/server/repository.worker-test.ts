@@ -276,6 +276,22 @@ describe('photos', () => {
     expect(removed?.displayKey).toBe('photos/x/a-display.jpg')
     expect(await deletePhotoRow(db, a)).toBeNull()
     expect((await listPhotos(db, visitId)).map((p) => p.id)).toEqual([b])
+
+    const c = await insertPhoto(
+      db,
+      {
+        visitId,
+        displayKey: 'photos/x/c-display.jpg',
+        thumbKey: 'photos/x/c-thumb.jpg',
+        width: 800,
+        height: 600,
+      },
+      actor,
+    )
+    expect((await listPhotos(db, visitId)).map((p) => [p.id, p.sortOrder])).toEqual([
+      [b, 1],
+      [c, 2],
+    ])
   })
 
   it('visit を消すと photos は cascade で消える', async () => {
@@ -385,5 +401,14 @@ describe('comments', () => {
     expect(await deleteOwnComment(db, b, 'partner@example.com')).toBe(true)
     expect(await listComments(db, 'visit', target)).toHaveLength(1)
     expect(await db.select().from(comments)).toHaveLength(1)
+  })
+
+  it('対象を消すとコメントも消える', async () => {
+    const visitId = crypto.randomUUID()
+    await db.insert(visits).values({ id: visitId, visitedOn: '2030-01-05', createdBy: actor })
+    await insertComment(db, { targetType: 'visit', targetId: visitId, body: '一言' }, actor)
+    expect(await listComments(db, 'visit', visitId)).toHaveLength(1)
+    await deleteVisitCascade(db, visitId)
+    expect(await db.select().from(comments)).toHaveLength(0)
   })
 })
