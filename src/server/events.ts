@@ -3,9 +3,10 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { EVENT_KINDS, events } from '../db/schema'
-import { composeStartsAt, dateKey, monthKeys } from '../lib/calendar'
+import { events } from '../db/schema'
+import { dateKey, monthKeys } from '../lib/calendar'
 import { pendingVisitEvents, upcomingEvents } from '../lib/pending'
+import { eventInput } from './events.schema'
 import { currentActorEmail } from './members'
 import {
   deleteEvent as deleteEventRow,
@@ -13,36 +14,12 @@ import {
   listRecordedEventIds,
   upsertEvent,
 } from './repository'
-import { dateField, idField, idInput, optionalText, timeField } from './zod'
+import { idInput } from './zod'
 
-export const eventInput = z
-  .object({
-    id: idField.optional(),
-    title: z.string().trim().min(1, 'タイトルは必須です').max(200),
-    kind: z.enum(EVENT_KINDS),
-    date: dateField,
-    allDay: z.boolean(),
-    startTime: timeField.nullable(),
-    endTime: timeField.nullable(),
-    placeId: idField.nullable(),
-    vendorId: idField.nullable(),
-    propertyId: idField.nullable(),
-    note: optionalText,
-  })
-  .refine((v) => v.allDay || v.startTime !== null, {
-    message: '開始時刻を入れてください',
-    path: ['startTime'],
-  })
-  .refine((v) => v.allDay || !v.startTime || !v.endTime || v.endTime > v.startTime, {
-    message: '終了時刻は開始より後にしてください',
-    path: ['endTime'],
-  })
-  .transform(({ date, startTime, endTime, ...rest }) => ({
-    ...rest,
-    startsAt: composeStartsAt(date, rest.allDay ? null : startTime),
-    endsAt: rest.allDay || !endTime ? null : composeStartsAt(date, endTime),
-  }))
-export type EventInput = z.input<typeof eventInput>
+// eventInput は events.schema.ts から（テストの都合で分離した理由はそちら参照）。
+// 公開する import パス（'./events' から eventInput/EventInput を取れる)は変えない。
+export { eventInput }
+export type { EventInput } from './events.schema'
 
 /** 「今」。JST の ISO 文字列（Worker は UTC なので +9h して整形） */
 export function nowJstIso(): string {

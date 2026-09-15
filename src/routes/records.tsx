@@ -11,8 +11,8 @@ import { VideoCard } from '../components/videos/VideoCard'
 import { VideoForm } from '../components/videos/VideoForm'
 import { VisitCard } from '../components/visits/VisitCard'
 import { VisitForm } from '../components/visits/VisitForm'
-import { dateKey } from '../lib/calendar'
 import { UUID_SHAPE } from '../lib/ids'
+import { buildVisitPrefill } from '../lib/prefill'
 import type { Event } from '../db/schema'
 import { getEvent } from '../server/events'
 import { listVideos, videoFormOptions } from '../server/videos'
@@ -122,17 +122,7 @@ function Page() {
         <VisitForm
           visit={null}
           options={options}
-          defaults={
-            fromEventRow
-              ? {
-                  eventId: fromEventRow.id,
-                  placeId: fromEventRow.placeId ?? null,
-                  vendorId: fromEventRow.vendorId ?? null,
-                  propertyId: fromEventRow.propertyId ?? null,
-                  visitedOn: dateKey(fromEventRow.startsAt),
-                }
-              : undefined
-          }
+          defaults={buildVisitPrefill({ eventId: fromEvent }, fromEventRow ?? null)}
           onSaved={(id) => {
             close()
             navigate({ to: '/records/visits/$id', params: { id } })
