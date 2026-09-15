@@ -5,6 +5,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -14,23 +15,26 @@ import { PlaceForm } from '../components/places/PlaceForm'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { formatTsubo } from '../lib/format'
 import { deleteVendor, getVendor } from '../server/candidates'
+import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
 import { getHomeAreas } from '../server/settings'
 
 export const Route = createFileRoute('/candidates_/vendors/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, homeAreas, targets] = await Promise.all([
+    const [detail, homeAreas, targets, commentData] = await Promise.all([
       getVendor({ data: { id: params.id } }),
       getHomeAreas(),
       listLinkTargets(),
+      listCommentsFor({ data: { targetType: 'vendor', targetId: params.id } }),
     ])
-    return { ...detail, homeAreas, targets }
+    return { ...detail, homeAreas, targets, ...commentData }
   },
 })
 
 function Page() {
-  const { vendor, places, coversHome, homeAreas, targets } = Route.useLoaderData()
+  const { vendor, places, coversHome, homeAreas, targets, comments, me, members } =
+    Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deleteVendor)
   const [editing, setEditing] = useState(false)
@@ -151,6 +155,14 @@ function Page() {
           ))
         )}
       </Stack>
+
+      <CommentThread
+        targetType="vendor"
+        targetId={vendor.id}
+        comments={comments}
+        me={me}
+        members={members}
+      />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="業者を編集">
         <VendorForm vendor={vendor} homeAreas={homeAreas} onSaved={() => setEditing(false)} />

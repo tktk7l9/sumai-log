@@ -5,6 +5,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -12,16 +13,18 @@ import { PhotoGrid } from '../components/visits/PhotoGrid'
 import { PhotoUploader } from '../components/visits/PhotoUploader'
 import { VisitForm } from '../components/visits/VisitForm'
 import { ATTENDEES_LABEL, type Photo } from '../db/schema'
+import { listCommentsFor } from '../server/comments'
 import { deletePhoto, deleteVisit, getVisit, visitFormOptions } from '../server/visits'
 
 export const Route = createFileRoute('/records_/visits/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, options] = await Promise.all([
+    const [detail, options, commentData] = await Promise.all([
       getVisit({ data: { id: params.id } }),
       visitFormOptions(),
+      listCommentsFor({ data: { targetType: 'visit', targetId: params.id } }),
     ])
-    return { ...detail, options }
+    return { ...detail, options, ...commentData }
   },
 })
 
@@ -33,7 +36,8 @@ const BLOCKS: { key: 'good' | 'concerns' | 'qa' | 'nextActions'; label: string }
 ]
 
 function Page() {
-  const { visit, place, vendor, property, event, photos, options } = Route.useLoaderData()
+  const { visit, place, vendor, property, event, photos, options, comments, me, members } =
+    Route.useLoaderData()
   const navigate = useNavigate()
   const router = useRouter()
   const removeVisit = useServerFn(deleteVisit)
@@ -127,6 +131,14 @@ function Page() {
         <PhotoUploader visitId={visit.id} onUploaded={() => router.invalidate()} />
         <PhotoGrid photos={photos} onDelete={handleDeletePhoto} />
       </Stack>
+
+      <CommentThread
+        targetType="visit"
+        targetId={visit.id}
+        comments={comments}
+        me={me}
+        members={members}
+      />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="見学記録を編集">
         <VisitForm visit={visit} options={options} onSaved={() => setEditing(false)} />
