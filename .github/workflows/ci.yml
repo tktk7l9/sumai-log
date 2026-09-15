@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # gitleaks-action は組織アカウントだとライセンスを要求するため、
+      # private リポジトリでも確実に動くようバイナリを直接使う。
+      - name: gitleaks scan
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks dir . --no-banner --redact --verbose
+
+      - name: npm audit
+        run: npm audit --audit-level=low
+
+      # 実データの混入検査。CI には seed.local.json が無いので、ここでは
+      # 「スクリプトが壊れていないか」しか見られない。実際に守るのは手元で
+      # `npm run check:pii` を通すこと（AGENTS.md 参照）。
+      - name: 実データの混入検査（スクリプトの健全性のみ）
+        run: npm run check:pii
+
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      # 実 Workers ランタイム＋D1 に対するサーバー層のテスト
+      - run: npm run test:server
+      - run: npm run build
+
+      # スキーマ変更とマイグレーションの取り違えを防ぐ。
+      # schema.ts を直したのに db:generate を忘れた場合はここで落ちる。
+      - name: drizzle migrations are up to date
+        run: |
+          npm run db:generate -- --name ci_check
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::schema.ts の変更に対してマイグレーションが未生成です。'npm run db:generate' を実行してコミットしてください。"
+            git status --porcelain drizzle
+            exit 1
+          fi

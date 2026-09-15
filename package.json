@@ -1,0 +1,74 @@
+{
+  "name": "sumai-log",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#/*": "./src/*"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
+    "dev": "vite dev --port 3000",
+    "generate-routes": "tsr generate",
+    "build": "vite build",
+    "preview": "npm run build && vite preview",
+    "test": "vitest run && vitest run --config vitest.workers.config.ts",
+    "test:coverage": "vitest run --coverage",
+    "test:server": "vitest run --config vitest.workers.config.ts",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:pii": "node scripts/check-pii.mjs",
+    "deploy": "npm run build && wrangler deploy",
+    "cf-typegen": "wrangler types",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply sumai-log --local",
+    "db:migrate:remote": "wrangler d1 migrations apply sumai-log --remote",
+    "db:export": "wrangler d1 export sumai-log --remote --output backups/sumai-log-$(date +%Y%m%d).sql"
+  },
+  "dependencies": {
+    "@cloudflare/vite-plugin": "^1.54.5",
+    "@mantine/core": "^9.6.0",
+    "@mantine/dates": "^9.6.0",
+    "@mantine/form": "^9.6.0",
+    "@mantine/hooks": "^9.6.0",
+    "@mantine/notifications": "^9.6.0",
+    "@tanstack/react-router": "latest",
+    "@tanstack/react-router-ssr-query": "latest",
+    "@tanstack/react-start": "latest",
+    "@tanstack/router-plugin": "^1.168.36",
+    "dayjs": "^1.11.21",
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.12",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.43.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@tanstack/devtools-vite": "latest",
+    "@tanstack/router-cli": "^1.167.34",
+    "@types/leaflet": "^1.9.21",
+    "@types/node": "^26.5.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.10",
+    "drizzle-kit": "^0.31.10",
+    "postcss": "^8.5.28",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.5",
+    "wrangler": "^4.131.0"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.0"
+    },
+    "sharp": "^0.35.4"
+  }
+}

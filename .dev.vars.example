@@ -1,0 +1,15 @@
+# ローカル開発用。`.dev.vars` にコピーして使う（gitignore 済み）。
+# Keyway を使う場合: keyway pull -e development -f .dev.vars -y
+#
+# ローカルには Cloudflare Access が無いため、ENVIRONMENT=development のときだけ
+# DEV_IDENTITY_EMAIL を認証済み利用者として扱う。本番では必ず無効。
+
+ENVIRONMENT=development
+DEV_IDENTITY_EMAIL=owner@example.com
+ACCESS_ALLOWED_EMAILS=owner@example.com,partner@example.com
+# email:表示名:Mantineの色名 をカンマ区切り
+MEMBERS=owner@example.com:甲:teal,partner@example.com:乙:pink
+
+# 本番でのみ使う値（ローカルでは空でよい）
+ACCESS_TEAM_DOMAIN=
+ACCESS_POLICY_AUD=

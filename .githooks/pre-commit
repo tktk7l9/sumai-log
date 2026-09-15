@@ -1,0 +1,18 @@
+#!/bin/sh
+# コミットに実データが混ざっていないか確かめる。
+#
+# AGENTS.md に書くだけでは守られず、コメントとテストの fixture に実名・実住所・
+# 実地番が入って履歴を作り直すことになった。人の注意力に任せない。
+#
+# 見るのはインデックスの内容だけ（コミットに実際に入るもの）。0.2秒ほどで終わる。
+# どうしても通したいときは git commit --no-verify。
+#
+# このフックは .githooks/ に置いてありコミットされる。有効化は npm install が
+# 走ったときの prepare スクリプトが行う（core.hooksPath を向ける）。
+
+node scripts/check-pii.mjs --staged || {
+  echo ''
+  echo 'コミットを中止しました。実データは seed.local.json 経由でのみ入れます。'
+  echo '（意図して通す場合のみ: git commit --no-verify）'
+  exit 1
+}

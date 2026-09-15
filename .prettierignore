@@ -1,0 +1,10 @@
+dist
+.wrangler
+coverage
+drizzle/migrations
+src/routeTree.gen.ts
+worker-configuration.d.ts
+package-lock.json
+
+# サブエージェント駆動の作業ドキュメント（管理側の成果物。整形対象に含めない）
+docs/
