@@ -40,6 +40,11 @@ const FIELD_CODE_MESSAGE: Partial<Record<string, Partial<Record<ZodIssueCode, st
     too_small: 'タグは 1〜30 文字、最大 10 個です',
     too_big: 'タグは 1〜30 文字、最大 10 個です',
   },
+  // 設定画面のタグ一覧（src/server/tags.ts の names: 1〜30 文字 × 最大 100 個）
+  names: {
+    too_small: 'タグは 1〜30 文字で入力してください',
+    too_big: 'タグは 1〜30 文字、最大 100 個です',
+  },
   takeaways: {
     too_big: '学びは 4000 文字までです',
   },

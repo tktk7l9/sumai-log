@@ -56,6 +56,17 @@ describe('extractFormError', () => {
     })
   })
 
+  it('names（設定画面のタグ一覧）の too_big / too_small は 100 個上限の文言に言い換える', () => {
+    expect(
+      extractFormError(issueError([{ code: 'too_big', path: ['names', 3], message: 'Too big' }])),
+    ).toEqual({ message: 'タグは 1〜30 文字、最大 100 個です', path: 'names' })
+    expect(
+      extractFormError(
+        issueError([{ code: 'too_small', path: ['names', 0], message: 'Too small' }]),
+      ),
+    ).toEqual({ message: 'タグは 1〜30 文字で入力してください', path: 'names' })
+  })
+
   it('tags too_small も同じ文言に言い換える', () => {
     const error = issueError([{ code: 'too_small', path: ['tags'], message: 'Too small' }])
     expect(extractFormError(error).message).toBe('タグは 1〜30 文字、最大 10 個です')
