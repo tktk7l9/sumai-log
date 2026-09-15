@@ -19,12 +19,13 @@ type Targets = {
 type Options = { targets: Targets; places: PlaceWithLinks[]; events: Event[] }
 type Values = Omit<VisitInput, 'id'>
 
-const empty: Values = {
+// visitedOn の既定値は「今日」なのでモジュール読み込み時でなくコンポーネント内で計算する
+// （Worker は長寿命で isolate をまたいで再利用されるため、モジュール直下で固定すると古くなる）
+const empty: Omit<Values, 'visitedOn'> = {
   eventId: null,
   placeId: null,
   vendorId: null,
   propertyId: null,
-  visitedOn: dayjs().format('YYYY-MM-DD'),
   attendees: 'both',
   good: null,
   concerns: null,
@@ -52,6 +53,7 @@ export function VisitForm({
   const router = useRouter()
   const save = useServerFn(saveVisit)
   const [saving, setSaving] = useState(false)
+  const today = dayjs().format('YYYY-MM-DD')
   const form = useForm<Values>({
     initialValues: visit
       ? { ...empty, ...visit }
@@ -61,7 +63,7 @@ export function VisitForm({
           placeId: defaults?.placeId ?? null,
           vendorId: defaults?.vendorId ?? null,
           propertyId: defaults?.propertyId ?? null,
-          visitedOn: defaults?.visitedOn ?? empty.visitedOn,
+          visitedOn: defaults?.visitedOn ?? today,
         },
     validate: {
       visitedOn: (v) => (v ? null : '日付は必須です'),
