@@ -46,13 +46,20 @@ export function validatePhotoUpload(input: {
   thumbSize: number
   width: number
   height: number
-}): string | null {
-  if (input.displaySize <= 0 || input.thumbSize <= 0) return '画像が空です'
+}): { status: 400 | 413; message: string } | null {
+  if (input.displaySize <= 0 || input.thumbSize <= 0) {
+    return { status: 400, message: '画像が空です' }
+  }
   if (input.displaySize > MAX_PHOTO_BYTES || input.thumbSize > MAX_PHOTO_BYTES) {
-    return `画像が大きすぎます（上限 ${MAX_PHOTO_BYTES / 1024 / 1024}MB）`
+    return {
+      status: 413,
+      message: `画像が大きすぎます（上限 ${MAX_PHOTO_BYTES / 1024 / 1024}MB）`,
+    }
   }
   for (const n of [input.width, input.height]) {
-    if (!Number.isInteger(n) || n < 1 || n > MAX_EDGE_PX) return '画像の寸法が不正です'
+    if (!Number.isInteger(n) || n < 1 || n > MAX_EDGE_PX) {
+      return { status: 400, message: '画像の寸法が不正です' }
+    }
   }
   return null
 }

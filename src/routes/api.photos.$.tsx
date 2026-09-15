@@ -17,6 +17,15 @@ function json(status: number, body: unknown) {
   })
 }
 
+function notFound() {
+  return new Response('Not Found', {
+    status: 404,
+    headers: securityHeadersInit({ 'content-type': 'text/plain; charset=utf-8' }),
+  })
+}
+
+const MAX_UPLOAD_CONTENT_LENGTH = 6 * 1024 * 1024
+
 /**
  * 写真のアップロード（POST /api/photos）と配信（GET /api/photos/<key>）。
  *
@@ -35,7 +44,15 @@ function json(status: number, body: unknown) {
 export const Route = createFileRoute('/api/photos/$')({
   server: {
     handlers: {
-      POST: async ({ request }) => {
+      POST: async ({ request, params }) => {
+        // アップロード URL は `/api/photos` ちょうど。スプラットに何か付いていたら別物
+        if (params._splat) return notFound()
+
+        const contentLength = Number(request.headers.get('content-length'))
+        if (contentLength > MAX_UPLOAD_CONTENT_LENGTH) {
+          return json(413, { error: '画像が大きすぎます' })
+        }
+
         const form = await request.formData()
         const visitId = String(form.get('visitId') ?? '')
         const display = form.get('display')
@@ -52,7 +69,7 @@ export const Route = createFileRoute('/api/photos/$')({
           width,
           height,
         })
-        if (problem) return json(problem.includes('大きすぎ') ? 413 : 400, { error: problem })
+        if (problem) return json(problem.status, { error: problem.message })
 
         const [displayBytes, thumbBytes] = await Promise.all([
           display.arrayBuffer(),
@@ -85,11 +102,6 @@ export const Route = createFileRoute('/api/photos/$')({
         return json(200, { id: photoId, ...keys })
       },
       GET: async ({ params, request }) => {
-        const notFound = () =>
-          new Response('Not Found', {
-            status: 404,
-            headers: securityHeadersInit({ 'content-type': 'text/plain; charset=utf-8' }),
-          })
         const key = `photos/${params._splat ?? ''}`
         if (!isManagedPhotoKey(key)) return notFound()
         const object = await getPhotosBucket().get(key)
