@@ -29,8 +29,8 @@ function Home() {
   return (
     <PageShell title="住まいログ" description="二人の家探しの記録">
       <Stack gap="lg">
-        <PendingVisits events={pending} />
         <UpcomingEvents events={upcoming} />
+        <PendingVisits events={pending} />
         <RecentFeed items={feed} members={members} />
       </Stack>
     </PageShell>
