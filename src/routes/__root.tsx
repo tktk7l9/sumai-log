@@ -19,7 +19,10 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
       { name: 'robots', content: 'noindex, nofollow, noarchive' },
-      { name: 'theme-color', content: '#ca7654' },
+      // theme-color はライト/ダーク 2 本を RootDocument の <head> に直接書く
+      // （head() の meta 配列は name が同じタグを 1 本にまとめてしまうため）
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
       { title: '住まいログ' },
     ],
     links: [
@@ -28,7 +31,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: mantineNotificationsCss },
       { rel: 'stylesheet', href: appCss },
       { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-      { rel: 'apple-touch-icon', href: '/logo192.png' },
+      { rel: 'apple-touch-icon', href: '/icons/icon-192.png' },
       { rel: 'manifest', href: '/manifest.json' },
     ],
   }),
@@ -42,6 +45,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="ja" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="auto" />
+        {/* 地色は src/styles.css の --mantine-color-body と src/theme.ts の dark[7] に合わせる */}
+        <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)" />
         <HeadContent />
       </head>
       <body>

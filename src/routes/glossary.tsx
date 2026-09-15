@@ -74,6 +74,7 @@ function Page() {
 
         {groups.length === 0 ? (
           <EmptyState
+            emoji="🔎"
             title="見つかりませんでした"
             description="別のキーワードや、分類の絞り込みを外してお試しください。"
           />

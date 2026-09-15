@@ -28,7 +28,7 @@ export function PhotoGrid({ photos, onDelete }: { photos: Photo[]; onDelete: (p:
             <Image
               src={photoUrl(p.thumbKey)}
               alt={p.caption ?? '見学の写真'}
-              radius="md"
+              radius="sm"
               fit="cover"
               h={110}
               loading="lazy"

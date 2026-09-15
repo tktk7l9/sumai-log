@@ -88,7 +88,7 @@ function Page() {
   }
 
   return (
-    <PageShell title="予定">
+    <PageShell title="予定" fab>
       <Stack gap="md" align="center">
         <Calendar
           date={monthDate}
