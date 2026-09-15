@@ -3,8 +3,6 @@ import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { emptyToNull } from '../lib/emptyToNull'
-import { UUID_SHAPE } from '../lib/ids'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
@@ -17,33 +15,10 @@ import {
   upsertProperty,
   upsertVendor,
 } from './repository'
-
-const idInput = z.object({ id: z.string().regex(UUID_SHAPE, 'id の形式が不正です') })
-
-const optionalText = z
-  .string()
-  .trim()
-  .max(2000)
-  .transform((v) => (v === '' ? null : v))
-  .nullable()
-const optionalUrl = z
-  .string()
-  .trim()
-  .max(500)
-  .transform((v) => (v === '' ? null : v))
-  .nullable()
-  .refine((v) => v === null || /^https?:\/\//.test(v), 'URL は http(s):// で始めてください')
-// Mantine の NumberInput は空欄で '' を emit する。DB 上は null の数値項目なので、
-// zod の境界で '' → null に変換してから受け取る（そうしないと保存が黙って失敗する）。
-const numberOrEmpty = <T extends z.ZodNumber>(schema: T) =>
-  z
-    .union([schema, z.literal('')])
-    .transform(emptyToNull)
-    .nullable()
-const optionalInt = numberOrEmpty(z.number().int())
+import { idField, idInput, numberOrEmpty, optionalInt, optionalText, optionalUrl } from './zod'
 
 export const vendorInput = z.object({
-  id: z.string().regex(UUID_SHAPE, 'id の形式が不正です').optional(),
+  id: idField.optional(),
   name: z.string().trim().min(1, '名前は必須です').max(200),
   kind: z.enum(VENDOR_KINDS),
   hq: optionalText,
@@ -63,7 +38,7 @@ export const vendorInput = z.object({
 export type VendorInput = z.infer<typeof vendorInput>
 
 export const propertyInput = z.object({
-  id: z.string().regex(UUID_SHAPE, 'id の形式が不正です').optional(),
+  id: idField.optional(),
   name: z.string().trim().min(1, '名前は必須です').max(200),
   address: optionalText,
   station: optionalText,
