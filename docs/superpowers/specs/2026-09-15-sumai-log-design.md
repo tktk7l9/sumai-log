@@ -61,8 +61,8 @@
 | `properties` マンション物件 | name, address, station, walkMinutes, price, areaSqm, layout, builtYear/completionDate, managementFee, repairReserve, listingUrl, status | |
 | `places` 場所 | name, kind(showroom/model_house/open_house/gallery/site/other), address, lat, lng, geocodeSource(gsi/manual/null), vendorId?, propertyId?, note | 地図の単位。同じ展示場に何度も行ける |
 | `events` 予定 | title, kind(visit/meeting/viewing/other), startsAt, endsAt, allDay, placeId?, vendorId?, propertyId?, note | 終日は日付のみ |
-| `visits` 見学記録 | eventId?, placeId, vendorId?, propertyId?, visitedOn, attendees(both/a/b), good, concerns, qa, nextActions | 「聞いたこと/答え」は自由記述 1 欄 |
-| `photos` | visitId, displayKey, thumbKey, width, height, caption, sortOrder | R2 キー `photos/{visitId}/{photoId}-{display|thumb}.jpg` |
+| `visits` 見学記録 | eventId?, placeId?, vendorId?, propertyId?, visitedOn, attendees(both/a/b), good, concerns, qa, nextActions | 「聞いたこと/答え」は自由記述 1 欄。`placeId` は null 可（場所を伴わない業者との打ち合わせ等） |
+| `photos` | visitId, displayKey, thumbKey, width, height, caption, sortOrder | R2 キー `photos/{visitId}/{photoId}-{display|thumb}.jpg`。`caption`/`sortOrder` は列としては Phase 2 で持つが、編集 UI（キャプション入力・並べ替え）は Phase 3 |
 | `videos` YouTube | url, videoId, title, channel, thumbnailUrl, watchedOn, watchedBy, tags(JSON), takeaways, vendorId? | title/channel/thumbnail は保存時に oEmbed で自動取得（編集可） |
 | `comments` | targetType(vendor/property/place/visit/video), targetId, body | 二人がどの記録にも一言足せる汎用の場 |
 | `tags` | name, sortOrder | 初期値: 断熱・気密・耐震・間取り・資金・ローン・土地・マンション・管理・設備・外構 |
@@ -115,6 +115,7 @@
 - 完了基準: `format:check` `typecheck` `test:coverage`（lib 100%）`test:server` `build` `check:pii` が green
 - 認証: JWT なし／署名不正／allowlist 外／本番での dev 経路 → 403 を実際に確認
 - 写真: iPhone Safari から HEIC を選んで JPEG として保存・20 枚同時・2 MB 超と非画像の拒否・未認証で配信 URL が 403
+  （この 3 点は実機/本番でしか確認できないため、開発環境ではなくデプロイ後に確認する）
 - 地図: 住所で取れた／手貼り／座標なし の 3 通りの描画と出典表示
 - モバイル: 390×844 のスモーク（下タブ・FAB・全画面フォーム・地図・写真グリッド）。1280 でも崩れない
 - デプロイ: `wrangler deployments list` の `Created` が最新コミットと一致すること
