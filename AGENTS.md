@@ -31,8 +31,15 @@
 
 - 副作用は `src/server/`、DB は `src/db/`、UI は `src/components/` と `src/routes/`
 - D1 アクセスは `src/server/repository/<domain>.ts`（candidates/places/events/visits/photos/
-  comments/settings/geocode）にテーブル単位で分割。`src/server/repository.ts` は
+  comments/settings/geocode/videos/tags/feed）にテーブル単位で分割。`src/server/repository.ts` は
   `export * from './repository/index'` の再エクスポートのみで、既存の import パスは変えずに済む
+- 変更系 server function の wrapper（`createServerFn` で `getRequest` などを静的 import するもの）は
+  TanStack Start の Vite プラグインが用意する仮想モジュールに依存するため、素の workers テスト
+  （`vitest.workers.config.ts`、TanStack の Vite プラグイン無し）から import すると解決に失敗する。
+  D1 も要らない純粋な zod スキーマは `src/server/events.schema.ts` のように別ファイルへ切り出し、
+  `*.worker-test.ts` はそちらを直接 import してスキーマだけをテストする（`src/server/events.ts` は
+  同じ名前を re-export するだけで、公開 import パスは変えない）
+- 写真アップロード途中で失敗したときの R2 掃除は `src/server/storage.ts` の `cleanupFailedUpload`
 - 日付は TEXT の ISO-8601、金額は円の整数、面積は小数、id は text（`crypto.randomUUID()`）
 - スマホ優先。下タブ＋FAB＋全画面 Drawer。デスクトップは左ナビ
 - 地図に出せない場所は「出せない理由」を画面に書く（空の枠を出さない）
@@ -47,6 +54,8 @@
   import して使う）の両方に同じ実装がある。片方だけ変えない（seed 側は plain `.mjs` で
   TS を import できないため、あえて重複させている）。一致は `src/lib/normalize-parity.test.ts`
   が両実装に同じケースを流して固定している。直すときは両方直してこのテストを green に保つ
+- 見た目のトークンは `src/theme.ts`（Mantine テーマ・配色）と `src/styles.css`（`--sumai-*` の
+  CSS 変数）に集約。コントラストは本文 4.5:1・UI 部品（ボーダー等）3:1 を満たすこと
 
 ## スキーマを変えたら
 

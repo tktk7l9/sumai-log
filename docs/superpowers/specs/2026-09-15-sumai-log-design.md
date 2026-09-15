@@ -39,7 +39,7 @@
 |---|---|---|
 | ホーム | `/` | 次の予定 3 件・「記録を書きませんか」（終わった予定で見学記録が無いもの）・二人の最近の更新フィード |
 | 予定 | `/calendar` | 月カレンダー（`@mantine/dates` の `renderDay` で予定ドット）＋選択日のリスト。種別=見学/打合せ/内覧/その他 |
-| 記録 | `/records` | 見学記録と YouTube メモを SegmentedControl で切替。サムネ付きカード一覧。FAB→「見学記録」「YouTube」 |
+| 記録 | `/records`（`?tab=visits\|videos`） | 見学記録と YouTube メモを SegmentedControl で切替。サムネ付きカード一覧。FAB→「見学記録」「YouTube」 |
 | 候補 | `/candidates` | 戸建て業者とマンション物件を切替。業者は「施工エリアに建築予定地の市区町村（設定値）を含む」フィルタと状態フィルタ |
 | 地図 | `/map` | Leaflet + 地理院タイル。行った場所は塗りピン、予定だけの場所は枠ピン。タップで下からカード→詳細へ。現在地ボタン |
 
@@ -92,6 +92,8 @@
 - アップロード: `<input type="file" accept="image/*" multiple>`（`image/heic` は書かない。Safari 17+ で拡張子が壊れる既知バグ）。端末側 Canvas で表示用 1600px JPEG q0.8 とサムネ 400px を生成し multipart POST → Worker → R2。1 回 20 枚・縮小後 2 MB 上限・マジックバイトで JPEG/PNG/WebP 以外を拒否
 - 配信: 認証後に R2 からストリーム。`Cache-Control: private, max-age=31536000, immutable` + ETag。バケットは公開設定にしない
 - YouTube: Worker から `https://www.youtube.com/oembed` を取得。受け付けるホストは `youtube.com` / `youtu.be` のみ。失敗時は題名手入力
+  - 実装メモ（2026-09-16）: `src/routes/api.oembed.tsx` が oEmbed を Worker 経由でプロキシする。ホストは allowlist、動画 ID は 11 文字であることを検証し、5 秒タイムアウト。題名/チャンネルは長さ上限つきで受け取る。200 のレスポンスには `Cache-Control: private, max-age=86400` を付け、取得に失敗した場合は題名の手入力にフォールバックする
+  - ホームの「最近の更新」フィードは UNION SQL を書かず、ドメインごとの `recent*`（見学記録・予定・業者・物件・場所・動画・コメント・写真）を並行取得し、`mergeFeed`（`src/lib/feed.ts`）で 1 つに結合する。各 `FeedItem.href` はルートの動的パラメータを `params`、カレンダーの選択日など画面固有のクエリを `search` に持つ（例: 予定は `/calendar` に `search: { d: 日付 }`）
 - 地図: タイル `https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png`。出典表示「地理院タイル」を必ず出す
 - CSP: `img-src 'self' data: blob: https://i.ytimg.com https://cyberjapandata.gsi.go.jp`、`connect-src 'self'`。`robots: noindex, nofollow, noarchive`
 - CSRF: Origin / Sec-Fetch-Site 検査
@@ -107,7 +109,9 @@
 
 1. **Phase 1 土台**: リポジトリ・Access・D1/R2・Keyway・CI・モバイルシェル・テーマ・候補（業者/物件）・場所・地図・設定
 2. **Phase 2 記録**: 予定・見学記録・写真・コメント・「記録を書きませんか」
-3. **Phase 3 仕上げ**: YouTube メモ・ホームのフィード・PWA・デザイン仕上げ・バックアップ手順
+3. **Phase 3 仕上げ**: YouTube メモ・ホームのフィード・PWA・デザイン仕上げ・バックアップ手順。
+   **実装済み（2026-09-16）**: oEmbed プロキシ・「最近の更新」フィード・ホーム画面追加（manifest・
+   アイコン・セーフエリア）・暖色パレットへのデザイン仕上げ・繰り越し負債の回収まで完了（PR #4）
 4. 業者の初期データは公開情報だけで `data/vendors.seed.json` を作り `npm run import:vendors` で取り込む
 
 ## 9. 検証
