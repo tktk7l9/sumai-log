@@ -23,14 +23,14 @@ export function EventItem({
 }) {
   const who = event.placeName ?? event.vendorName ?? event.propertyName
   return (
-    <Card withBorder padding="sm">
-      <Stack gap={6}>
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="xs" wrap="nowrap">
+    <Card withBorder padding="md">
+      <Stack gap={8}>
+        <Group justify="space-between" wrap="nowrap" align="flex-start">
+          <Group gap="xs" wrap="nowrap" align="baseline">
             <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
               {formatEventTime(event)}
             </Text>
-            <Text fw={600} lineClamp={1}>
+            <Text fw={600} lineClamp={2} lh={1.4}>
               {event.title}
             </Text>
           </Group>
@@ -53,7 +53,7 @@ export function EventItem({
             {EVENT_KIND_LABEL[event.kind]}
           </Badge>
           {who ? (
-            <Group gap={4}>
+            <Group gap={4} c="dimmed">
               <MapPin size={12} aria-hidden />
               {event.placeId ? (
                 <Link to="/places/$id" params={{ id: event.placeId }}>

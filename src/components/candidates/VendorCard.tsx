@@ -22,15 +22,15 @@ export function VendorCard({
 
   return (
     <Card withBorder padding="md" onClick={goToDetail} style={{ cursor: 'pointer' }}>
-      <Stack gap={6}>
-        <Group justify="space-between" wrap="nowrap">
+      <Stack gap={8}>
+        <Group justify="space-between" wrap="nowrap" align="flex-start" gap="xs">
           <Link
             to="/candidates/vendors/$id"
             params={params}
             onClick={(e) => e.stopPropagation()}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            <Text component="span" fw={700} lineClamp={1}>
+            <Text component="span" fw={700} lineClamp={2} lh={1.4}>
               {vendor.name}
             </Text>
           </Link>
@@ -92,16 +92,12 @@ export function VendorCard({
           ) : null}
         </Group>
         <Group justify="space-between" align="center" wrap="nowrap">
-          <Group gap="md">
-            <Text size="sm" c="dimmed">
-              {formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
-            </Text>
+          <Group gap="md" c="dimmed">
+            <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
             {vendor.placeCount > 0 ? (
               <Group gap={4}>
                 <MapPin size={14} aria-hidden />
-                <Text size="sm" c="dimmed">
-                  {vendor.placeCount} 箇所
-                </Text>
+                <Text size="sm">{vendor.placeCount} 箇所</Text>
               </Group>
             ) : null}
           </Group>

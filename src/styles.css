@@ -2,13 +2,124 @@
   color-scheme: light dark;
 }
 
+/*
+ * 地の色だけは Mantine が light で `#fff` と決め打ちしていて theme のパレットから
+ * 導けないので、ここで暖色に差し替える。セレクタは Mantine 本体と同じ形にして、
+ * 読み込み順（__root.tsx で Mantine のあとに appCss）で勝たせている。
+ * ダークは theme の dark[7]（地）がそのまま使われるので上書き不要。
+ *
+ * プレースホルダは既定だと入力欄の枠と同じ段（gray-5 / dark-3）で、文字としては
+ * 薄すぎる（3.2:1 / 4.3:1）。枠は枠のまま、文字は補助文字と同じ段に上げて 4.5:1 を満たす。
+ *
+ * ついでにこのアプリだけの語彙を 3 つ置く:
+ *   --sumai-ring   キーボードフォーカスの輪郭
+ *   --sumai-sunken 一段沈めた面（空状態・写真のプレースホルダ）
+ *   --sumai-lift   浮いているもの（FAB）の影。灰色ではなく焦げ茶の影にする
+ */
+:root[data-mantine-color-scheme='light'],
+:host([data-mantine-color-scheme='light']) {
+  --mantine-color-body: #faf7f2;
+  --mantine-color-placeholder: var(--mantine-color-gray-6);
+  --sumai-ring: var(--mantine-color-clay-6);
+  --sumai-sunken: var(--mantine-color-gray-2);
+  --sumai-lift: 0 6px 18px -6px rgba(69, 45, 30, 0.35);
+}
+
+:root[data-mantine-color-scheme='dark'],
+:host([data-mantine-color-scheme='dark']) {
+  --mantine-color-placeholder: var(--mantine-color-dark-2);
+  --sumai-ring: var(--mantine-color-clay-4);
+  --sumai-sunken: var(--mantine-color-dark-4);
+  --sumai-lift: 0 6px 18px -6px rgba(0, 0, 0, 0.7);
+}
+
+/*
+ * 入力欄の枠は「触れる場所」の目印なので、カードの罫線（gray-4 / dark-4）より濃くして
+ * 地に対して 3:1 を確保する。Mantine 本体が
+ * `[data-mantine-color-scheme] .m_xxx[data-variant='default']` の強さで当てているため、
+ * こちらは公開クラス名を足して 1 段強くする。
+ */
+:root[data-mantine-color-scheme='light'] .mantine-Input-input[data-variant='default'] {
+  --input-bd: var(--mantine-color-gray-5);
+}
+:root[data-mantine-color-scheme='dark'] .mantine-Input-input[data-variant='default'] {
+  --input-bd: var(--mantine-color-dark-3);
+}
+
+/* 素の <a>（TanStack の Link）。既定の青はこの配色から浮くので、色は中身に任せて
+   下線だけをリンクの印にする。Anchor を中に置いた箇所は Anchor の色が下線にも乗る */
+a {
+  color: inherit;
+}
+
+/* カード全体がリンクになっている箇所は Mantine のフォーカス輪郭が付かないので、ここで付ける。
+   border-radius: inherit は <a> 自身に角丸指定があるときだけ効く。カード全体を覆う
+   <a>（Card 自身に角丸があり <a> には無い場合）では効かず、輪郭は四角のままになる
+   （見た目の破綻はないため許容している。角丸に揃えたければ var(--mantine-radius-md) 等を
+   直接指定する） */
+a:focus-visible {
+  outline: 2px solid var(--sumai-ring);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
 .breakable {
   overflow-wrap: anywhere;
+}
+
+/* ヘッダ・左ナビ・下タブは「地」ではなく「面」に乗せて、本文と別の板に見せる */
+.appbar,
+.tabbar {
+  background-color: var(--mantine-color-default);
 }
 
 /* 下タブ（AppShell.Footer）はホームインジケータの分だけ底上げする */
 .tabbar {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/*
+ * AppShell は下タブの高さ（56px）しか本文の下に空けてくれないので、ホームインジケータ分を
+ * 足す。足さないと最後のカードがタブバーの裏に潜る。
+ * Mantine の指定と同じ計算に env() を 1 つ足しただけ。
+ */
+.app-main {
+  padding-bottom: calc(
+    var(--app-shell-footer-offset, 0rem) + var(--app-shell-padding) +
+      env(safe-area-inset-bottom, 0px)
+  );
+}
+
+/*
+ * FAB は下タブの 16px 上（bottom 72px）に高さ約 50px で浮いているので、下タブ分を空けただけ
+ * では最後のカードがまだ隠れる。差分（FAB の高さ＋余白）を本文の一番外側で足す。
+ *
+ * ここを .app-main ではなく PageShell 側に付けているのは、地図タブが
+ * 「ヘッダと下タブを引いた高さぴったりの 1 枚」で、main の下 padding を増やすと
+ * その分だけページ全体がスクロールしてしまうため（地図は PageShell を使っていない）。
+ */
+.fab-clearance {
+  padding-bottom: 64px;
+}
+
+/* 空状態・写真のプレースホルダなど、一段沈めた面 */
+.sunken {
+  background-color: var(--sumai-sunken);
+}
+
+/*
+ * 「誰が書いたか」をカードの左端 3px の帯で示す（丸をもう 1 つ足さずに一覧で追えるように）。
+ * 帯は MemberChip の丸と同じ色名の 6 段目。丸のほう（Avatar の light バリアント）は
+ * 同じ色名の淡い地＋濃い字なので、色みは揃うが明るさは別段になる。
+ * border ではなく内側の影で引くので、角丸に沿って切れるしカードの幅も動かない。
+ */
+.author-band {
+  box-shadow: inset 3px 0 0 0 var(--author-color, transparent);
+}
+
+/* 浮いている追加ボタン */
+.lifted {
+  box-shadow: var(--sumai-lift);
 }
 
 /* Leaflet の地図。高さは親が決める */
@@ -23,7 +134,8 @@
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--mantine-color-gray-4);
-  border: 2px solid #fff;
+  /* 地図タイルはダークでも明るいままなので、縁取りは配色によらず明るい方で固定する */
+  border: 2px solid var(--mantine-color-white);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 .place-pin.visited {
@@ -35,12 +147,12 @@
 }
 
 /*
- * 地図タブ本体。ヘッダ(52px)・下タブ(64px)・ホームインジケータを差し引いた高さいっぱいに出す。
+ * 地図タブ本体。ヘッダ(52px)・下タブ(56px)・ホームインジケータを差し引いた高さいっぱいに出す。
  * AppShell の padding="md" 分だけ負のマージンで打ち消して縁いっぱいに広げる
  * （打ち消さないと main の上下 padding が二重に積んで 100dvh をはみ出す）。
  */
 .map-page {
-  height: calc(100dvh - 52px - 64px - env(safe-area-inset-bottom, 0px));
+  height: calc(100dvh - 52px - 56px - env(safe-area-inset-bottom, 0px));
   margin: calc(var(--mantine-spacing-md) * -1);
   width: calc(100% + var(--mantine-spacing-md) * 2);
 }

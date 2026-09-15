@@ -38,13 +38,17 @@ function Page() {
   const shownProperties = properties.filter((p) => !status || p.status === status)
 
   return (
-    <PageShell title="候補">
+    <PageShell title="候補" fab>
       <Stack gap="md">
         <SegmentedControl
           fullWidth
+          aria-label="表示の切替"
           value={tab}
           onChange={(v) =>
-            navigate({ search: (s) => ({ ...s, tab: v as 'vendors' | 'properties' }) })
+            navigate({
+              search: (s) => ({ ...s, tab: v as 'vendors' | 'properties' }),
+              replace: true,
+            })
           }
           data={[
             { value: 'vendors', label: `戸建て業者 ${vendors.length}` },

@@ -6,12 +6,12 @@ import type { EventWithLinks } from '../../server/repository'
 
 export function UpcomingEvents({ events }: { events: EventWithLinks[] }) {
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       <Title order={2}>次の予定</Title>
       {events.length === 0 ? (
         <Text c="dimmed">予定はありません</Text>
       ) : (
-        <Stack gap="xs">
+        <Stack gap="sm">
           {events.map((e) => {
             const who = e.placeName ?? e.vendorName ?? e.propertyName
             const key = dateKey(e.startsAt)
@@ -22,13 +22,13 @@ export function UpcomingEvents({ events }: { events: EventWithLinks[] }) {
                 search={{ m: key.slice(0, 7), d: key }}
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
-                <Card withBorder padding="sm">
+                <Card withBorder padding="md">
                   <Stack gap={4}>
-                    <Group gap="xs" wrap="nowrap">
+                    <Group gap="xs" wrap="nowrap" align="baseline">
                       <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
                         {key} {formatEventTime(e)}
                       </Text>
-                      <Text fw={600} lineClamp={1}>
+                      <Text fw={600} lineClamp={2} lh={1.4}>
                         {e.title}
                       </Text>
                     </Group>

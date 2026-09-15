@@ -6,6 +6,10 @@ import { ATTENDEES_LABEL } from '../../db/schema'
 import { photoUrl } from '../../lib/photos'
 import type { VisitWithLinks } from '../../server/repository'
 
+/** サムネイルは 4:3。390px 幅でも本文に 200px 以上残る大きさ */
+const THUMB_W = 104
+const THUMB_H = 78
+
 export function VisitCard({ visit }: { visit: VisitWithLinks }) {
   const label = visit.placeName ?? visit.vendorName ?? visit.propertyName ?? '場所未設定'
   return (
@@ -15,32 +19,34 @@ export function VisitCard({ visit }: { visit: VisitWithLinks }) {
       style={{ textDecoration: 'none', color: 'inherit' }}
     >
       <Card withBorder padding="md">
-        <Group wrap="nowrap" align="flex-start">
+        <Group wrap="nowrap" align="flex-start" gap="sm">
+          {/* 見学の写真は横長 4:3 で切り出す（部屋の写真は横位置で撮ることが多い） */}
           {visit.firstThumbKey ? (
             <Image
               src={photoUrl(visit.firstThumbKey)}
               alt=""
-              w={80}
-              h={80}
-              radius="md"
+              w={THUMB_W}
+              h={THUMB_H}
+              radius="sm"
               fit="cover"
               style={{ flexShrink: 0 }}
             />
           ) : (
             <Center
-              w={80}
-              h={80}
-              bg="var(--mantine-color-default-hover)"
-              style={{ borderRadius: 'var(--mantine-radius-md)', flexShrink: 0 }}
+              w={THUMB_W}
+              h={THUMB_H}
+              className="sunken"
+              c="dimmed"
+              style={{ borderRadius: 'var(--mantine-radius-sm)', flexShrink: 0 }}
             >
-              <Camera size={24} aria-hidden />
+              <Camera size={22} aria-hidden />
             </Center>
           )}
           <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
-            <Text size="sm" c="dimmed">
+            <Text size="xs" c="dimmed">
               {visit.visitedOn}
             </Text>
-            <Text fw={700} lineClamp={1}>
+            <Text fw={700} lineClamp={2} lh={1.4}>
               {label}
             </Text>
             <Group gap="xs">

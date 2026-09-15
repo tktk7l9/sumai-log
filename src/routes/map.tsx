@@ -54,7 +54,8 @@ function Page() {
       <PlacesMapLazy markers={markers} focusId={sheetId} center={center} onSelect={setSheetId} />
 
       <Stack gap={6} style={{ position: 'absolute', top: 8, left: 8, right: 56, zIndex: 1000 }}>
-        <Paper withBorder shadow="sm" p={6} radius="md">
+        {/* 影を持つのは FAB だけ。地図の上の板は罫線と面の色で浮かせる */}
+        <Paper withBorder p={6}>
           <SegmentedControl
             fullWidth
             size="xs"
@@ -68,7 +69,7 @@ function Page() {
           />
         </Paper>
         {missingCount > 0 ? (
-          <Paper withBorder shadow="sm" p={6} radius="md">
+          <Paper withBorder p={6}>
             <Text size="xs" c="dimmed">
               地図に出せない場所が {missingCount} 件（一覧で確認）
             </Text>
