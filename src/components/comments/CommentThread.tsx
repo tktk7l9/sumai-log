@@ -2,6 +2,8 @@ import { ActionIcon, Button, Card, Group, Stack, Text, Textarea, Title } from '@
 import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc'
 import { Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -9,6 +11,8 @@ import type { COMMENT_TARGETS, Comment } from '../../db/schema'
 import type { Member } from '../../lib/members'
 import { addComment, deleteComment } from '../../server/comments'
 import { MemberChip } from '../MemberChip'
+
+dayjs.extend(utc)
 
 export function CommentThread({
   targetType,
@@ -68,10 +72,10 @@ export function CommentThread({
               <Stack gap={4} style={{ minWidth: 0 }}>
                 <Group gap="xs">
                   <MemberChip email={c.createdBy} members={members} />
-                  {/* createdAt は D1 の datetime('now')（UTC）をそのまま先頭16文字で表示。
-                      JST 変換は Phase 3 でまとめて行う。 */}
+                  {/* createdAt は D1 の datetime('now')（UTC, 'YYYY-MM-DD HH:MM:SS'）。
+                      dayjs.utc で UTC として読み、+9h して JST で表示する。 */}
                   <Text size="xs" c="dimmed">
-                    {c.createdAt.slice(0, 16).replace('T', ' ')}
+                    {dayjs.utc(c.createdAt).add(9, 'hour').format('YYYY-MM-DD HH:mm')}
                   </Text>
                 </Group>
                 <Text size="sm" className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
