@@ -55,7 +55,7 @@ describe('sniffImageType', () => {
 })
 
 describe('validatePhotoUpload', () => {
-  it('上限と寸法を見る', () => {
+  it('上限と寸法を見る。返り値は { status, message } か null', () => {
     expect(MAX_PHOTOS_PER_UPLOAD).toBe(20)
     expect(
       validatePhotoUpload({ displaySize: 1000, thumbSize: 100, width: 1600, height: 1200 }),
@@ -67,7 +67,7 @@ describe('validatePhotoUpload', () => {
         width: 1600,
         height: 1200,
       }),
-    ).toMatch(/大きすぎ/)
+    ).toEqual({ status: 413, message: expect.stringMatching(/大きすぎ/) })
     expect(
       validatePhotoUpload({
         displaySize: 1000,
@@ -75,18 +75,18 @@ describe('validatePhotoUpload', () => {
         width: 1600,
         height: 1200,
       }),
-    ).toMatch(/大きすぎ/)
+    ).toEqual({ status: 413, message: expect.stringMatching(/大きすぎ/) })
     expect(
       validatePhotoUpload({ displaySize: 0, thumbSize: 100, width: 1600, height: 1200 }),
-    ).toMatch(/空/)
+    ).toEqual({ status: 400, message: expect.stringMatching(/空/) })
     expect(
       validatePhotoUpload({ displaySize: 1000, thumbSize: 100, width: 0, height: 1200 }),
-    ).toMatch(/寸法/)
+    ).toEqual({ status: 400, message: expect.stringMatching(/寸法/) })
     expect(
       validatePhotoUpload({ displaySize: 1000, thumbSize: 100, width: 1.5, height: 1200 }),
-    ).toMatch(/寸法/)
+    ).toEqual({ status: 400, message: expect.stringMatching(/寸法/) })
     expect(
       validatePhotoUpload({ displaySize: 1000, thumbSize: 100, width: 9000, height: 1200 }),
-    ).toMatch(/寸法/)
+    ).toEqual({ status: 400, message: expect.stringMatching(/寸法/) })
   })
 })
