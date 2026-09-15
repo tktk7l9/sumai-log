@@ -1,4 +1,15 @@
-import { Alert, Badge, Button, Card, Group, Stack, Text, TextInput, Title } from '@mantine/core'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  TagsInput,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
@@ -9,17 +20,41 @@ import { MemberChip } from '../components/MemberChip'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { getSettings, saveHomeAreas } from '../server/settings'
+import { listTagNames, saveTags } from '../server/tags'
 
 export const Route = createFileRoute('/settings')({
   component: Page,
-  loader: () => getSettings(),
+  loader: async () => {
+    const [settings, tags] = await Promise.all([getSettings(), listTagNames()])
+    return { ...settings, tags }
+  },
 })
 
+// タグ保存が失敗したときのサーバー側メッセージを取り出す。標準スキーマ（zod）の
+// バリデーション失敗は Error#message が issues の JSON 文字列になるため、その形なら
+// 先頭 issue の message を使う。それ以外はそのまま使う。
+function extractErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) return '保存できませんでした'
+  try {
+    const issues = JSON.parse(error.message) as unknown
+    if (Array.isArray(issues)) {
+      const first = issues[0] as { message?: unknown } | undefined
+      if (typeof first?.message === 'string' && first.message) return first.message
+    }
+  } catch {
+    // JSON でなければ message をそのまま使う
+  }
+  return error.message || '保存できませんでした'
+}
+
 function Page() {
-  const { homeAreas, actorEmail, members, environment, photosReady } = Route.useLoaderData()
+  const { homeAreas, actorEmail, members, environment, photosReady, tags } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveHomeAreas)
+  const saveTagsFn = useServerFn(saveTags)
   const [saving, setSaving] = useState(false)
+  const [tagValues, setTagValues] = useState<string[]>(tags)
+  const [savingTags, setSavingTags] = useState(false)
   const form = useForm({ initialValues: { areas: homeAreas.join('、') } })
 
   async function submit(values: { areas: string }) {
@@ -32,6 +67,24 @@ function Page() {
       notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function submitTags() {
+    // 0 件保存はサーバーも拒否するが、往復させずにここで止める
+    if (tagValues.length === 0) {
+      notifications.show({ message: 'タグは 1 つ以上必要です', color: 'red' })
+      return
+    }
+    setSavingTags(true)
+    try {
+      await saveTagsFn({ data: { names: tagValues } })
+      await router.invalidate()
+      notifications.show({ message: 'タグを保存しました' })
+    } catch (error) {
+      notifications.show({ message: extractErrorMessage(error), color: 'red' })
+    } finally {
+      setSavingTags(false)
     }
   }
 
@@ -57,6 +110,29 @@ function Page() {
               </Group>
             </Stack>
           </form>
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>タグ</Title>
+          <Text size="sm" c="dimmed">
+            動画の記録で候補に出るタグ。Enter で追加、並びは入れた順です。
+          </Text>
+          <TagsInput
+            label="タグ"
+            value={tagValues}
+            onChange={setTagValues}
+            placeholder="タグを入力して Enter"
+          />
+          <Text size="xs" c="dimmed">
+            動画に付けたタグはそのまま残ります。
+          </Text>
+          <Group justify="flex-end">
+            <Button onClick={submitTags} loading={savingTags}>
+              保存
+            </Button>
+          </Group>
         </Stack>
       </Card>
 
