@@ -9,7 +9,12 @@
 
 const DATE_TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(Z|[+-]\d{2}:\d{2})?$/
 
-/** UTC ミリ秒に直す。読めない形式は null */
+/**
+ * UTC ミリ秒に直す。D1 の 'YYYY-MM-DD HH:MM:SS'（オフセット無し=UTC）と
+ * ISO 8601（'Z' / '+09:00' のようなオフセット付き、またはオフセット無し=UTC）を受ける。
+ * この正規表現の形に合わない文字列は null（呼び出し側で「読めない＝元の文字列のまま」
+ * などのフォールバックに使う。feed.ts はここでの null を「最も古い扱い」に読み替える）。
+ */
 export function parseToUtcMs(value: string): number | null {
   const match = DATE_TIME_PATTERN.exec(value)
   if (!match) return null

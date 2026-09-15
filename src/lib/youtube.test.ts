@@ -61,6 +61,18 @@ describe('parseYouTubeId', () => {
     expect(parseYouTubeId('youtube.com/@channel')).toBeNull()
   })
 
+  it('http は許可する', () => {
+    expect(parseYouTubeId(`http://www.youtube.com/watch?v=${ID}`)).toBe(ID)
+  })
+
+  it('http/https 以外のスキームは null', () => {
+    expect(parseYouTubeId(`file://youtube.com/watch?v=${ID}`)).toBeNull()
+    expect(parseYouTubeId(`ftp://youtube.com/watch?v=${ID}`)).toBeNull()
+    expect(parseYouTubeId(`ws://youtube.com/watch?v=${ID}`)).toBeNull()
+    expect(parseYouTubeId('javascript:alert(1)')).toBeNull()
+    expect(parseYouTubeId('data:text/plain,hello')).toBeNull()
+  })
+
   it('空文字/空白は null', () => {
     expect(parseYouTubeId('')).toBeNull()
     expect(parseYouTubeId('   ')).toBeNull()

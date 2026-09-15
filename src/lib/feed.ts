@@ -51,6 +51,8 @@ function atMs(item: FeedItem): number {
 /**
  * 複数系統のフィード項目を時系列（新しい順）に束ねる。
  * 同時刻は FEED_KIND_ORDER の順で安定させ、limit 件に絞る。
+ * limit が 0 以下なら空配列（`slice(0, limit)` に負数をそのまま渡すと
+ * 「末尾から絞る」挙動になってしまうため、Math.max(0, limit) で正規化する）。
  * 引数の配列・要素はいずれも書き換えない。
  */
 export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: number): FeedItem[] {
@@ -62,5 +64,5 @@ export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: numbe
   }
 
   entries.sort((a, b) => (a.ms !== b.ms ? b.ms - a.ms : a.order - b.order))
-  return entries.slice(0, limit).map((e) => e.item)
+  return entries.slice(0, Math.max(0, limit)).map((e) => e.item)
 }
