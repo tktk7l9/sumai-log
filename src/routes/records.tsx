@@ -76,9 +76,9 @@ function Page() {
             fromEventRow
               ? {
                   eventId: fromEventRow.id,
-                  placeId: fromEventRow.placeId ?? undefined,
-                  vendorId: fromEventRow.vendorId ?? undefined,
-                  propertyId: fromEventRow.propertyId ?? undefined,
+                  placeId: fromEventRow.placeId ?? null,
+                  vendorId: fromEventRow.vendorId ?? null,
+                  propertyId: fromEventRow.propertyId ?? null,
                   visitedOn: dateKey(fromEventRow.startsAt),
                 }
               : undefined

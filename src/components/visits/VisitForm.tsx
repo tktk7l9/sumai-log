@@ -42,9 +42,9 @@ export function VisitForm({
   options: Options
   defaults?: {
     eventId?: string
-    placeId?: string
-    vendorId?: string
-    propertyId?: string
+    placeId?: string | null
+    vendorId?: string | null
+    propertyId?: string | null
     visitedOn?: string
   }
   onSaved: (id: string) => void
@@ -53,7 +53,16 @@ export function VisitForm({
   const save = useServerFn(saveVisit)
   const [saving, setSaving] = useState(false)
   const form = useForm<Values>({
-    initialValues: visit ? { ...empty, ...visit } : { ...empty, ...defaults },
+    initialValues: visit
+      ? { ...empty, ...visit }
+      : {
+          ...empty,
+          eventId: defaults?.eventId ?? null,
+          placeId: defaults?.placeId ?? null,
+          vendorId: defaults?.vendorId ?? null,
+          propertyId: defaults?.propertyId ?? null,
+          visitedOn: defaults?.visitedOn ?? empty.visitedOn,
+        },
     validate: {
       visitedOn: (v) => (v ? null : '日付は必須です'),
     },
