@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { getDb } from '../db/client'
 import { emptyToNull } from '../lib/emptyToNull'
+import { UUID_SHAPE } from '../lib/ids'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
@@ -17,7 +18,7 @@ import {
   upsertVendor,
 } from './repository'
 
-const idInput = z.object({ id: z.string().uuid() })
+const idInput = z.object({ id: z.string().regex(UUID_SHAPE, 'id の形式が不正です') })
 
 const optionalText = z
   .string()
@@ -42,7 +43,7 @@ const numberOrEmpty = <T extends z.ZodNumber>(schema: T) =>
 const optionalInt = numberOrEmpty(z.number().int())
 
 export const vendorInput = z.object({
-  id: z.string().uuid().optional(),
+  id: z.string().regex(UUID_SHAPE, 'id の形式が不正です').optional(),
   name: z.string().trim().min(1, '名前は必須です').max(200),
   kind: z.enum(VENDOR_KINDS),
   hq: optionalText,
@@ -62,7 +63,7 @@ export const vendorInput = z.object({
 export type VendorInput = z.infer<typeof vendorInput>
 
 export const propertyInput = z.object({
-  id: z.string().uuid().optional(),
+  id: z.string().regex(UUID_SHAPE, 'id の形式が不正です').optional(),
   name: z.string().trim().min(1, '名前は必須です').max(200),
   address: optionalText,
   station: optionalText,

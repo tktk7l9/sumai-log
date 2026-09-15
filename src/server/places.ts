@@ -5,10 +5,11 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { GEOCODE_SOURCES, PLACE_KINDS, places, properties, vendors } from '../db/schema'
 import { parseCoordinate } from '../lib/coords'
+import { UUID_SHAPE } from '../lib/ids'
 import { currentActorEmail } from './members'
 import { deletePlaceCascade, hasVisits, listPlacesWithLinks, upsertPlace } from './repository'
 
-const idInput = z.object({ id: z.string().uuid() })
+const idInput = z.object({ id: z.string().regex(UUID_SHAPE, 'id の形式が不正です') })
 const optionalText = z
   .string()
   .trim()
@@ -18,7 +19,7 @@ const optionalText = z
 
 export const placeInput = z
   .object({
-    id: z.string().uuid().optional(),
+    id: z.string().regex(UUID_SHAPE, 'id の形式が不正です').optional(),
     name: z.string().trim().min(1, '名前は必須です').max(200),
     kind: z.enum(PLACE_KINDS),
     address: optionalText,
@@ -28,8 +29,8 @@ export const placeInput = z
     /** 手貼りの座標。入っていれば lat/lng より優先し geocodeSource='manual' */
     coordsText: optionalText,
     geocodeSource: z.enum(GEOCODE_SOURCES).nullable(),
-    vendorId: z.string().uuid().nullable(),
-    propertyId: z.string().uuid().nullable(),
+    vendorId: z.string().regex(UUID_SHAPE, 'id の形式が不正です').nullable(),
+    propertyId: z.string().regex(UUID_SHAPE, 'id の形式が不正です').nullable(),
     note: optionalText,
   })
   .transform((v) => {
