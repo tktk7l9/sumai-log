@@ -5,7 +5,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sumai-log",
-  "compatibility_date": "2026-09-15",
+  // 2026-08-22 に固定: @cloudflare/vitest-pool-workers@0.22.0（最新）が内部で
+  // ロックしている workerd@1.20260815.1 が対応する最新日付がこれ。
+  // これより先の日付にすると `npm run test:server`（実 D1 のテスト）が
+  // ランタイム起動時エラーで即死する（Task 2 で発覚）。
+  "compatibility_date": "2026-08-22",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "observability": { "enabled": true },
