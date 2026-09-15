@@ -13,6 +13,18 @@ describe('applySecurityHeaders', () => {
     expect(headers.get('cross-origin-opener-policy')).toBe('same-origin')
   })
 
+  it('img-src に地理院タイルと i.ytimg.com が含まれる', () => {
+    const headers = applySecurityHeaders(new Headers())
+    const csp = headers.get('content-security-policy')
+    expect(csp).toContain('https://cyberjapandata.gsi.go.jp')
+    expect(csp).toContain('https://i.ytimg.com')
+  })
+
+  it('geolocation は self だけ許可する', () => {
+    const headers = applySecurityHeaders(new Headers())
+    expect(headers.get('permissions-policy')).toContain('geolocation=(self)')
+  })
+
   it('同じ名前があれば上書きする', () => {
     const headers = new Headers({ 'x-frame-options': 'SAMEORIGIN' })
     applySecurityHeaders(headers)
