@@ -12,22 +12,22 @@ export function SetbackDiagram() {
         fill="var(--mantine-color-gray-3)"
         fillOpacity={0.5}
       />
-      <Label x={160} y={175} size={9}>
+      <Label x={160} y={175} size={12}>
         道路 3m
       </Label>
 
       <line x1={20} y1={170} x2={300} y2={170} strokeDasharray="4 3" />
-      <Label x={300} y={165} size={8} anchor="end">
+      <Label x={300} y={165} size={12} anchor="end">
         中心線
       </Label>
 
       <line x1={20} y1={130} x2={300} y2={130} strokeDasharray="4 3" />
-      <Label x={300} y={125} size={8} anchor="end">
+      <Label x={300} y={125} size={12} anchor="end">
         後退線
       </Label>
 
       <Arrow x1={60} y1={168} x2={60} y2={132} double />
-      <Label x={70} y={150} size={9} anchor="start">
+      <Label x={70} y={150} size={12} anchor="start">
         2m
       </Label>
 
@@ -39,7 +39,7 @@ export function SetbackDiagram() {
         fill="var(--mantine-color-clay-2)"
         fillOpacity={0.6}
       />
-      <Label x={160} y={95} size={11}>
+      <Label x={160} y={95} size={13}>
         建物
       </Label>
     </Figure>

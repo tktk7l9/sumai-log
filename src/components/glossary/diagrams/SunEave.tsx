@@ -16,19 +16,19 @@ export function SunEaveDiagram() {
         fill="var(--mantine-color-clay-2)"
         fillOpacity={0.5}
       />
-      <Label x={160} y={186} size={9}>
+      <Label x={160} y={188} size={12}>
         軒が夏の日差しを遮る
       </Label>
 
-      <circle cx={262} cy={16} r={6} />
-      <Arrow x1={257} y1={22} x2={215} y2={69} dashed />
-      <Label x={272} y={12} size={10}>
+      <circle cx={262} cy={20} r={6} />
+      <Arrow x1={257} y1={26} x2={215} y2={69} dashed />
+      <Label x={272} y={18} size={13}>
         夏
       </Label>
 
       <circle cx={302} cy={92} r={6} />
       <Arrow x1={296} y1={94} x2={200} y2={128} dashed />
-      <Label x={306} y={78} size={10} anchor="end">
+      <Label x={306} y={78} size={13} anchor="end">
         冬
       </Label>
     </Figure>
