@@ -2,14 +2,9 @@ import { Card, Group, Stack, Text } from '@mantine/core'
 import { MapPinOff } from 'lucide-react'
 
 import type { Place } from '../../db/schema'
-import { formatLatLng } from '../../lib/coords'
+import { PlacesMapLazy } from '../map/PlacesMapLazy'
 
-/**
- * 詳細ページの地図枠。
- *
- * Task 7 時点では地図（PlacesMapLazy）がまだ無いので座標のテキスト表示に留める。
- * Task 8 で「座標あり」分岐を PlacesMapLazy に差し替える。
- */
+/** 詳細ページの地図枠。座標があれば PlacesMapLazy に 1 件だけピンを出す */
 export function PlaceLocation({ place }: { place: Place }) {
   if (place.lat == null || place.lng == null) {
     return (
@@ -27,7 +22,14 @@ export function PlaceLocation({ place }: { place: Place }) {
   }
   return (
     <Stack gap={4}>
-      <Text size="sm">座標: {formatLatLng({ lat: place.lat, lng: place.lng })}</Text>
+      <div style={{ height: 240, borderRadius: 'var(--mantine-radius-md)', overflow: 'hidden' }}>
+        <PlacesMapLazy
+          markers={[
+            { id: place.id, name: place.name, lat: place.lat, lng: place.lng, visited: true },
+          ]}
+          focusId={place.id}
+        />
+      </div>
       {place.geocodeSource === 'manual' ? (
         <Text size="xs" c="dimmed">
           座標は手貼り（{place.coordsText}）

@@ -7,11 +7,15 @@ export function FormDrawer({
   onClose,
   title,
   children,
+  zIndex,
 }: {
   opened: boolean
   onClose: () => void
   title: string
   children: React.ReactNode
+  /** 既定は Mantine の modal 既定値（200）。地図タブでは Leaflet の操作コントロールが
+   * z-index: 1000 で描かれるため、その上に出したいページから明示的に渡す */
+  zIndex?: number
 }) {
   const isMobile = useMediaQuery('(max-width: 48em)', true)
   return (
@@ -22,6 +26,7 @@ export function FormDrawer({
       position={isMobile ? 'bottom' : 'right'}
       size={isMobile ? '100%' : 480}
       padding="md"
+      zIndex={zIndex}
       styles={{ title: { fontWeight: 700, fontSize: 'var(--mantine-font-size-lg)' } }}
     >
       {children}
