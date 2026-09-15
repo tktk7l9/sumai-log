@@ -18,7 +18,7 @@ import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ATTENDEES, ATTENDEES_LABEL, type Video } from '../../db/schema'
 import { parseYouTubeId } from '../../lib/youtube'
@@ -65,6 +65,20 @@ export function VideoForm({
   // 既存動画を開いた時点では既に題名が入っているので、oEmbed の自動入力で上書きしない
   const [titleTouched, setTitleTouched] = useState(Boolean(initial))
   const lastFetchedUrl = useRef<string | null>(initial?.url ?? null)
+  // oEmbed は連打・貼り直しで複数リクエストが飛びうる。古いレスポンスが後から返って
+  // 新しい入力を上書きしないよう、リクエストごとに番号を振って最新のものだけを反映する。
+  // アンマウント後（Drawer を閉じた後）に届いた応答も同様に捨てる。
+  const requestSeq = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      abortRef.current?.abort()
+    }
+  }, [])
 
   const form = useForm<Values>({
     initialValues: initial ? { ...empty, ...initial } : empty,
@@ -88,14 +102,25 @@ export function VideoForm({
     form.clearFieldError('url')
     if (lastFetchedUrl.current === url) return
     lastFetchedUrl.current = url
+
+    // 前のリクエストがまだ飛んでいれば打ち切り、この呼び出しだけを「最新」として扱う
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const seq = ++requestSeq.current
+
     setFetchState('loading')
     try {
-      const res = await fetch(`/api/oembed?url=${encodeURIComponent(url)}`)
+      const res = await fetch(`/api/oembed?url=${encodeURIComponent(url)}`, {
+        signal: controller.signal,
+      })
+      if (seq !== requestSeq.current || !mountedRef.current) return
       if (!res.ok) {
         setFetchState('fail')
         return
       }
       const data = (await res.json()) as OEmbedResponse
+      if (seq !== requestSeq.current || !mountedRef.current) return
       lastFetchedUrl.current = data.canonicalUrl
       setFetchState('ok')
       form.setValues({
@@ -106,6 +131,7 @@ export function VideoForm({
       })
       notifications.show({ message: '取得しました' })
     } catch {
+      if (seq !== requestSeq.current || !mountedRef.current) return
       setFetchState('fail')
     }
   }
