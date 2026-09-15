@@ -5,6 +5,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -14,21 +15,23 @@ import { PlaceForm } from '../components/places/PlaceForm'
 import { PLACE_KIND_LABEL } from '../db/schema'
 import { formatSqm, formatYen } from '../lib/format'
 import { deleteProperty, getProperty } from '../server/candidates'
+import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
 
 export const Route = createFileRoute('/candidates_/properties/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, targets] = await Promise.all([
+    const [detail, targets, commentData] = await Promise.all([
       getProperty({ data: { id: params.id } }),
       listLinkTargets(),
+      listCommentsFor({ data: { targetType: 'property', targetId: params.id } }),
     ])
-    return { ...detail, targets }
+    return { ...detail, targets, ...commentData }
   },
 })
 
 function Page() {
-  const { property, places, targets } = Route.useLoaderData()
+  const { property, places, targets, comments, me, members } = Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deleteProperty)
   const [editing, setEditing] = useState(false)
@@ -136,6 +139,14 @@ function Page() {
           ))
         )}
       </Stack>
+
+      <CommentThread
+        targetType="property"
+        targetId={property.id}
+        comments={comments}
+        me={me}
+        members={members}
+      />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="物件を編集">
         <PropertyForm property={property} onSaved={() => setEditing(false)} />

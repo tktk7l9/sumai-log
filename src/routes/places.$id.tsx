@@ -5,27 +5,30 @@ import { useServerFn } from '@tanstack/react-start'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
+import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { PlaceLocation } from '../components/places/PlaceLocation'
 import { PLACE_KIND_LABEL } from '../db/schema'
+import { listCommentsFor } from '../server/comments'
 import { deletePlace, getPlace, listLinkTargets } from '../server/places'
 
 export const Route = createFileRoute('/places/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, targets] = await Promise.all([
+    const [detail, targets, commentData] = await Promise.all([
       getPlace({ data: { id: params.id } }),
       listLinkTargets(),
+      listCommentsFor({ data: { targetType: 'place', targetId: params.id } }),
     ])
-    return { ...detail, targets }
+    return { ...detail, targets, ...commentData }
   },
 })
 
 function Page() {
-  const { place, vendor, property, visited, targets } = Route.useLoaderData()
+  const { place, vendor, property, visited, targets, comments, me, members } = Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deletePlace)
   const [editing, setEditing] = useState(false)
@@ -85,6 +88,14 @@ function Page() {
       <PlaceLocation place={place} visited={visited} />
 
       {place.note ? <Text style={{ whiteSpace: 'pre-wrap' }}>{place.note}</Text> : null}
+
+      <CommentThread
+        targetType="place"
+        targetId={place.id}
+        comments={comments}
+        me={me}
+        members={members}
+      />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="場所を編集">
         <PlaceForm
