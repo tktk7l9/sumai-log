@@ -23,3 +23,6 @@ seed.local/
 
 # サブエージェント駆動の作業ファイル
 .superpowers/
+
+# git worktree（superpowers:using-git-worktrees）
+.worktrees/
