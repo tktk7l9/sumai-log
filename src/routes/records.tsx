@@ -7,12 +7,15 @@ import { EmptyState } from '../components/EmptyState'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
+import { VideoCard } from '../components/videos/VideoCard'
+import { VideoForm } from '../components/videos/VideoForm'
 import { VisitCard } from '../components/visits/VisitCard'
 import { VisitForm } from '../components/visits/VisitForm'
 import { dateKey } from '../lib/calendar'
 import { UUID_SHAPE } from '../lib/ids'
 import type { Event } from '../db/schema'
 import { getEvent } from '../server/events'
+import { listVideos, videoFormOptions } from '../server/videos'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
@@ -26,7 +29,12 @@ export const Route = createFileRoute('/records')({
   validateSearch: (s) => search.parse(s),
   loaderDeps: ({ search }) => ({ fromEvent: search.fromEvent }),
   loader: async ({ deps }) => {
-    const [visits, options] = await Promise.all([listVisits(), visitFormOptions()])
+    const [visits, videos, options, videoOptions] = await Promise.all([
+      listVisits(),
+      listVideos(),
+      visitFormOptions(),
+      videoFormOptions(),
+    ])
     // visitFormOptions の予定一覧は直近 180 日の窓に限られる。窓の外の予定から
     // 「記録を書く」で来た場合はここで個別に引く（無ければ無視して既定値のまま）
     let fromEventRow: Event | undefined
@@ -37,15 +45,22 @@ export const Route = createFileRoute('/records')({
         // 404: 予定が既に削除されている等。既定値のまま進める
       }
     }
-    return { visits, options, fromEventRow }
+    return { visits, videos, options, videoOptions, fromEventRow }
   },
 })
 
 function Page() {
-  const { visits, options, fromEventRow: loadedFromEventRow } = Route.useLoaderData()
+  const {
+    visits,
+    videos,
+    options,
+    videoOptions,
+    fromEventRow: loadedFromEventRow,
+  } = Route.useLoaderData()
   const { tab, fromEvent } = Route.useSearch()
   const navigate = useNavigate({ from: '/records' })
   const [opened, setOpened] = useState(fromEvent !== undefined)
+  const [videoFormOpened, setVideoFormOpened] = useState(false)
   const fromEventRow = fromEvent
     ? (options.events.find((e) => e.id === fromEvent) ?? loadedFromEventRow)
     : undefined
@@ -61,14 +76,30 @@ function Page() {
         <SegmentedControl
           fullWidth
           value={tab}
-          onChange={(v) => navigate({ search: (s) => ({ ...s, tab: v as 'visits' | 'videos' }) })}
+          onChange={(v) =>
+            navigate({
+              search: (s) => ({ ...s, tab: v as 'visits' | 'videos' }),
+              replace: true,
+            })
+          }
           data={[
             { value: 'visits', label: `見学記録 ${visits.length}` },
             { value: 'videos', label: 'YouTube' },
           ]}
         />
         {tab === 'videos' ? (
-          <EmptyState title="準備中" description="YouTube のメモは次の段階で追加します。" />
+          videos.length === 0 ? (
+            <EmptyState
+              title="観た動画のメモを残しましょう"
+              description="右下の追加から書けます。"
+            />
+          ) : (
+            <SimpleGrid cols={{ base: 1, md: 2 }}>
+              {videos.map((v) => (
+                <VideoCard key={v.id} video={v} />
+              ))}
+            </SimpleGrid>
+          )
         ) : visits.length === 0 ? (
           <EmptyState
             title="見学記録がありません"
@@ -82,7 +113,11 @@ function Page() {
           </SimpleGrid>
         )}
       </Stack>
-      {tab === 'visits' ? <Fab label="記録を書く" onClick={() => setOpened(true)} /> : null}
+      {tab === 'visits' ? (
+        <Fab label="記録を書く" onClick={() => setOpened(true)} />
+      ) : (
+        <Fab label="YouTube" onClick={() => setVideoFormOpened(true)} />
+      )}
       <FormDrawer opened={opened} onClose={close} title="見学記録を書く">
         <VisitForm
           visit={null}
@@ -102,6 +137,20 @@ function Page() {
             close()
             navigate({ to: '/records/visits/$id', params: { id } })
           }}
+        />
+      </FormDrawer>
+      <FormDrawer
+        opened={videoFormOpened}
+        onClose={() => setVideoFormOpened(false)}
+        title="YouTube メモを書く"
+      >
+        <VideoForm
+          options={videoOptions}
+          onSaved={(id) => {
+            setVideoFormOpened(false)
+            navigate({ to: '/records/videos/$id', params: { id } })
+          }}
+          onCancel={() => setVideoFormOpened(false)}
         />
       </FormDrawer>
     </PageShell>
