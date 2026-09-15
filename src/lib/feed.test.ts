@@ -52,6 +52,14 @@ describe('mergeFeed', () => {
     expect(mergeFeed([[]], 10)).toEqual([])
   })
 
+  it('limit が 0 以下なら空（負数を slice にそのまま渡さない）', () => {
+    const groups = [
+      [item('visit', 'a', '2030-01-01T00:00:00Z'), item('visit', 'b', '2030-01-02T00:00:00Z')],
+    ]
+    expect(mergeFeed(groups, 0)).toEqual([])
+    expect(mergeFeed(groups, -1)).toEqual([])
+  })
+
   it('at が読めない要素は最も古い扱いにする（feed から落とさない）', () => {
     const groups = [
       [item('visit', 'bad', 'invalid'), item('visit', 'good', '2030-01-01T00:00:00Z')],

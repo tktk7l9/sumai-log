@@ -1,6 +1,29 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatJst, toJstDateKey } from './jst'
+import { formatJst, parseToUtcMs, toJstDateKey } from './jst'
+
+describe('parseToUtcMs', () => {
+  it('D1 の空白区切り（オフセット無し=UTC）を UTC ミリ秒に直す', () => {
+    expect(parseToUtcMs('2030-01-05 23:30:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
+  })
+
+  it('ISO の Z 付きを UTC ミリ秒に直す', () => {
+    expect(parseToUtcMs('2030-01-05T23:30:00Z')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
+  })
+
+  it('ISO の +09:00 オフセット付きを UTC ミリ秒に直す（同じ瞬間になる）', () => {
+    expect(parseToUtcMs('2030-01-06T08:30:00+09:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
+  })
+
+  it('ISO の T 区切り・オフセット無しも UTC とみなす', () => {
+    expect(parseToUtcMs('2030-01-05T23:30:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
+  })
+
+  it('形式が合わない文字列は null', () => {
+    expect(parseToUtcMs('not-a-date')).toBeNull()
+    expect(parseToUtcMs('')).toBeNull()
+  })
+})
 
 describe('formatJst', () => {
   it('D1 の空白区切り（オフセット無し=UTC）を JST に直す', () => {

@@ -34,7 +34,8 @@ function extractId(host: string, pathname: string, searchParams: URLSearchParams
 }
 
 /**
- * YouTube の URL から動画 id を取り出す。対応外のホスト・パス、
+ * YouTube の URL から動画 id を取り出す。http/https 以外のスキーム
+ * （file: / ftp: / ws: / javascript: など）、対応外のホスト・パス、
  * 11 文字でない id、空文字は null。前後の空白は trim する。
  */
 export function parseYouTubeId(url: string): string | null {
@@ -47,6 +48,8 @@ export function parseYouTubeId(url: string): string | null {
   } catch {
     return null
   }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
 
   const host = parsed.hostname.toLowerCase()
   if (!isYouTubeHost(host)) return null
