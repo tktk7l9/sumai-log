@@ -20,6 +20,8 @@ coverage
 # 実データ（見学先・写真・動画メモ）はコミットしない
 seed.local.json
 seed.local/
+# 上と同じく seed.local/ 配下だが、取り込みスクリプトの生成物であることを明示しておく
+seed.local/out/
 
 # サブエージェント駆動の作業ファイル
 .superpowers/
