@@ -26,6 +26,7 @@ export function VendorCard({
           <Link
             to="/candidates/vendors/$id"
             params={params}
+            onClick={(e) => e.stopPropagation()}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
             <Text component="span" fw={700} lineClamp={1}>
