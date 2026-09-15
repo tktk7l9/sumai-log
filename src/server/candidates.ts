@@ -3,6 +3,7 @@ import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
+import { emptyToNull } from '../lib/emptyToNull'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
@@ -31,7 +32,14 @@ const optionalUrl = z
   .transform((v) => (v === '' ? null : v))
   .nullable()
   .refine((v) => v === null || /^https?:\/\//.test(v), 'URL は http(s):// で始めてください')
-const optionalInt = z.number().int().nullable()
+// Mantine の NumberInput は空欄で '' を emit する。DB 上は null の数値項目なので、
+// zod の境界で '' → null に変換してから受け取る（そうしないと保存が黙って失敗する）。
+const numberOrEmpty = <T extends z.ZodNumber>(schema: T) =>
+  z
+    .union([schema, z.literal('')])
+    .transform(emptyToNull)
+    .nullable()
+const optionalInt = numberOrEmpty(z.number().int())
 
 export const vendorInput = z.object({
   id: z.string().uuid().optional(),
@@ -39,9 +47,9 @@ export const vendorInput = z.object({
   kind: z.enum(VENDOR_KINDS),
   hq: optionalText,
   serviceAreas: z.array(z.string().trim().min(1).max(50)).max(100),
-  uaValue: z.number().min(0).max(5).nullable(),
+  uaValue: numberOrEmpty(z.number().min(0).max(5)),
   cValuePublished: z.boolean(),
-  seismicGrade: z.number().int().min(1).max(3).nullable(),
+  seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),
   longTermCertified: z.boolean(),
   pricePerTsuboMin: optionalInt,
   pricePerTsuboMax: optionalInt,
@@ -60,7 +68,7 @@ export const propertyInput = z.object({
   station: optionalText,
   walkMinutes: optionalInt,
   price: optionalInt,
-  areaSqm: z.number().min(0).nullable(),
+  areaSqm: numberOrEmpty(z.number().min(0)),
   layout: optionalText,
   builtYear: optionalInt,
   completionDate: optionalText,

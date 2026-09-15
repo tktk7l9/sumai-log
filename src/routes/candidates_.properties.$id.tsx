@@ -36,9 +36,13 @@ function Page() {
 
   async function handleDelete() {
     if (!window.confirm(`「${property.name}」を削除します。場所・予定・記録は残ります。`)) return
-    await remove({ data: { id: property.id } })
-    notifications.show({ message: '物件を削除しました' })
-    navigate({ to: '/candidates', search: { tab: 'properties', coversHome: false } })
+    try {
+      await remove({ data: { id: property.id } })
+      notifications.show({ message: '物件を削除しました' })
+      navigate({ to: '/candidates', search: { tab: 'properties', coversHome: false } })
+    } catch {
+      notifications.show({ message: '削除できませんでした', color: 'red' })
+    }
   }
 
   const stationValue =

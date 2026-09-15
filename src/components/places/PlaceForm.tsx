@@ -77,6 +77,8 @@ export function PlaceForm({
       await router.invalidate()
       notifications.show({ message: place ? '場所を更新しました' : '場所を追加しました' })
       onSaved(id)
+    } catch {
+      notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
       setSaving(false)
     }
