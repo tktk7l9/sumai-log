@@ -37,10 +37,12 @@ export function PlacesMap({
 }) {
   const elRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
-  const layerRef = useRef<Map<string, L.Marker>>(new Map())
+  const layerRef = useRef<Map<string, { marker: L.Marker; visited: boolean }>>(new Map())
   const onSelectRef = useRef(onSelect)
+  const focusIdRef = useRef(focusId)
   useEffect(() => {
     onSelectRef.current = onSelect
+    focusIdRef.current = focusId
   })
 
   useEffect(() => {
@@ -60,24 +62,36 @@ export function PlacesMap({
     }
   }, [])
 
+  // マーカーを描き直し、表示範囲を合わせる。focusId はここでは見ない
+  // （ピンをタップしただけで視点が戻ってしまうのを防ぐため、アイコンの
+  // アクティブ表示は下の別 effect に分離している）。
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
-    for (const m of layerRef.current.values()) m.remove()
+    for (const { marker } of layerRef.current.values()) marker.remove()
     layerRef.current.clear()
     for (const m of markers) {
-      const marker = L.marker([m.lat, m.lng], { icon: pinIcon(m.visited, m.id === focusId) }).addTo(
-        map,
-      )
-      marker.bindTooltip(m.name, { direction: 'top', offset: [0, -20] })
+      const marker = L.marker([m.lat, m.lng], {
+        icon: pinIcon(m.visited, m.id === focusIdRef.current),
+      }).addTo(map)
+      const label = document.createElement('span')
+      label.textContent = m.name
+      marker.bindTooltip(label, { direction: 'top', offset: [0, -20] })
       marker.on('click', () => onSelectRef.current?.(m.id))
-      layerRef.current.set(m.id, marker)
+      layerRef.current.set(m.id, { marker, visited: m.visited })
     }
     const b = boundsOf(markers)
     if (!b) map.setView([35.68, 139.69], 9)
     else if (markers.length === 1) map.setView(b[0], 15)
     else map.fitBounds(b, { padding: [24, 24] })
-  }, [markers, focusId])
+  }, [markers])
+
+  // アクティブなピンのアイコンだけ差し替える。視点（bounds/center）は動かさない。
+  useEffect(() => {
+    for (const [id, { marker, visited }] of layerRef.current) {
+      marker.setIcon(pinIcon(visited, id === focusId))
+    }
+  }, [focusId])
 
   useEffect(() => {
     const map = mapRef.current

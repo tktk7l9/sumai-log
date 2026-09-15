@@ -2,7 +2,7 @@ import { ActionIcon, Paper, SegmentedControl, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { LocateFixed } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
@@ -30,8 +30,11 @@ function Page() {
   const [formOpened, setFormOpened] = useState(false)
   const [center, setCenter] = useState<{ lat: number; lng: number } | undefined>(undefined)
 
-  const shownPlaces = places.filter((p) => filter === 'all' || (filter === 'visited') === p.visited)
-  const markers = toMarkers(shownPlaces)
+  const shownPlaces = useMemo(
+    () => places.filter((p) => filter === 'all' || (filter === 'visited') === p.visited),
+    [places, filter],
+  )
+  const markers = useMemo(() => toMarkers(shownPlaces), [shownPlaces])
   const missingCount = places.filter((p) => p.lat == null || p.lng == null).length
   const sheetPlace = sheetId ? (places.find((p) => p.id === sheetId) ?? null) : null
 
