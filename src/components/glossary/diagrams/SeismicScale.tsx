@@ -1,6 +1,6 @@
 import { Figure, Label } from './Figure'
 
-const BASE_Y = 170
+const BASE_Y = 200
 const SCALE = 60 // px per 1.0 倍
 
 const BARS: { grade: string; value: number; x: number }[] = [
@@ -27,10 +27,10 @@ export function SeismicScaleDiagram() {
               fill="var(--mantine-color-clay-3)"
               fillOpacity={0.7}
             />
-            <Label x={bar.x} y={top - 8} size={11}>
+            <Label x={bar.x} y={top - 10} size={13}>
               {bar.value}倍
             </Label>
-            <Label x={bar.x} y={BASE_Y + 18} size={11}>
+            <Label x={bar.x} y={BASE_Y + 20} size={13}>
               {bar.grade}
             </Label>
           </g>

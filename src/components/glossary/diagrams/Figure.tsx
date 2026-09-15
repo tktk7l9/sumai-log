@@ -1,10 +1,13 @@
 /**
  * 用語集の図解が共有する土台。
- * - `Figure`: `viewBox="0 0 320 200"` の <svg> と矢印マーカー（<defs>）を用意する
+ * - `Figure`: `viewBox="0 0 320 240"` の <svg> と矢印マーカー（<defs>）を用意する
  * - `Arrow` / `Label`: 各図が個別に <line>/<text> を書かないための共通部品
  *
  * 色は `currentColor`（線・文字）と、テーマの CSS 変数（塗りのみ・半透明）に限る。
  * hex や rgb() は使わない＝ダーク/ライトどちらの文字色にも自動で追従する。
+ *
+ * 文字は全図共通で 12〜14px（`Label` の `size` 型で強制）。200 高だと 12px 未満まで
+ * 詰めないと収まらない図があったため、viewBox の高さを 240 に統一した（幅 320 は変えない）。
  */
 
 import { createContext, useContext, useId } from 'react'
@@ -52,7 +55,7 @@ export function Figure({ label, children }: { label: string; children: ReactNode
   return (
     <ArrowMarkerContext.Provider value={markerUrls}>
       <svg
-        viewBox="0 0 320 200"
+        viewBox="0 0 320 240"
         width="100%"
         role="img"
         aria-label={label}
@@ -107,7 +110,10 @@ export function Arrow({
   )
 }
 
-/** 日本語ラベル用の <text>。塗りは currentColor、線は引かない */
+/**
+ * 日本語ラベル用の <text>。塗りは currentColor、線は引かない。
+ * `size` は 12〜14 に固定（グローバル制約「文字は font-size 12〜14」を型で強制する）。
+ */
 export function Label({
   x,
   y,
@@ -119,7 +125,7 @@ export function Label({
   y: number
   children: ReactNode
   anchor?: 'start' | 'middle' | 'end'
-  size?: number
+  size?: 12 | 13 | 14
 }) {
   return (
     <text x={x} y={y} fill="currentColor" stroke="none" fontSize={size} textAnchor={anchor}>

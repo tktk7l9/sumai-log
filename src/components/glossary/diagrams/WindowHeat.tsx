@@ -12,18 +12,18 @@ export function WindowHeatDiagram() {
     <Figure label="窓の種類ごとの熱の逃げやすさ。アルミ単板が最も太い矢印、アルミ樹脂複合ペア、樹脂トリプルの順に矢印が細くなる">
       {WINDOWS.map((w) => (
         <g key={w.label}>
-          <rect x={w.x - 25} y={60} width={50} height={80} />
+          <rect x={w.x - 25} y={70} width={50} height={80} />
           {Array.from({ length: w.panes }, (_, i) => {
             const px = w.x - 25 + ((i + 1) * 50) / (w.panes + 1)
-            return <line key={i} x1={px} y1={60} x2={px} y2={140} />
+            return <line key={i} x1={px} y1={70} x2={px} y2={150} />
           })}
-          <Arrow x1={w.x} y1={55} x2={w.x} y2={18} width={w.arrowWidth} />
-          <Label x={w.x} y={155} size={9}>
+          <Arrow x1={w.x} y1={65} x2={w.x} y2={25} width={w.arrowWidth} />
+          <Label x={w.x} y={168} size={12}>
             {w.label}
           </Label>
         </g>
       ))}
-      <Label x={160} y={195} size={9}>
+      <Label x={160} y={205} size={12}>
         熱の逃げやすさ（矢印が太いほど大きい）
       </Label>
     </Figure>

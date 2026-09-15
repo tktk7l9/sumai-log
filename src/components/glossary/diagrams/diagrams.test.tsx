@@ -28,12 +28,20 @@ describe('DIAGRAMS', () => {
 
       expect(markup).toContain('role="img"')
       expect(markup).toMatch(/aria-label="[^"]+"/)
-      expect(markup).toContain('viewBox="0 0 320 200"')
+      expect(markup).toContain('viewBox="0 0 320 240"')
       expect(markup).toContain('width="100%"')
       expect(markup).toContain('stroke="currentColor"')
       expect(markup).not.toMatch(/#[0-9a-fA-F]{3,6}\b/)
       expect(markup).not.toContain('rgb(')
       expect(markup).toMatch(JAPANESE_TEXT)
+
+      // グローバル制約「文字は font-size 12〜14」。すべての font-size 属性が範囲内かを見る。
+      const sizes = [...markup.matchAll(/font-size="(\d+(?:\.\d+)?)"/g)].map((m) => Number(m[1]))
+      expect(sizes.length, `${id}: font-size 属性が見つからない`).toBeGreaterThan(0)
+      for (const size of sizes) {
+        expect(size, `${id}: font-size=${size} が 12〜14 の範囲外`).toBeGreaterThanOrEqual(12)
+        expect(size, `${id}: font-size=${size} が 12〜14 の範囲外`).toBeLessThanOrEqual(14)
+      }
     })
   }
 })
