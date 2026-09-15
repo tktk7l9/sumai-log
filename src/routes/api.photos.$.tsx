@@ -8,7 +8,7 @@ import { isManagedPhotoKey, photoKeys, sniffImageType, validatePhotoUpload } fro
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { currentActorEmail } from '../server/members'
 import { insertPhoto } from '../server/repository'
-import { getPhotosBucket } from '../server/storage'
+import { deletePhotoObjects, getPhotosBucket } from '../server/storage'
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -74,24 +74,35 @@ export const Route = createFileRoute('/api/photos/$')({
         const photoId = crypto.randomUUID()
         const keys = photoKeys(visitId, photoId)
         const bucket = getPhotosBucket()
-        await bucket.put(keys.displayKey, displayBytes, { httpMetadata: { contentType: type } })
-        await bucket.put(keys.thumbKey, thumbBytes, { httpMetadata: { contentType: thumbType } })
         try {
+          await bucket.put(keys.displayKey, displayBytes, { httpMetadata: { contentType: type } })
+          await bucket.put(keys.thumbKey, thumbBytes, { httpMetadata: { contentType: thumbType } })
           await insertPhoto(db, { id: photoId, visitId, ...keys, width, height }, actor)
         } catch (error) {
-          await bucket.delete([keys.displayKey, keys.thumbKey])
+          await deletePhotoObjects([keys.displayKey, keys.thumbKey])
           throw error
         }
         return json(200, { id: photoId, ...keys })
       },
       GET: async ({ params, request }) => {
+        const notFound = () =>
+          new Response('Not Found', {
+            status: 404,
+            headers: securityHeadersInit({ 'content-type': 'text/plain; charset=utf-8' }),
+          })
         const key = `photos/${params._splat ?? ''}`
-        if (!isManagedPhotoKey(key)) return new Response('Not Found', { status: 404 })
+        if (!isManagedPhotoKey(key)) return notFound()
         const object = await getPhotosBucket().get(key)
-        if (!object) return new Response('Not Found', { status: 404 })
+        if (!object) return notFound()
         const etag = object.httpEtag
         if (request.headers.get('if-none-match') === etag) {
-          return new Response(null, { status: 304, headers: securityHeadersInit({ etag }) })
+          return new Response(null, {
+            status: 304,
+            headers: securityHeadersInit({
+              'cache-control': 'private, max-age=31536000, immutable',
+              etag,
+            }),
+          })
         }
         return new Response(object.body, {
           headers: securityHeadersInit({
