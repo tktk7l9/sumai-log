@@ -10,6 +10,10 @@
 2. **R2 バケットを公開設定にしない。** 配信は必ず認証後に Worker 経由でストリームする。
 3. **認証を迂回できる経路を足さない。** 判定は `src/lib/access.ts` に集約し、
    `src/start.ts` のグローバルミドルウェアで全リクエストに適用する。fail closed。
+   例外: 静的アセット（クライアントバンドル・favicon・manifest・robots.txt）は Workers Assets
+   層が配信し `src/start.ts` を経由しない。Cloudflare Access の背後ではあるが、アプリ側
+   allowlist は通らない。Phase 2 の写真配信（`/api/photos`）はこの例外に乗せず、必ず
+   `src/server/` の server route（＝ミドルウェアを通る経路）として実装すること。
 4. **秘密は `.dev.vars`（ローカル）と `wrangler secret`（本番）だけ。** `wrangler.jsonc` の `vars` に
    メールを書かない。Keyway は `keyway pull -e development -f .dev.vars -y`（`keyway run` は wrangler に効かない）。
 5. **`src/lib/` は純粋関数のみ。** カバレッジ 100% ゲートの対象。

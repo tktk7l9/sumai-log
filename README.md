@@ -138,6 +138,11 @@ rm .dev.vars.production
 - 許可外の Google アカウントでは Access が拒否する
 - 設定ページで自分の表示名と色が `MEMBERS` どおりに出ることを確認する
 
+例外: 静的アセット（クライアントバンドル・favicon・manifest・robots.txt）は Cloudflare
+Workers Assets が直接配信し、アプリのコード（`src/start.ts` のミドルウェア）を経由しない。
+Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らない。Phase 2 で追加する
+写真配信（`/api/photos`）はこの経路に乗せず、必ず `src/server/` の server route にすること。
+
 ### 6. Keyway（secret のチーム共有）
 
 ```bash
@@ -168,3 +173,8 @@ Workers Builds が無音で止まる既知の事故があるため（他プロ�
 
 **⚠️ この項目は本タスクではダッシュボード操作が必要なため未実施。上記手順どおりに
 オーナーが設定すること。**
+
+### 8. バックアップ
+
+月次: `npm run db:export`（`backups/sumai-log-YYYYMMDD.sql` を出力・gitignore 済み）→
+Google Drive の `backups/sumai-log` へコピー。

@@ -1218,7 +1218,7 @@ describe('matchesHomeAreas', () => {
 
 ```ts
 /**
- * 施工エリアの判定。値は人が自由に書く（「座間市」「神奈川県」「関東」「全国」）ので、
+ * 施工エリアの判定。値は人が自由に書く（「テスト市」「神奈川県」「関東」「全国」）ので、
  * 厳密な住所コードではなく文字列の包含で「含みそうか」を見る。
  */
 
@@ -3342,7 +3342,7 @@ git push
 ## Phase 1 完了の確認
 
 - `npm run format:check` `typecheck` `test:coverage`（lib 100%）`test:server` `build` `check:pii` が green、CI が green
-- 本番で: Access ログイン → 候補 4 件・地図 4 ピン・設定に建築予定地「座間市」（seed から）
+- 本番で: Access ログイン → 候補 4 件・地図 4 ピン・設定に建築予定地（seed の値）
 - 妻のアカウントでログインできる（メール取得後）
 - `git ls-files | grep -E 'seed.local|\.dev\.vars$|\.env'` が空（`.dev.vars.example` 以外）
 - 次: `docs/superpowers/plans/2026-09-XX-sumai-log-phase2.md`（予定・見学記録・写真・コメント）を writing-plans で作る
