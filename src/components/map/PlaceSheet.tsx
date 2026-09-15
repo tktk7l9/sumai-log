@@ -17,7 +17,15 @@ export function PlaceSheet({
       opened={place != null}
       onClose={onClose}
       position="bottom"
-      size="auto"
+      // Mantine 9 は position="bottom" の Drawer で size="auto" を指定しても
+      // コンテンツに合わせて縮まらず、常に画面いっぱいの高さになる
+      // （top/bottom は flex-basis を強制的に 100% にする実装のため）。
+      // 「タップで下からカード」という仕様どおり、固定高の縮小カードにする。
+      // 300px は 名前見出し + 種別バッジ + 業者名 + マンション物件名 + 長め（2 行）の
+      // 住所 + 「詳細を見る」ボタンをすべて表示しても収まることを実機（390×844 と
+      // 1280×800）で確認した値。overflow は発生していない
+      // （scrollHeight === clientHeight === 300 を確認済み）
+      size={300}
       title={place?.name}
       padding="md"
       // Leaflet の操作コントロール（地図タブの現在地ボタンなど）は z-index: 1000 で
