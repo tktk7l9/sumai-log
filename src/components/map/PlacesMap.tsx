@@ -46,7 +46,9 @@ export function PlacesMap({
   useEffect(() => {
     if (!elRef.current || mapRef.current) return
     const map = L.map(elRef.current, { zoomControl: false, minZoom: 4, maxZoom: 18 })
-    L.control.zoom({ position: 'bottomright' }).addTo(map)
+    // 地図タブの FAB「場所を追加」は右下(bottom-right)に浮くため、そこにズームコント
+    // ロールを置くと重なる（実測: 390×844 で約 28×39px 重複）。右上に移す
+    L.control.zoom({ position: 'topright' }).addTo(map)
     L.tileLayer(GSI_PALE, { maxZoom: 18, maxNativeZoom: 18, attribution: ATTRIBUTION }).addTo(map)
     mapRef.current = map
     const t = setTimeout(() => map.invalidateSize(), 0)

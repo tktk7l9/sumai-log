@@ -5,7 +5,7 @@ import type { Place } from '../../db/schema'
 import { PlacesMapLazy } from '../map/PlacesMapLazy'
 
 /** 詳細ページの地図枠。座標があれば PlacesMapLazy に 1 件だけピンを出す */
-export function PlaceLocation({ place }: { place: Place }) {
+export function PlaceLocation({ place, visited }: { place: Place; visited: boolean }) {
   if (place.lat == null || place.lng == null) {
     return (
       <Card withBorder padding="md" bg="var(--mantine-color-default-hover)">
@@ -24,9 +24,7 @@ export function PlaceLocation({ place }: { place: Place }) {
     <Stack gap={4}>
       <div style={{ height: 240, borderRadius: 'var(--mantine-radius-md)', overflow: 'hidden' }}>
         <PlacesMapLazy
-          markers={[
-            { id: place.id, name: place.name, lat: place.lat, lng: place.lng, visited: true },
-          ]}
+          markers={[{ id: place.id, name: place.name, lat: place.lat, lng: place.lng, visited }]}
           focusId={place.id}
         />
       </div>

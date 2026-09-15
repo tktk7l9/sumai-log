@@ -124,6 +124,15 @@ export async function deletePlaceCascade(
   return { ok: true }
 }
 
+/** その場所に見学記録が1件でもあるか。詳細ページのピンを塗る/塗らないの判定に使う */
+export async function hasVisits(db: Db, placeId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)` })
+    .from(visits)
+    .where(eq(visits.placeId, placeId))
+  return Number(row?.n ?? 0) > 0
+}
+
 export async function getCachedGeocode(db: Db, query: string): Promise<GeocodeHit | null> {
   const [row] = await db.select().from(geocodeCache).where(eq(geocodeCache.query, query)).limit(1)
   return row ? { lat: row.lat, lng: row.lng, title: row.title } : null
