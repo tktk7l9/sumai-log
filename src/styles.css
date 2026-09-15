@@ -3,10 +3,13 @@
 }
 
 /*
- * 地の色と本文の色だけは Mantine が light で決め打ち（#fff / #000）していて
- * theme のパレットから導けないので、ここで暖色に差し替える。セレクタは Mantine 本体と
- * 同じ形にして、読み込み順（__root.tsx で Mantine のあとに appCss）で勝たせている。
- * ダークは theme の dark[7]（地）・dark[0]（文字）がそのまま使われるので上書き不要。
+ * 地の色だけは Mantine が light で `#fff` と決め打ちしていて theme のパレットから
+ * 導けないので、ここで暖色に差し替える。セレクタは Mantine 本体と同じ形にして、
+ * 読み込み順（__root.tsx で Mantine のあとに appCss）で勝たせている。
+ * ダークは theme の dark[7]（地）がそのまま使われるので上書き不要。
+ *
+ * プレースホルダは既定だと入力欄の枠と同じ段（gray-5 / dark-3）で、文字としては
+ * 薄すぎる（3.2:1 / 4.3:1）。枠は枠のまま、文字は補助文字と同じ段に上げて 4.5:1 を満たす。
  *
  * ついでにこのアプリだけの語彙を 3 つ置く:
  *   --sumai-ring   キーボードフォーカスの輪郭
@@ -16,7 +19,7 @@
 :root[data-mantine-color-scheme='light'],
 :host([data-mantine-color-scheme='light']) {
   --mantine-color-body: #faf7f2;
-  --mantine-color-text: var(--mantine-color-black);
+  --mantine-color-placeholder: var(--mantine-color-gray-6);
   --sumai-ring: var(--mantine-color-clay-6);
   --sumai-sunken: var(--mantine-color-gray-2);
   --sumai-lift: 0 6px 18px -6px rgba(69, 45, 30, 0.35);
@@ -24,6 +27,7 @@
 
 :root[data-mantine-color-scheme='dark'],
 :host([data-mantine-color-scheme='dark']) {
+  --mantine-color-placeholder: var(--mantine-color-dark-2);
   --sumai-ring: var(--mantine-color-clay-4);
   --sumai-sunken: var(--mantine-color-dark-4);
   --sumai-lift: 0 6px 18px -6px rgba(0, 0, 0, 0.7);
@@ -48,11 +52,12 @@ a {
   color: inherit;
 }
 
-/* カード全体がリンクになっている箇所は Mantine のフォーカス輪郭が付かないので、ここで付ける */
+/* カード全体がリンクになっている箇所は Mantine のフォーカス輪郭が付かないので、ここで付ける。
+   輪郭は中身の角丸に沿わせる（inherit なので、角丸を持たないリンクでは素直に四角になる） */
 a:focus-visible {
   outline: 2px solid var(--sumai-ring);
   outline-offset: 2px;
-  border-radius: var(--mantine-radius-md);
+  border-radius: inherit;
 }
 
 .breakable {
@@ -82,6 +87,18 @@ a:focus-visible {
   );
 }
 
+/*
+ * FAB は下タブの 16px 上（bottom 72px）に高さ約 50px で浮いているので、下タブ分を空けただけ
+ * では最後のカードがまだ隠れる。差分（FAB の高さ＋余白）を本文の一番外側で足す。
+ *
+ * ここを .app-main ではなく PageShell 側に付けているのは、地図タブが
+ * 「ヘッダと下タブを引いた高さぴったりの 1 枚」で、main の下 padding を増やすと
+ * その分だけページ全体がスクロールしてしまうため（地図は PageShell を使っていない）。
+ */
+.fab-clearance {
+  padding-bottom: 64px;
+}
+
 /* 空状態・写真のプレースホルダなど、一段沈めた面 */
 .sunken {
   background-color: var(--sumai-sunken);
@@ -89,8 +106,9 @@ a:focus-visible {
 
 /*
  * 「誰が書いたか」をカードの左端 3px の帯で示す（丸をもう 1 つ足さずに一覧で追えるように）。
- * 色は MemberChip の丸と同じ。border ではなく内側の影で引くので、角丸に沿って切れるし
- * カードの幅も動かない。
+ * 帯は MemberChip の丸と同じ色名の 6 段目。丸のほう（Avatar の light バリアント）は
+ * 同じ色名の淡い地＋濃い字なので、色みは揃うが明るさは別段になる。
+ * border ではなく内側の影で引くので、角丸に沿って切れるしカードの幅も動かない。
  */
 .author-band {
   box-shadow: inset 3px 0 0 0 var(--author-color, transparent);

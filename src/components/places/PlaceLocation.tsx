@@ -8,10 +8,11 @@ import { PlacesMapLazy } from '../map/PlacesMapLazy'
 export function PlaceLocation({ place, visited }: { place: Place; visited: boolean }) {
   if (place.lat == null || place.lng == null) {
     return (
-      <Card withBorder padding="md" bg="var(--mantine-color-default-hover)">
+      <Card withBorder padding="md" className="sunken">
+        {/* 沈めた面の上なので、文字は dimmed に落とさず本文色のまま置く（空状態と同じ理由） */}
         <Group gap={8} wrap="nowrap">
           <MapPinOff size={16} aria-hidden />
-          <Text size="sm" c="dimmed">
+          <Text size="sm">
             {place.address
               ? '住所から座標を引けていないため地図を出せません。編集して座標を貼ってください。'
               : '住所も座標も登録されていないため地図を出せません。'}

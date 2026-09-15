@@ -174,7 +174,7 @@ export function VideoForm({
         ) : null}
         {form.values.thumbnailUrl ? (
           <AspectRatio ratio={16 / 9} maw={240}>
-            <Image src={form.values.thumbnailUrl} alt="" radius="md" />
+            <Image src={form.values.thumbnailUrl} alt="" radius="sm" />
           </AspectRatio>
         ) : null}
         <TextInput

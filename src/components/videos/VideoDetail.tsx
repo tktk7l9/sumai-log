@@ -83,7 +83,7 @@ export function VideoDetail({
     >
       {video.thumbnailUrl ? (
         <AspectRatio ratio={16 / 9}>
-          <Image src={video.thumbnailUrl} alt={video.title} radius="md" />
+          <Image src={video.thumbnailUrl} alt={video.title} radius="sm" />
         </AspectRatio>
       ) : null}
 
