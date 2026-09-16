@@ -9,6 +9,7 @@ import {
   recentPhotos,
   recentPlaces,
   recentProperties,
+  recentSources,
   recentVendors,
   recentVideos,
   recentVisits,
@@ -29,6 +30,7 @@ export const recentFeed = createServerFn()
       recentVideos(db, 10),
       recentComments(db, 10),
       recentPhotos(db, 10),
+      recentSources(db, 10),
     ])
     return mergeFeed(groups, limit)
   })

@@ -366,3 +366,44 @@ export type Video = typeof videos.$inferSelect
 export type NewVideo = typeof videos.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
+
+/** 情報収集（/sources）の情報源の種類。YouTube チャンネル URL から解析できたら
+ * 'youtube'、それ以外は 'site'（src/lib/sources.ts の parseYoutubeChannelUrl 参照） */
+export const SOURCE_KINDS = ['youtube', 'site'] as const
+
+/**
+ * 情報収集ページの情報源（主に YouTube チャンネル）。ジャンルは固定 enum ではなく
+ * `src/content/sourceGenres.ts` のデータで表す（妥当性は src/server/sources.schema.ts の
+ * zod 側で SOURCE_GENRE_IDS と照合する。vendors.status 等と違ってここでは drizzle の
+ * enum 制約を付けない）。
+ */
+export const sources = sqliteTable(
+  'sources',
+  {
+    id: id(),
+    kind: text('kind', { enum: SOURCE_KINDS }).notNull().default('youtube'),
+    name: text('name').notNull(),
+    url: text('url').notNull().unique(),
+    /** YouTube ハンドル（'@…'）。/channel/UC… だけの URL から登録した場合は無い */
+    handle: text('handle'),
+    /** YouTube チャンネル ID（'UC…'）。/@handle だけの URL では取得できないことがある */
+    channelId: text('channel_id'),
+    /** src/content/sourceGenres.ts の SourceGenre['id'] */
+    genre: text('genre').notNull(),
+    /** 最大 200 字（呼び出し側で切り詰める） */
+    description: text('description'),
+    /** https のみ。ホストは src/lib/sources.ts の isAllowedAvatarUrl で絞る */
+    avatarUrl: text('avatar_url'),
+    /** 候補の会社（vendors）と紐づける場合 */
+    vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
+    /** 加盟団体（src/content/affiliations.ts の Affiliation['id']）と紐づける場合 */
+    affiliation: text('affiliation'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: createdBy(),
+    ...timestamps,
+  },
+  (t) => [index('sources_genre_idx').on(t.genre)],
+)
+
+export type Source = typeof sources.$inferSelect
+export type NewSource = typeof sources.$inferInsert

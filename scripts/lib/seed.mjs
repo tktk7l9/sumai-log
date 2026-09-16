@@ -140,6 +140,64 @@ function validateAffiliations(vendorSlug, affiliations) {
   }
 }
 
+// src/content/sourceGenres.ts の SOURCE_GENRE_IDS と同じ値。plain .mjs から TS を import
+// できないため値を重複させている（NEWS_SOURCES/AFFILIATION_IDS と同じ理由）。
+const SOURCE_GENRE_IDS = [
+  'candidates',
+  'associations',
+  'knowledge',
+  'builders',
+  'hm',
+  'condo-reno',
+  'money',
+  'energy',
+  'owners',
+]
+
+// src/db/schema.ts の SOURCE_KINDS と同じ値。
+const SOURCE_KINDS = ['youtube', 'site']
+
+/** 既知の YouTube チャンネル URL の形（src/lib/sources.ts の parseYoutubeChannelUrl と同じ
+ * 判定を、TS を import できない .mjs 側で最小限だけ再実装）。取り込み時の kind 自動判定用 */
+function looksLikeYoutubeChannelUrl(url) {
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  const hosts = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com']
+  if (!hosts.includes(parsed.hostname.toLowerCase())) return false
+  const [first] = parsed.pathname.split('/').filter(Boolean)
+  return Boolean(first)
+}
+
+/** 情報源の kind/genre/url/avatarUrl を検証する。どの slug のどの値が不正かがわかる
+ * メッセージで例外を投げる（validateAffiliations と同じ流儀） */
+function validateSource(s) {
+  if (s.kind !== undefined && s.kind !== null && !SOURCE_KINDS.includes(s.kind)) {
+    throw new Error(
+      `source ${s.slug}: unknown kind: ${s.kind} (expected one of ${SOURCE_KINDS.join(', ')})`,
+    )
+  }
+  if (!SOURCE_GENRE_IDS.includes(s.genre)) {
+    throw new Error(
+      `source ${s.slug}: unknown genre: ${s.genre} (expected one of ${SOURCE_GENRE_IDS.join(', ')})`,
+    )
+  }
+  if (!/^https:\/\//.test(s.url)) {
+    throw new Error(`source ${s.slug}: url must start with https://`)
+  }
+  if (s.avatarUrl != null && !/^https:\/\//.test(s.avatarUrl)) {
+    throw new Error(`source ${s.slug}: avatarUrl must start with https://`)
+  }
+  if (s.affiliation != null && !AFFILIATION_IDS.includes(s.affiliation)) {
+    throw new Error(
+      `source ${s.slug}: unknown affiliation: ${s.affiliation} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+    )
+  }
+}
+
 /**
  * affiliationLinks（{ [affiliationId]: { url, note? } }）を検証する。省略は許容する
  * （所有者の seed.local.json は一部の業者にしか付けない想定。src/server/candidates.ts の
@@ -382,6 +440,30 @@ export function buildStatements(seed, opts) {
         tags: JSON.stringify(vid.tags ?? []),
         takeaways: vid.takeaways ?? null,
         vendor_id: resolveId(vendorIdBySlug, vid.vendor, 'vendor'),
+        created_by: actorEmail,
+        created_at: now,
+        updated_at: now,
+      }),
+    )
+  }
+
+  // --- sources ---------------------------------------------------------------
+  for (const s of seed.sources ?? []) {
+    validateSource(s)
+    sql.push(
+      upsertStatement('sources', {
+        id: slugToId(`source:${s.slug}`),
+        kind: s.kind ?? (looksLikeYoutubeChannelUrl(s.url) ? 'youtube' : 'site'),
+        name: s.name,
+        url: s.url,
+        handle: s.handle ?? null,
+        channel_id: s.channelId ?? null,
+        genre: s.genre,
+        description: s.description ?? null,
+        avatar_url: s.avatarUrl ?? null,
+        vendor_id: resolveId(vendorIdBySlug, s.vendorSlug, 'vendor'),
+        affiliation: s.affiliation ?? null,
+        sort_order: s.sortOrder ?? 0,
         created_by: actorEmail,
         created_at: now,
         updated_at: now,

@@ -8,6 +8,7 @@ import {
   Map,
   Newspaper,
   NotebookPen,
+  Radio,
   Settings,
 } from 'lucide-react'
 
@@ -17,6 +18,7 @@ import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
 const HEADER_LINKS = [
   { to: '/news', label: 'お知らせ', Icon: Newspaper },
   { to: '/glossary', label: '用語集', Icon: BookOpen },
+  { to: '/sources', label: '情報収集', Icon: Radio },
   { to: '/settings', label: '設定', Icon: Settings },
 ] as const
 

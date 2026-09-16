@@ -49,6 +49,7 @@ const ALL_TABLES = [
   'visits',
   'photos',
   'videos',
+  'sources',
   'geocode_cache',
 ]
 
