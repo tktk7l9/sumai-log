@@ -8,7 +8,7 @@ import dayjs from 'dayjs'
 import { useState } from 'react'
 
 import { ATTENDEES, ATTENDEES_LABEL, type Event, type Visit } from '../../db/schema'
-import { dateKey } from '../../lib/calendar'
+import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
 import { saveVisit, type VisitInput } from '../../server/visits'
 import type { PlaceWithLinks } from '../../server/repository'
 
@@ -131,7 +131,7 @@ export function VisitForm({
           placeholder="関連する予定を選ぶと日付・場所を補完します"
           data={options.events.map((e) => ({
             value: e.id,
-            label: `${dateKey(e.startsAt)} ${e.title}`,
+            label: `${formatDateWithWeekday(dateKey(e.startsAt))} ${e.title}`,
           }))}
           value={form.values.eventId}
           onChange={onEventChange}
