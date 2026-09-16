@@ -27,7 +27,7 @@ import { formatJst } from '../lib/jst'
 import { describeFetchError } from '../lib/news/errors'
 import { sameHost } from '../lib/news/url'
 import { photoUrl } from '../lib/photos'
-import { fetchNewsNow, newsSources as loadNewsSources } from '../server/news'
+import { fetchNewsNow, newsSources as loadNewsSources, reparseNewsEvents } from '../server/news'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
@@ -66,11 +66,13 @@ function Page() {
   const save = useServerFn(saveHomeAreas)
   const saveTagsFn = useServerFn(saveTags)
   const fetchNewsNowFn = useServerFn(fetchNewsNow)
+  const reparseNewsEventsFn = useServerFn(reparseNewsEvents)
   const refreshFaviconsFn = useServerFn(refreshVendorFavicons)
   const [saving, setSaving] = useState(false)
   const [tagValues, setTagValues] = useState<string[]>(tags)
   const [savingTags, setSavingTags] = useState(false)
   const [fetchingNews, setFetchingNews] = useState(false)
+  const [reparsingNews, setReparsingNews] = useState(false)
   const [fetchingFavicons, setFetchingFavicons] = useState(false)
   const form = useForm({ initialValues: { areas: homeAreas.join('、') } })
 
@@ -128,6 +130,24 @@ function Page() {
       notifications.show({ message: extractErrorMessage(error), color: 'red' })
     } finally {
       setFetchingNews(false)
+    }
+  }
+
+  /**
+   * 「日程を再解析」。`eventDate.ts` の抽出ロジックが直った後に、既存の
+   * vendor_news 全件へ再適用する（取得し直さず、保存済みのタイトル/要約から
+   * 再計算するだけ）。
+   */
+  async function handleReparseNews() {
+    setReparsingNews(true)
+    try {
+      const { checked, updated } = await reparseNewsEventsFn()
+      notifications.show({ message: `${checked} 件のうち ${updated} 件の日程を更新しました` })
+      await router.invalidate()
+    } catch (error) {
+      notifications.show({ message: extractErrorMessage(error), color: 'red' })
+    } finally {
+      setReparsingNews(false)
     }
   }
 
@@ -276,7 +296,10 @@ function Page() {
               })}
             </Stack>
           )}
-          <Group justify="flex-end">
+          <Group justify="flex-end" gap="xs">
+            <Button variant="default" onClick={handleReparseNews} loading={reparsingNews}>
+              日程を再解析
+            </Button>
             <Button onClick={handleFetchNews} loading={fetchingNews}>
               今すぐ取得
             </Button>
