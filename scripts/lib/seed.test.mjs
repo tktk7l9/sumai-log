@@ -336,6 +336,57 @@ test('buildStatements: affiliations に未知の id が混ざると例外（slug
   )
 })
 
+test('buildStatements: vendor の affiliationLinks が指定されれば vendors INSERT に JSON で入る', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = {
+    'kouzou-cram': { url: 'https://kouzou-cram.com/partnermap/example/', note: '構造 ★★★' },
+  }
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(
+    vendorAStmt,
+    /\{"kouzou-cram":\{"url":"https:\/\/kouzou-cram\.com\/partnermap\/example\/","note":"構造 ★★★"\}\}/,
+  )
+})
+
+test('buildStatements: affiliationLinks が未指定なら空オブジェクトになる（許容する）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorBStmt, /affiliations, affiliation_links/)
+  assert.match(vendorBStmt, /'\[\]', '\{\}'/)
+})
+
+test('buildStatements: affiliationLinks に未知の id が混ざると例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = { 'no-such-group': { url: 'https://example.com/' } }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*no-such-group/s,
+  )
+})
+
+test('buildStatements: affiliationLinks.url が https:// で始まらないと例外', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = { 'kouzou-cram': { url: 'http://example.com/' } }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*affiliationLinks\.kouzou-cram\.url/s,
+  )
+})
+
+test('buildStatements: affiliationLinks.note が 60 字を超えると例外', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = {
+    'kouzou-cram': { url: 'https://example.com/', note: 'あ'.repeat(61) },
+  }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*affiliationLinks\.kouzou-cram\.note/s,
+  )
+})
+
 test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が入る（vendorId だけから決まる key）', () => {
   const seed = fictionalSeed()
   const { sql } = buildStatements(seed, {

@@ -204,27 +204,44 @@ function Page() {
       {vendor.affiliations.length > 0 ? (
         <Stack gap="xs">
           <Title order={2}>加盟団体</Title>
-          {resolveAffiliations(vendor.affiliations).map((a) => (
-            <Card key={a.id} withBorder padding="sm">
-              <Group justify="space-between" wrap="wrap" gap="xs">
-                <Text fw={600}>
-                  {a.name}（{a.shortName}）
-                </Text>
-                <Group gap="md">
-                  <Anchor href={a.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink size={14} aria-hidden /> 公式サイト
-                  </Anchor>
-                  <Link
-                    to="/glossary/$termId"
-                    params={{ termId: a.glossaryId }}
-                    style={{ color: 'inherit' }}
-                  >
-                    用語集で読む
-                  </Link>
-                </Group>
-              </Group>
-            </Card>
-          ))}
+          {resolveAffiliations(vendor.affiliations).map((a) => {
+            const link = vendor.affiliationLinks[a.id]
+            return (
+              <Card key={a.id} withBorder padding="sm">
+                <Stack gap="xs">
+                  <Group justify="space-between" wrap="wrap" gap="xs">
+                    <Text fw={600}>
+                      {a.name}（{a.shortName}）
+                    </Text>
+                    <Group gap="md">
+                      <Anchor href={a.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} aria-hidden /> 公式サイト
+                      </Anchor>
+                      <Link
+                        to="/glossary/$termId"
+                        params={{ termId: a.glossaryId }}
+                        style={{ color: 'inherit' }}
+                      >
+                        用語集で読む
+                      </Link>
+                    </Group>
+                  </Group>
+                  {link ? (
+                    <Group justify="space-between" wrap="wrap" gap="xs">
+                      <Anchor href={link.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} aria-hidden /> 紹介ページ
+                      </Anchor>
+                      {link.note ? (
+                        <Text size="sm" c="dimmed">
+                          {link.note}
+                        </Text>
+                      ) : null}
+                    </Group>
+                  ) : null}
+                </Stack>
+              </Card>
+            )
+          })}
         </Stack>
       ) : null}
 

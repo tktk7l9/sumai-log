@@ -126,7 +126,7 @@ function validateNewsSource(vendorSlug, newsSource) {
 
 // src/content/affiliations.ts の AFFILIATION_IDS と同じ値。plain .mjs から TS を import
 // できないため値を重複させている（NEWS_SOURCES と同じ理由）。
-const AFFILIATION_IDS = ['iedukuri100', 'miratsugu']
+const AFFILIATION_IDS = ['iedukuri100', 'miratsugu', 'kouzou-cram']
 
 /** affiliations に未知の id が混ざっていたら、どの業者のどの値かがわかるメッセージで例外を投げる */
 function validateAffiliations(vendorSlug, affiliations) {
@@ -135,6 +135,30 @@ function validateAffiliations(vendorSlug, affiliations) {
     if (!AFFILIATION_IDS.includes(id)) {
       throw new Error(
         `vendor ${vendorSlug}: unknown affiliation: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+  }
+}
+
+/**
+ * affiliationLinks（{ [affiliationId]: { url, note? } }）を検証する。省略は許容する
+ * （所有者の seed.local.json は一部の業者にしか付けない想定。src/server/candidates.ts の
+ * zod と同じ判定: キーは既知の affiliation id・url は https:// 始まり・note は 60 字以内）。
+ */
+function validateAffiliationLinks(vendorSlug, affiliationLinks) {
+  if (affiliationLinks === undefined || affiliationLinks === null) return
+  for (const [id, link] of Object.entries(affiliationLinks)) {
+    if (!AFFILIATION_IDS.includes(id)) {
+      throw new Error(
+        `vendor ${vendorSlug}: unknown affiliationLinks key: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+    if (typeof link?.url !== 'string' || !/^https:\/\//.test(link.url)) {
+      throw new Error(`vendor ${vendorSlug}: affiliationLinks.${id}.url must start with https://`)
+    }
+    if (link.note !== undefined && link.note !== null && link.note.length > 60) {
+      throw new Error(
+        `vendor ${vendorSlug}: affiliationLinks.${id}.note must be 60 characters or less`,
       )
     }
   }
@@ -190,6 +214,7 @@ export function buildStatements(seed, opts) {
   for (const v of seed.vendors ?? []) {
     validateNewsSource(v.slug, v.newsSource)
     validateAffiliations(v.slug, v.affiliations)
+    validateAffiliationLinks(v.slug, v.affiliationLinks)
     const vendorId = vendorIdBySlug[v.slug]
     sql.push(
       upsertStatement('vendors', {
@@ -200,6 +225,7 @@ export function buildStatements(seed, opts) {
         representative: v.representative ?? null,
         service_areas: JSON.stringify(v.serviceAreas ?? []),
         affiliations: JSON.stringify(v.affiliations ?? []),
+        affiliation_links: JSON.stringify(v.affiliationLinks ?? {}),
         ua_value: v.uaValue ?? null,
         c_value_published: v.cValuePublished ?? false,
         seismic_grade: v.seismicGrade ?? null,

@@ -142,18 +142,27 @@ export function VendorCard({
             </Group>
           ) : null}
         </Group>
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Group gap="md" c="dimmed">
-            <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
-            {vendor.placeCount > 0 ? (
-              <Group gap={4}>
-                <MapPin size={14} aria-hidden />
-                <Text size="sm">{vendor.placeCount} 箇所</Text>
-              </Group>
-            ) : null}
+        {/* 坪単価・箇所数・リンクのどれも無ければ行自体を出さない。formatTsubo は
+            常に「—」を返すため、この行だけ表示すると中身の無い「—」だけの行が
+            残ってカード下部に余白ができて見える（所有者の指摘）。 */}
+        {vendor.pricePerTsuboMin != null ||
+        vendor.pricePerTsuboMax != null ||
+        vendor.placeCount > 0 ||
+        vendor.websiteUrl ||
+        vendor.socialUrls.length > 0 ? (
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Group gap="md" c="dimmed">
+              <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
+              {vendor.placeCount > 0 ? (
+                <Group gap={4}>
+                  <MapPin size={14} aria-hidden />
+                  <Text size="sm">{vendor.placeCount} 箇所</Text>
+                </Group>
+              ) : null}
+            </Group>
+            <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="sm" />
           </Group>
-          <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="sm" />
-        </Group>
+        ) : null}
       </Stack>
     </Card>
   )

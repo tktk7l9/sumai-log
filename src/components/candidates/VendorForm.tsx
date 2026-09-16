@@ -41,6 +41,7 @@ const empty: Values = {
   representative: null,
   serviceAreas: [],
   affiliations: [],
+  affiliationLinks: {},
   uaValue: null,
   cValuePublished: false,
   seismicGrade: null,
@@ -88,12 +89,23 @@ export function VendorForm({
   async function submit(values: Values) {
     setSaving(true)
     try {
+      // affiliationLinks は選んでいない団体の分・URL 未入力の分を送らない（zod は
+      // キーがあれば url を必須にしているため、空欄のまま送ると弾かれる）
+      const affiliationLinks = Object.fromEntries(
+        Object.entries(values.affiliationLinks)
+          .filter(([id, link]) => values.affiliations.includes(id) && link.url.trim() !== '')
+          .map(([id, link]) => [
+            id,
+            { url: link.url.trim(), ...(link.note?.trim() ? { note: link.note.trim() } : {}) },
+          ]),
+      )
       const { id } = await save({
         data: {
           ...(vendor ? { id: vendor.id } : {}),
           ...values,
           socialUrls: values.socialUrls.split('\n'),
           affiliations: values.affiliations as AffiliationId[],
+          affiliationLinks,
         },
       })
       await router.invalidate()
@@ -143,6 +155,43 @@ export function VendorForm({
           clearable
           {...form.getInputProps('affiliations')}
         />
+        {form.values.affiliations.map((affId) => {
+          const affiliation = AFFILIATIONS.find((a) => a.id === affId)
+          if (!affiliation) return null
+          const link = form.values.affiliationLinks[affId as AffiliationId]
+          // Mantine form の setFieldValue はドットパスの途中が無いと辿れない
+          // （affiliationLinks に affId のキーがまだ無いと落ちる）。選んだ団体を
+          // 増やした直後はキーが無い状態なので、常にオブジェクト全体を差し替える
+          function setLink(patch: { url?: string; note?: string }) {
+            form.setFieldValue('affiliationLinks', {
+              ...form.values.affiliationLinks,
+              [affId]: { url: '', note: '', ...link, ...patch },
+            })
+          }
+          return (
+            <Stack
+              key={affId}
+              gap="xs"
+              pl="md"
+              style={{ borderLeft: '2px solid var(--mantine-color-default-border)' }}
+            >
+              <TextInput
+                label={`紹介ページの URL（${affiliation.shortName}）`}
+                type="url"
+                placeholder="https://example.com/partner/some-koumuten/"
+                value={link?.url ?? ''}
+                onChange={(e) => setLink({ url: e.currentTarget.value })}
+              />
+              <TextInput
+                label="メモ"
+                placeholder="例: 構造 ★★★・断熱 ★★★"
+                maxLength={60}
+                value={link?.note ?? ''}
+                onChange={(e) => setLink({ note: e.currentTarget.value })}
+              />
+            </Stack>
+          )
+        })}
         <TextInput label="本社" {...form.getInputProps('hq')} value={form.values.hq ?? ''} />
         <TextInput
           label="代表者名"
