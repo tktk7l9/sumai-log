@@ -300,6 +300,186 @@ describe('fetchVendorNews', () => {
       'sumai-log/1.0',
     )
   })
+
+  it('許可されたホストへのリダイレクトは1回だけ追従して取得できる', async () => {
+    const vendorId = await makeVendor('リダイレクト業者', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: 'リダイレクト業者',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    let calls = 0
+    const fetchImpl = (async (url: string | URL) => {
+      calls += 1
+      if (String(url) === 'https://news.example.com/feed/') {
+        return new Response(null, {
+          status: 301,
+          headers: { Location: 'https://news.example.com/feed-renamed/' },
+        })
+      }
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(result).toEqual({ added: 2, error: null })
+    expect(calls).toBe(2) // 最初の 301 と、リダイレクト先への 1 回
+  })
+
+  it('許可されないホストへのリダイレクトは、そのホストへ fetch されることなくエラーになる', async () => {
+    const vendorId = await makeVendor('リダイレクト業者2', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: 'リダイレクト業者2',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    let blockedHostFetched = false
+    const fetchImpl = (async (url: string | URL) => {
+      if (String(url) === 'https://news.example.com/feed/') {
+        // 内部 IP リテラルへ誘導しようとするリダイレクト
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://192.168.1.1/feed/' },
+        })
+      }
+      blockedHostFetched = true
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(blockedHostFetched).toBe(false)
+    expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
+  })
+
+  it('自分自身のホスト（sumai-log.app）へのリダイレクトも拒否する', async () => {
+    const vendorId = await makeVendor('自己リダイレクト業者', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: '自己リダイレクト業者',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    let selfHostFetched = false
+    const fetchImpl = (async (url: string | URL) => {
+      if (String(url) === 'https://news.example.com/feed/') {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://sumai-log.app/api/photos/x' },
+        })
+      }
+      selfHostFetched = true
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(selfHostFetched).toBe(false)
+    expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
+  })
+
+  it('リダイレクトが4回連続すると（3回を超えるため）エラーになる', async () => {
+    const vendorId = await makeVendor('多段リダイレクト業者', {
+      newsUrl: 'https://news.example.com/hop0',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: '多段リダイレクト業者',
+      newsUrl: 'https://news.example.com/hop0',
+      newsSource: 'rss',
+    }
+
+    const fetchImpl = (async (url: string | URL) => {
+      const match = /\/hop(\d)$/.exec(String(url))
+      const hop = match ? Number(match[1]) : 0
+      if (hop < 4) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `https://news.example.com/hop${hop + 1}` },
+        })
+      }
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
+  })
+
+  it('リダイレクトが3回なら（境界）追従して成功する', async () => {
+    const vendorId = await makeVendor('3段リダイレクト業者', {
+      newsUrl: 'https://news.example.com/hop0',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: '3段リダイレクト業者',
+      newsUrl: 'https://news.example.com/hop0',
+      newsSource: 'rss',
+    }
+
+    const fetchImpl = (async (url: string | URL) => {
+      const match = /\/hop(\d)$/.exec(String(url))
+      const hop = match ? Number(match[1]) : 0
+      if (hop < 3) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `https://news.example.com/hop${hop + 1}` },
+        })
+      }
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(result).toEqual({ added: 2, error: null })
+  })
+
+  it('Location が相対パスでも「今いる URL」基準で解決してから許可判定する（最初の URL 基準ではない）', async () => {
+    const vendorId = await makeVendor('相対リダイレクト業者', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: '相対リダイレクト業者',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    const fetchImpl = (async (url: string | URL) => {
+      if (String(url) === 'https://news.example.com/feed/') {
+        // 1 hop目: 絶対 URL へ
+        return new Response(null, {
+          status: 302,
+          headers: { Location: 'https://news.example.com/sub/feed/' },
+        })
+      }
+      if (String(url) === 'https://news.example.com/sub/feed/') {
+        // 2 hop目: 相対パス。「今いる URL」（.../sub/feed/）基準で解決すると
+        // .../sub/feed2/ になる（最初の URL である .../feed/ 基準なら .../feed2/ になり、
+        // このテストは区別できる）
+        return new Response(null, { status: 302, headers: { Location: '../feed2/' } })
+      }
+      if (String(url) === 'https://news.example.com/sub/feed2/') {
+        return new Response(RSS_FEED, { status: 200 })
+      }
+      throw new Error(`unexpected url: ${String(url)}`)
+    }) as typeof fetch
+
+    const result = await fetchVendorNews(db, vendor, fetchImpl)
+    expect(result).toEqual({ added: 2, error: null })
+  })
 })
 
 describe('fetchAllVendorNews', () => {

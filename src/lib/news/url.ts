@@ -6,14 +6,17 @@
  * 経路を持たず、DNS 解決結果を覗く API も無い。したがってこのホスト名の拒否リストは
  * 「念のため」の多層防御であり、本体の防御は Workers のネットワーク境界そのもの。
  *
- * この判定はチェック対象の URL（＝最初のリクエスト先）にだけ適用する。リダイレクトは
- * 追従（follow）したままにする方針（業者サイトの www 有無・http→https のような
- * リダイレクトは珍しくないため）。リダイレクト先の URL にはこの関数のホスト名判定は
- * 掛からない — 許容するトレードオフとして受け入れる（design.md では触れられていない
- * 追加の防御）。
+ * リダイレクトは newsFetcher.ts 側で `redirect: 'manual'` にしたうえで、`Location` を
+ * 解決するたびにこの関数を再度通す（最大 3 ホップ）。この関数自体はどの URL に対して
+ * 呼ばれても同じ判定をするだけで、それが最初の URL かリダイレクト先かは意識しない。
  */
 
-const DENYLISTED_EXACT_HOSTS = new Set(['localhost'])
+const DENYLISTED_EXACT_HOSTS = new Set([
+  'localhost',
+  // このアプリ自身のカスタムドメイン。お知らせの取得元がリダイレクトでここに
+  // 誘導されると、Worker が自分自身（や別の Worker）に対してリクエストする形になる。
+  'sumai-log.app',
+])
 
 const DENYLISTED_SUFFIXES = [
   '.localhost',
@@ -22,6 +25,7 @@ const DENYLISTED_SUFFIXES = [
   '.home.arpa',
   '.workers.dev',
   '.cloudflareaccess.com',
+  '.sumai-log.app',
 ]
 
 /** 末尾の '.'（FQDN 表記）を落としてから小文字化する。先に落とさないと workers.dev の

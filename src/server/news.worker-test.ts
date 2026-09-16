@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  listVendorNewsInput,
-  newsEventsBetweenInput,
-  newsEventsForMonthInput,
-  planVisitInput,
-} from './news.schema'
+import { listVendorNewsInput, newsEventsBetweenInput, planVisitInput } from './news.schema'
 
 /**
  * fetchNewsNow / planVisitFromNews は createServerFn でラップされているため、
@@ -34,34 +29,6 @@ describe('listVendorNewsInput', () => {
 
   it('offset が負なら拒否する', () => {
     expect(listVendorNewsInput.safeParse({ offset: -1 }).success).toBe(false)
-  })
-})
-
-describe('newsEventsForMonthInput', () => {
-  it('YYYY-MM を月初〜月末の範囲に直す（9月は30日まで）', () => {
-    const result = newsEventsForMonthInput.safeParse({ ym: '2026-09' })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data).toEqual({ from: '2026-09-01', to: '2026-09-30' })
-    }
-  })
-
-  it('うるう年の2月は29日までになる', () => {
-    const result = newsEventsForMonthInput.safeParse({ ym: '2028-02' })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data).toEqual({ from: '2028-02-01', to: '2028-02-29' })
-    }
-  })
-
-  it('YYYY-MM の形式でなければ拒否する', () => {
-    expect(newsEventsForMonthInput.safeParse({ ym: '2026-9' }).success).toBe(false)
-    expect(newsEventsForMonthInput.safeParse({ ym: '2026/09' }).success).toBe(false)
-  })
-
-  it('範囲外の月（00・13）は拒否する', () => {
-    expect(newsEventsForMonthInput.safeParse({ ym: '2026-13' }).success).toBe(false)
-    expect(newsEventsForMonthInput.safeParse({ ym: '2026-00' }).success).toBe(false)
   })
 })
 

@@ -180,6 +180,16 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   return dates
 }
 
+/** この日数を超える範囲は「1つの予定」とみなさず開始日だけを残す（MAX_RANGE_DAYS 参照）。 */
+const MAX_RANGE_DAYS = 14
+
+/** 'YYYY-MM-DD' 同士の日数差（end − start。end が前なら負）。うるう年も UTC 通算で正しく数える。 */
+function daysBetween(startIso: string, endIso: string): number {
+  const toUtcMs = (iso: string) =>
+    Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)))
+  return Math.round((toUtcMs(endIso) - toUtcMs(startIso)) / 86_400_000)
+}
+
 /**
  * タイトル＋要約（呼び出し側で連結した `text`）からイベントの種別と日程を抜く。
  * 種別語（完成見学会 / 構造見学会 / 見学会（お住まい見学会・オープンハウスを含む）/
@@ -187,6 +197,13 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
  * 一つも拾えなければ null（1/32 や 2/30 のような実在しない日、分数表記と
  * みなした M/D は個別に捨てる）。複数の日が見つかれば最小を start・最大を
  * end にする（1 つなら両方同じ）。
+ *
+ * ただし start〜end が MAX_RANGE_DAYS（14 日）を超える場合は end を start に
+ * 揃える（1 日だけの予定にする）。「8月1日より受付開始。見学会は9月12日」の
+ * ような、本文中に開催日と無関係な日付（受付期間など）が混ざっている場合、
+ * min/max だけで範囲を決めると月をまたぐ長大な期間になり、カレンダーに
+ * 何か月もの灰色バーが出たり「行く」が受付開始日（最小値）で予定を作って
+ * しまったりする。範囲だと判断できる自信が無いときは単日に倒すほうが安全。
  */
 export function extractEvent(
   text: string,
@@ -202,7 +219,8 @@ export function extractEvent(
 
   const isoDates = dates.map(toIso)
   const start = isoDates.reduce((a, b) => (a < b ? a : b))
-  const end = isoDates.reduce((a, b) => (a > b ? a : b))
+  const rawEnd = isoDates.reduce((a, b) => (a > b ? a : b))
+  const end = daysBetween(start, rawEnd) > MAX_RANGE_DAYS ? start : rawEnd
 
   return { start, end, kind }
 }

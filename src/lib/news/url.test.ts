@@ -72,6 +72,11 @@ describe('isAllowedNewsUrl', () => {
     expect(isAllowedNewsUrl('https://team.cloudflareaccess.com/feed/')).toBe(false)
   })
 
+  it('このアプリ自身のホスト（sumai-log.app・そのサブドメイン）は拒否する', () => {
+    expect(isAllowedNewsUrl('https://sumai-log.app/feed/')).toBe(false)
+    expect(isAllowedNewsUrl('https://www.sumai-log.app/feed/')).toBe(false)
+  })
+
   it('末尾ドットで拒否リストの suffix チェックを回避できない', () => {
     expect(isAllowedNewsUrl('https://some-worker.workers.dev./feed/')).toBe(false)
   })
