@@ -1,4 +1,4 @@
-import { AppShell, Group, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
+import { ActionIcon, AppShell, Group, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   BookOpen,
@@ -12,6 +12,13 @@ import {
 } from 'lucide-react'
 
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
+
+/** ヘッダ右側のリンク（下タブに無いページ）。並びは表示順 */
+const HEADER_LINKS = [
+  { to: '/news', label: 'お知らせ', Icon: Newspaper },
+  { to: '/glossary', label: '用語集', Icon: BookOpen },
+  { to: '/settings', label: '設定', Icon: Settings },
+] as const
 
 const ICONS: Record<NavIcon, typeof House> = {
   home: House,
@@ -37,40 +44,56 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     >
       <AppShell.Header className="appbar">
         <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="xs">
-          <Text fw={700} size="lg" component={Link} to="/" c="inherit" td="none">
+          <Text
+            fw={700}
+            size="lg"
+            component={Link}
+            to="/"
+            c="inherit"
+            td="none"
+            style={{ whiteSpace: 'nowrap' }}
+          >
             住まいログ
           </Text>
-          <Group gap="xs" wrap="nowrap">
-            <NavLink
-              component={Link}
-              to="/news"
-              label="お知らせ"
-              leftSection={<Newspaper size={18} aria-hidden />}
-              active={isNavItemActive(pathname, '/news')}
-              aria-current={isNavItemActive(pathname, '/news') ? 'page' : undefined}
-              w="auto"
-              px="xs"
-            />
-            <NavLink
-              component={Link}
-              to="/glossary"
-              label="用語集"
-              leftSection={<BookOpen size={18} aria-hidden />}
-              active={isNavItemActive(pathname, '/glossary')}
-              aria-current={isNavItemActive(pathname, '/glossary') ? 'page' : undefined}
-              w="auto"
-              px="xs"
-            />
-            <NavLink
-              component={Link}
-              to="/settings"
-              label="設定"
-              leftSection={<Settings size={18} aria-hidden />}
-              active={isNavItemActive(pathname, '/settings')}
-              aria-current={isNavItemActive(pathname, '/settings') ? 'page' : undefined}
-              w="auto"
-              px="xs"
-            />
+          {/* スマホ幅（sm 未満）は 3 つ並ぶと題名が折り返すので、アイコンだけにする。
+              ラベルは aria-label と title で残す */}
+          <Group gap={4} wrap="nowrap" hiddenFrom="sm">
+            {HEADER_LINKS.map(({ to, label, Icon }) => {
+              const active = isNavItemActive(pathname, to)
+              return (
+                <ActionIcon
+                  key={to}
+                  component={Link}
+                  to={to}
+                  variant={active ? 'light' : 'subtle'}
+                  color={active ? 'clay' : 'gray'}
+                  size="lg"
+                  aria-label={label}
+                  title={label}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  <Icon size={20} aria-hidden />
+                </ActionIcon>
+              )
+            })}
+          </Group>
+          <Group gap="xs" wrap="nowrap" visibleFrom="sm">
+            {HEADER_LINKS.map(({ to, label, Icon }) => {
+              const active = isNavItemActive(pathname, to)
+              return (
+                <NavLink
+                  key={to}
+                  component={Link}
+                  to={to}
+                  label={label}
+                  leftSection={<Icon size={18} aria-hidden />}
+                  active={active}
+                  aria-current={active ? 'page' : undefined}
+                  w="auto"
+                  px="xs"
+                />
+              )
+            })}
           </Group>
         </Group>
       </AppShell.Header>
