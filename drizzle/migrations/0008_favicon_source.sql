@@ -1,0 +1,1 @@
+ALTER TABLE `vendors` ADD `favicon_source` text;

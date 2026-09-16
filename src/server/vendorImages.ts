@@ -10,6 +10,7 @@ import { getDb } from '../db/client'
 import { listVendorsWithWebsite } from './repository'
 import {
   deleteRepresentativePhotoObjects,
+  deleteVendorFaviconObjects,
   importRepresentativePhotoFromUrlCore,
   refreshAllVendorFavicons,
 } from './vendorImagesFetcher'
@@ -42,3 +43,9 @@ export const importRepresentativePhotoFromUrl = createServerFn({ method: 'POST' 
 export const deleteRepresentativePhoto = createServerFn({ method: 'POST' })
   .validator(vendorIdInput)
   .handler(async ({ data }) => deleteRepresentativePhotoObjects(getDb(), data.vendorId))
+
+/** 業者フォームの「削除」（サイトのアイコン）。アップロードは multipart なので
+ * createServerFn ではなく src/routes/api.vendor-favicon.$vendorId.tsx（raw route）で扱う */
+export const deleteVendorFavicon = createServerFn({ method: 'POST' })
+  .validator(vendorIdInput)
+  .handler(async ({ data }) => deleteVendorFaviconObjects(getDb(), data.vendorId))
