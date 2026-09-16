@@ -58,8 +58,8 @@ export function VendorCard({
             <Group gap="xs" onClick={(e) => e.stopPropagation()}>
               {vendor.uaValue != null ? (
                 <Link
-                  to="/glossary"
-                  hash={`term-${termIdForMetric('ua')}`}
+                  to="/glossary/$termId"
+                  params={{ termId: termIdForMetric('ua') }}
                   aria-label="用語集で UA値 を見る"
                   style={{ textDecoration: 'none' }}
                 >
@@ -68,8 +68,8 @@ export function VendorCard({
               ) : null}
               {vendor.cValuePublished ? (
                 <Link
-                  to="/glossary"
-                  hash={`term-${termIdForMetric('c')}`}
+                  to="/glossary/$termId"
+                  params={{ termId: termIdForMetric('c') }}
                   aria-label="用語集で C値 を見る"
                   style={{ textDecoration: 'none' }}
                 >
@@ -78,8 +78,8 @@ export function VendorCard({
               ) : null}
               {vendor.seismicGrade != null ? (
                 <Link
-                  to="/glossary"
-                  hash={`term-${termIdForMetric('seismic')}`}
+                  to="/glossary/$termId"
+                  params={{ termId: termIdForMetric('seismic') }}
                   aria-label="用語集で 耐震等級 を見る"
                   style={{ textDecoration: 'none' }}
                 >
@@ -88,8 +88,8 @@ export function VendorCard({
               ) : null}
               {vendor.longTermCertified ? (
                 <Link
-                  to="/glossary"
-                  hash={`term-${termIdForMetric('longTerm')}`}
+                  to="/glossary/$termId"
+                  params={{ termId: termIdForMetric('longTerm') }}
                   aria-label="用語集で 長期優良 を見る"
                   style={{ textDecoration: 'none' }}
                 >

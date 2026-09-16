@@ -1,31 +1,29 @@
-import { Alert, Badge, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Alert, Badge, Group, Stack, Table, Text } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
 import type { GlossaryTerm } from '../../content/glossary'
 import { DIAGRAMS } from './diagrams'
+import type { GlossarySearch } from './glossarySearch'
 
 /**
- * 用語 1 件分の表示。見出し (`id="term-<id>"`) はページ内アンカー・スクロール先として
- * 使われるので、構造を変えるときはこの id を保つこと。
+ * 用語 1 件分の表示。詳細ページ（`/glossary/$termId`）専用。
+ * 用語名・読みは `PageShell` の見出しが担うので、ここでは一言定義より下だけを描く。
+ * `search` は今の検索条件（`?q` `?c`）。関連語バッジで別の詳細に飛んでも、
+ * そこから「← 用語集」で一覧に戻ったときに絞り込みが消えないよう転送する。
  */
-export function TermCard({ term, related }: { term: GlossaryTerm; related: GlossaryTerm[] }) {
+export function TermCard({
+  term,
+  related,
+  search,
+}: {
+  term: GlossaryTerm
+  related: GlossaryTerm[]
+  search: GlossarySearch
+}) {
   const Diagram = term.diagram ? DIAGRAMS[term.diagram] : undefined
 
   return (
     <Stack gap="xs">
-      <Stack gap={2}>
-        {/* AppShell.Header は fixed で高さ 52px。scrollIntoView がそのまま見出しを
-            viewport 上端に合わせるとヘッダの下に隠れるため、scroll-margin-top で逃がす */}
-        <Title order={3} id={`term-${term.id}`} fz="md" style={{ scrollMarginTop: 68 }}>
-          {term.term}
-        </Title>
-        {term.reading ? (
-          <Text size="xs" c="dimmed">
-            {term.reading}
-          </Text>
-        ) : null}
-      </Stack>
-
       <Text size="sm" fw={600}>
         {term.summary}
       </Text>
@@ -76,8 +74,9 @@ export function TermCard({ term, related }: { term: GlossaryTerm; related: Gloss
             // フォーカス・読み上げ対象になる（VendorCard のバッジリンクと同じ形）。
             <Link
               key={r.id}
-              to="/glossary"
-              hash={`term-${r.id}`}
+              to="/glossary/$termId"
+              params={{ termId: r.id }}
+              search={search}
               aria-label={`用語集で ${r.term} を見る`}
               style={{ textDecoration: 'none' }}
             >
