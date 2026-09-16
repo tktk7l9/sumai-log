@@ -12,6 +12,7 @@ import {
   listNewsEventsBetween,
   listNewsSources,
   markNewsFetched,
+  reparseNewsEventDates,
 } from './news'
 import { actor, db, reset } from './test-helpers'
 
@@ -450,6 +451,96 @@ describe('linkPlannedEvent', () => {
 
     const [after] = await db.select().from(vendorNews).where(eq(vendorNews.id, news.id))
     expect(after.plannedEventId).toBe(eventId)
+  })
+})
+
+describe('reparseNewsEventDates', () => {
+  it('「8/22.23」の取りこぼし（終端が1日目のまま）を再解析で直す', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    await insertRow({
+      id: 'fix-me',
+      vendorId,
+      url: 'https://news.example.com/fix-me',
+      title: '完成見学会 8/22.23開催のおしらせ',
+      publishedOn: '2026-08-01',
+      firstSeenAt: '2026-08-01 00:00:00',
+      // 直す前の eventDate.ts が実際に出していたバグの形（列挙の2日目が拾えず単日のまま）
+      eventStart: '2026-08-22',
+      eventEnd: '2026-08-22',
+      eventKind: '完成見学会',
+    })
+
+    const result = await reparseNewsEventDates(db)
+    expect(result).toEqual({ checked: 1, updated: 1 })
+
+    const [after] = await db.select().from(vendorNews).where(eq(vendorNews.id, 'fix-me'))
+    expect(after.eventStart).toBe('2026-08-22')
+    expect(after.eventEnd).toBe('2026-08-23')
+    expect(after.eventKind).toBe('完成見学会')
+  })
+
+  it('既に正しい行は checked に数えるが updated には数えない', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    await insertRow({
+      id: 'already-correct',
+      vendorId,
+      url: 'https://news.example.com/already-correct',
+      title: '見学会 9/12開催',
+      publishedOn: '2026-08-20',
+      firstSeenAt: '2026-08-20 00:00:00',
+      eventStart: '2026-09-12',
+      eventEnd: '2026-09-12',
+      eventKind: '見学会',
+    })
+    await insertRow({
+      id: 'no-event-both',
+      vendorId,
+      url: 'https://news.example.com/no-event-both',
+      title: '工事の進捗のお知らせ（イベントではない）',
+      publishedOn: '2026-08-20',
+      firstSeenAt: '2026-08-20 00:00:00',
+    })
+
+    const result = await reparseNewsEventDates(db)
+    expect(result).toEqual({ checked: 2, updated: 0 })
+  })
+
+  it('planned_event_id（「行く」で紐づけた自分の予定）は変えない', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    await insertRow({
+      id: 'with-planned',
+      vendorId,
+      url: 'https://news.example.com/with-planned',
+      title: '完成見学会 8/22.23開催',
+      publishedOn: '2026-08-01',
+      firstSeenAt: '2026-08-01 00:00:00',
+      eventStart: '2026-08-22',
+      eventEnd: '2026-08-22',
+      eventKind: '完成見学会',
+    })
+    const eventId = await upsertEvent(
+      db,
+      {
+        title: '完成見学会 8/22.23開催',
+        kind: 'visit',
+        startsAt: '2026-08-22',
+        allDay: true,
+        vendorId,
+      },
+      actor,
+    )
+    await linkPlannedEvent(db, 'with-planned', eventId)
+
+    const result = await reparseNewsEventDates(db)
+    expect(result).toEqual({ checked: 1, updated: 1 })
+
+    const [after] = await db.select().from(vendorNews).where(eq(vendorNews.id, 'with-planned'))
+    expect(after.plannedEventId).toBe(eventId)
+    expect(after.eventEnd).toBe('2026-08-23')
+  })
+
+  it('vendor_news が無ければ checked: 0, updated: 0', async () => {
+    expect(await reparseNewsEventDates(db)).toEqual({ checked: 0, updated: 0 })
   })
 })
 

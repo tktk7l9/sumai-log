@@ -7,6 +7,16 @@
  * 判定は `inferYear` に切り出してある。拾った日付は月1〜12・日を実在の暦
  * （うるう年考慮）で検証し、実在しないものは個別に捨てる（他に実在する日が
  * あればイベントは成立する）。
+ *
+ * 対応している日付の書式（詳細は各セクションのコメント参照）:
+ *   - 漢字: `M月D日`（`YYYY年` は任意）、直後に続く独立した `D日` の列挙・範囲
+ *     （`・18日` `〜23日(月祝)` 等。曜日・祝日の注記は無視）
+ *   - スラッシュ: `M/D` 単独、`M/D-/D`（同月終端）、`M/D-M/D`（月をまたぐ終端）、
+ *     `M/D〜M/D`・`M/D～D`（波ダッシュ/全角チルダの範囲）、
+ *     `M/D.D`・`M/D・D`・`M/D、D`・`M/D,D`（`.` `・` `、` `,` 区切りの日の列挙。
+ *     `8/22.23.24` のように繰り返せる。各要素は直前の日より大きい実在の日で
+ *     なければならず、そうでなくなった時点でそこで列挙の読み取りを止める
+ *     ——小数表記〔`1.5` `0.5割`〕との混同を避けるためのトレードオフ）
  */
 
 import { pad } from './text'
@@ -137,7 +147,43 @@ function looksLikeFraction(text: string, start: number, end: number): boolean {
   )
 }
 
-/** 「M/D」「M/D-/D」「M/D-M/D」「M/D〜M/D」「M/D～D」を拾う。 */
+// 「M/D」の直後から続く、日の列挙の1要素（`.` `・` `、` `,` のいずれかに続く
+// 1〜2桁の日）。3桁以上の数字（`.234` 等）の一部を切り出さないよう、直後に
+// さらに数字が続く場合はマッチさせない（`(?!\d)`）。
+const SLASH_DAY_LIST_ITEM = /^[.・、,](\d{1,2})(?!\d)/
+
+/**
+ * `cursor` から始まる日の列挙を読めるだけ読む。各要素は直前の日より大きい
+ * 実在の日（同じ年月）でなければならず、そうでなければそこで止める
+ * （`1.5` `0.5割` のような小数表記を列挙と誤認しないためのトレードオフ。
+ * 例えば `7/22.5割` は 5 が 22 より小さいので列挙にならず、単独の 7/22 のまま
+ * 残る）。戻り値の `day` は最後に読めた日（列挙が1つも読めなければ null）。
+ */
+function readDayList(
+  text: string,
+  cursor: number,
+  year: number,
+  month: number,
+  startDay: number,
+): number | null {
+  let lastDay: number | null = null
+  let pos = cursor
+  let prevDay = startDay
+
+  for (;;) {
+    const match = SLASH_DAY_LIST_ITEM.exec(text.slice(pos))
+    if (!match) break
+    const day = Number(match[1])
+    if (day <= prevDay || !isRealDate({ year, month, day })) break
+    lastDay = day
+    prevDay = day
+    pos += match[0].length
+  }
+
+  return lastDay
+}
+
+/** 「M/D」「M/D-/D」「M/D-M/D」「M/D〜M/D」「M/D～D」「M/D.D」「M/D・D」等を拾う。 */
 function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
 
@@ -147,10 +193,15 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
     const hasRange = match[3] !== undefined || match[5] !== undefined || match[6] !== undefined
     const start = match.index as number
     const end = start + match[0].length
+    const year = inferYear(startMonth, publishedOn)
 
-    if (!hasRange && looksLikeFraction(text, start, end)) continue
+    // 範囲マーカー（`-` `〜` `～`）が無ければ、直後に続く日の列挙を試す
+    // （`8/22.23` 等）。既存の範囲形と共存はしない（範囲があれば列挙は試さない）。
+    const listEndDay = hasRange ? null : readDayList(text, end, year, startMonth, startDay)
 
-    dates.push({ year: inferYear(startMonth, publishedOn), month: startMonth, day: startDay })
+    if (!hasRange && listEndDay === null && looksLikeFraction(text, start, end)) continue
+
+    dates.push({ year, month: startMonth, day: startDay })
 
     if (match[3] !== undefined) {
       // M/D-M/D（月をまたぐこともある終端）
@@ -162,18 +213,13 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
       })
     } else if (match[5] !== undefined) {
       // M/D-/D（同月終端）
-      dates.push({
-        year: inferYear(startMonth, publishedOn),
-        month: startMonth,
-        day: Number(match[5]),
-      })
+      dates.push({ year, month: startMonth, day: Number(match[5]) })
     } else if (match[6] !== undefined) {
       // M/D～D（同月終端）
-      dates.push({
-        year: inferYear(startMonth, publishedOn),
-        month: startMonth,
-        day: Number(match[6]),
-      })
+      dates.push({ year, month: startMonth, day: Number(match[6]) })
+    } else if (listEndDay !== null) {
+      // M/D.D・M/D・D 等（列挙。最後に読めた日を終端にする）
+      dates.push({ year, month: startMonth, day: listEndDay })
     }
   }
 
