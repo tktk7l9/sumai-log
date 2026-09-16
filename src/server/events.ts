@@ -14,7 +14,7 @@ import {
   listRecordedEventIds,
   upsertEvent,
 } from './repository'
-import { idInput } from './zod'
+import { dateField, idInput } from './zod'
 
 // eventInput は events.schema.ts から（テストの都合で分離した理由はそちら参照）。
 // 公開する import パス（'./events' から eventInput/EventInput を取れる）は変えない。
@@ -39,6 +39,27 @@ export const listMonthEvents = createServerFn()
     const keys = monthKeys(data.year, data.month)
     const [rows, recorded] = await Promise.all([
       listEventsWithLinks(db, keys[0], keys[keys.length - 1]),
+      listRecordedEventIds(db),
+    ])
+    const now = nowJstIso()
+    return {
+      events: rows,
+      recordedEventIds: [...recorded],
+      todayKey: dateKey(now),
+      nowIso: now,
+    }
+  })
+
+/**
+ * 予定タブ（Mantine Schedule）用。日/週/月ビューが跨ぐ可能性のある任意の期間で取る。
+ * listMonthEvents と違い年月ではなく日付の範囲そのものを受け取る。
+ */
+export const listEventsBetween = createServerFn()
+  .validator(z.object({ from: dateField, to: dateField }))
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [rows, recorded] = await Promise.all([
+      listEventsWithLinks(db, data.from, data.to),
       listRecordedEventIds(db),
     ])
     const now = nowJstIso()
