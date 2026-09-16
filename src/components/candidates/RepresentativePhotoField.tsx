@@ -113,7 +113,11 @@ export function RepresentativePhotoField({
     if (!vendorId) return
     setDeleting(true)
     try {
-      await removePhoto({ data: { vendorId } })
+      const result = await removePhoto({ data: { vendorId } })
+      if (!result.ok) {
+        notifications.show({ message: result.error, color: 'red' })
+        return
+      }
       await router.invalidate()
       notifications.show({ message: '代表者の写真を削除しました' })
     } catch (error) {

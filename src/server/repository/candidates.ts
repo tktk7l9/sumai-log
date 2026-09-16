@@ -47,6 +47,16 @@ export async function getVendorWebsiteUrl(db: Db, id: string): Promise<string | 
 }
 
 /**
+ * 業者が実在するか。R2 へ書き込む・消す前に呼ぶ（存在しない id に対して write/delete すると
+ * 孤児オブジェクトが残る・0 行更新で気づけないため）。`api.vendor-photos.$vendorId.tsx` の
+ * アップロード経路と同じ判定をここに切り出し、URL 取り込み・削除でも使う。
+ */
+export async function vendorExists(db: Db, id: string): Promise<boolean> {
+  const [row] = await db.select({ id: vendors.id }).from(vendors).where(eq(vendors.id, id)).limit(1)
+  return row !== undefined
+}
+
+/**
  * favicon_key を vendors.updated_at を動かさずに差し替える。markNewsFetched
  * （repository/news.ts）と同じ理由: 自動取得のたびにホームの「最近の更新」フィードへ
  * 業者が浮上してしまうのを避ける。戻り値は差し替え前の値（無ければ null）。

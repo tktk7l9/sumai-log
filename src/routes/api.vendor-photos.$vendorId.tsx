@@ -1,12 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { eq } from 'drizzle-orm'
 
 import { getDb } from '../db/client'
-import { vendors } from '../db/schema'
 import { isIdLike } from '../lib/ids'
 import { sniffImageType, validatePhotoUpload, vendorImageKeys } from '../lib/photos'
 import { securityHeadersInit } from '../lib/securityHeaders'
-import { setVendorRepresentativePhotoKey } from '../server/repository'
+import { setVendorRepresentativePhotoKey, vendorExists } from '../server/repository'
 import { cleanupFailedUpload, getPhotosBucket } from '../server/storage'
 
 function json(status: number, body: unknown) {
@@ -63,12 +61,7 @@ export const Route = createFileRoute('/api/vendor-photos/$vendorId')({
         if (!type || !thumbType) return json(415, { error: '画像ファイルではありません' })
 
         const db = getDb()
-        const [vendor] = await db
-          .select({ id: vendors.id })
-          .from(vendors)
-          .where(eq(vendors.id, vendorId))
-          .limit(1)
-        if (!vendor) return json(404, { error: '業者が見つかりません' })
+        if (!(await vendorExists(db, vendorId))) return json(404, { error: '業者が見つかりません' })
 
         const keys = vendorImageKeys(vendorId)
         const bucket = getPhotosBucket()

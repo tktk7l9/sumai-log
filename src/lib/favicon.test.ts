@@ -163,6 +163,34 @@ describe('pickFaviconCandidates', () => {
       'https://vendor.example.com/favicon.ico',
     ])
   })
+
+  it('宣言された候補が多くても上位 5 件 + favicon.ico の保険で最大 6 件に切る（1 業者あたりの外向き fetch 数を有限に保つ）', () => {
+    const html = Array.from(
+      { length: 10 },
+      (_, i) => `<link rel="icon" href="/icon-${i}.png" sizes="${16 + i}x${16 + i}">`,
+    ).join('')
+    const result = pickFaviconCandidates(html, PAGE_URL)
+    expect(result).toHaveLength(6)
+    // sizes 降順なので後ろ（大きい i）が優先される
+    expect(result).toEqual([
+      'https://vendor.example.com/icon-9.png',
+      'https://vendor.example.com/icon-8.png',
+      'https://vendor.example.com/icon-7.png',
+      'https://vendor.example.com/icon-6.png',
+      'https://vendor.example.com/icon-5.png',
+      'https://vendor.example.com/favicon.ico',
+    ])
+  })
+
+  it('上限を超える宣言があっても favicon.ico の保険は必ず含まれる（宣言だけで 6 件ちょうどでも保険が押し出されない）', () => {
+    const html = Array.from(
+      { length: 6 },
+      (_, i) => `<link rel="icon" href="/icon-${i}.png">`,
+    ).join('')
+    const result = pickFaviconCandidates(html, PAGE_URL)
+    expect(result).toContain('https://vendor.example.com/favicon.ico')
+    expect(result).toHaveLength(6)
+  })
 })
 
 describe('sniffFaviconType', () => {
