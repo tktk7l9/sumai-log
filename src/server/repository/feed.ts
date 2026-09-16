@@ -16,13 +16,25 @@ import {
   type Comment,
 } from '../../db/schema'
 import { dateKey } from '../../lib/calendar'
-import type { FeedItem } from '../../lib/feed'
+import type { FeedAction, FeedItem } from '../../lib/feed'
+import { parseToUtcMs } from '../../lib/jst'
 
 /**
  * ホームの「最近の更新」フィード用。各 recent* は updatedAt（photos/comments は
- * createdAt）の新しい順に n 件、FeedItem 形（kind/id/title/subtitle/at/by/href）で返す。
+ * createdAt）の新しい順に n 件、FeedItem 形（kind/id/title/subtitle/action/at/by/href）で返す。
  * limit で件数を絞るのは呼び出し側（src/server/feed.ts の mergeFeed）の責務。
  */
+
+/** 挿入直後は createdAt と updatedAt が同じ datetime('now') 呼び出しでほぼ揃うため
+ * 'add'、それより後に更新された（差が 60 秒を超える）行は 'update'。
+ * 片方でも読めない書式なら安全側の 'add' にする。comments/photos は呼ばない
+ * （更新という概念が無く常に 'add'）。 */
+function actionFor(createdAt: string, updatedAt: string): FeedAction {
+  const createdMs = parseToUtcMs(createdAt)
+  const updatedMs = parseToUtcMs(updatedAt)
+  if (createdMs === null || updatedMs === null) return 'add'
+  return updatedMs - createdMs > 60_000 ? 'update' : 'add'
+}
 
 export async function recentVisits(db: Db, n: number): Promise<FeedItem[]> {
   const rows = await db
@@ -43,6 +55,7 @@ export async function recentVisits(db: Db, n: number): Promise<FeedItem[]> {
     id: r.visit.id,
     title: r.placeName ?? r.vendorName ?? r.propertyName ?? '見学記録',
     subtitle: r.visit.visitedOn,
+    action: actionFor(r.visit.createdAt, r.visit.updatedAt),
     at: r.visit.updatedAt,
     by: r.visit.createdBy,
     href: { to: '/records/visits/$id', params: { id: r.visit.id } },
@@ -68,6 +81,7 @@ export async function recentEvents(db: Db, n: number): Promise<FeedItem[]> {
     id: r.event.id,
     title: r.event.title,
     subtitle: r.placeName ?? r.vendorName ?? r.propertyName ?? EVENT_KIND_LABEL[r.event.kind],
+    action: actionFor(r.event.createdAt, r.event.updatedAt),
     at: r.event.updatedAt,
     by: r.event.createdBy,
     href: { to: '/calendar', search: { d: dateKey(r.event.startsAt) } },
@@ -81,6 +95,7 @@ export async function recentVendors(db: Db, n: number): Promise<FeedItem[]> {
     id: v.id,
     title: v.name,
     subtitle: VENDOR_KIND_LABEL[v.kind],
+    action: actionFor(v.createdAt, v.updatedAt),
     at: v.updatedAt,
     by: v.createdBy,
     href: { to: '/candidates/vendors/$id', params: { id: v.id } },
@@ -94,6 +109,7 @@ export async function recentProperties(db: Db, n: number): Promise<FeedItem[]> {
     id: p.id,
     title: p.name,
     subtitle: p.address ?? undefined,
+    action: actionFor(p.createdAt, p.updatedAt),
     at: p.updatedAt,
     by: p.createdBy,
     href: { to: '/candidates/properties/$id', params: { id: p.id } },
@@ -107,6 +123,7 @@ export async function recentPlaces(db: Db, n: number): Promise<FeedItem[]> {
     id: p.id,
     title: p.name,
     subtitle: PLACE_KIND_LABEL[p.kind],
+    action: actionFor(p.createdAt, p.updatedAt),
     at: p.updatedAt,
     by: p.createdBy,
     href: { to: '/places/$id', params: { id: p.id } },
@@ -120,6 +137,7 @@ export async function recentVideos(db: Db, n: number): Promise<FeedItem[]> {
     id: v.id,
     title: v.title,
     subtitle: v.channel ?? undefined,
+    action: actionFor(v.createdAt, v.updatedAt),
     at: v.updatedAt,
     by: v.createdBy,
     href: { to: '/records/videos/$id', params: { id: v.id } },
@@ -218,6 +236,7 @@ export async function recentComments(db: Db, n: number): Promise<FeedItem[]> {
     id: c.id,
     title: c.body,
     subtitle: nameMaps.get(c.targetType)?.get(c.targetId) ?? '（削除済み）',
+    action: 'add' as const,
     at: c.createdAt,
     by: c.createdBy,
     href: targetHref(c.targetType, c.targetId),
@@ -237,6 +256,7 @@ export async function recentPhotos(db: Db, n: number): Promise<FeedItem[]> {
     id: r.photo.id,
     title: r.photo.caption ?? '写真',
     subtitle: r.placeName ?? r.visitedOn ?? undefined,
+    action: 'add' as const,
     at: r.photo.createdAt,
     by: r.photo.createdBy,
     href: { to: '/records/visits/$id', params: { id: r.photo.visitId } },
