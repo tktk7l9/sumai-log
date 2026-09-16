@@ -111,6 +111,13 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
         </Link>
       )
     }
+    case 'source':
+      // 情報源には詳細ページが無いため、一覧（/sources）へのリンクにする
+      return (
+        <Link to="/sources" style={linkStyle}>
+          {children}
+        </Link>
+      )
     case 'comment':
       switch (item.href.to) {
         case '/records/visits/$id':

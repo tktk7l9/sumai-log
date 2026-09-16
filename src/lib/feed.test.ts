@@ -34,16 +34,17 @@ describe('mergeFeed', () => {
     expect(mergeFeed(groups, 10).map((i) => i.id)).toEqual(['b', 'c', 'a'])
   })
 
-  it('同時刻は kind の順（見学記録→予定→業者→物件→場所→動画→コメント→写真）で安定する', () => {
+  it('同時刻は kind の順（見学記録→予定→業者→物件→場所→動画→情報源→コメント→写真）で安定する', () => {
     const at = '2030-01-01T00:00:00Z'
     const groups = [
       [item('photo', 'photo', at), item('video', 'video', at), item('visit', 'visit', at)],
-      [item('comment', 'comment', at), item('event', 'event', at)],
+      [item('comment', 'comment', at), item('event', 'event', at), item('source', 'source', at)],
     ]
     expect(mergeFeed(groups, 10).map((i) => i.kind)).toEqual([
       'visit',
       'event',
       'video',
+      'source',
       'comment',
       'photo',
     ])
@@ -116,6 +117,7 @@ describe('FEED_KIND_LABEL', () => {
       video: '動画',
       comment: 'コメント',
       photo: '写真',
+      source: '情報源',
     })
   })
 })
@@ -248,6 +250,20 @@ describe('feedSentence', () => {
     expect(feedSentence(update)).toEqual({
       before: '動画「',
       link: 'テスト動画',
+      after: '」を更新',
+    })
+  })
+
+  it('source: 追加/更新', () => {
+    const add: FeedItem = { ...item('source', 's1', '2030-01-01T00:00:00Z'), title: 'テストch' }
+    const update: FeedItem = {
+      ...item('source', 's1', '2030-01-01T00:00:00Z', 'update'),
+      title: 'テストch',
+    }
+    expect(feedSentence(add)).toEqual({ before: '情報源「', link: 'テストch', after: '」を追加' })
+    expect(feedSentence(update)).toEqual({
+      before: '情報源「',
+      link: 'テストch',
       after: '」を更新',
     })
   })

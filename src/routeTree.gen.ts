@@ -17,6 +17,7 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as GlossaryTermIdRouteImport } from './routes/glossary_.$termId'
@@ -66,6 +67,11 @@ const RecordsRoute = RecordsRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SourcesRoute = SourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
@@ -128,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
@@ -148,6 +155,7 @@ export interface FileRoutesByTo {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary_/$termId': typeof GlossaryTermIdRoute
@@ -191,6 +200,7 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary/$termId'
@@ -211,6 +221,7 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary/$termId'
@@ -231,6 +242,7 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary_/$termId'
@@ -252,6 +264,7 @@ export interface RootRouteChildren {
   NewsRoute: typeof NewsRoute
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
+  SourcesRoute: typeof SourcesRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiOembedRoute: typeof ApiOembedRoute
   GlossaryTermIdRoute: typeof GlossaryTermIdRoute
@@ -320,6 +333,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sources': {
+      id: '/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof SourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/geocode': {
@@ -404,6 +424,7 @@ const rootRouteChildren: RootRouteChildren = {
   NewsRoute: NewsRoute,
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,
+  SourcesRoute: SourcesRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiOembedRoute: ApiOembedRoute,
   GlossaryTermIdRoute: GlossaryTermIdRoute,
