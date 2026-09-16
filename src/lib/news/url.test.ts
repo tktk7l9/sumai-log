@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAllowedNewsUrl } from './url'
+import { isAllowedNewsUrl, isAllowedRemoteUrl } from './url'
+
+describe('isAllowedRemoteUrl', () => {
+  it('isAllowedNewsUrl は isAllowedRemoteUrl の別名（同じ関数）', () => {
+    expect(isAllowedNewsUrl).toBe(isAllowedRemoteUrl)
+  })
+
+  it('vendorImages（ファビコン取得）からの呼び出しを想定した許可判定も同じ関数で通る', () => {
+    expect(isAllowedRemoteUrl('https://vendor.example.com/')).toBe(true)
+  })
+})
 
 describe('isAllowedNewsUrl', () => {
   it('https の公開ホスト名は許可する', () => {

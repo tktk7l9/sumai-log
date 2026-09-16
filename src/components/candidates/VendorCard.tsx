@@ -1,4 +1,4 @@
-import { Badge, Card, Group, Stack, Text } from '@mantine/core'
+import { Avatar, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
 
@@ -6,6 +6,7 @@ import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { resolveAffiliations } from '../../lib/affiliations'
 import { formatTsubo } from '../../lib/format'
 import { termIdForMetric } from '../../lib/glossary'
+import { photoUrl, vendorImageKeys } from '../../lib/photos'
 import { StatusBadge } from './StatusBadge'
 import { VendorLinks } from './VendorLinks'
 
@@ -31,9 +32,20 @@ export function VendorCard({
             onClick={(e) => e.stopPropagation()}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            <Text component="span" fw={700} lineClamp={2} lh={1.4}>
-              {vendor.name}
-            </Text>
+            <Group gap={6} wrap="nowrap" align="center">
+              <Avatar
+                src={vendor.faviconKey ? photoUrl(vendor.faviconKey) : null}
+                size={20}
+                radius="xs"
+                color="gray"
+                alt=""
+              >
+                {vendor.name.charAt(0)}
+              </Avatar>
+              <Text component="span" fw={700} lineClamp={2} lh={1.4}>
+                {vendor.name}
+              </Text>
+            </Group>
           </Link>
           <StatusBadge status={vendor.status} />
         </Group>
@@ -46,9 +58,19 @@ export function VendorCard({
           </Group>
         ) : null}
         {vendor.kind === 'koumuten' && vendor.representative ? (
-          <Text size="sm" c="dimmed">
-            代表: {vendor.representative}
-          </Text>
+          <Group gap={6} wrap="nowrap" align="center">
+            {vendor.representativePhotoKey ? (
+              <Avatar
+                src={photoUrl(vendorImageKeys(vendor.id).thumbKey)}
+                size={28}
+                radius="xl"
+                alt=""
+              />
+            ) : null}
+            <Text size="sm" c="dimmed">
+              代表: {vendor.representative}
+            </Text>
+          </Group>
         ) : null}
         <Group gap="xs">
           <Badge variant="default">{VENDOR_KIND_LABEL[vendor.kind]}</Badge>

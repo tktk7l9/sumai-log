@@ -24,7 +24,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { buildStatements, normalizeAddress, parseGsiResponse, sqlString } from './lib/seed.mjs'
+import {
+  buildStatements,
+  normalizeAddress,
+  parseGsiResponse,
+  slugToId,
+  sqlString,
+} from './lib/seed.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DATABASE = 'sumai-log'
@@ -132,6 +138,52 @@ async function geocodePlaces(places, now) {
 
   const notFound = withAddress.length - Object.keys(coords).length
   return { coords, geocodeCacheSql, skippedNoAddress, notFound }
+}
+
+/**
+ * 代表者の顔写真を sips で display(800px)/thumb(240px) の JPEG に変換する
+ * （src/lib/photos.ts の vendorImageKeys と同じサイズ規約: 見学の写真より小さい）。
+ * macOS 以外では変換できないので何もせず空を返す（convertPhotos と同じ方針）。
+ * 実寸は不要（vendors テーブルに width/height の列は無い）なので測らない。
+ *
+ * vendor slug → { vendorId, displayPath, thumbPath } の map を返す（変換に成功した業者のみ）。
+ * buildStatements の representativePhotoReady にはこの map の key（slug）の Set を渡す。
+ */
+function convertRepresentativePhotos(vendorRows) {
+  const withPhoto = (vendorRows ?? []).filter((v) => v.representativePhoto)
+  if (process.platform !== 'darwin') {
+    if (withPhoto.length > 0) {
+      console.log(
+        `代表者の写真は変換できないので飛ばします（sips は macOS 専用。現在: ${process.platform}）。`,
+      )
+    }
+    return {}
+  }
+  if (withPhoto.length === 0) return {}
+
+  const outDir = resolve(root, 'seed.local/out')
+  mkdirSync(outDir, { recursive: true })
+
+  const ready = {}
+  for (const v of withPhoto) {
+    const vendorId = slugToId(`vendor:${v.slug}`)
+    const src = resolve(root, v.representativePhoto)
+    const displayPath = resolve(outDir, `rep-${vendorId}-display.jpg`)
+    const thumbPath = resolve(outDir, `rep-${vendorId}-thumb.jpg`)
+
+    execFileSync(
+      'sips',
+      ['-s', 'format', 'jpeg', '-s', 'formatOptions', '80', '-Z', '800', src, '--out', displayPath],
+      { stdio: 'pipe' },
+    )
+    execFileSync(
+      'sips',
+      ['-s', 'format', 'jpeg', '-s', 'formatOptions', '80', '-Z', '240', src, '--out', thumbPath],
+      { stdio: 'pipe' },
+    )
+    ready[v.slug] = { vendorId, displayPath, thumbPath }
+  }
+  return ready
 }
 
 /** display の実寸を sips -g で読む。"  pixelWidth: 1600" のような行から数値を拾う */
@@ -261,8 +313,21 @@ async function main() {
     `  → 実寸を取得できた写真: ${Object.keys(photoSizes).length} / ${photoDescriptors.length}`,
   )
 
-  // 2回目: 座標・写真実寸込みの最終 SQL
-  const { sql, photos } = buildStatements(seed, { actorEmail, now, photoSizes, coords })
+  const repPhotoVendors = (seed.vendors ?? []).filter((v) => v.representativePhoto)
+  console.log(`代表者の写真 ${repPhotoVendors.length} 枚を変換中…`)
+  const repPhotosReady = convertRepresentativePhotos(seed.vendors)
+  console.log(
+    `  → 変換できた代表者の写真: ${Object.keys(repPhotosReady).length} / ${repPhotoVendors.length}`,
+  )
+
+  // 2回目: 座標・写真実寸・代表者の写真の変換結果込みの最終 SQL
+  const { sql, photos } = buildStatements(seed, {
+    actorEmail,
+    now,
+    photoSizes,
+    coords,
+    representativePhotoReady: new Set(Object.keys(repPhotosReady)),
+  })
   const allSql = [...sql, ...geocodeCacheSql]
 
   const outDir = resolve(root, 'seed.local/out')
@@ -279,13 +344,17 @@ async function main() {
   const r2Keys = photos
     .filter((p) => photoSizes[p.photoId])
     .flatMap((p) => [p.displayKey, p.thumbKey])
+  const repPhotoR2Keys = Object.entries(repPhotosReady).flatMap(([, { vendorId }]) => [
+    `vendors/${vendorId}/representative-display.jpg`,
+    `vendors/${vendorId}/representative-thumb.jpg`,
+  ])
 
   console.log('--- SQL 文の件数（テーブルごと） ---')
   for (const [table, count] of Object.entries(countsByTable)) {
     console.log(`  ${table}: ${count}`)
   }
-  console.log(`--- R2 に置くキー（${r2Keys.length} 件） ---`)
-  for (const key of r2Keys) console.log(`  ${key}`)
+  console.log(`--- R2 に置くキー（${r2Keys.length + repPhotoR2Keys.length} 件） ---`)
+  for (const key of [...r2Keys, ...repPhotoR2Keys]) console.log(`  ${key}`)
   console.log(`SQL ファイル: ${sqlPath}`)
 
   if (dryRun) {
@@ -317,6 +386,32 @@ async function main() {
       `${R2_BUCKET}/${p.thumbKey}`,
       '--file',
       paths.thumbPath,
+      '--content-type',
+      'image/jpeg',
+      targetFlag(target),
+    ])
+  }
+
+  console.log(`\n${target === 'local' ? 'ローカル' : '本番'} R2 へ代表者の写真をアップロード中…`)
+  for (const { vendorId, displayPath, thumbPath } of Object.values(repPhotosReady)) {
+    wrangler([
+      'r2',
+      'object',
+      'put',
+      `${R2_BUCKET}/vendors/${vendorId}/representative-display.jpg`,
+      '--file',
+      displayPath,
+      '--content-type',
+      'image/jpeg',
+      targetFlag(target),
+    ])
+    wrangler([
+      'r2',
+      'object',
+      'put',
+      `${R2_BUCKET}/vendors/${vendorId}/representative-thumb.jpg`,
+      '--file',
+      thumbPath,
       '--content-type',
       'image/jpeg',
       targetFlag(target),

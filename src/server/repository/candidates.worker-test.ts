@@ -5,6 +5,10 @@ import { comments, places, vendors } from '../../db/schema'
 import {
   deletePropertyCascade,
   deleteVendorCascade,
+  getVendorWebsiteUrl,
+  listVendorsWithWebsite,
+  setVendorFaviconKey,
+  setVendorRepresentativePhotoKey,
   upsertProperty,
   upsertVendor,
 } from './candidates'
@@ -67,6 +71,83 @@ describe('vendors', () => {
     ;[row] = await db.select().from(vendors).where(eq(vendors.id, otherId))
     expect(row.representative).toBeNull()
     expect(row.affiliations).toEqual([])
+  })
+
+  it('setVendorFaviconKey / setVendorRepresentativePhotoKey は差し替え前の値を返し、updated_at を動かさない', async () => {
+    const id = await upsertVendor(
+      db,
+      { name: 'キー更新工務店', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    const [before] = await db.select().from(vendors).where(eq(vendors.id, id))
+
+    const prevFavicon = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.png`)
+    expect(prevFavicon).toBeNull()
+    const prevPhoto = await setVendorRepresentativePhotoKey(
+      db,
+      id,
+      `vendors/${id}/representative-display.jpg`,
+    )
+    expect(prevPhoto).toBeNull()
+
+    let [after] = await db.select().from(vendors).where(eq(vendors.id, id))
+    expect(after.faviconKey).toBe(`vendors/${id}/favicon.png`)
+    expect(after.representativePhotoKey).toBe(`vendors/${id}/representative-display.jpg`)
+    expect(after.updatedAt).toBe(before.updatedAt)
+
+    // 2 回目は「差し替え前の値」として 1 回目に設定したキーが返る
+    const prevFavicon2 = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.ico`)
+    expect(prevFavicon2).toBe(`vendors/${id}/favicon.png`)
+
+    // null を渡すと消せる
+    await setVendorRepresentativePhotoKey(db, id, null)
+    ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
+    expect(after.representativePhotoKey).toBeNull()
+  })
+
+  it('getVendorWebsiteUrl は website_url を返し、無い業者は null', async () => {
+    const id = await upsertVendor(
+      db,
+      {
+        name: 'URL業者',
+        kind: 'koumuten',
+        serviceAreas: [],
+        websiteUrl: 'https://vendor.example.com/',
+      },
+      actor,
+    )
+    expect(await getVendorWebsiteUrl(db, id)).toBe('https://vendor.example.com/')
+
+    const noUrlId = await upsertVendor(
+      db,
+      { name: 'URL無し業者', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    expect(await getVendorWebsiteUrl(db, noUrlId)).toBeNull()
+    expect(await getVendorWebsiteUrl(db, '11111111-1111-1111-1111-111111111111')).toBeNull()
+  })
+
+  it('listVendorsWithWebsite は website_url がある業者だけ返す', async () => {
+    const withUrlId = await upsertVendor(
+      db,
+      {
+        name: 'URLあり',
+        kind: 'koumuten',
+        serviceAreas: [],
+        websiteUrl: 'https://vendor.example.com/',
+      },
+      actor,
+    )
+    await upsertVendor(db, { name: 'URLなし', kind: 'koumuten', serviceAreas: [] }, actor)
+
+    const rows = await listVendorsWithWebsite(db)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toEqual({
+      id: withUrlId,
+      name: 'URLあり',
+      websiteUrl: 'https://vendor.example.com/',
+      faviconKey: null,
+    })
   })
 })
 

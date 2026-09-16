@@ -1,14 +1,18 @@
 /**
- * 業者のお知らせ URL（= 実際に fetch する先）として許可するかを判定する
- * （SSRF 対策の多層防御の一つ）。
+ * サーバーから実際に fetch してよい URL かを判定する（SSRF 対策の多層防御の一つ）。
+ * 元は業者のお知らせ URL 専用だったが、代表者写真の URL 取り込み・ファビコン取得
+ * （src/server/vendorImages.ts）でも同じ判定を使うため `isAllowedRemoteUrl` に改名した。
+ * `isAllowedNewsUrl` は既存の呼び出し元（zod.ts の optionalHttpsUrl・newsFetcher.ts・
+ * VendorForm.tsx）をそのまま動かすための別名（下の export const）。
  *
  * Cloudflare Workers の fetch はそもそもプライベートネットワーク（10.0.0.0/8 等）への
  * 経路を持たず、DNS 解決結果を覗く API も無い。したがってこのホスト名の拒否リストは
  * 「念のため」の多層防御であり、本体の防御は Workers のネットワーク境界そのもの。
  *
- * リダイレクトは newsFetcher.ts 側で `redirect: 'manual'` にしたうえで、`Location` を
- * 解決するたびにこの関数を再度通す（最大 3 ホップ）。この関数自体はどの URL に対して
- * 呼ばれても同じ判定をするだけで、それが最初の URL かリダイレクト先かは意識しない。
+ * リダイレクトは newsFetcher.ts / vendorImages.ts 側で `redirect: 'manual'` にしたうえで、
+ * `Location` を解決するたびにこの関数を再度通す（最大 3 ホップ）。この関数自体はどの
+ * URL に対して呼ばれても同じ判定をするだけで、それが最初の URL かリダイレクト先かは
+ * 意識しない。
  */
 
 const DENYLISTED_EXACT_HOSTS = new Set([
@@ -41,7 +45,7 @@ function isIpv4Literal(hostname: string): boolean {
   return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
 }
 
-export function isAllowedNewsUrl(url: string): boolean {
+export function isAllowedRemoteUrl(url: string): boolean {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -65,3 +69,6 @@ export function isAllowedNewsUrl(url: string): boolean {
 
   return true
 }
+
+/** `isAllowedRemoteUrl` の旧名。既存の呼び出し元はこちらを import したままでよい */
+export const isAllowedNewsUrl = isAllowedRemoteUrl

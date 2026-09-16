@@ -13,10 +13,12 @@ import {
   countPlacesByVendor,
   deletePropertyCascade,
   deleteVendorCascade,
+  getVendorWebsiteUrl,
   readHomeAreas,
   upsertProperty,
   upsertVendor,
 } from './repository'
+import { fetchFaviconForVendor } from './vendorImagesFetcher'
 import {
   idField,
   idInput,
@@ -127,9 +129,18 @@ export const getVendor = createServerFn()
 
 export const saveVendor = createServerFn({ method: 'POST' })
   .validator(vendorInput)
-  .handler(async ({ data }) => ({
-    id: await upsertVendor(getDb(), data, await currentActorEmail()),
-  }))
+  .handler(async ({ data }) => {
+    const db = getDb()
+    // websiteUrl が新規/変更されたときだけファビコンを取りに行く（design 通り）。
+    // 既存の websiteUrl と同じなら毎回叩き直さない。取得は fetchFaviconForVendor
+    // 自身が例外を投げない設計だが、念のため .catch で保存自体は必ず成功させる。
+    const previousWebsiteUrl = data.id ? await getVendorWebsiteUrl(db, data.id) : null
+    const id = await upsertVendor(db, data, await currentActorEmail())
+    if (data.websiteUrl && data.websiteUrl !== previousWebsiteUrl) {
+      await fetchFaviconForVendor(db, id, data.websiteUrl).catch(() => {})
+    }
+    return { id }
+  })
 
 export const deleteVendor = createServerFn({ method: 'POST' })
   .validator(idInput)

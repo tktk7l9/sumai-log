@@ -8,6 +8,8 @@ import {
   photoUrl,
   sniffImageType,
   validatePhotoUpload,
+  vendorFaviconKey,
+  vendorImageKeys,
 } from './photos'
 
 const V = '11111111-1111-1111-1111-111111111111'
@@ -29,9 +31,38 @@ describe('photoKeys / isManagedPhotoKey', () => {
   })
 })
 
+describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）', () => {
+  it('vendorId だけから代表者写真のキーを決定的に作り、それだけを管理対象とみなす', () => {
+    const k = vendorImageKeys(V)
+    expect(k).toEqual({
+      displayKey: `vendors/${V}/representative-display.jpg`,
+      thumbKey: `vendors/${V}/representative-thumb.jpg`,
+    })
+    expect(isManagedPhotoKey(k.displayKey)).toBe(true)
+    expect(isManagedPhotoKey(k.thumbKey)).toBe(true)
+    // 同じ vendorId を渡せば毎回同じキーになる（冪等）
+    expect(vendorImageKeys(V)).toEqual(k)
+  })
+
+  it('ファビコンのキーは拡張子込みで、宣言した拡張子だけ管理対象とみなす', () => {
+    for (const ext of ['png', 'ico', 'jpg', 'webp'] as const) {
+      const key = vendorFaviconKey(V, ext)
+      expect(key).toBe(`vendors/${V}/favicon.${ext}`)
+      expect(isManagedPhotoKey(key)).toBe(true)
+    }
+    expect(isManagedPhotoKey(`vendors/${V}/favicon.gif`)).toBe(false)
+    expect(isManagedPhotoKey(`vendors/${V}/representative-original.jpg`)).toBe(false)
+    expect(isManagedPhotoKey(`vendors/../${V}/favicon.png`)).toBe(false)
+  })
+})
+
 describe('photoUrl', () => {
   it('photos/ を剥がして配信ルートの URL にする', () => {
     expect(photoUrl('photos/a/b-thumb.jpg')).toBe('/api/photos/a/b-thumb.jpg')
+  })
+
+  it('vendors/ キーはそのまま配信ルートの URL にする（photos/ 以外は剥がさない）', () => {
+    expect(photoUrl(`vendors/${V}/favicon.png`)).toBe(`/api/photos/vendors/${V}/favicon.png`)
   })
 })
 

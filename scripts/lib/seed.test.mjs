@@ -288,8 +288,9 @@ test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL に
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
-  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ
-  assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
+  // social_urls の直後（news_url, news_source, representative_photo_key の列位置）に
+  // NULL, NULL, NULL が並ぶ（representative_photo_key は representativePhotoReady 未指定なので NULL）
+  assert.match(vendorBStmt, /'\[\]', NULL, NULL, NULL, 'owner@example\.com'/)
 })
 
 test('buildStatements: newsSource に html-list を指定できる', () => {
@@ -333,6 +334,25 @@ test('buildStatements: affiliations に未知の id が混ざると例外（slug
     () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
     /vendor-a.*no-such-group/s,
   )
+})
+
+test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が入る（vendorId だけから決まる key）', () => {
+  const seed = fictionalSeed()
+  const { sql } = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    representativePhotoReady: new Set(['vendor-a']),
+  })
+  const vendorAId = slugToId('vendor:vendor-a')
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(vendorAStmt, new RegExp(`'vendors/${vendorAId}/representative-display\\.jpg'`))
+})
+
+test('buildStatements: representativePhotoReady に無い vendor は representative_photo_key が NULL のまま（未指定の既定も同じ）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.doesNotMatch(vendorAStmt, /representative-display\.jpg/)
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {

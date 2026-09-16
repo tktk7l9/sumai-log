@@ -22,6 +22,7 @@ import { extractFormError } from '../../lib/formError'
 import { isAllowedNewsUrl } from '../../lib/news/url'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
+import { RepresentativePhotoField } from './RepresentativePhotoField'
 
 /**
  * socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ。
@@ -148,6 +149,10 @@ export function VendorForm({
           description="工務店の場合に一覧へ出ます"
           {...form.getInputProps('representative')}
           value={form.values.representative ?? ''}
+        />
+        <RepresentativePhotoField
+          vendorId={vendor?.id ?? null}
+          hasPhoto={vendor?.representativePhotoKey != null}
         />
         <Group grow>
           <NumberInput

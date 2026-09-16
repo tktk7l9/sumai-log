@@ -8,8 +8,9 @@ export function PageShell({
   inlineDescription = false,
   children,
 }: {
-  /** 省略すると見出しブロックを出さない（ホームのように節見出しから始めるページ用） */
-  title?: string
+  /** 省略すると見出しブロックを出さない（ホームのように節見出しから始めるページ用）。
+   * 文字列以外（業者詳細のファビコン + 名前など）も渡せる */
+  title?: React.ReactNode
   description?: React.ReactNode
   /** 見出しの右に置く操作（デスクトップ用。スマホは FAB を使う） */
   actions?: React.ReactNode

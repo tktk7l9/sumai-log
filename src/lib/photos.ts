@@ -1,14 +1,32 @@
+import type { FaviconExt } from './favicon'
+
 /**
  * 写真の R2 キーと受け取り検査。R2 は非公開で、配信は認証後に Worker が
  * ストリームする。キーは `photos/{visitId}/{photoId}-display.jpg` と `-thumb.jpg`。
  * seed 取込（scripts/lib/seed.mjs）も同じ形で置くので、ここを変えたらそちらも変える。
+ *
+ * 業者の代表者の顔写真・サイトのファビコンも同じ R2 バケットに `vendors/{vendorId}/…`
+ * として置く（vendorImageKeys / vendorFaviconKey）。両方とも vendorId だけから
+ * 決定的に決まる（写真のような乱数の photoId を挟まない）ので、DB に持つ列は
+ * 存在確認用の 1 本（vendors.representative_photo_key / favicon_key）で足りる。
  */
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024
 export const MAX_PHOTOS_PER_UPLOAD = 20
 export const MAX_EDGE_PX = 8000
+/** URL から代表者の顔写真を取り込むときの上限（design 通り 5MB） */
+export const MAX_IMPORTED_PHOTO_BYTES = 5 * 1024 * 1024
 
 const UUIDISH = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-const MANAGED = new RegExp(`^photos/${UUIDISH}/${UUIDISH}-(display|thumb)\\.jpg$`)
+const MANAGED_PHOTO = new RegExp(`^photos/${UUIDISH}/${UUIDISH}-(display|thumb)\\.jpg$`)
+const MANAGED_VENDOR_REPRESENTATIVE = new RegExp(
+  `^vendors/${UUIDISH}/representative-(display|thumb)\\.jpg$`,
+)
+// svg は含めない（src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照。
+// SVG を画像として受け付けない設計のため favicon.svg キーは作られない）
+const FAVICON_EXTS = ['png', 'ico', 'jpg', 'webp'] as const
+const MANAGED_VENDOR_FAVICON = new RegExp(
+  `^vendors/${UUIDISH}/favicon\\.(${FAVICON_EXTS.join('|')})$`,
+)
 
 export function photoKeys(
   visitId: string,
@@ -20,8 +38,25 @@ export function photoKeys(
   }
 }
 
+/** 業者の代表者の顔写真。vendorId だけから決定的に決まる（display/thumb とも） */
+export function vendorImageKeys(vendorId: string): { displayKey: string; thumbKey: string } {
+  return {
+    displayKey: `vendors/${vendorId}/representative-display.jpg`,
+    thumbKey: `vendors/${vendorId}/representative-thumb.jpg`,
+  }
+}
+
+/** 業者サイトのファビコン。拡張子はサイトごとに変わる（png/ico/svg/jpg/webp） */
+export function vendorFaviconKey(vendorId: string, ext: FaviconExt): string {
+  return `vendors/${vendorId}/favicon.${ext}`
+}
+
 export function isManagedPhotoKey(key: string): boolean {
-  return MANAGED.test(key)
+  return (
+    MANAGED_PHOTO.test(key) ||
+    MANAGED_VENDOR_REPRESENTATIVE.test(key) ||
+    MANAGED_VENDOR_FAVICON.test(key)
+  )
 }
 
 /** 配信ルート（GET /api/photos/<key>）の URL。ルート側が photos/ を付け直す */
