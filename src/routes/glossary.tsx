@@ -1,52 +1,18 @@
 import { Accordion, Group, NavLink, Stack, Text } from '@mantine/core'
-import { createFileRoute, createLink, useLocation, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
-import { forwardRef, useEffect, useState } from 'react'
-import { z } from 'zod'
+import { useEffect, useState } from 'react'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { GlossaryFilters } from '../components/glossary/GlossaryFilters'
-import { GLOSSARY, GLOSSARY_CATEGORIES, type CategoryId } from '../content/glossary'
+import { CATEGORY_IDS, glossarySearchSchema } from '../components/glossary/glossarySearch'
+import { GLOSSARY } from '../content/glossary'
 import { findTerm, groupByCategory, searchGlossary } from '../lib/glossary'
-
-const CATEGORY_IDS = GLOSSARY_CATEGORIES.map((c) => c.id) as [CategoryId, ...CategoryId[]]
-
-// Mantine の NavLink は polymorphic component（component prop でタグ/コンポーネントを
-// 差し替えられる）なので、`component={Link}` に to/params を直接渡すと Mantine 側の
-// props 合成で TanStack Router のジェネリック推論が潰れて型エラーになる。
-// 素の <a> として振る舞う非ジェネリックなラッパーを createLink に渡すのが
-// TanStack Router 公式の推奨パターン（見た目は NavLink のまま、型だけ通す）。
-type TermNavLinkProps = {
-  label: React.ReactNode
-  description?: React.ReactNode
-  rightSection?: React.ReactNode
-} & Omit<React.ComponentPropsWithoutRef<'a'>, 'href' | 'onChange'>
-
-const TermNavLinkAnchor = forwardRef<HTMLAnchorElement, TermNavLinkProps>(
-  ({ label, description, rightSection, ...anchorProps }, ref) => (
-    <NavLink
-      component="a"
-      ref={ref}
-      label={label}
-      description={description}
-      rightSection={rightSection}
-      {...anchorProps}
-    />
-  ),
-)
-TermNavLinkAnchor.displayName = 'TermNavLinkAnchor'
-
-const NavLinkLink = createLink(TermNavLinkAnchor)
-
-const search = z.object({
-  q: z.string().optional(),
-  c: z.enum(CATEGORY_IDS).optional(),
-})
 
 export const Route = createFileRoute('/glossary')({
   component: Page,
-  validateSearch: (s) => search.parse(s),
+  validateSearch: (s) => glossarySearchSchema.parse(s),
 })
 
 function Page() {
@@ -115,12 +81,18 @@ function Page() {
                 <Accordion.Panel>
                   <Stack gap={0}>
                     {group.terms.map((term) => (
-                      <NavLinkLink
+                      <NavLink
                         key={term.id}
-                        to="/glossary/$termId"
-                        params={{ termId: term.id }}
+                        renderRoot={(rootProps) => (
+                          <Link
+                            {...rootProps}
+                            to="/glossary/$termId"
+                            params={{ termId: term.id }}
+                            search={{ q, c }}
+                          />
+                        )}
                         label={
-                          <Group gap={6} wrap="nowrap">
+                          <Group gap={6}>
                             <Text fw={600} span>
                               {term.term}
                             </Text>
