@@ -286,6 +286,9 @@ async function main() {
   const devVars = readDevVars()
   const actorEmail = devVars.DEV_IDENTITY_EMAIL
   const now = new Date().toISOString()
+  // buildStatements（scripts/lib/seed.mjs）が representative_photo_key に埋め込む stamp と
+  // 同じ値をここでも作る（R2 へ実際に置くキーを、DB に書く値と一致させるため）。
+  const representativePhotoStamp = new Date(now).getTime().toString(36)
 
   const seedPath = resolve(root, 'seed.local.json')
   if (!existsSync(seedPath)) {
@@ -346,8 +349,8 @@ async function main() {
     .filter((p) => photoSizes[p.photoId])
     .flatMap((p) => [p.displayKey, p.thumbKey])
   const repPhotoR2Keys = Object.entries(repPhotosReady).flatMap(([, { vendorId }]) => [
-    `vendors/${vendorId}/representative-display.jpg`,
-    `vendors/${vendorId}/representative-thumb.jpg`,
+    `vendors/${vendorId}/representative-${representativePhotoStamp}-display.jpg`,
+    `vendors/${vendorId}/representative-${representativePhotoStamp}-thumb.jpg`,
   ])
 
   console.log('--- SQL 文の件数（テーブルごと） ---')
@@ -399,7 +402,7 @@ async function main() {
       'r2',
       'object',
       'put',
-      `${R2_BUCKET}/vendors/${vendorId}/representative-display.jpg`,
+      `${R2_BUCKET}/vendors/${vendorId}/representative-${representativePhotoStamp}-display.jpg`,
       '--file',
       displayPath,
       '--content-type',
@@ -410,7 +413,7 @@ async function main() {
       'r2',
       'object',
       'put',
-      `${R2_BUCKET}/vendors/${vendorId}/representative-thumb.jpg`,
+      `${R2_BUCKET}/vendors/${vendorId}/representative-${representativePhotoStamp}-thumb.jpg`,
       '--file',
       thumbPath,
       '--content-type',

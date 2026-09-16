@@ -6,9 +6,17 @@ import type { FaviconExt } from './favicon'
  * seed 取込（scripts/lib/seed.mjs）も同じ形で置くので、ここを変えたらそちらも変える。
  *
  * 業者の代表者の顔写真・サイトのファビコンも同じ R2 バケットに `vendors/{vendorId}/…`
- * として置く（vendorImageKeys / vendorFaviconKey）。両方とも vendorId だけから
- * 決定的に決まる（写真のような乱数の photoId を挟まない）ので、DB に持つ列は
- * 存在確認用の 1 本（vendors.representative_photo_key / favicon_key）で足りる。
+ * として置く（vendorImageKeys / vendorFaviconKey）。配信（api.photos.$.tsx）は全キーに
+ * `immutable` で 1 年キャッシュするため、差し替え時に古い画像が出続けないよう鍵に
+ * `stamp`（呼び出し側が渡す base36 の `Date.now()`）を挟んで毎回別の URL にする
+ * （最終レビュー Must #1 対応）。DB（vendors.representative_photo_key / favicon_key）には
+ * 実際に置いたキーをそのまま保存し、次に使う鍵は常にそこから読む（vendorId だけからは
+ * 現在の stamp が分からない）。サムネ（-thumb.jpg）は保存した display キーの末尾を
+ * 置き換えるだけで求まるので別列は持たない（representativeThumbKeyFromDisplayKey）。
+ *
+ * 後方互換: このスキーマを入れる前に保存された鍵（stamp 無しの
+ * `representative-display.jpg` / `favicon.<ext>`）も `isManagedPhotoKey` は許可し続ける
+ * （既存行がそのまま配信できるように）。
  */
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024
 export const MAX_PHOTOS_PER_UPLOAD = 20
@@ -17,15 +25,18 @@ export const MAX_EDGE_PX = 8000
 export const MAX_IMPORTED_PHOTO_BYTES = 5 * 1024 * 1024
 
 const UUIDISH = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+/** base36（Date.now().toString(36)）の stamp。旧形式との違いはこの部分の有無だけ */
+const STAMP = '[0-9a-z]+'
 const MANAGED_PHOTO = new RegExp(`^photos/${UUIDISH}/${UUIDISH}-(display|thumb)\\.jpg$`)
+// 末尾に `-{stamp}` が付いた新形式・付かない旧形式の両方を許可する
 const MANAGED_VENDOR_REPRESENTATIVE = new RegExp(
-  `^vendors/${UUIDISH}/representative-(display|thumb)\\.jpg$`,
+  `^vendors/${UUIDISH}/representative-(${STAMP}-)?(display|thumb)\\.jpg$`,
 )
 // svg は含めない（src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照。
 // SVG を画像として受け付けない設計のため favicon.svg キーは作られない）
 const FAVICON_EXTS = ['png', 'ico', 'jpg', 'webp'] as const
 const MANAGED_VENDOR_FAVICON = new RegExp(
-  `^vendors/${UUIDISH}/favicon\\.(${FAVICON_EXTS.join('|')})$`,
+  `^vendors/${UUIDISH}/favicon(-${STAMP})?\\.(${FAVICON_EXTS.join('|')})$`,
 )
 
 export function photoKeys(
@@ -38,18 +49,36 @@ export function photoKeys(
   }
 }
 
-/** 業者の代表者の顔写真。vendorId だけから決定的に決まる（display/thumb とも） */
-export function vendorImageKeys(vendorId: string): { displayKey: string; thumbKey: string } {
+/**
+ * 業者の代表者の顔写真。`stamp`（呼び出し側が渡す base36 の `Date.now()`）を挟むことで、
+ * 同じ vendorId でも差し替えるたびに違う URL になる（immutable キャッシュ対策）。
+ */
+export function vendorImageKeys(
+  vendorId: string,
+  stamp: string,
+): { displayKey: string; thumbKey: string } {
   return {
-    displayKey: `vendors/${vendorId}/representative-display.jpg`,
-    thumbKey: `vendors/${vendorId}/representative-thumb.jpg`,
+    displayKey: `vendors/${vendorId}/representative-${stamp}-display.jpg`,
+    thumbKey: `vendors/${vendorId}/representative-${stamp}-thumb.jpg`,
   }
 }
 
+/**
+ * 保存済みの display キー（DB の representative_photo_key）から、対になる thumb キーを導く。
+ * display/thumb は同じ stamp で作るので、末尾の `-display.jpg` を `-thumb.jpg` に
+ * 置き換えるだけで求まる（新形式・旧形式のどちらの鍵でも同じ規則で導ける）。
+ * vendorId だけからは現在の stamp が分からないため、呼び出し側は必ず DB に保存された
+ * 実際のキーを渡すこと。
+ */
+export function representativeThumbKeyFromDisplayKey(displayKey: string): string {
+  return displayKey.replace(/-display\.jpg$/, '-thumb.jpg')
+}
+
 /** 業者サイトのファビコン。拡張子はサイトごとに変わる（png/ico/jpg/webp。SVG を含めない
- * 理由は src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照） */
-export function vendorFaviconKey(vendorId: string, ext: FaviconExt): string {
-  return `vendors/${vendorId}/favicon.${ext}`
+ * 理由は src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照）。
+ * `stamp` の理由は vendorImageKeys と同じ（immutable キャッシュ対策）。 */
+export function vendorFaviconKey(vendorId: string, ext: FaviconExt, stamp: string): string {
+  return `vendors/${vendorId}/favicon-${stamp}.${ext}`
 }
 
 export function isManagedPhotoKey(key: string): boolean {
