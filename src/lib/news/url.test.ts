@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAllowedNewsUrl, isAllowedRemoteUrl } from './url'
+import { isAllowedNewsUrl, isAllowedRemoteUrl, sameHost } from './url'
 
 describe('isAllowedRemoteUrl', () => {
   it('isAllowedNewsUrl は isAllowedRemoteUrl の別名（同じ関数）', () => {
@@ -89,5 +89,36 @@ describe('isAllowedNewsUrl', () => {
 
   it('末尾ドットで拒否リストの suffix チェックを回避できない', () => {
     expect(isAllowedNewsUrl('https://some-worker.workers.dev./feed/')).toBe(false)
+  })
+})
+
+describe('sameHost', () => {
+  it('同じホスト名なら true', () => {
+    expect(sameHost('https://vendor.example.com/news/', 'https://vendor.example.com/')).toBe(true)
+  })
+
+  it('パス・大文字小文字が違っても同じホスト名なら true', () => {
+    expect(sameHost('https://Vendor.example.com/news/feed', 'https://vendor.example.com/')).toBe(
+      true,
+    )
+  })
+
+  it('別ホストなら false', () => {
+    expect(sameHost('https://news.example.com/feed/', 'https://vendor.example.com/')).toBe(false)
+  })
+
+  it('サブドメインが違えば別ホスト扱いで false', () => {
+    expect(sameHost('https://www.vendor.example.com/', 'https://vendor.example.com/')).toBe(false)
+  })
+
+  it('どちらかが null なら false', () => {
+    expect(sameHost(null, 'https://vendor.example.com/')).toBe(false)
+    expect(sameHost('https://vendor.example.com/', null)).toBe(false)
+    expect(sameHost(null, null)).toBe(false)
+  })
+
+  it('URL として読めない文字列は false', () => {
+    expect(sameHost('not a url', 'https://vendor.example.com/')).toBe(false)
+    expect(sameHost('https://vendor.example.com/', 'not a url')).toBe(false)
   })
 })

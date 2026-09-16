@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
-import { newsToScheduleEvents, nextDay, toScheduleEvents } from './scheduleEvents'
+import {
+  newsToAgendaEvents,
+  newsToScheduleEvents,
+  nextDay,
+  toScheduleEvents,
+} from './scheduleEvents'
 
 const base: EventWithLinks = {
   id: 'e1',
@@ -162,5 +167,40 @@ describe('newsToScheduleEvents', () => {
   it('planned_event_id が付いていても情報レイヤーからは消さない', () => {
     const [result] = newsToScheduleEvents([news({ plannedEventId: 'e1' })])
     expect(result.payload).toEqual({ kind: 'news', newsId: 'n1' })
+  })
+})
+
+describe('newsToAgendaEvents', () => {
+  it('公開日（publishedOn）の終日イベントにする。event_start は見ない', () => {
+    const [result] = newsToAgendaEvents([
+      news({ publishedOn: '2030-02-01', eventStart: null, eventEnd: null, eventKind: null }),
+    ])
+    expect(result).toEqual({
+      id: 'news-n1',
+      title: 'テスト工務店 完成見学会のお知らせ',
+      start: '2030-02-01 00:00:00',
+      end: '2030-02-02 00:00:00',
+      color: 'gray',
+      payload: { kind: 'news', newsId: 'n1' },
+    })
+  })
+
+  it('イベント未判定（event_kind/event_start が無い）お知らせも除外せず含める', () => {
+    expect(
+      newsToAgendaEvents([news({ eventStart: null, eventEnd: null, eventKind: null })]),
+    ).toHaveLength(1)
+  })
+
+  it('月末・年末をまたぐ公開日も翌日が end になる', () => {
+    const [result] = newsToAgendaEvents([news({ publishedOn: '2030-12-31' })])
+    expect(result.end).toBe('2031-01-01 00:00:00')
+  })
+
+  it('複数件は渡した順のまま変換する', () => {
+    const results = newsToAgendaEvents([
+      news({ id: 'a', publishedOn: '2030-01-01' }),
+      news({ id: 'b', publishedOn: '2030-01-02' }),
+    ])
+    expect(results.map((r) => r.id)).toEqual(['news-a', 'news-b'])
   })
 })

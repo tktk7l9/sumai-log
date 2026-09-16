@@ -1,16 +1,12 @@
 import { Button, Chip, Group, Stack } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
-import { useServerFn } from '@tanstack/react-start'
-import { useState } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
-import { NewsList } from '../components/news/NewsList'
-import { extractErrorMessage } from '../lib/formError'
+import { NewsAgenda } from '../components/news/NewsAgenda'
 import { UUID_SHAPE } from '../lib/ids'
-import { listVendorNews, newsSources, planVisitFromNews } from '../server/news'
+import { listVendorNews, newsSources } from '../server/news'
 
 /** 1 ページぶんの件数。「もっと見る」を押すごとに PAGE_SIZE 件ずつ増やす */
 const PAGE_SIZE = 50
@@ -52,29 +48,13 @@ function Page() {
   const { news, sources, limit, hasMore } = Route.useLoaderData()
   const { v, p } = Route.useSearch()
   const navigate = useNavigate({ from: '/news' })
-  const router = useRouter()
-  const planVisit = useServerFn(planVisitFromNews)
-  const [planningId, setPlanningId] = useState<string | null>(null)
-
-  async function handlePlan(newsId: string) {
-    setPlanningId(newsId)
-    try {
-      await planVisit({ data: { newsId } })
-      await router.invalidate()
-      notifications.show({ message: '予定を追加しました' })
-    } catch (error) {
-      notifications.show({ message: extractErrorMessage(error), color: 'red' })
-    } finally {
-      setPlanningId(null)
-    }
-  }
 
   // hasMore は loader が limit+1 件を問い合わせて実測済み（正確な判定）。
   // 表示上限に既に達している場合はこれ以上増やせないので出さない。
   const canLoadMore = hasMore && limit < MAX_LIMIT
 
   return (
-    <PageShell title="業者のお知らせ">
+    <PageShell title="お知らせ">
       <Stack gap="md">
         {sources.length > 0 ? (
           <Chip.Group
@@ -100,7 +80,7 @@ function Page() {
           <EmptyState emoji="📰" title="まだお知らせはありません" />
         ) : (
           <>
-            <NewsList items={news} onPlan={handlePlan} planningId={planningId} />
+            <NewsAgenda items={news} />
             {canLoadMore ? (
               <Button
                 variant="light"
