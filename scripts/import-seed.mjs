@@ -5,7 +5,10 @@
  *   node scripts/import-seed.mjs --local|--remote [--dry-run]
  *
  * 冪等: scripts/lib/seed.mjs の buildStatements が slug から決定的に id を作り、
- * すべて `INSERT OR REPLACE` で書くので、同じ引数で何度実行しても結果は変わらない。
+ * すべて `INSERT ... ON CONFLICT DO UPDATE` で書くので、同じ引数で何度実行しても
+ * 結果は変わらない（`INSERT OR REPLACE` は使わない: 既存行を一度 DELETE してから
+ * 作り直すため、外部キーが ON DELETE CASCADE の子行 — vendor_news 等 — を
+ * 巻き込んで消してしまう）。
  *
  * 流れ:
  *   1. .dev.vars から DEV_IDENTITY_EMAIL を読む（= created_by。ここでは絶対に出力しない）

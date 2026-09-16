@@ -33,7 +33,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: mantineNotificationsCss },
       { rel: 'stylesheet', href: appCss },
       { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
-      { rel: 'apple-touch-icon', href: '/icons/icon-192.png' },
+      { rel: 'apple-touch-icon', sizes: '180x180', href: '/icons/apple-touch-icon-180.png' },
       { rel: 'manifest', href: '/manifest.json' },
     ],
   }),

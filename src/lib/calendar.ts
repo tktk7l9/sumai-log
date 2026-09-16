@@ -19,6 +19,59 @@ export function formatDateWithWeekday(key: string): string {
   return `${key}（${WEEKDAY_LABELS[day]}）`
 }
 
+/**
+ * 'YYYY-MM-DD' を 'M/D(土)' に直す（EventBadge 用の短い表記）。formatDateWithWeekday と
+ * 違い月日をゼロ埋めせず、括弧も半角にする（design.md §4 のバッジ表記に合わせる）。
+ * 読めない文字列はそのまま返す。
+ */
+export function formatShortDateWithWeekday(key: string): string {
+  const day = dayOfWeek(key)
+  if (day === null) return key
+  const [, month, date] = key.split('-')
+  return `${Number(month)}/${Number(date)}(${WEEKDAY_LABELS[day]})`
+}
+
+/**
+ * 業者のお知らせのイベントバッジ文言。「見学会 9/12(土)」（単日）／
+ * 「見学会 9/12(土)〜9/13(日)」（複数日）。eventKind か eventStart が無ければ
+ * イベントとして扱わない（null）。
+ */
+export function formatEventBadge(
+  eventKind: string | null,
+  eventStart: string | null,
+  eventEnd: string | null,
+): string | null {
+  if (!eventKind || !eventStart) return null
+  const start = formatShortDateWithWeekday(eventStart)
+  if (!eventEnd || eventEnd === eventStart) return `${eventKind} ${start}`
+  return `${eventKind} ${start}〜${formatShortDateWithWeekday(eventEnd)}`
+}
+
+/**
+ * 既に並んでいる配列を、日付キーが変わるかどうかに関わらず同じキーでまとめる
+ * （groupByDay と違って開始順には並べ替えない）。呼び出し側が既に望む順で渡す前提
+ * （例: /news の新しい順・ホームのフィードの新しい順）。日内の順序も items の
+ * 並びをそのまま保つ。NewsList（お知らせ）と feed.ts の groupFeedByDay（フィード）
+ * が共通で使う、唯一の実装（重複させない）。
+ */
+export function groupByDayKeepOrder<T>(
+  items: readonly T[],
+  dayKey: (item: T) => string,
+): { day: string; items: T[] }[] {
+  const order: string[] = []
+  const byDay = new Map<string, T[]>()
+  for (const item of items) {
+    const key = dayKey(item)
+    const list = byDay.get(key)
+    if (list) list.push(item)
+    else {
+      order.push(key)
+      byDay.set(key, [item])
+    }
+  }
+  return order.map((day) => ({ day, items: byDay.get(day)! }))
+}
+
 export function composeStartsAt(date: string, time: string | null): string {
   return time ? `${date}T${time}:00+09:00` : date
 }

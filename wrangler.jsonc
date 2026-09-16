@@ -11,9 +11,20 @@
   // ランタイム起動時エラーで即死する（Task 2 で発覚）。
   "compatibility_date": "2026-08-22",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  // 自前のエントリ（Cron の scheduled ハンドラを足すため）。中身は
+  // @tanstack/react-start/server-entry の既定エクスポートと同じ fetch を使う。
+  "main": "./src/server.ts",
   "observability": { "enabled": true },
   "upload_source_maps": true,
+
+  // カスタムドメイン。2026-09-16 に所有者がダッシュボードでアタッチ済み。ここに書くのは
+  // 設定を後追いで揃えるため（実体は既にダッシュボード側にある）。既定の workers.dev
+  // ホストもそのまま生きる（Access アプリは両方のホスト名をカバーする設定）。
+  "routes": [{ "pattern": "sumai-log.app", "custom_domain": true }],
+  "workers_dev": true, // routes を書くと既定で false になるため明示する（両方のホストを維持）
+
+  // 毎朝 6 時（JST）に業者のお知らせを取得する（design.md §1）。
+  "triggers": { "crons": ["0 21 * * *"] },
 
   "d1_databases": [
     {

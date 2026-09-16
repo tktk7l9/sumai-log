@@ -14,6 +14,7 @@ import { VendorForm } from '../components/candidates/VendorForm'
 import { VendorLinks } from '../components/candidates/VendorLinks'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
+import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
 import { termIdForMetric } from '../lib/glossary'
 import { deleteVendor, getVendor } from '../server/candidates'
@@ -98,6 +99,7 @@ function Page() {
       <Card withBorder padding="md">
         <Stack gap="xs">
           <Row label="本社" value={vendor.hq} />
+          {vendor.representative ? <Row label="代表者" value={vendor.representative} /> : null}
           <Row
             label="施工エリア"
             value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}
@@ -154,6 +156,33 @@ function Page() {
         </Stack>
       </Card>
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
+
+      {vendor.affiliations.length > 0 ? (
+        <Stack gap="xs">
+          <Title order={2}>加盟団体</Title>
+          {resolveAffiliations(vendor.affiliations).map((a) => (
+            <Card key={a.id} withBorder padding="sm">
+              <Group justify="space-between" wrap="wrap" gap="xs">
+                <Text fw={600}>
+                  {a.name}（{a.shortName}）
+                </Text>
+                <Group gap="md">
+                  <Anchor href={a.url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={14} aria-hidden /> 公式サイト
+                  </Anchor>
+                  <Link
+                    to="/glossary/$termId"
+                    params={{ termId: a.glossaryId }}
+                    style={{ color: 'inherit' }}
+                  >
+                    用語集で読む
+                  </Link>
+                </Group>
+              </Group>
+            </Card>
+          ))}
+        </Stack>
+      ) : null}
 
       <Stack gap="xs">
         <Group justify="space-between" align="center">

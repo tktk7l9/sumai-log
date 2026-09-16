@@ -2,6 +2,7 @@ import {
   Button,
   Checkbox,
   Group,
+  MultiSelect,
   NumberInput,
   Select,
   Stack,
@@ -15,18 +16,30 @@ import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
-import { VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
+import { NEWS_SOURCES, VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { extractFormError } from '../../lib/formError'
+import { isAllowedNewsUrl } from '../../lib/news/url'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 
-/** socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ */
-type Values = Omit<VendorInput, 'id' | 'socialUrls'> & { socialUrls: string }
+/**
+ * socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ。
+ * affiliations は MultiSelect が素の string[] で onChange を返すので、フォーム上は緩めた型にし、
+ * 送信時に AffiliationId[] へ戻す（実際の選択肢は AFFILIATIONS の id に限られる）。
+ */
+type Values = Omit<VendorInput, 'id' | 'socialUrls' | 'affiliations'> & {
+  socialUrls: string
+  affiliations: string[]
+}
 
 const empty: Values = {
   name: '',
   kind: 'koumuten',
   hq: null,
+  representative: null,
   serviceAreas: [],
+  affiliations: [],
   uaValue: null,
   cValuePublished: false,
   seismicGrade: null,
@@ -39,6 +52,8 @@ const empty: Values = {
   sourceUrl: null,
   websiteUrl: null,
   socialUrls: '',
+  newsUrl: null,
+  newsSource: null,
 }
 
 export function VendorForm({
@@ -57,7 +72,16 @@ export function VendorForm({
     initialValues: vendor
       ? { ...empty, ...vendor, socialUrls: vendor.socialUrls.join('\n') }
       : empty,
-    validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
+    validate: {
+      name: (v) => (v.trim() ? null : '名前は必須です'),
+      // サーバー側（optionalHttpsUrl）と同じ判定を先に見せる。送信してから
+      // 一般的なエラー文言だけ返ってくるより、どこが・なぜ悪いかをその場で伝える。
+      newsUrl: (v) => {
+        if (!v) return null
+        if (!/^https:\/\//.test(v)) return 'URL は https:// で始めてください'
+        return isAllowedNewsUrl(v) ? null : 'URL が許可されていません'
+      },
+    },
   })
 
   async function submit(values: Values) {
@@ -68,13 +92,19 @@ export function VendorForm({
           ...(vendor ? { id: vendor.id } : {}),
           ...values,
           socialUrls: values.socialUrls.split('\n'),
+          affiliations: values.affiliations as AffiliationId[],
         },
       })
       await router.invalidate()
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
       onSaved(id)
-    } catch {
-      notifications.show({ message: '保存できませんでした', color: 'red' })
+    } catch (error) {
+      // サーバー側の zod（optionalHttpsUrl 等）で拒否された場合、汎用の
+      // 「保存できませんでした」ではなく実際の理由を出す（src/components/videos/VideoForm.tsx
+      // と同じパターン）。対象フィールドが分かれば setFieldError でその場に出す。
+      const { message, path } = extractFormError(error)
+      notifications.show({ message, color: 'red' })
+      if (path) form.setFieldError(path, message)
     } finally {
       setSaving(false)
     }
@@ -105,7 +135,20 @@ export function VendorForm({
           splitChars={[',', '、']}
           {...form.getInputProps('serviceAreas')}
         />
+        <MultiSelect
+          label="加盟団体"
+          data={AFFILIATIONS.map((a) => ({ value: a.id, label: `${a.name}（${a.shortName}）` }))}
+          searchable={false}
+          clearable
+          {...form.getInputProps('affiliations')}
+        />
         <TextInput label="本社" {...form.getInputProps('hq')} value={form.values.hq ?? ''} />
+        <TextInput
+          label="代表者名"
+          description="工務店の場合に一覧へ出ます"
+          {...form.getInputProps('representative')}
+          value={form.values.representative ?? ''}
+        />
         <Group grow>
           <NumberInput
             label="UA値"
@@ -162,6 +205,26 @@ export function VendorForm({
           type="url"
           {...form.getInputProps('sourceUrl')}
           value={form.values.sourceUrl ?? ''}
+        />
+        <TextInput
+          label="お知らせの URL"
+          description="毎朝自動で取得します。https:// のみ入力できます（未設定なら取得しません）"
+          type="url"
+          placeholder="https://example.com/feed/"
+          {...form.getInputProps('newsUrl')}
+          value={form.values.newsUrl ?? ''}
+        />
+        <Select
+          label="取得方法"
+          description="お知らせの URL を設定したときに選びます"
+          data={NEWS_SOURCES.map((source) => ({
+            value: source,
+            label:
+              source === 'rss' ? 'RSS/Atom フィード' : 'トップページの一覧（RSS が無い会社向け）',
+          }))}
+          clearable
+          {...form.getInputProps('newsSource')}
+          value={form.values.newsSource ?? null}
         />
         <Textarea
           label="SNS の URL（1 行に 1 つ）"

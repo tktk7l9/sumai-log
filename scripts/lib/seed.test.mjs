@@ -149,6 +149,8 @@ function fictionalSeed(overrides = {}) {
         websiteUrl: 'https://vendor-a.example.com',
         sourceUrl: 'https://vendor-a.example.com/source',
         socialUrls: ['https://www.instagram.com/example/', 'https://x.com/example'],
+        newsUrl: 'https://news.example.com/feed/',
+        newsSource: 'rss',
       },
       {
         slug: 'vendor-b',
@@ -209,25 +211,41 @@ function fictionalSeed(overrides = {}) {
   }
 }
 
-test('buildStatements: settings の INSERT OR REPLACE 文が含まれる', () => {
+test('buildStatements: settings の INSERT ... ON CONFLICT(key) DO UPDATE 文が含まれる', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO settings'))
   assert.ok(stmt, 'settings statement が見つからない')
-  assert.match(stmt, /INSERT OR REPLACE INTO settings/)
+  assert.match(stmt, /^INSERT INTO settings/)
+  assert.match(stmt, /ON CONFLICT\(key\) DO UPDATE SET/)
+  assert.doesNotMatch(stmt, /OR REPLACE/)
   assert.match(stmt, /'homeAreas'/)
   assert.match(stmt, /\["架空市"\]/)
 })
 
-test('buildStatements: vendors/places/events/visits/videos の INSERT OR REPLACE 文が生成される', () => {
+test('buildStatements: vendors/places/events/visits/videos は INSERT ... ON CONFLICT(id) DO UPDATE 文が生成される（OR REPLACE は使わない）', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
-  assert.ok(sql.some((s) => s.includes('INTO vendors')))
-  assert.ok(sql.some((s) => s.includes('INTO places')))
-  assert.ok(sql.some((s) => s.includes('INTO events')))
-  assert.ok(sql.some((s) => s.includes('INTO visits')))
-  assert.ok(sql.some((s) => s.includes('INTO videos')))
-  for (const stmt of sql) {
-    assert.match(stmt, /^INSERT OR REPLACE INTO/)
+  // settings だけ主キーが key なので別テストで見る。ここでは id が主キーのテーブルだけ見る。
+  const idKeyedStatements = sql.filter((s) => !s.includes('INTO settings'))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO vendors')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO places')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO events')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO visits')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO videos')))
+  for (const stmt of idKeyedStatements) {
+    assert.match(stmt, /^INSERT INTO/)
+    assert.match(stmt, /ON CONFLICT\(id\) DO UPDATE SET/)
+    assert.doesNotMatch(stmt, /OR REPLACE/)
   }
+})
+
+test('buildStatements: vendors の ON CONFLICT DO UPDATE は created_by/created_at を更新対象から除く（他の列は更新する）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
+  assert.doesNotMatch(vendorStmt, /created_by = excluded\.created_by/)
+  assert.doesNotMatch(vendorStmt, /created_at = excluded\.created_at/)
+  assert.match(vendorStmt, /name = excluded\.name/)
+  assert.match(vendorStmt, /updated_at = excluded\.updated_at/)
 })
 
 test('buildStatements: created_by に actorEmail が入る', () => {
@@ -256,6 +274,65 @@ test('buildStatements: vendor の socialUrls は JSON 文字列になり、無�
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
   assert.match(vendorBStmt, /'\[\]'/)
+})
+
+test('buildStatements: vendor の newsUrl/newsSource が指定されれば vendors INSERT に入る', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(vendorAStmt, /'https:\/\/news\.example\.com\/feed\/'/)
+  assert.match(vendorAStmt, /'rss'/)
+})
+
+test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL になる', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ
+  assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
+})
+
+test('buildStatements: newsSource に html-list を指定できる', () => {
+  const seed = fictionalSeed()
+  seed.vendors[1].newsUrl = 'https://www.example-koumuten.co.jp/'
+  seed.vendors[1].newsSource = 'html-list'
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.match(vendorBStmt, /'html-list'/)
+})
+
+test('buildStatements: newsSource が rss/html-list 以外なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].newsSource = 'atom'
+  assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /vendor-a.*atom/s)
+})
+
+test('buildStatements: vendor の representative/affiliations が指定されれば vendors INSERT に入る', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].representative = '山田太郎'
+  seed.vendors[0].affiliations = ['iedukuri100', 'miratsugu']
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(vendorAStmt, /'山田太郎'/)
+  assert.match(vendorAStmt, /\["iedukuri100","miratsugu"\]/)
+})
+
+test('buildStatements: vendor の representative/affiliations が未指定なら NULL / 空配列になる', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorBStmt, /hq, representative, service_areas, affiliations/)
+  assert.match(vendorBStmt, /NULL, NULL, '\[\]', '\[\]'/)
+})
+
+test('buildStatements: affiliations に未知の id が混ざると例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliations = ['iedukuri100', 'no-such-group']
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*no-such-group/s,
+  )
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {
