@@ -149,6 +149,8 @@ function fictionalSeed(overrides = {}) {
         websiteUrl: 'https://vendor-a.example.com',
         sourceUrl: 'https://vendor-a.example.com/source',
         socialUrls: ['https://www.instagram.com/example/', 'https://x.com/example'],
+        newsUrl: 'https://news.example.com/feed/',
+        newsSource: 'rss',
       },
       {
         slug: 'vendor-b',
@@ -256,6 +258,37 @@ test('buildStatements: vendor の socialUrls は JSON 文字列になり、無�
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
   assert.match(vendorBStmt, /'\[\]'/)
+})
+
+test('buildStatements: vendor の newsUrl/newsSource が指定されれば vendors INSERT に入る', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(vendorAStmt, /'https:\/\/news\.example\.com\/feed\/'/)
+  assert.match(vendorAStmt, /'rss'/)
+})
+
+test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL になる', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ
+  assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
+})
+
+test('buildStatements: newsSource に html-list を指定できる', () => {
+  const seed = fictionalSeed()
+  seed.vendors[1].newsUrl = 'https://www.example-koumuten.co.jp/'
+  seed.vendors[1].newsSource = 'html-list'
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.match(vendorBStmt, /'html-list'/)
+})
+
+test('buildStatements: newsSource が rss/html-list 以外なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].newsSource = 'atom'
+  assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /vendor-a.*atom/s)
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {

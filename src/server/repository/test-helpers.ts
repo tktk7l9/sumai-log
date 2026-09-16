@@ -19,6 +19,7 @@ export async function reset() {
     'comments',
     'tags',
     'places',
+    'vendor_news',
     'vendors',
     'properties',
     'settings',

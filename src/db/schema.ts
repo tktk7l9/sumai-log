@@ -38,6 +38,9 @@ export const VENDOR_KIND_LABEL: Record<(typeof VENDOR_KINDS)[number], string> = 
   developer: 'デベロッパー',
 }
 
+/** 業者のお知らせ取得方式。rss = RSS 2.0 フィード、html-list = トップページの <ul><li> 一覧 */
+export const NEWS_SOURCES = ['rss', 'html-list'] as const
+
 /** 戸建ての業者 */
 export const vendors = sqliteTable(
   'vendors',
@@ -62,6 +65,14 @@ export const vendors = sqliteTable(
     websiteUrl: text('website_url'),
     /** SNS のプロフィール URL（Instagram/X/YouTube/Facebook/TikTok/LINE/Threads/note など） */
     socialUrls: jsonList('social_urls'),
+    /** お知らせの取得元 URL（未設定なら取得対象外） */
+    newsUrl: text('news_url'),
+    /** newsUrl があるときの取得方式 */
+    newsSource: text('news_source', { enum: NEWS_SOURCES }),
+    /** お知らせの最終取得日時（成功・失敗いずれも更新） */
+    newsFetchedAt: text('news_fetched_at'),
+    /** 直近の取得失敗理由。成功時は null */
+    newsFetchError: text('news_fetch_error'),
     createdBy: createdBy(),
     ...timestamps,
   },
@@ -161,6 +172,42 @@ export const events = sqliteTable(
     ...timestamps,
   },
   (t) => [index('events_starts_idx').on(t.startsAt)],
+)
+
+/**
+ * 業者のお知らせ（RSS/HTML から定期取得）。url が新着判定のキー
+ * （既にあれば何もしない。タイトル等の更新は追わない）。
+ * イベント判定（event_start/event_end/event_kind）は取得時に 1 回だけ行い結果を保存する。
+ * 「行く」で自分の予定（events）に変換したら planned_event_id に紐づける。
+ */
+export const vendorNews = sqliteTable(
+  'vendor_news',
+  {
+    id: id(),
+    vendorId: text('vendor_id')
+      .notNull()
+      .references(() => vendors.id, { onDelete: 'cascade' }),
+    url: text('url').notNull().unique(),
+    title: text('title').notNull(),
+    /** 最大 300 字（呼び出し側で切り詰める） */
+    summary: text('summary'),
+    /** YYYY-MM-DD。RSS は pubDate、HTML は表記の日付 */
+    publishedOn: text('published_on').notNull(),
+    /** YYYY-MM-DD。イベントと判定したときのみ */
+    eventStart: text('event_start'),
+    /** YYYY-MM-DD。複数日なら終端、単日なら eventStart と同じ */
+    eventEnd: text('event_end'),
+    /** 見学会 / 完成見学会 / 構造見学会 / 相談会 / セミナー / イベント */
+    eventKind: text('event_kind'),
+    /** 「行く」で作った自分の予定。予定が消えたら null に戻す */
+    plannedEventId: text('planned_event_id').references(() => events.id, { onDelete: 'set null' }),
+    /** 初回取得の日時 */
+    firstSeenAt: text('first_seen_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    ...timestamps,
+  },
+  (t) => [index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn)],
 )
 
 export const ATTENDEES = ['both', 'husband', 'wife'] as const
@@ -288,6 +335,8 @@ export type Place = typeof places.$inferSelect
 export type NewPlace = typeof places.$inferInsert
 export type Event = typeof events.$inferSelect
 export type NewEvent = typeof events.$inferInsert
+export type VendorNews = typeof vendorNews.$inferSelect
+export type NewVendorNews = typeof vendorNews.$inferInsert
 export type Visit = typeof visits.$inferSelect
 export type NewVisit = typeof visits.$inferInsert
 export type Photo = typeof photos.$inferSelect
