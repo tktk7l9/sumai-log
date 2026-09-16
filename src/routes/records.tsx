@@ -19,7 +19,7 @@ import { listVideos, videoFormOptions } from '../server/videos'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
-  tab: z.enum(['visits', 'videos']).default('visits'),
+  tab: z.enum(['visits', 'videos']).default('videos'),
   // 予定から「記録を書く」で来たとき: その予定を初期値にしてフォームを開く
   fromEvent: z.string().regex(UUID_SHAPE).optional(),
 })
@@ -57,7 +57,9 @@ function Page() {
     videoOptions,
     fromEventRow: loadedFromEventRow,
   } = Route.useLoaderData()
-  const { tab, fromEvent } = Route.useSearch()
+  const { tab: tabParam, fromEvent } = Route.useSearch()
+  // 予定から「記録を書く」で来たときは、tab パラメータが無くても必ず見学タブを開く
+  const tab = fromEvent ? 'visits' : tabParam
   const navigate = useNavigate({ from: '/records' })
   const [opened, setOpened] = useState(fromEvent !== undefined)
   const [videoFormOpened, setVideoFormOpened] = useState(false)
@@ -84,8 +86,8 @@ function Page() {
             })
           }
           data={[
-            { value: 'visits', label: `見学記録 ${visits.length}` },
-            { value: 'videos', label: `YouTube ${videos.length}` },
+            { value: 'videos', label: `動画 ${videos.length}` },
+            { value: 'visits', label: `見学 ${visits.length}` },
           ]}
         />
         {tab === 'videos' ? (
@@ -117,7 +119,7 @@ function Page() {
       {tab === 'visits' ? (
         <Fab label="記録を書く" onClick={() => setOpened(true)} />
       ) : (
-        <Fab label="YouTube" onClick={() => setVideoFormOpened(true)} />
+        <Fab label="動画" onClick={() => setVideoFormOpened(true)} />
       )}
       <FormDrawer opened={opened} onClose={close} title="見学記録を書く">
         <VisitForm
@@ -133,7 +135,7 @@ function Page() {
       <FormDrawer
         opened={videoFormOpened}
         onClose={() => setVideoFormOpened(false)}
-        title="YouTube メモを書く"
+        title="動画メモを書く"
       >
         <VideoForm
           options={videoOptions}
