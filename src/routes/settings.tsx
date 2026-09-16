@@ -24,6 +24,7 @@ import { Row } from '../components/candidates/DetailRow'
 import { NEWS_SOURCE_LABEL } from '../db/schema'
 import { extractErrorMessage } from '../lib/formError'
 import { formatJst } from '../lib/jst'
+import { describeFetchError } from '../lib/news/errors'
 import { photoUrl } from '../lib/photos'
 import { fetchNewsNow, newsSources as loadNewsSources } from '../server/news'
 import { getSettings, saveHomeAreas } from '../server/settings'
@@ -234,29 +235,44 @@ function Page() {
             </Text>
           ) : (
             <Stack gap="xs">
-              {newsSources.map((v) => (
-                <Stack key={v.id} gap={2}>
-                  <Group justify="space-between" wrap="nowrap">
-                    <Text fw={600}>{v.name}</Text>
-                    <Badge variant="light" color={v.newsFetchError ? 'red' : undefined}>
-                      {v.newsSource ? NEWS_SOURCE_LABEL[v.newsSource] : '方式未設定'}
-                    </Badge>
-                  </Group>
-                  {v.newsUrl ? (
-                    <Text size="xs" c="dimmed" title={v.newsUrl} style={{ wordBreak: 'break-all' }}>
-                      {truncateForDisplay(v.newsUrl)}
+              {newsSources.map((v) => {
+                const errorDesc = v.newsFetchError ? describeFetchError(v.newsFetchError) : null
+                return (
+                  <Stack key={v.id} gap={2}>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text fw={600}>{v.name}</Text>
+                      <Badge variant="light" color={v.newsFetchError ? 'red' : undefined}>
+                        {v.newsSource ? NEWS_SOURCE_LABEL[v.newsSource] : '方式未設定'}
+                      </Badge>
+                    </Group>
+                    {v.newsUrl ? (
+                      <Text
+                        size="xs"
+                        c="dimmed"
+                        title={v.newsUrl}
+                        style={{ wordBreak: 'break-all' }}
+                      >
+                        {truncateForDisplay(v.newsUrl)}
+                      </Text>
+                    ) : null}
+                    <Text size="xs" c="dimmed">
+                      最終取得: {v.newsFetchedAt ? formatJst(v.newsFetchedAt) : '未取得'}
                     </Text>
-                  ) : null}
-                  <Text size="xs" c="dimmed">
-                    最終取得: {v.newsFetchedAt ? formatJst(v.newsFetchedAt) : '未取得'}
-                  </Text>
-                  {v.newsFetchError ? (
-                    <Text size="xs" c="red">
-                      {v.newsFetchError}
-                    </Text>
-                  ) : null}
-                </Stack>
-              ))}
+                    {errorDesc ? (
+                      <Stack gap={0}>
+                        <Text size="xs" c="red">
+                          {errorDesc.label}
+                        </Text>
+                        {errorDesc.hint ? (
+                          <Text size="xs" c="dimmed">
+                            {errorDesc.hint}
+                          </Text>
+                        ) : null}
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                )
+              })}
             </Stack>
           )}
           <Group justify="flex-end">
@@ -279,27 +295,45 @@ function Page() {
             </Text>
           ) : (
             <Stack gap="xs">
-              {faviconVendors.map((v) => (
-                <Group key={v.id} justify="space-between" wrap="nowrap" gap="xs">
-                  <Group gap={8} wrap="nowrap">
-                    <Avatar
-                      src={v.faviconKey ? photoUrl(v.faviconKey) : null}
-                      size={20}
-                      radius="xs"
-                      color="gray"
-                      alt=""
-                    >
-                      {v.name.charAt(0)}
-                    </Avatar>
-                    <Text size="sm" lineClamp={1}>
-                      {v.name}
-                    </Text>
-                  </Group>
-                  <Badge variant="light" color={v.faviconKey ? 'teal' : 'gray'}>
-                    {v.faviconKey ? '取得済み' : '未取得'}
-                  </Badge>
-                </Group>
-              ))}
+              {faviconVendors.map((v) => {
+                // ファビコンの自動取得自体は成否しか記録しない（HTTP ステータスつきの理由を
+                // 持つ列が無い）ため、同じ業者のお知らせ取得結果（newsFetchError）を手がかりに
+                // 「Cloudflare を拒否するサーバー」かどうかを判定する（design 背景: 両方とも
+                // 同じサーバー側の拒否が原因であることが多い）。未取得のときだけ意味がある
+                const blocked =
+                  v.faviconKey === null && v.newsFetchError
+                    ? describeFetchError(v.newsFetchError)
+                    : null
+                return (
+                  <Stack key={v.id} gap={2}>
+                    <Group justify="space-between" wrap="nowrap" gap="xs">
+                      <Group gap={8} wrap="nowrap">
+                        <Avatar
+                          src={v.faviconKey ? photoUrl(v.faviconKey) : null}
+                          size={20}
+                          radius="xs"
+                          color="gray"
+                          alt=""
+                        >
+                          {v.name.charAt(0)}
+                        </Avatar>
+                        <Text size="sm" lineClamp={1}>
+                          {v.name}
+                        </Text>
+                      </Group>
+                      <Badge variant="light" color={v.faviconKey ? 'teal' : 'gray'}>
+                        {v.faviconKey ? '取得済み' : '未取得'}
+                      </Badge>
+                    </Group>
+                    {blocked?.hint ? (
+                      <Text size="xs" c="dimmed">
+                        {blocked.label}。このサイトはアイコンを自動取得できません。業者フォームの
+                        「サイトのアイコン」から手動でアップロードしてください
+                      </Text>
+                    ) : null}
+                  </Stack>
+                )
+              })}
             </Stack>
           )}
           <Group justify="flex-end" gap="xs">

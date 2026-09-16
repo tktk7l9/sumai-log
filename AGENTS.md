@@ -51,6 +51,14 @@
   と違って業者側のキーは元々 `vendorId` だけから決定的だったため、差し替え後も同じ URL を
   `cache-control: immutable` で長期キャッシュしてしまい、再アップロードしても古い画像が
   出続ける不具合があった（鍵にバージョンを持たせることで解決する）
+- `vendors.favicon_source`（`'auto' | 'manual'`。既存行との後方互換のため nullable で、null は
+  `'auto'` 扱い）は favicon_key の由来を持つ。業者フォームの「サイトのアイコン」から手動
+  アップロード（`uploadVendorFaviconCore`）すると `'manual'` になり、以後の非 force の自動
+  取得（`refreshAllVendorFavicons` の既定呼び出し・`saveVendor` 保存時のインライン取得）は
+  この業者をスキップして上書きしない（Cloudflare からのアクセスを一律拒否するサーバー向けの
+  代替経路のため、自動取得に負けさせない）。設定画面の「取り直す」（`force: true`）はこの限り
+  でなく、手動アップロードした業者も対象に含める。削除（`deleteVendorFaviconObjects`）は
+  `favicon_key`/`favicon_source` を両方 NULL に戻す
 - 予定の日時（`startsAt`）は終日なら `YYYY-MM-DD`、時刻ありなら `YYYY-MM-DDTHH:MM:00+09:00`
   （日本時間のオフセットを明示）。日付キーは先頭 10 文字（`src/lib/calendar.ts`）。Date
   オブジェクトへ変換しない

@@ -7,9 +7,11 @@ import { upsertVendor } from './repository/candidates'
 import { actor, db, reset } from './repository/test-helpers'
 import {
   deleteRepresentativePhotoObjects,
+  deleteVendorFaviconObjects,
   fetchFaviconForVendor,
   importRepresentativePhotoFromUrlCore,
   refreshAllVendorFavicons,
+  uploadVendorFaviconCore,
 } from './vendorImagesFetcher'
 
 beforeEach(reset)
@@ -107,6 +109,8 @@ describe('fetchFaviconForVendor', () => {
 
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(row.faviconKey).toBe(result.key)
+    // 自動取得は favicon_source を 'auto' にする（手動アップロードと区別するため）
+    expect(row.faviconSource).toBe('auto')
   })
 
   it('candidate が画像として sniff できなければ次を試し、全滅なら失敗を返す', async () => {
@@ -549,6 +553,57 @@ describe('refreshAllVendorFavicons', () => {
     expect(older).toBeTruthy()
     expect(newer).toBeTruthy()
   })
+
+  it('force=false は favicon_source=manual の業者を対象にしない（手動アップロードは自動更新で上書きしない）', async () => {
+    const manualVendor = await makeVendor('手動アイコン業者', {
+      websiteUrl: 'https://manual.example.com/',
+      faviconKey: 'vendors/manual/favicon-abc.png',
+      faviconSource: 'manual',
+    })
+    const autoVendor = await makeVendor('自動取得対象業者', {
+      websiteUrl: 'https://auto.example.com/',
+    })
+    const { bucket } = fakeBucket()
+    const fetchImpl = fakeFetch((url) => {
+      if (url === 'https://auto.example.com/') return new Response(HTML_WITH_ICON, { status: 200 })
+      if (url === 'https://auto.example.com/icon.png')
+        return new Response(PNG_BYTES, { status: 200 })
+      // manual.example.com への fetch はここまで来ないはず（来たら候補にされている）
+      return new Response('', { status: 404 })
+    })
+
+    const { results } = await refreshAllVendorFavicons(db, { force: false }, fetchImpl, bucket)
+    const ids = results.map((r) => r.vendorId)
+    expect(ids).toContain(autoVendor)
+    expect(ids).not.toContain(manualVendor)
+
+    // 手動アップロードした favicon_key/favicon_source はそのまま残る
+    const [row] = await db.select().from(vendors).where(eq(vendors.id, manualVendor))
+    expect(row.faviconKey).toBe('vendors/manual/favicon-abc.png')
+    expect(row.faviconSource).toBe('manual')
+  })
+
+  it('force=true は favicon_source=manual の業者も対象にする（「取り直す」は上書きを許す）', async () => {
+    const manualVendor = await makeVendor('取り直し対象手動業者', {
+      websiteUrl: 'https://manual2.example.com/',
+      faviconKey: 'vendors/manual/favicon-old.png',
+      faviconSource: 'manual',
+    })
+    const { bucket } = fakeBucket()
+    const fetchImpl = fakeFetch((url) => {
+      if (url === 'https://manual2.example.com/')
+        return new Response(HTML_WITH_ICON, { status: 200 })
+      if (url === 'https://manual2.example.com/icon.png')
+        return new Response(PNG_BYTES, { status: 200 })
+      return null
+    })
+
+    const { results } = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
+    expect(results.map((r) => r.vendorId)).toContain(manualVendor)
+    const [row] = await db.select().from(vendors).where(eq(vendors.id, manualVendor))
+    // force で再取得できたので favicon_source は 'auto' に戻る
+    expect(row.faviconSource).toBe('auto')
+  })
 })
 
 describe('importRepresentativePhotoFromUrlCore', () => {
@@ -804,6 +859,135 @@ describe('deleteRepresentativePhotoObjects', () => {
     const nonExistentId = '99999999-9999-9999-9999-999999999999'
 
     const result = await deleteRepresentativePhotoObjects(db, nonExistentId, bucket)
+
+    expect(result).toEqual({ ok: false, error: '業者が見つかりません' })
+    expect(del).not.toHaveBeenCalled()
+  })
+})
+
+describe('uploadVendorFaviconCore', () => {
+  it('PNG をアップロードして favicon_key を更新し、favicon_source を manual にする', async () => {
+    const vendorId = await makeVendor('手動アップロード業者')
+    const { bucket, objects } = fakeBucket()
+
+    const result = await uploadVendorFaviconCore(db, vendorId, PNG_BYTES, bucket)
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'png') })
+    if (!result.ok) throw new Error('unreachable')
+    expect(objects.get(result.key)?.contentType).toBe('image/png')
+
+    const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
+    expect(row.faviconKey).toBe(result.key)
+    expect(row.faviconSource).toBe('manual')
+  })
+
+  it('ICO もアップロードできる', async () => {
+    const vendorId = await makeVendor('ICOアップロード業者')
+    const { bucket, objects } = fakeBucket()
+
+    const result = await uploadVendorFaviconCore(db, vendorId, ICO_BYTES, bucket)
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
+    if (!result.ok) throw new Error('unreachable')
+    expect(objects.get(result.key)?.contentType).toBe('image/x-icon')
+  })
+
+  it('512KB を超えるバイト列は R2 put を呼ばずに失敗を返す', async () => {
+    const vendorId = await makeVendor('大きすぎアップロード業者')
+    const { bucket, put } = fakeBucket()
+    const big = new Uint8Array(512_001)
+    big.set(PNG_BYTES)
+
+    const result = await uploadVendorFaviconCore(db, vendorId, big, bucket)
+    expect(result).toEqual({
+      ok: false,
+      error: '画像が大きすぎます（上限 512KB）',
+    })
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('画像として sniff できない（SVG/テキスト）は R2 put を呼ばずに失敗を返す', async () => {
+    const vendorId = await makeVendor('SVGアップロード業者')
+    const { bucket, put } = fakeBucket()
+    const svgLike = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+
+    const result = await uploadVendorFaviconCore(db, vendorId, svgLike, bucket)
+    expect(result).toEqual({
+      ok: false,
+      error: '画像ファイルではありません（PNG/JPEG/WebP/ICO のみ）',
+    })
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('業者が存在しない id には R2 put を行わず失敗を返す（孤児オブジェクト対策）', async () => {
+    const { bucket, put } = fakeBucket()
+    const nonExistentId = '99999999-9999-9999-9999-999999999999'
+
+    const result = await uploadVendorFaviconCore(db, nonExistentId, PNG_BYTES, bucket)
+    expect(result).toEqual({ ok: false, error: '業者が見つかりません' })
+    expect(put).not.toHaveBeenCalled()
+  })
+
+  it('差し替えると前の favicon オブジェクトを消す（鍵は毎回 stamp が違う）', async () => {
+    const vendorId = await makeVendor('favicon差し替え業者')
+    const { bucket, deletedKeys } = fakeBucket()
+    let clock = 1_700_000_000_000
+    const now = () => clock++
+
+    const first = await uploadVendorFaviconCore(db, vendorId, PNG_BYTES, bucket, now)
+    if (!first.ok) throw new Error('unreachable')
+    const second = await uploadVendorFaviconCore(db, vendorId, ICO_BYTES, bucket, now)
+    if (!second.ok) throw new Error('unreachable')
+
+    expect(second.key).not.toBe(first.key)
+    expect(deletedKeys).toContain(first.key)
+  })
+
+  it('予期しない例外が飛んでも投げ直さず失敗を返す', async () => {
+    const vendorId = await makeVendor('アップロード例外業者')
+    const throwingBucket = {
+      put: vi.fn(async () => {
+        throw new Error('R2 put failed')
+      }),
+    } as unknown as R2Bucket
+
+    const result = await uploadVendorFaviconCore(db, vendorId, PNG_BYTES, throwingBucket)
+    expect(result).toEqual({ ok: false, error: 'R2 put failed' })
+  })
+})
+
+describe('deleteVendorFaviconObjects', () => {
+  it('favicon_key/favicon_source を両方 NULL にし、R2 のファビコンオブジェクトを消す', async () => {
+    const vendorId = await makeVendor('favicon削除業者')
+    const storedKey = `vendors/${vendorId}/favicon-1abc2d.png`
+    await db
+      .update(vendors)
+      .set({ faviconKey: storedKey, faviconSource: 'manual' })
+      .where(eq(vendors.id, vendorId))
+    const { bucket, deletedKeys } = fakeBucket()
+
+    const result = await deleteVendorFaviconObjects(db, vendorId, bucket)
+
+    expect(result).toEqual({ ok: true })
+    const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
+    expect(row.faviconKey).toBeNull()
+    expect(row.faviconSource).toBeNull()
+    expect(deletedKeys).toContain(storedKey)
+  })
+
+  it('favicon_key が無い業者には R2 delete を呼ばない（消すものが無い）', async () => {
+    const vendorId = await makeVendor('favicon無し業者')
+    const { bucket, del } = fakeBucket()
+
+    const result = await deleteVendorFaviconObjects(db, vendorId, bucket)
+
+    expect(result).toEqual({ ok: true })
+    expect(del).not.toHaveBeenCalled()
+  })
+
+  it('業者が存在しない id には何もしない（R2 delete を呼ばずに失敗を返す）', async () => {
+    const { bucket, del } = fakeBucket()
+    const nonExistentId = '99999999-9999-9999-9999-999999999999'
+
+    const result = await deleteVendorFaviconObjects(db, nonExistentId, bucket)
 
     expect(result).toEqual({ ok: false, error: '業者が見つかりません' })
     expect(del).not.toHaveBeenCalled()

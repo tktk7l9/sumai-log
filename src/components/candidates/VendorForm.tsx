@@ -22,6 +22,7 @@ import { extractFormError } from '../../lib/formError'
 import { isAllowedNewsUrl } from '../../lib/news/url'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
+import { FaviconField } from './FaviconField'
 import { RepresentativePhotoField } from './RepresentativePhotoField'
 
 /**
@@ -254,6 +255,7 @@ export function VendorForm({
           {...form.getInputProps('websiteUrl')}
           value={form.values.websiteUrl ?? ''}
         />
+        <FaviconField vendorId={vendor?.id ?? null} faviconKey={vendor?.faviconKey ?? null} />
         <TextInput
           label="参照 URL"
           type="url"

@@ -40,6 +40,11 @@ export const VENDOR_KIND_LABEL: Record<(typeof VENDOR_KINDS)[number], string> = 
 
 /** 業者のお知らせ取得方式。rss = RSS 2.0 フィード、html-list = トップページの <ul><li> 一覧 */
 export const NEWS_SOURCES = ['rss', 'html-list'] as const
+/** favicon_key の由来。'auto' = 自動取得（fetchFaviconForVendor）、'manual' = 業者フォームからの
+ * 手動アップロード（design 背景: Cloudflare からのアクセスを拒否するサーバー向けの代替経路）。
+ * 既存行との後方互換のため列は nullable にし、null は 'auto' として扱う（migration 0008 参照）。 */
+export const FAVICON_SOURCES = ['auto', 'manual'] as const
+export type FaviconSource = (typeof FAVICON_SOURCES)[number]
 export const NEWS_SOURCE_LABEL: Record<(typeof NEWS_SOURCES)[number], string> = {
   rss: 'RSS',
   'html-list': 'HTML',
@@ -94,6 +99,8 @@ export const vendors = sqliteTable(
      * 拡張子がサイトごとに変わるため（png/ico/jpg/webp。SVG は扱わない理由は
      * src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照）、鍵そのものを保持する */
     faviconKey: text('favicon_key'),
+    /** favicon_key の由来（'auto' | 'manual'）。null は 'auto' 扱い（上の FAVICON_SOURCES 参照） */
+    faviconSource: text('favicon_source', { enum: FAVICON_SOURCES }),
     createdBy: createdBy(),
     ...timestamps,
   },
