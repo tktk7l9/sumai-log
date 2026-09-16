@@ -50,7 +50,9 @@ export function formatEventBadge(
 /**
  * 既に並んでいる配列を、日付キーが変わるかどうかに関わらず同じキーでまとめる
  * （groupByDay と違って開始順には並べ替えない）。呼び出し側が既に望む順で渡す前提
- * （例: /news の新しい順）。日内の順序も items の並びをそのまま保つ。
+ * （例: /news の新しい順・ホームのフィードの新しい順）。日内の順序も items の
+ * 並びをそのまま保つ。NewsList（お知らせ）と feed.ts の groupFeedByDay（フィード）
+ * が共通で使う、唯一の実装（重複させない）。
  */
 export function groupByDayKeepOrder<T>(
   items: readonly T[],

@@ -1,3 +1,4 @@
+import { groupByDayKeepOrder } from './calendar'
 import { parseToUtcMs, toJstDateKey } from './jst'
 
 /**
@@ -82,21 +83,11 @@ export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: numbe
 /**
  * フィードを日（JST の日付キー）でまとめる。items は既に新しい順（mergeFeed 後）
  * を前提にしており、日の並び順は「最初に出てきた順」＝新しい日が先になる。
- * 日内の順序は items の並びをそのまま保つ。
+ * 日内の順序は items の並びをそのまま保つ。グルーピング自体は calendar.ts の
+ * groupByDayKeepOrder（お知らせ一覧と共通）に委ねる薄いラッパー。
  */
 export function groupFeedByDay(items: readonly FeedItem[]): { day: string; items: FeedItem[] }[] {
-  const order: string[] = []
-  const byDay = new Map<string, FeedItem[]>()
-  for (const item of items) {
-    const day = toJstDateKey(item.at)
-    const list = byDay.get(day)
-    if (list) list.push(item)
-    else {
-      order.push(day)
-      byDay.set(day, [item])
-    }
-  }
-  return order.map((day) => ({ day, items: byDay.get(day)! }))
+  return groupByDayKeepOrder(items, (item) => toJstDateKey(item.at))
 }
 
 /** コメント本文の表示上限（超えたら末尾に … を付けて切る） */

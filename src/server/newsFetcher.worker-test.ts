@@ -190,6 +190,47 @@ describe('fetchVendorNews', () => {
     expect(result.error).toMatch(/1MB/)
   })
 
+  it('insertNewsIfNew が成功した後に markNewsFetched が例外を投げても、追加できた件数は失わずに返す', async () => {
+    const vendorId = await makeVendor('記録失敗業者', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: '記録失敗業者',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    // markNewsFetched は db.update(vendors)... を呼ぶ。insertNewsIfNew（db.insert）が
+    // 成功した後、最初の markNewsFetched 呼び出しだけ失敗させる（2 回目 =
+    // フォールバックの記録は元の実装に戻し、その中身は .catch で握りつぶされる
+    // 想定なので added の検証には影響しない）。
+    const originalUpdate = db.update.bind(db)
+    let updateCalls = 0
+    db.update = ((...args: Parameters<typeof db.update>) => {
+      updateCalls += 1
+      if (updateCalls === 1) throw new Error('simulated markNewsFetched failure')
+      return originalUpdate(...args)
+    }) as typeof db.update
+
+    try {
+      const result = await fetchVendorNews(
+        db,
+        vendor,
+        fakeFetch(() => new Response(RSS_FEED, { status: 200 })),
+      )
+      // insertNewsIfNew 自体は成功しているので、added は 0 に化けない
+      expect(result.added).toBe(2)
+      expect(result.error).not.toBeNull()
+    } finally {
+      db.update = originalUpdate
+    }
+
+    const rows = await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId))
+    expect(rows).toHaveLength(2)
+  })
+
   it('news_url / news_source が未設定ならエラーを記録する（防御的に）', async () => {
     const vendorId = await makeVendor('URL未設定')
     const vendor: NewsSourceVendor = {
@@ -280,8 +321,18 @@ describe('fetchAllVendorNews', () => {
 
     const results = await fetchAllVendorNews(db, fetchImpl)
     const byVendor = new Map(results.map((r) => [r.vendorId, r]))
-    expect(byVendor.get(failingId)).toEqual({ vendorId: failingId, added: 0, error: 'HTTP 500' })
-    expect(byVendor.get(okId)).toEqual({ vendorId: okId, added: 2, error: null })
+    expect(byVendor.get(failingId)).toEqual({
+      vendorId: failingId,
+      vendorName: '失敗業者',
+      added: 0,
+      error: 'HTTP 500',
+    })
+    expect(byVendor.get(okId)).toEqual({
+      vendorId: okId,
+      vendorName: '成功業者',
+      added: 2,
+      error: null,
+    })
   })
 
   it('newsUrl が無い業者は対象外（listNewsSources が既に絞っている）', async () => {
@@ -332,12 +383,18 @@ describe('fetchAllVendorNews', () => {
     const byVendor = new Map(results.map((r) => [r.vendorId, r]))
 
     const failing = byVendor.get(failingId)
+    expect(failing?.vendorName).toBe('挿入失敗業者')
     expect(failing?.added).toBe(0)
     expect(failing?.error).not.toBeNull()
     // ERROR_MESSAGE_MAX（200字）に切り詰められている
     expect(failing?.error?.length).toBeLessThanOrEqual(200)
 
     // 失敗した業者の後でも次の業者は正常に取得できる（ループが止まらない）
-    expect(byVendor.get(okId)).toEqual({ vendorId: okId, added: 2, error: null })
+    expect(byVendor.get(okId)).toEqual({
+      vendorId: okId,
+      vendorName: '成功業者2',
+      added: 2,
+      error: null,
+    })
   })
 })

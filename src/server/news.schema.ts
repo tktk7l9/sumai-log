@@ -16,7 +16,10 @@ import { dateField, idField } from './zod'
 
 export const listVendorNewsInput = z.object({
   vendorId: idField.optional(),
-  limit: z.number().int().min(1).max(200).default(50),
+  // 上限は 201: /news の「もっと見る」は表示上限 200 件ぶんに 1 件足して問い合わせ、
+  // その 1 件が実際に返ってきたかどうかで「まだ先があるか」を判定する
+  // （src/routes/news.tsx）。ぴったり 200 件で終わる空振りクリックを避けるため。
+  limit: z.number().int().min(1).max(201).default(50),
   offset: z.number().int().min(0).default(0),
 })
 export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
