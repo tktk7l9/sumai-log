@@ -18,8 +18,10 @@ import { drizzle } from 'drizzle-orm/d1'
 import * as schema from './db/schema'
 import { fetchAllVendorNews } from './server/newsFetcher'
 
-const fetch = createStartHandler(defaultStreamHandler)
-const entry = createServerEntry({ fetch })
+// グローバルの fetch を上書きしないよう startFetch と名付ける（このモジュール内で
+// うっかり fetch(...) と書いたら SSR ハンドラを呼んでしまう、を避ける）。
+const startFetch = createStartHandler(defaultStreamHandler)
+const entry = createServerEntry({ fetch: startFetch })
 
 /**
  * `entry.fetch` の型は `(request, opts?) => Promise<Response>`（TanStack Start 側の

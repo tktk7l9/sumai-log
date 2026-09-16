@@ -49,6 +49,11 @@ describe('newsEventsForMonthInput', () => {
     expect(newsEventsForMonthInput.safeParse({ ym: '2026-9' }).success).toBe(false)
     expect(newsEventsForMonthInput.safeParse({ ym: '2026/09' }).success).toBe(false)
   })
+
+  it('範囲外の月（00・13）は拒否する', () => {
+    expect(newsEventsForMonthInput.safeParse({ ym: '2026-13' }).success).toBe(false)
+    expect(newsEventsForMonthInput.safeParse({ ym: '2026-00' }).success).toBe(false)
+  })
 })
 
 describe('planVisitInput', () => {

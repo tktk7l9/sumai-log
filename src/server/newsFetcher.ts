@@ -9,9 +9,11 @@
 
 import type { Db } from '../db/client'
 import type { Vendor } from '../db/schema'
+import { detectCharset } from '../lib/news/charset'
 import { extractEvent } from '../lib/news/eventDate'
 import { parseHtmlList } from '../lib/news/htmlList'
 import { parseRss, type NewsCandidate } from '../lib/news/rss'
+import { truncate } from '../lib/news/text'
 import { isAllowedNewsUrl } from '../lib/news/url'
 import { insertNewsIfNew, listNewsSources, markNewsFetched, type NewNews } from './repository/news'
 
@@ -20,16 +22,22 @@ export type NewsSourceVendor = Pick<Vendor, 'id' | 'name' | 'newsUrl' | 'newsSou
 const TIMEOUT_MS = 10_000
 const MAX_BYTES = 1_000_000
 const USER_AGENT = 'sumai-log/1.0'
-const TOO_LARGE_ERROR = `応答が上限（1MB）を超えました`
+const TOO_LARGE_ERROR = '応答が上限（1MB）を超えました'
+/** vendors.news_fetch_error に残す長さの上限。例外の message はどれだけ長くなるか
+ * 分からない（D1 のエラー等）ため、ここで切る。スタックは元々含めない（Error#message
+ * のみを見る。stack はここでは一切参照しない）。 */
+const ERROR_MESSAGE_MAX = 200
 
 type FetchOutcome = { candidates: NewsCandidate[] } | { error: string }
 
 /**
- * レスポンス本文を読む。`content-length` があればそれで先に弾く（本文を読まずに済む）。
- * 無ければストリームを読みながら合計バイト数を数え、1 MB を超えた時点で読み取りを
- * 打ち切る（全部読み切ってから切り捨てない）。
+ * レスポンス本文をバイト列のまま読む。`content-length` があればそれで先に弾く
+ * （本文を読まずに済む）。無ければストリームを読みながら合計バイト数を数え、
+ * 1 MB を超えた時点で読み取りを打ち切る（全部読み切ってから切り捨てない）。
+ * 文字列に直す（charset を見て decode する）のは呼び出し側の責務にする
+ * （detectCharset に生バイトが要るため）。
  */
-async function readCappedText(response: Response): Promise<string | { error: string }> {
+async function readCappedBytes(response: Response): Promise<Uint8Array | { error: string }> {
   const contentLength = response.headers.get('content-length')
   if (contentLength && Number(contentLength) > MAX_BYTES) {
     return { error: TOO_LARGE_ERROR }
@@ -37,8 +45,8 @@ async function readCappedText(response: Response): Promise<string | { error: str
 
   const reader = response.body?.getReader()
   if (!reader) {
-    const text = await response.text()
-    return text.length > MAX_BYTES ? { error: TOO_LARGE_ERROR } : text
+    const buf = new Uint8Array(await response.arrayBuffer())
+    return buf.byteLength > MAX_BYTES ? { error: TOO_LARGE_ERROR } : buf
   }
 
   const chunks: Uint8Array[] = []
@@ -61,11 +69,26 @@ async function readCappedText(response: Response): Promise<string | { error: str
     merged.set(chunk, offset)
     offset += chunk.byteLength
   }
-  return new TextDecoder('utf-8').decode(merged)
+  return merged
 }
 
+/**
+ * `charset` は Content-Type ヘッダ / `<meta charset>` から判定したラベル
+ * （detectCharset の戻り値）。`TextDecoder` が知らないラベルなら例外を投げるので、
+ * その場合は utf-8 にフォールバックする（文字化けはしうるが、取得自体を諦めない）。
+ */
+function decodeWithCharset(bytes: Uint8Array, charset: string): string {
+  try {
+    return new TextDecoder(charset).decode(bytes)
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes)
+  }
+}
+
+/** Error#message だけを見る（stack は含めない）。ERROR_MESSAGE_MAX で切り詰める。 */
 function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : '取得に失敗しました'
+  const message = e instanceof Error ? e.message : '取得に失敗しました'
+  return truncate(message, ERROR_MESSAGE_MAX)
 }
 
 async function fetchCandidates(
@@ -91,13 +114,16 @@ async function fetchCandidates(
 
   if (!response.ok) return { error: `HTTP ${response.status}` }
 
-  let body: string | { error: string }
+  let bytes: Uint8Array | { error: string }
   try {
-    body = await readCappedText(response)
+    bytes = await readCappedBytes(response)
   } catch (e) {
     return { error: errorMessage(e) }
   }
-  if (typeof body !== 'string') return body
+  if (!(bytes instanceof Uint8Array)) return bytes
+
+  const charset = detectCharset(response.headers.get('content-type'), bytes)
+  const body = decodeWithCharset(bytes, charset)
 
   const candidates =
     vendor.newsSource === 'rss' ? parseRss(body) : parseHtmlList(body, vendor.newsUrl)
@@ -108,6 +134,9 @@ async function fetchCandidates(
  * 1 業者ぶん取得して保存する。`newsSource` に応じて parseRss / parseHtmlList を選び、
  * 各候補に extractEvent を適用してから insertNewsIfNew（新着のみ INSERT）、最後に
  * 必ず markNewsFetched（成功なら error は null、失敗なら理由）を呼ぶ。
+ *
+ * 取得後の DB 処理（insertNewsIfNew 等）が例外を投げても markNewsFetched は必ず
+ * 呼ぶ（そうしないと直前の成功が設定画面に残り続け、失敗が見えなくなる）。
  */
 export async function fetchVendorNews(
   db: Db,
@@ -121,24 +150,33 @@ export async function fetchVendorNews(
     return { added: 0, error: outcome.error }
   }
 
-  const rows: NewNews[] = outcome.candidates.map((c) => {
-    const event = extractEvent(`${c.title} ${c.summary ?? ''}`, c.publishedOn)
-    return {
-      vendorId: vendor.id,
-      url: c.url,
-      title: c.title,
-      summary: c.summary,
-      publishedOn: c.publishedOn,
-      eventStart: event?.start ?? null,
-      eventEnd: event?.end ?? null,
-      eventKind: event?.kind ?? null,
-    }
-  })
+  try {
+    const rows: NewNews[] = outcome.candidates.map((c) => {
+      const event = extractEvent(`${c.title} ${c.summary ?? ''}`, c.publishedOn)
+      return {
+        vendorId: vendor.id,
+        url: c.url,
+        title: c.title,
+        summary: c.summary,
+        publishedOn: c.publishedOn,
+        eventStart: event?.start ?? null,
+        eventEnd: event?.end ?? null,
+        eventKind: event?.kind ?? null,
+      }
+    })
 
-  const added = await insertNewsIfNew(db, rows)
-  await markNewsFetched(db, vendor.id, null)
-  console.log(`news: ${vendor.id} added=${added} error=null`)
-  return { added, error: null }
+    const added = await insertNewsIfNew(db, rows)
+    await markNewsFetched(db, vendor.id, null)
+    console.log(`news: ${vendor.id} added=${added} error=null`)
+    return { added, error: null }
+  } catch (e) {
+    const message = errorMessage(e)
+    // markNewsFetched 自体が失敗しても（例: 業者行が取得と同時に消えた）、
+    // ここでの記録の失敗を握りつぶして下の返り値・ログは必ず返す。
+    await markNewsFetched(db, vendor.id, message).catch(() => {})
+    console.log(`news: ${vendor.id} added=0 error=${message}`)
+    return { added: 0, error: message }
+  }
 }
 
 /**
