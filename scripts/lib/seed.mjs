@@ -83,6 +83,20 @@ function resolveId(map, slug, kind) {
   return id
 }
 
+// src/db/schema.ts の NEWS_SOURCES と同じ値。plain .mjs から TS を import できないため
+// 値を重複させている（他の enum も seed.mjs ではリテラルのまま検証している）。
+const NEWS_SOURCES = ['rss', 'html-list']
+
+/** newsSource が指定されているのに未知の値なら、どの業者のどの値かがわかるメッセージで例外を投げる */
+function validateNewsSource(vendorSlug, newsSource) {
+  if (newsSource === undefined || newsSource === null) return
+  if (!NEWS_SOURCES.includes(newsSource)) {
+    throw new Error(
+      `vendor ${vendorSlug}: unknown newsSource: ${newsSource} (expected one of ${NEWS_SOURCES.join(', ')})`,
+    )
+  }
+}
+
 /**
  * seed.local.json の内容を D1 の INSERT OR REPLACE 文へ変換する。
  *
@@ -118,6 +132,7 @@ export function buildStatements(seed, opts) {
     vendorIdBySlug[v.slug] = slugToId(`vendor:${v.slug}`)
   }
   for (const v of seed.vendors ?? []) {
+    validateNewsSource(v.slug, v.newsSource)
     sql.push(
       insertStatement('vendors', {
         id: vendorIdBySlug[v.slug],
@@ -137,6 +152,8 @@ export function buildStatements(seed, opts) {
         source_url: v.sourceUrl ?? null,
         website_url: v.websiteUrl ?? null,
         social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
+        news_url: v.newsUrl ?? null,
+        news_source: v.newsSource ?? null,
         created_by: actorEmail,
         created_at: now,
         updated_at: now,
