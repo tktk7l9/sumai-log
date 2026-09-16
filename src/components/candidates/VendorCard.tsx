@@ -36,6 +36,14 @@ export function VendorCard({
           </Link>
           <StatusBadge status={vendor.status} />
         </Group>
+        {vendor.hq ? (
+          <Group gap={4} c="dimmed">
+            <MapPin size={14} aria-hidden />
+            <Text size="sm" c="dimmed" lineClamp={1}>
+              {vendor.hq}
+            </Text>
+          </Group>
+        ) : null}
         <Group gap="xs">
           <Badge variant="default">{VENDOR_KIND_LABEL[vendor.kind]}</Badge>
           {vendor.coversHome ? (

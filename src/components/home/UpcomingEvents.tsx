@@ -1,4 +1,4 @@
-import { Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Card, Stack, Text, Title } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
 import { dateKey, formatEventTime } from '../../lib/calendar'
@@ -24,19 +24,19 @@ export function UpcomingEvents({ events }: { events: EventWithLinks[] }) {
               >
                 <Card withBorder padding="md">
                   <Stack gap={4}>
-                    <Group gap="xs" wrap="nowrap" align="baseline">
-                      <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
-                        {key} {formatEventTime(e)}
-                      </Text>
-                      <Text fw={600} lineClamp={2} lh={1.4}>
-                        {e.title}
-                      </Text>
-                    </Group>
+                    <Text size="sm" c="dimmed">
+                      {key} {formatEventTime(e)}
+                    </Text>
+                    <Text fw={600} lineClamp={2}>
+                      {e.title}
+                    </Text>
                     {who ? (
-                      <Text size="xs" c="dimmed">
-                        {who}
+                      <Text size="sm">{who}</Text>
+                    ) : (
+                      <Text size="sm" c="dimmed">
+                        場所未設定
                       </Text>
-                    ) : null}
+                    )}
                   </Stack>
                 </Card>
               </Link>

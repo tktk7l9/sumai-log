@@ -3,7 +3,6 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { BookOpen, Building2, CalendarDays, House, Map, NotebookPen, Settings } from 'lucide-react'
 
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
-import { ColorSchemeToggle } from './ColorSchemeToggle'
 
 const ICONS: Record<NavIcon, typeof House> = {
   home: House,
@@ -33,7 +32,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             住まいログ
           </Text>
           <Group gap="xs" wrap="nowrap">
-            <ColorSchemeToggle />
             <NavLink
               component={Link}
               to="/glossary"
