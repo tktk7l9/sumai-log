@@ -11,6 +11,7 @@ import { theme } from '../theme'
 import mantineCoreCss from '@mantine/core/styles.css?url'
 import mantineDatesCss from '@mantine/dates/styles.css?url'
 import mantineNotificationsCss from '@mantine/notifications/styles.css?url'
+import mantineScheduleCss from '@mantine/schedule/styles.css?url'
 import appCss from '../styles.css?url'
 
 export const Route = createRootRoute({
@@ -28,6 +29,7 @@ export const Route = createRootRoute({
     links: [
       { rel: 'stylesheet', href: mantineCoreCss },
       { rel: 'stylesheet', href: mantineDatesCss },
+      { rel: 'stylesheet', href: mantineScheduleCss },
       { rel: 'stylesheet', href: mantineNotificationsCss },
       { rel: 'stylesheet', href: appCss },
       { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
