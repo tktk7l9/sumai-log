@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { AFFILIATION_IDS, AFFILIATIONS } from '../content/affiliations'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
+import { isAllowedNewsUrl } from '../lib/news/url'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { normalizeSocialUrls } from '../lib/social'
 import { NEWS_SOURCES, VENDOR_KINDS, places, properties, vendors } from '../db/schema'
@@ -49,6 +50,29 @@ export const vendorInput = z
       .max(AFFILIATIONS.length)
       .default([])
       .transform((arr) => Array.from(new Set(arr))),
+    // 加盟団体ごとの紹介ページ URL・メモ。キーは affiliations と同じ Affiliation['id']
+    // （partialRecord なので選ばなかった団体のキーは無くてよい）。url は
+    // optionalHttpsUrl と同じ判定（https のみ・isAllowedNewsUrl で SSRF 対策）だが
+    // こちらは必須（キーがある以上 URL は要る）
+    affiliationLinks: z
+      .partialRecord(
+        z.enum(AFFILIATION_IDS),
+        z.object({
+          url: z
+            .string()
+            .trim()
+            .max(500)
+            .refine((v) => /^https:\/\//.test(v), 'URL は https:// で始めてください')
+            .refine(isAllowedNewsUrl, 'URL が許可されていません'),
+          note: z
+            .string()
+            .trim()
+            .max(60)
+            .transform((v) => (v === '' ? undefined : v))
+            .optional(),
+        }),
+      )
+      .default({}),
     uaValue: numberOrEmpty(z.number().min(0).max(5)),
     cValuePublished: z.boolean(),
     seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),

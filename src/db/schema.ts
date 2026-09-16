@@ -59,6 +59,12 @@ export const vendors = sqliteTable(
     serviceAreas: jsonList('service_areas'),
     /** 加盟団体の id の配列（`src/content/affiliations.ts` の Affiliation['id']） */
     affiliations: jsonList('affiliations'),
+    /** 加盟団体ごとの、この業者向けの紹介ページ URL とメモ（星の意味等）。
+     * キーは affiliations と同じ Affiliation['id']。選ばなかった団体は入らない */
+    affiliationLinks: text('affiliation_links', { mode: 'json' })
+      .$type<Record<string, { url: string; note?: string }>>()
+      .notNull()
+      .default(sql`'{}'`),
     uaValue: real('ua_value'),
     cValuePublished: integer('c_value_published', { mode: 'boolean' }).notNull().default(false),
     seismicGrade: integer('seismic_grade'),

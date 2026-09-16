@@ -43,6 +43,13 @@
       "when": 1789540437969,
       "tag": "0005_vendor_images",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789544191186,
+      "tag": "0006_perpetual_shockwave",
+      "breakpoints": true
     }
   ]
 }
