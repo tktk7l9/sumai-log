@@ -101,7 +101,12 @@ export const Route = createFileRoute('/api/photos/$')({
         return json(200, { id: photoId, ...keys })
       },
       GET: async ({ params, request }) => {
-        const key = `photos/${params._splat ?? ''}`
+        // 見学の写真は R2 キーが常に `photos/` で始まる一方、splat には photoUrl が
+        // 剥がした分だけしか乗らない（下の isManagedPhotoKey コメント参照）。業者の
+        // 代表者写真・ファビコンは `vendors/` キーをそのまま URL に使っている
+        // （photoUrl は `photos/` だけを剥がすので、`vendors/` はそのまま splat に乗る）。
+        const splat = params._splat ?? ''
+        const key = splat.startsWith('vendors/') ? splat : `photos/${splat}`
         if (!isManagedPhotoKey(key)) return notFound()
         const object = await getPhotosBucket().get(key)
         if (!object) return notFound()

@@ -22,6 +22,7 @@ import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as GlossaryTermIdRouteImport } from './routes/glossary_.$termId'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
+import { Route as ApiVendorPhotosVendorIdRouteImport } from './routes/api.vendor-photos.$vendorId'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
 import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
 import { Route as RecordsVideosIdRouteImport } from './routes/records_.videos.$id'
@@ -92,6 +93,11 @@ const ApiPhotosSplatRoute = ApiPhotosSplatRouteImport.update({
   path: '/api/photos/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVendorPhotosVendorIdRoute = ApiVendorPhotosVendorIdRouteImport.update({
+  id: '/api/vendor-photos/$vendorId',
+  path: '/api/vendor-photos/$vendorId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CandidatesPropertiesIdRoute = CandidatesPropertiesIdRouteImport.update({
   id: '/candidates_/properties/$id',
   path: '/candidates/properties/$id',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records/videos/$id': typeof RecordsVideosIdRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records/videos/$id': typeof RecordsVideosIdRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/glossary_/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records_/videos/$id': typeof RecordsVideosIdRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
     | '/records/videos/$id'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
     | '/records/videos/$id'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/glossary_/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates_/properties/$id'
     | '/candidates_/vendors/$id'
     | '/records_/videos/$id'
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   GlossaryTermIdRoute: typeof GlossaryTermIdRoute
   PlacesIdRoute: typeof PlacesIdRoute
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
+  ApiVendorPhotosVendorIdRoute: typeof ApiVendorPhotosVendorIdRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
   CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
   RecordsVideosIdRoute: typeof RecordsVideosIdRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPhotosSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vendor-photos/$vendorId': {
+      id: '/api/vendor-photos/$vendorId'
+      path: '/api/vendor-photos/$vendorId'
+      fullPath: '/api/vendor-photos/$vendorId'
+      preLoaderRoute: typeof ApiVendorPhotosVendorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/candidates_/properties/$id': {
       id: '/candidates_/properties/$id'
       path: '/candidates/properties/$id'
@@ -389,6 +409,7 @@ const rootRouteChildren: RootRouteChildren = {
   GlossaryTermIdRoute: GlossaryTermIdRoute,
   PlacesIdRoute: PlacesIdRoute,
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,
+  ApiVendorPhotosVendorIdRoute: ApiVendorPhotosVendorIdRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
   CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
   RecordsVideosIdRoute: RecordsVideosIdRoute,

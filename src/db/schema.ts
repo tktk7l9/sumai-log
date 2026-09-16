@@ -81,6 +81,12 @@ export const vendors = sqliteTable(
     newsFetchedAt: text('news_fetched_at'),
     /** 直近の取得失敗理由。成功時は null */
     newsFetchError: text('news_fetch_error'),
+    /** 代表者の顔写真。R2 キーは vendors/{id}/representative-display.jpg（vendorImageKeys）。
+     * サムネ（-thumb.jpg）は同じ vendorId から決定的に決まるので別列は持たない */
+    representativePhotoKey: text('representative_photo_key'),
+    /** サイトのファビコン。R2 キーは vendors/{id}/favicon.<ext>（vendorFaviconKey）。
+     * 拡張子がサイトごとに変わるため（png/ico/svg/jpg/webp）、鍵そのものを保持する */
+    faviconKey: text('favicon_key'),
     createdBy: createdBy(),
     ...timestamps,
   },

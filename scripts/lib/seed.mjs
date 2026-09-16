@@ -151,10 +151,19 @@ function validateAffiliations(vendorSlug, affiliations) {
  *   無い写真は photos テーブルへの INSERT 文を作らない（sips 変換前の 1 回目の呼び出し用）。
  * @param {Record<string, {lat:number,lng:number}>} [opts.coords] - place slug → 座標。
  *   無い place は lat/lng/geocode_source が NULL のまま（地図に出せない場所として扱われる）。
+ * @param {Set<string>} [opts.representativePhotoReady] - representativePhoto の sips 変換
+ *   （→ R2 アップロード）が済んだ vendor slug の集合。無い vendor は representative_photo_key
+ *   が NULL のまま（R2 に実体が無いのに DB だけ「写真あり」を指さないようにするため）。
  * @returns {{ sql: string[], photos: Array<{visitSlug:string, src:string, photoId:string, displayKey:string, thumbKey:string, sortOrder:number}> }}
  */
 export function buildStatements(seed, opts) {
-  const { actorEmail, now = new Date().toISOString(), photoSizes = {}, coords = {} } = opts
+  const {
+    actorEmail,
+    now = new Date().toISOString(),
+    photoSizes = {},
+    coords = {},
+    representativePhotoReady = new Set(),
+  } = opts
 
   const sql = []
 
@@ -181,9 +190,10 @@ export function buildStatements(seed, opts) {
   for (const v of seed.vendors ?? []) {
     validateNewsSource(v.slug, v.newsSource)
     validateAffiliations(v.slug, v.affiliations)
+    const vendorId = vendorIdBySlug[v.slug]
     sql.push(
       upsertStatement('vendors', {
-        id: vendorIdBySlug[v.slug],
+        id: vendorId,
         name: v.name,
         kind: v.kind,
         hq: v.hq ?? null,
@@ -204,6 +214,11 @@ export function buildStatements(seed, opts) {
         social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
         news_url: v.newsUrl ?? null,
         news_source: v.newsSource ?? null,
+        // representative_photo_key は src/lib/photos.ts の vendorImageKeys と同じ形
+        // （vendorId だけから決まる）。sips 変換（→ R2 アップロード）が済んだ業者だけ立てる
+        representative_photo_key: representativePhotoReady.has(v.slug)
+          ? `vendors/${vendorId}/representative-display.jpg`
+          : null,
         created_by: actorEmail,
         created_at: now,
         updated_at: now,

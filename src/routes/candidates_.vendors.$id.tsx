@@ -1,4 +1,15 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Anchor,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -17,6 +28,7 @@ import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
 import { termIdForMetric } from '../lib/glossary'
+import { photoUrl, vendorImageKeys } from '../lib/photos'
 import { deleteVendor, getVendor } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
@@ -76,7 +88,20 @@ function Page() {
 
   return (
     <PageShell
-      title={vendor.name}
+      title={
+        <Group gap={8} wrap="nowrap" align="center" component="span">
+          <Avatar
+            src={vendor.faviconKey ? photoUrl(vendor.faviconKey) : null}
+            size={24}
+            radius="xs"
+            color="gray"
+            alt=""
+          >
+            {vendor.name.charAt(0)}
+          </Avatar>
+          {vendor.name}
+        </Group>
+      }
       actions={
         <Group gap="xs">
           <StatusBadge status={vendor.status} />
@@ -99,7 +124,26 @@ function Page() {
       <Card withBorder padding="md">
         <Stack gap="xs">
           <Row label="本社" value={vendor.hq} />
-          {vendor.representative ? <Row label="代表者" value={vendor.representative} /> : null}
+          {vendor.representative ? (
+            <Group justify="space-between" wrap="nowrap" align="center">
+              <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
+                代表者
+              </Text>
+              <Group gap="sm" wrap="nowrap" align="center">
+                {vendor.representativePhotoKey ? (
+                  <Avatar
+                    src={photoUrl(vendorImageKeys(vendor.id).thumbKey)}
+                    size={96}
+                    radius="50%"
+                    alt=""
+                  />
+                ) : null}
+                <Text size="sm" ta="right">
+                  {vendor.representative}
+                </Text>
+              </Group>
+            </Group>
+          ) : null}
           <Row
             label="施工エリア"
             value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}

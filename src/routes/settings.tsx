@@ -1,5 +1,6 @@
 import {
   Alert,
+  Avatar,
   Badge,
   Button,
   Card,
@@ -23,9 +24,11 @@ import { Row } from '../components/candidates/DetailRow'
 import { NEWS_SOURCE_LABEL } from '../db/schema'
 import { extractErrorMessage } from '../lib/formError'
 import { formatJst } from '../lib/jst'
+import { photoUrl } from '../lib/photos'
 import { fetchNewsNow, newsSources as loadNewsSources } from '../server/news'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
+import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
 
 /** 「業者のお知らせ」カードで取得 URL を短く見せる（全文は title 属性で見られる）。 */
 const NEWS_URL_DISPLAY_MAX = 40
@@ -36,26 +39,37 @@ function truncateForDisplay(url: string): string {
 export const Route = createFileRoute('/settings')({
   component: Page,
   loader: async () => {
-    const [settings, tags, news] = await Promise.all([
+    const [settings, tags, news, favicons] = await Promise.all([
       getSettings(),
       listTagNames(),
       loadNewsSources(),
+      loadFaviconSources(),
     ])
-    return { ...settings, tags, newsSources: news.sources }
+    return { ...settings, tags, newsSources: news.sources, faviconVendors: favicons.vendors }
   },
 })
 
 function Page() {
-  const { homeAreas, actorEmail, members, environment, photosReady, tags, newsSources } =
-    Route.useLoaderData()
+  const {
+    homeAreas,
+    actorEmail,
+    members,
+    environment,
+    photosReady,
+    tags,
+    newsSources,
+    faviconVendors,
+  } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveHomeAreas)
   const saveTagsFn = useServerFn(saveTags)
   const fetchNewsNowFn = useServerFn(fetchNewsNow)
+  const refreshFaviconsFn = useServerFn(refreshVendorFavicons)
   const [saving, setSaving] = useState(false)
   const [tagValues, setTagValues] = useState<string[]>(tags)
   const [savingTags, setSavingTags] = useState(false)
   const [fetchingNews, setFetchingNews] = useState(false)
+  const [fetchingFavicons, setFetchingFavicons] = useState(false)
   const form = useForm({ initialValues: { areas: homeAreas.join('、') } })
 
   async function submit(values: { areas: string }) {
@@ -112,6 +126,37 @@ function Page() {
       notifications.show({ message: extractErrorMessage(error), color: 'red' })
     } finally {
       setFetchingNews(false)
+    }
+  }
+
+  async function handleFetchFavicons(force: boolean) {
+    if (faviconVendors.length === 0) {
+      notifications.show({ message: '公式サイトの URL が設定された業者がありません', color: 'red' })
+      return
+    }
+    setFetchingFavicons(true)
+    try {
+      const { results } = await refreshFaviconsFn({ data: { force } })
+      if (results.length === 0) {
+        notifications.show({
+          message: force
+            ? '対象の業者がありません'
+            : 'すべて取得済みです（「取り直す」で再取得できます）',
+        })
+      }
+      for (const r of results) {
+        const name = r.vendorName || '不明な業者'
+        if (!r.ok) {
+          notifications.show({ message: `${name}: エラー ${r.error}`, color: 'red' })
+        } else {
+          notifications.show({ message: `${name}: アイコンを取得しました` })
+        }
+      }
+      await router.invalidate()
+    } catch (error) {
+      notifications.show({ message: extractErrorMessage(error), color: 'red' })
+    } finally {
+      setFetchingFavicons(false)
     }
   }
 
@@ -209,6 +254,56 @@ function Page() {
           <Group justify="flex-end">
             <Button onClick={handleFetchNews} loading={fetchingNews}>
               今すぐ取得
+            </Button>
+          </Group>
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>候補のサイトアイコン</Title>
+          <Text size="sm" c="dimmed">
+            公式サイトの URL が設定された業者の一覧（候補の名前の前に出すアイコン）。
+          </Text>
+          {faviconVendors.length === 0 ? (
+            <Text size="sm" c="dimmed">
+              公式サイトの URL を設定した業者がありません。
+            </Text>
+          ) : (
+            <Stack gap="xs">
+              {faviconVendors.map((v) => (
+                <Group key={v.id} justify="space-between" wrap="nowrap" gap="xs">
+                  <Group gap={8} wrap="nowrap">
+                    <Avatar
+                      src={v.faviconKey ? photoUrl(v.faviconKey) : null}
+                      size={20}
+                      radius="xs"
+                      color="gray"
+                      alt=""
+                    >
+                      {v.name.charAt(0)}
+                    </Avatar>
+                    <Text size="sm" lineClamp={1}>
+                      {v.name}
+                    </Text>
+                  </Group>
+                  <Badge variant="light" color={v.faviconKey ? 'teal' : 'gray'}>
+                    {v.faviconKey ? '取得済み' : '未取得'}
+                  </Badge>
+                </Group>
+              ))}
+            </Stack>
+          )}
+          <Group justify="flex-end" gap="xs">
+            <Button
+              variant="default"
+              onClick={() => handleFetchFavicons(true)}
+              loading={fetchingFavicons}
+            >
+              取り直す
+            </Button>
+            <Button onClick={() => handleFetchFavicons(false)} loading={fetchingFavicons}>
+              アイコンを取得
             </Button>
           </Group>
         </Stack>

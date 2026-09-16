@@ -16,6 +16,7 @@ import { parseRss, type NewsCandidate } from '../lib/news/rss'
 import { truncate } from '../lib/news/text'
 import { isAllowedNewsUrl } from '../lib/news/url'
 import { insertNewsIfNew, listNewsSources, markNewsFetched, type NewNews } from './repository/news'
+import { fetchWithGuardedRedirects } from './safeFetch'
 
 export type NewsSourceVendor = Pick<Vendor, 'id' | 'name' | 'newsUrl' | 'newsSource'>
 
@@ -23,11 +24,8 @@ const TIMEOUT_MS = 10_000
 const MAX_BYTES = 1_000_000
 const USER_AGENT = 'sumai-log/1.0'
 const TOO_LARGE_ERROR = '応答が上限（1MB）を超えました'
-/** これを超えて `Location` が続くか、途中の hop が isAllowedNewsUrl で弾かれたときのエラー。 */
+/** リダイレクトの上限超過・Location の解決失敗・許可されない hop 先のときのエラー。 */
 const REDIRECT_BLOCKED_ERROR = 'リダイレクト先が許可されていません'
-/** 追従するリダイレクトの最大回数（初回のフェッチは含まない）。 */
-const MAX_REDIRECTS = 3
-const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 /** vendors.news_fetch_error に残す長さの上限。例外の message はどれだけ長くなるか
  * 分からない（D1 のエラー等）ため、ここで切る。スタックは元々含めない（Error#message
  * のみを見る。stack はここでは一切参照しない）。 */
@@ -96,60 +94,6 @@ function errorMessage(e: unknown): string {
   return truncate(message, ERROR_MESSAGE_MAX)
 }
 
-type RedirectOutcome = { response: Response; finalUrl: string } | { error: string }
-
-/**
- * `redirect: 'manual'` で自前にリダイレクトを追う。3xx を受け取るたびに
- * `Location` を「今いる URL」基準で解決し、isAllowedNewsUrl を再度通してから
- * 次の fetch を行う（許可されない hop 先には絶対に fetchImpl を呼ばない）。
- * MAX_REDIRECTS（3）を超えて 3xx が続く場合も同じエラーにする。`Location` が
- * 無い 3xx はリダイレクトとして扱わず、そのままのレスポンスを返す（後段の
- * `response.ok` チェックで弾かれる）。
- */
-async function fetchFollowingRedirects(
-  startUrl: string,
-  fetchImpl: typeof fetch,
-): Promise<RedirectOutcome> {
-  let currentUrl = startUrl
-
-  for (let hop = 0; ; hop++) {
-    let response: Response
-    try {
-      response = await fetchImpl(currentUrl, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        headers: { 'User-Agent': USER_AGENT },
-        redirect: 'manual',
-      })
-    } catch (e) {
-      return { error: errorMessage(e) }
-    }
-
-    if (!REDIRECT_STATUSES.has(response.status)) {
-      return { response, finalUrl: currentUrl }
-    }
-    if (hop >= MAX_REDIRECTS) {
-      return { error: REDIRECT_BLOCKED_ERROR }
-    }
-
-    const location = response.headers.get('location')
-    if (!location) {
-      return { response, finalUrl: currentUrl }
-    }
-
-    let resolved: string
-    try {
-      resolved = new URL(location, currentUrl).href
-    } catch {
-      return { error: REDIRECT_BLOCKED_ERROR }
-    }
-    if (!isAllowedNewsUrl(resolved)) {
-      return { error: REDIRECT_BLOCKED_ERROR }
-    }
-
-    currentUrl = resolved
-  }
-}
-
 async function fetchCandidates(
   vendor: NewsSourceVendor,
   fetchImpl: typeof fetch,
@@ -161,7 +105,14 @@ async function fetchCandidates(
   // 実際に fetch する直前にもう一度ここで弾く（SSRF 対策の多層防御）。
   if (!isAllowedNewsUrl(vendor.newsUrl)) return { error: 'URL が許可されていません' }
 
-  const redirectOutcome = await fetchFollowingRedirects(vendor.newsUrl, fetchImpl)
+  // リダイレクトの追従・hop ごとの許可判定は safeFetch.ts（vendorImages.ts と共有）に委ねる。
+  const redirectOutcome = await fetchWithGuardedRedirects(vendor.newsUrl, {
+    timeoutMs: TIMEOUT_MS,
+    headers: { 'User-Agent': USER_AGENT },
+    isAllowed: isAllowedNewsUrl,
+    fetchImpl,
+    redirectBlockedError: REDIRECT_BLOCKED_ERROR,
+  })
   if ('error' in redirectOutcome) return { error: redirectOutcome.error }
   const { response, finalUrl } = redirectOutcome
 
