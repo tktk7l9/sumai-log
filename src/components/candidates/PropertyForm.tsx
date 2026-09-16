@@ -3,7 +3,7 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { Property } from '../../db/schema'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
@@ -31,9 +31,13 @@ const empty: Values = {
 export function PropertyForm({
   property,
   onSaved,
+  onDirtyChange,
 }: {
   property: Property | null
   onSaved: (id: string) => void
+  /** 候補ページの「追加」ドロワー（戸建て/マンションの切替）が、切替前に確認を挟むかの
+   * 判定に使う。渡さなければ何もしない（既存の編集フォームは呼び出し元を増やさない） */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const router = useRouter()
   const save = useServerFn(saveProperty)
@@ -42,6 +46,10 @@ export function PropertyForm({
     initialValues: property ? { ...empty, ...property } : empty,
     validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
   })
+
+  useEffect(() => {
+    onDirtyChange?.(form.isDirty())
+  }, [form.values])
 
   async function submit(values: Values) {
     setSaving(true)

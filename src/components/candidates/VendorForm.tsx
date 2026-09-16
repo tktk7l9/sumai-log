@@ -14,7 +14,7 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
 import { NEWS_SOURCES, VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
@@ -63,10 +63,14 @@ export function VendorForm({
   vendor,
   homeAreas,
   onSaved,
+  onDirtyChange,
 }: {
   vendor: Vendor | null
   homeAreas: string[]
   onSaved: (id: string) => void
+  /** 候補ページの「追加」ドロワー（戸建て/マンションの切替）が、切替前に確認を挟むかの
+   * 判定に使う。渡さなければ何もしない（既存の編集フォームは呼び出し元を増やさない） */
+  onDirtyChange?: (dirty: boolean) => void
 }) {
   const router = useRouter()
   const save = useServerFn(saveVendor)
@@ -86,6 +90,12 @@ export function VendorForm({
       },
     },
   })
+
+  // 候補ページの「追加」ドロワーが切替確認に使うだけの軽い通知。form.isDirty() は
+  // 呼ぶたびに initialValues と比較するだけなので、依存は values の変化だけで十分
+  useEffect(() => {
+    onDirtyChange?.(form.isDirty())
+  }, [form.values])
 
   async function submit(values: Values) {
     setSaving(true)
