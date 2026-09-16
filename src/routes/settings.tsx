@@ -16,6 +16,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
+import { ColorSchemeSetting } from '../components/ColorSchemeSetting'
 import { MemberChip } from '../components/MemberChip'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -74,6 +75,13 @@ function Page() {
 
   return (
     <PageShell title="設定">
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>表示</Title>
+          <ColorSchemeSetting />
+        </Stack>
+      </Card>
+
       <Card withBorder padding="md">
         <Stack gap="sm">
           <Title order={2}>建築予定地</Title>
