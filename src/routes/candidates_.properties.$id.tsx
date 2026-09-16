@@ -42,7 +42,7 @@ function Page() {
     try {
       await remove({ data: { id: property.id } })
       notifications.show({ message: '物件を削除しました' })
-      navigate({ to: '/candidates', search: { tab: 'properties', coversHome: false } })
+      navigate({ to: '/candidates', search: { tab: 'properties' } })
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
     }

@@ -15,7 +15,7 @@ import { listVendorNews } from '../server/news'
 // バンドルに含まれてビルドが壊れるため。settings.tsx と同じ回避パターン）
 import { getSettings } from '../server/settings'
 
-// ホームの「業者のお知らせ」ブロックは最新 5 件だけ（design.md §4「ホーム」）
+// ホームの「お知らせ」ブロックは最新 5 件だけ（design.md §4「ホーム」）
 const HOME_NEWS_LIMIT = 5
 
 export const Route = createFileRoute('/')({

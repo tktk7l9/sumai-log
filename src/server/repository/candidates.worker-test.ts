@@ -169,6 +169,7 @@ describe('vendors', () => {
       id: withUrlId,
       name: 'URLあり',
       websiteUrl: 'https://vendor.example.com/',
+      newsUrl: null,
       faviconKey: null,
       faviconSource: null,
       newsFetchError: null,

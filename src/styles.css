@@ -3,6 +3,21 @@
 }
 
 /*
+ * モバイル（主に iOS Safari）でページ最下部を超えてスクロールすると、ページ全体が
+ * ゴムのように伸び縮みする「バウンス」が起きる。AppShell.Footer（.tabbar）は
+ * position: fixed だが、このバウンス中はビューポート自体が動くため、固定のはずの
+ * 下タブも一緒にずれて見える（所有者の報告）。overscroll-behavior-y: none で
+ * バウンスそのものを止めるのが本体の対策（.tabbar 側の position: fixed は Mantine の
+ * AppShell.Footer が既定で持っている。念のためここでも明示する。下の #root 経由の
+ * 指定は入れない＝.app-main を別スクロールコンテナにする案は、地図タブが
+ * 高さぴったりの 1 枚をこの main に頼っているため見送った）。
+ */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+/*
  * 地の色だけは Mantine が light で `#fff` と決め打ちしていて theme のパレットから
  * 導けないので、ここで暖色に差し替える。セレクタは Mantine 本体と同じ形にして、
  * 読み込み順（__root.tsx で Mantine のあとに appCss）で勝たせている。
@@ -73,8 +88,12 @@ a:focus-visible {
   background-color: var(--mantine-color-default);
 }
 
-/* 下タブ（AppShell.Footer）はホームインジケータの分だけ底上げする */
+/* 下タブ（AppShell.Footer）はホームインジケータの分だけ底上げする。position/bottom は
+   Mantine の AppShell.Footer が既定で fixed/0 を持っているが、バウンス対策の一部として
+   ここでも明示しておく（上の overscroll-behavior-y が本体の対策） */
 .tabbar {
+  position: fixed;
+  bottom: 0;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 

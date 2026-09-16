@@ -72,3 +72,20 @@ export function isAllowedRemoteUrl(url: string): boolean {
 
 /** `isAllowedRemoteUrl` の旧名。既存の呼び出し元はこちらを import したままでよい */
 export const isAllowedNewsUrl = isAllowedRemoteUrl
+
+/**
+ * 2 つの URL のホスト名が一致するか。settings.tsx の「候補のサイトアイコン」カードで、
+ * お知らせ取得の失敗理由（newsFetchError）をアイコン取得のヒントとして使い回してよいかの
+ * 判定に使う。news_url と website_url が別ホストなら、お知らせ側の拒否理由（Cloudflare を
+ * 拒否するサーバー）をアイコン取得の理由として見せるのは推測に過ぎない（PR #12 レビュー
+ * 指摘）。どちらかが null・URL として読めない場合は false（違うホスト扱い＝ヒントを出さず
+ * 「未取得」の中立表示に倒す。安全側）。
+ */
+export function sameHost(a: string | null, b: string | null): boolean {
+  if (!a || !b) return false
+  try {
+    return normalizeHostname(new URL(a).hostname) === normalizeHostname(new URL(b).hostname)
+  } catch {
+    return false
+  }
+}

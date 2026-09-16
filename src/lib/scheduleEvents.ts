@@ -113,3 +113,27 @@ export function newsToScheduleEvents(
       }
     })
 }
+
+/**
+ * お知らせを `NewsAgenda`（src/components/news/NewsAgenda.tsx）の AgendaView 用
+ * ScheduleEventData に変換する（純粋関数）。`newsToScheduleEvents` と違い、イベント
+ * 判定の有無に関わらず全件を対象にし、日付は eventStart ではなく**公開日
+ * （publishedOn）**の終日イベントにする（design: 「お知らせ」はまず公開されたことを
+ * 見せる一覧であり、イベント判定はバッジで添えるだけ）。id は自分の予定の id と
+ * 衝突しないよう `news-` を前置する（newsToScheduleEvents と同じ命名）。
+ */
+export function newsToAgendaEvents(
+  items: readonly NewsEventRow[],
+): ScheduleEventData<NewsEventPayload>[] {
+  return items.map((n) => {
+    const payload: NewsEventPayload = { kind: 'news', newsId: n.id }
+    return {
+      id: `news-${n.id}`,
+      title: `${n.vendorName} ${n.title}`,
+      start: `${n.publishedOn} 00:00:00`,
+      end: `${nextDay(n.publishedOn)} 00:00:00`,
+      color: 'gray',
+      payload,
+    }
+  })
+}

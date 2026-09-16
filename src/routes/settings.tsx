@@ -25,13 +25,14 @@ import { NEWS_SOURCE_LABEL } from '../db/schema'
 import { extractErrorMessage } from '../lib/formError'
 import { formatJst } from '../lib/jst'
 import { describeFetchError } from '../lib/news/errors'
+import { sameHost } from '../lib/news/url'
 import { photoUrl } from '../lib/photos'
 import { fetchNewsNow, newsSources as loadNewsSources } from '../server/news'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
 
-/** 「業者のお知らせ」カードで取得 URL を短く見せる（全文は title 属性で見られる）。 */
+/** 「お知らせ」カードで取得 URL を短く見せる（全文は title 属性で見られる）。 */
 const NEWS_URL_DISPLAY_MAX = 40
 function truncateForDisplay(url: string): string {
   return url.length > NEWS_URL_DISPLAY_MAX ? `${url.slice(0, NEWS_URL_DISPLAY_MAX)}…` : url
@@ -227,7 +228,7 @@ function Page() {
 
       <Card withBorder padding="md">
         <Stack gap="sm">
-          <Title order={2}>業者のお知らせ</Title>
+          <Title order={2}>お知らせ</Title>
           {newsSources.length === 0 ? (
             <Text size="sm" c="dimmed">
               お知らせ URL を設定した業者がありません。候補の編集からお知らせの URL
@@ -297,11 +298,15 @@ function Page() {
             <Stack gap="xs">
               {faviconVendors.map((v) => {
                 // ファビコンの自動取得自体は成否しか記録しない（HTTP ステータスつきの理由を
-                // 持つ列が無い）ため、同じ業者のお知らせ取得結果（newsFetchError）を手がかりに
+                // 持つ列が無い）ため、同じお知らせ取得結果（newsFetchError）を手がかりに
                 // 「Cloudflare を拒否するサーバー」かどうかを判定する（design 背景: 両方とも
-                // 同じサーバー側の拒否が原因であることが多い）。未取得のときだけ意味がある
+                // 同じサーバー側の拒否が原因であることが多い）。未取得のときだけ意味がある。
+                // news_url と website_url が別ホストだと単なる推測になるため、同じホストの
+                // ときだけこのヒントを見せる（PR #12 レビュー指摘。sameHost は
+                // src/lib/news/url.ts）。別ホスト・お知らせ URL 未設定なら null のままにして、
+                // Badge の「未取得」（中立表示）だけを見せる
                 const blocked =
-                  v.faviconKey === null && v.newsFetchError
+                  v.faviconKey === null && v.newsFetchError && sameHost(v.newsUrl, v.websiteUrl)
                     ? describeFetchError(v.newsFetchError)
                     : null
                 return (

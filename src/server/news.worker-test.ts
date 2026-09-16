@@ -19,16 +19,38 @@ describe('listVendorNewsInput', () => {
     }
   })
 
-  it('limit は 201（表示上限200 + hasMore 判定用の1件）まで許す', () => {
-    expect(listVendorNewsInput.safeParse({ limit: 201 }).success).toBe(true)
+  it('limit は 200（1 か月ぶんの安全上限）まで許す', () => {
+    expect(listVendorNewsInput.safeParse({ limit: 200 }).success).toBe(true)
   })
 
-  it('limit が 201 を超えたら拒否する', () => {
-    expect(listVendorNewsInput.safeParse({ limit: 202 }).success).toBe(false)
+  it('limit が 200 を超えたら拒否する', () => {
+    expect(listVendorNewsInput.safeParse({ limit: 201 }).success).toBe(false)
   })
 
   it('offset が負なら拒否する', () => {
     expect(listVendorNewsInput.safeParse({ offset: -1 }).success).toBe(false)
+  })
+
+  it('from/to（公開日の期間）を渡せる。YYYY-MM-DD 形式で', () => {
+    const result = listVendorNewsInput.safeParse({ from: '2026-09-01', to: '2026-09-30' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toMatchObject({ from: '2026-09-01', to: '2026-09-30' })
+    }
+  })
+
+  it('from/to は省略できる（期間の絞り込み無し）', () => {
+    const result = listVendorNewsInput.safeParse({})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.from).toBeUndefined()
+      expect(result.data.to).toBeUndefined()
+    }
+  })
+
+  it('from/to の形式が違えば拒否する', () => {
+    expect(listVendorNewsInput.safeParse({ from: '2026/09/01' }).success).toBe(false)
+    expect(listVendorNewsInput.safeParse({ to: '9-2026-01' }).success).toBe(false)
   })
 })
 

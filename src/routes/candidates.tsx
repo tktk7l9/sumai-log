@@ -1,4 +1,4 @@
-import { Chip, Group, SegmentedControl, SimpleGrid, Stack, Switch, Title } from '@mantine/core'
+import { Chip, Group, SegmentedControl, SimpleGrid, Stack, Title } from '@mantine/core'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { z } from 'zod'
@@ -17,11 +17,11 @@ import { listCandidates } from '../server/candidates'
 
 const search = z.object({
   tab: z.enum(['vendors', 'properties']).default('vendors'),
-  coversHome: z.boolean().default(false),
   status: z.enum(CANDIDATE_STATUSES).optional(),
 })
 
 type VendorKind = (typeof VENDOR_KINDS)[number]
+type CandidateKind = 'vendors' | 'properties'
 
 /**
  * 候補一覧のカードを工務店とハウスメーカーで分けて表示する（所有者の要望）。
@@ -44,48 +44,43 @@ export const Route = createFileRoute('/candidates')({
 
 function Page() {
   const { vendors, properties, homeAreas } = Route.useLoaderData()
-  const { tab, coversHome, status } = Route.useSearch()
+  const { tab, status } = Route.useSearch()
   const navigate = useNavigate({ from: '/candidates' })
   const [opened, setOpened] = useState(false)
 
-  const shownVendors = vendors.filter(
-    (v) => (!coversHome || v.coversHome) && (!status || v.status === status),
-  )
+  const shownVendors = vendors.filter((v) => !status || v.status === status)
   const shownProperties = properties.filter((p) => !status || p.status === status)
   const vendorGroups = VENDOR_GROUPS.map((g) => ({
     label: g.label,
     vendors: shownVendors.filter((v) => g.match(v.kind)),
   })).filter((g) => g.vendors.length > 0)
 
+  // マンション（物件）が 1 件も無ければ戸建て/マンションの切替タブ自体を出さない
+  // （所有者の要望）。?tab=properties を直接開いた場合はそのまま尊重し、下の一覧・
+  // 追加ドロワーの初期選択は tab の値をそのまま使う（タブが無いだけで動作は変えない）
+  const showTabs = properties.length > 0
+
   return (
     <PageShell title="候補" fab>
       <Stack gap="md">
-        <SegmentedControl
-          fullWidth
-          aria-label="表示の切替"
-          value={tab}
-          onChange={(v) =>
-            navigate({
-              search: (s) => ({ ...s, tab: v as 'vendors' | 'properties' }),
-              replace: true,
-            })
-          }
-          data={[
-            { value: 'vendors', label: `戸建て業者 ${vendors.length}` },
-            { value: 'properties', label: `マンション ${properties.length}` },
-          ]}
-        />
+        {showTabs ? (
+          <SegmentedControl
+            fullWidth
+            aria-label="表示の切替"
+            value={tab}
+            onChange={(v) =>
+              navigate({
+                search: (s) => ({ ...s, tab: v as CandidateKind }),
+                replace: true,
+              })
+            }
+            data={[
+              { value: 'vendors', label: `戸建て ${vendors.length}` },
+              { value: 'properties', label: `マンション ${properties.length}` },
+            ]}
+          />
+        ) : null}
         <Group gap="xs">
-          {tab === 'vendors' ? (
-            <Switch
-              label="建築予定地が施工エリア内"
-              checked={coversHome}
-              disabled={homeAreas.length === 0}
-              onChange={(e) =>
-                navigate({ search: (s) => ({ ...s, coversHome: e.currentTarget.checked }) })
-              }
-            />
-          ) : null}
           <Chip.Group
             value={status ?? null}
             onChange={(v) =>
@@ -132,34 +127,77 @@ function Page() {
         )}
       </Stack>
 
-      <Fab
-        label={tab === 'vendors' ? '業者を追加' : '物件を追加'}
-        onClick={() => setOpened(true)}
-      />
-      <FormDrawer
-        opened={opened}
-        onClose={() => setOpened(false)}
-        title={tab === 'vendors' ? '業者を追加' : '物件を追加'}
-      >
-        {tab === 'vendors' ? (
-          <VendorForm
-            vendor={null}
-            homeAreas={homeAreas}
-            onSaved={(id) => {
-              setOpened(false)
-              navigate({ to: '/candidates/vendors/$id', params: { id } })
-            }}
-          />
-        ) : (
-          <PropertyForm
-            property={null}
-            onSaved={(id) => {
-              setOpened(false)
-              navigate({ to: '/candidates/properties/$id', params: { id } })
-            }}
-          />
-        )}
+      <Fab label="追加" onClick={() => setOpened(true)} />
+      <FormDrawer opened={opened} onClose={() => setOpened(false)} title="追加">
+        <CandidateAddForm
+          initialKind={tab}
+          homeAreas={homeAreas}
+          onSaved={(kind, id) => {
+            setOpened(false)
+            if (kind === 'vendors') navigate({ to: '/candidates/vendors/$id', params: { id } })
+            else navigate({ to: '/candidates/properties/$id', params: { id } })
+          }}
+        />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+/**
+ * 「追加」ドロワーの中身。上に戸建て（業者）/マンション（物件）の SegmentedControl を置き、
+ * 下にどちらかのフォームを出す（所有者の要望: 「業者を追加」「物件を追加」を「追加」に
+ * 統一し、フォーム側で種別を選べるようにする）。切替は `key` でフォームを丸ごと作り直す
+ * ことで「もう一方の入力状態をリセットする」を素直に満たす。入力中に切り替えようとしたら
+ * （dirty のときだけ）確認を挟む。dirty かどうかは表示中のフォーム（VendorForm /
+ * PropertyForm）が `onDirtyChange` で都度教えてくれる。
+ */
+function CandidateAddForm({
+  initialKind,
+  homeAreas,
+  onSaved,
+}: {
+  initialKind: CandidateKind
+  homeAreas: string[]
+  onSaved: (kind: CandidateKind, id: string) => void
+}) {
+  const [kind, setKind] = useState<CandidateKind>(initialKind)
+  const [dirty, setDirty] = useState(false)
+
+  function handleKindChange(next: string) {
+    if (next === kind) return
+    if (dirty && !window.confirm('入力中の内容は破棄されます。切り替えますか？')) return
+    setKind(next as CandidateKind)
+    setDirty(false)
+  }
+
+  return (
+    <Stack gap="md">
+      <SegmentedControl
+        fullWidth
+        aria-label="追加する種別"
+        value={kind}
+        onChange={handleKindChange}
+        data={[
+          { value: 'vendors', label: '戸建て（業者）' },
+          { value: 'properties', label: 'マンション（物件）' },
+        ]}
+      />
+      {kind === 'vendors' ? (
+        <VendorForm
+          key="vendor"
+          vendor={null}
+          homeAreas={homeAreas}
+          onSaved={(id) => onSaved('vendors', id)}
+          onDirtyChange={setDirty}
+        />
+      ) : (
+        <PropertyForm
+          key="property"
+          property={null}
+          onSaved={(id) => onSaved('properties', id)}
+          onDirtyChange={setDirty}
+        />
+      )}
+    </Stack>
   )
 }
