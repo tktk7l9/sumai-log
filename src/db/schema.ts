@@ -91,7 +91,8 @@ export const vendors = sqliteTable(
      * サムネ（-thumb.jpg）は同じ vendorId から決定的に決まるので別列は持たない */
     representativePhotoKey: text('representative_photo_key'),
     /** サイトのファビコン。R2 キーは vendors/{id}/favicon.<ext>（vendorFaviconKey）。
-     * 拡張子がサイトごとに変わるため（png/ico/svg/jpg/webp）、鍵そのものを保持する */
+     * 拡張子がサイトごとに変わるため（png/ico/jpg/webp。SVG は扱わない理由は
+     * src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照）、鍵そのものを保持する */
     faviconKey: text('favicon_key'),
     createdBy: createdBy(),
     ...timestamps,

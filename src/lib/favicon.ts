@@ -59,6 +59,10 @@ function dedupe(urls: string[]): string[] {
 
 type Candidate = { href: string; kind: 'icon' | 'apple-touch'; size: number }
 
+/** 宣言された候補（favicon.ico の保険を除く）を優先度順に残す最大件数。広告テンプレート等が
+ * `<link rel="icon">` を大量に並べても、1 業者の保存に対する外向き fetch を有限に抑える。 */
+const MAX_DECLARED_CANDIDATES = 5
+
 /**
  * `pageUrl` の HTML から favicon の候補 URL を、優先度の高い順に並べて返す。
  * 並び: rel="icon"/"shortcut icon" を宣言サイズの大きい順（sizes="any" は最優先）
@@ -67,6 +71,8 @@ type Candidate = { href: string; kind: 'icon' | 'apple-touch'; size: number }
  * `data:` URL・`.svg` の href は候補にしない（SVG は画像として受け付けない。上の
  * FaviconExt/FaviconMimeType のコメント参照。無駄な fetch もしない）。同じ URL が
  * 重複したら最初の出現だけ残す。宣言が全部 .svg だった場合も favicon.ico の保険は残る。
+ * 宣言された候補は優先度順に上位 `MAX_DECLARED_CANDIDATES`（5）件までに切り、
+ * favicon.ico の保険を足して最大 6 件を返す（呼び出し側の外向き fetch 数の上限のため）。
  *
  * `pageUrl` が URL として読めない、または HTML が MAX_HTML_LENGTH を超える場合は
  * 空配列を返す（呼び出し側は候補が尽きたのと同じ扱いになる）。
@@ -111,7 +117,9 @@ export function pickFaviconCandidates(html: string, pageUrl: string): string[] {
   const icons = candidates.filter((c) => c.kind === 'icon').sort(bySize)
   const appleTouch = candidates.filter((c) => c.kind === 'apple-touch').sort(bySize)
 
-  return dedupe([...icons, ...appleTouch].map((c) => c.href).concat(fallback))
+  const declared = dedupe([...icons, ...appleTouch].map((c) => c.href))
+  const capped = declared.slice(0, MAX_DECLARED_CANDIDATES)
+  return dedupe([...capped, fallback])
 }
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]

@@ -288,9 +288,9 @@ test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL に
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
-  // social_urls の直後（news_url, news_source, representative_photo_key の列位置）に
-  // NULL, NULL, NULL が並ぶ（representative_photo_key は representativePhotoReady 未指定なので NULL）
-  assert.match(vendorBStmt, /'\[\]', NULL, NULL, NULL, 'owner@example\.com'/)
+  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ。
+  // representative_photo_key は representativePhotoReady に無いので列ごと出ない（Finding 3 参照）
+  assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
 })
 
 test('buildStatements: newsSource に html-list を指定できる', () => {
@@ -404,6 +404,36 @@ test('buildStatements: representativePhotoReady に無い vendor は representat
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
   assert.doesNotMatch(vendorAStmt, /representative-display\.jpg/)
+})
+
+// Finding 3 の回帰防止: representativePhoto を持たない（= representativePhotoReady に無い）
+// vendor を再取り込みしても、フォーム経由で既に付いている representative_photo_key を
+// NULL に巻き戻してはいけない（favicon_key と同じ「seed が触らない列」の扱い）。
+// upsertStatement は row に無い列を UPDATE SET にも出さないので、INSERT 文そのものに
+// `representative_photo_key` という語が一切現れないことを確認すれば「列ごと省略されている
+// （= 値を明示的に null で上書きしていない）」ことを厳密に検証できる。
+test('buildStatements: representativePhoto が無い vendor の INSERT 文に representative_photo_key 列自体が出ない（再取込で列を NULL に巻き戻さない）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.doesNotMatch(vendorAStmt, /representative_photo_key/)
+  assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
+})
+
+test('buildStatements: representativePhotoReady に slug が入っている vendor だけ、その INSERT/UPDATE 文に representative_photo_key 列が出る', () => {
+  const seed = fictionalSeed()
+  const { sql } = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    representativePhotoReady: new Set(['vendor-a']),
+  })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorAStmt, /representative_photo_key = excluded\.representative_photo_key/)
+  assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {

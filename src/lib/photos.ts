@@ -46,12 +46,18 @@ export function vendorImageKeys(vendorId: string): { displayKey: string; thumbKe
   }
 }
 
-/** 業者サイトのファビコン。拡張子はサイトごとに変わる（png/ico/svg/jpg/webp） */
+/** 業者サイトのファビコン。拡張子はサイトごとに変わる（png/ico/jpg/webp。SVG を含めない
+ * 理由は src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照） */
 export function vendorFaviconKey(vendorId: string, ext: FaviconExt): string {
   return `vendors/${vendorId}/favicon.${ext}`
 }
 
 export function isManagedPhotoKey(key: string): boolean {
+  // 以下の正規表現は multiline フラグを付けていないので $ は「入力の末尾」にしか
+  // マッチせず、末尾に改行が付いた文字列は本来どれも false になるはずだが、
+  // 鍵の許可判定という性質上「$ が改行の直前にもマッチしうる」他の正規表現実装との
+  // 混同を避けるため、改行を含む時点で明示的に弾く（意図を自己文書化する防御）。
+  if (key.includes('\n')) return false
   return (
     MANAGED_PHOTO.test(key) ||
     MANAGED_VENDOR_REPRESENTATIVE.test(key) ||

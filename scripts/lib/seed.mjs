@@ -241,10 +241,16 @@ export function buildStatements(seed, opts) {
         news_url: v.newsUrl ?? null,
         news_source: v.newsSource ?? null,
         // representative_photo_key は src/lib/photos.ts の vendorImageKeys と同じ形
-        // （vendorId だけから決まる）。sips 変換（→ R2 アップロード）が済んだ業者だけ立てる
-        representative_photo_key: representativePhotoReady.has(v.slug)
-          ? `vendors/${vendorId}/representative-display.jpg`
-          : null,
+        // （vendorId だけから決まる）。sips 変換（→ R2 アップロード）が済んだ業者だけ列自体を
+        // 出す。favicon_key と同じ理由でキーごと省略する（値を null にするのではない）:
+        // upsertStatement は row に含まれる列だけを UPDATE SET に載せるため、ここで列を
+        // 省略すれば再取り込みのたびに ON CONFLICT DO UPDATE が走っても既存値は変わらない。
+        // 値を null にしてしまうと（favicon_key と違って）常に列が出るぶん、seed に
+        // representativePhoto が無いだけで、フォームからアップロード済みの写真キーが
+        // NULL に巻き戻ってしまう（R2 の実体は残ったまま UI から見えなくなる）。
+        ...(representativePhotoReady.has(v.slug)
+          ? { representative_photo_key: `vendors/${vendorId}/representative-display.jpg` }
+          : {}),
         created_by: actorEmail,
         created_at: now,
         updated_at: now,

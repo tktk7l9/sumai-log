@@ -54,6 +54,11 @@ describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）',
     expect(isManagedPhotoKey(`vendors/${V}/representative-original.jpg`)).toBe(false)
     expect(isManagedPhotoKey(`vendors/../${V}/favicon.png`)).toBe(false)
   })
+
+  it('末尾に改行が付いたキーは管理対象とみなさない', () => {
+    expect(isManagedPhotoKey(`vendors/${V}/favicon.png\n`)).toBe(false)
+    expect(isManagedPhotoKey(`vendors/${V}/favicon.png\nDROP TABLE vendors;`)).toBe(false)
+  })
 })
 
 describe('photoUrl', () => {

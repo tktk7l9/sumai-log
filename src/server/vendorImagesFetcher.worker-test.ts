@@ -43,6 +43,28 @@ function fakeFetch(build: (url: string) => Response | null): typeof fetch {
   }) as typeof fetch
 }
 
+/**
+ * `content-length` ヘッダを付けずに合計 `totalBytes` を小分けのチャンクで流す Response を作る。
+ * readCapped（vendorImagesFetcher.ts）は content-length が無いとき、チャンクを読みながら
+ * 合計を数えて上限超過時点で打ち切る。相手が Content-Length を出さない／詐称する場合の
+ * 防御はこの経路でしか検証できない（content-length ヘッダ経由の上限テストとは別物）。
+ */
+function streamedResponse(totalBytes: number, chunkSize = 64 * 1024): Response {
+  let sent = 0
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent >= totalBytes) {
+        controller.close()
+        return
+      }
+      const size = Math.min(chunkSize, totalBytes - sent)
+      controller.enqueue(new Uint8Array(size))
+      sent += size
+    },
+  })
+  return new Response(stream, { status: 200 })
+}
+
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const ICO_BYTES = new Uint8Array([0x00, 0x00, 0x01, 0x00, 1, 0])
 const HTML_WITH_ICON = '<html><head><link rel="icon" href="/icon.png"></head></html>'
@@ -256,6 +278,100 @@ describe('fetchFaviconForVendor', () => {
     )
     expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.png` })
   })
+
+  it('候補が 6 件を超える HTML でも外向き fetch は HTML 1 回 + 候補最大 6 回 = 最大 7 回に収まる', async () => {
+    const vendorId = await makeVendor('候補大量業者')
+    const { bucket } = fakeBucket()
+    // rel=icon を 10 個宣言（全部 sizes 無し = 同順位。favicon.ico の保険を含めても
+    // pickFaviconCandidates は上位 5 件 + 保険の最大 6 件までしか返さない）
+    const htmlWithManyIcons = Array.from(
+      { length: 10 },
+      (_, i) => `<link rel="icon" href="/icon-${i}.png">`,
+    ).join('')
+    let fetchCount = 0
+    let requestedCandidateUrls: string[] = []
+    const fetchImpl = (async (url: string | URL) => {
+      fetchCount += 1
+      const u = String(url)
+      if (u === 'https://vendor.example.com/') {
+        return new Response(htmlWithManyIcons, { status: 200 })
+      }
+      requestedCandidateUrls.push(u)
+      // 候補・保険とも全部「画像として使えない」ことにして、最後まで（=上限まで）試させる
+      return new Response('not an image', { status: 200 })
+    }) as typeof fetch
+
+    const result = await fetchFaviconForVendor(
+      db,
+      vendorId,
+      'https://vendor.example.com/',
+      fetchImpl,
+      bucket,
+    )
+    expect(result).toEqual({ ok: false, error: 'アイコンが見つかりませんでした' })
+    // HTML 1 回 + 候補 6 回（宣言 5 + favicon.ico の保険）= 最大 7 回
+    expect(fetchCount).toBeLessThanOrEqual(7)
+    expect(requestedCandidateUrls.length).toBeLessThanOrEqual(6)
+    // 10 個宣言したうち、後半（icon-5〜icon-9）は上限に切られて一度も fetch されない
+    expect(requestedCandidateUrls).not.toContain('https://vendor.example.com/icon-9.png')
+  })
+
+  it('HTML 取得が content-length 無しで 1MB を超えるストリームなら打ち切り、favicon.ico の保険にフォールバックする', async () => {
+    const vendorId = await makeVendor('HTML上限ストリーム業者')
+    const { bucket, objects } = fakeBucket()
+    let declaredCandidateFetched = false
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      if (u === 'https://vendor.example.com/') {
+        // HTML_MAX_BYTES（1_000_000）を超える量を content-length 無しで流す。
+        // 中身がどんな HTML であっても、打ち切られれば html='' 扱いになり、
+        // 宣言された候補（後述の icon.png）は一度も fetch されないはず
+        return streamedResponse(1_000_001)
+      }
+      if (u === 'https://vendor.example.com/favicon.ico') {
+        return new Response(ICO_BYTES, { status: 200 })
+      }
+      declaredCandidateFetched = true
+      return new Response('', { status: 404 })
+    }) as typeof fetch
+
+    const result = await fetchFaviconForVendor(
+      db,
+      vendorId,
+      'https://vendor.example.com/',
+      fetchImpl,
+      bucket,
+    )
+    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
+    expect(objects.get(`vendors/${vendorId}/favicon.ico`)?.contentType).toBe('image/x-icon')
+    expect(declaredCandidateFetched).toBe(false)
+  })
+
+  it('favicon 候補が content-length 無しで 512KB を超えるストリームなら破棄し、次の候補（保険）を試す', async () => {
+    const vendorId = await makeVendor('favicon上限ストリーム業者')
+    const { bucket } = fakeBucket()
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      if (u === 'https://vendor.example.com/') return new Response(HTML_WITH_ICON, { status: 200 })
+      if (u === 'https://vendor.example.com/icon.png') {
+        // ICON_MAX_BYTES（512_000）を超える量を content-length 無しで流す
+        return streamedResponse(512_001)
+      }
+      if (u === 'https://vendor.example.com/favicon.ico') {
+        return new Response(ICO_BYTES, { status: 200 })
+      }
+      return new Response('', { status: 404 })
+    }) as typeof fetch
+
+    const result = await fetchFaviconForVendor(
+      db,
+      vendorId,
+      'https://vendor.example.com/',
+      fetchImpl,
+      bucket,
+    )
+    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
+  })
 })
 
 describe('refreshAllVendorFavicons', () => {
@@ -383,6 +499,27 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     expect(result).toEqual({ ok: false, error: 'URL が許可されていません' })
   })
 
+  it('業者が存在しない id には fetch も R2 put も行わず失敗を返す（孤児オブジェクト対策）', async () => {
+    const { bucket, put } = fakeBucket()
+    const nonExistentId = '99999999-9999-9999-9999-999999999999'
+    let fetchCalled = false
+    const fetchImpl = (async () => {
+      fetchCalled = true
+      return new Response(PNG_BYTES, { status: 200 })
+    }) as typeof fetch
+
+    const result = await importRepresentativePhotoFromUrlCore(
+      db,
+      nonExistentId,
+      'https://vendor.example.com/rep.png',
+      fetchImpl,
+      bucket,
+    )
+    expect(result).toEqual({ ok: false, error: '業者が見つかりません' })
+    expect(fetchCalled).toBe(false)
+    expect(put).not.toHaveBeenCalled()
+  })
+
   it('画像として sniff できなければ失敗を返す', async () => {
     const vendorId = await makeVendor('非画像業者')
     const { bucket } = fakeBucket()
@@ -429,6 +566,30 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     })
   })
 
+  it('content-length 無しで 5MB を超えるストリームは打ち切って失敗を返す（詐称・無申告への防御）', async () => {
+    const vendorId = await makeVendor('巨大画像ストリーム業者')
+    const { bucket } = fakeBucket()
+    const fetchImpl = (async (url: string | URL) => {
+      if (String(url) === 'https://vendor.example.com/huge-stream.jpg') {
+        // MAX_IMPORTED_PHOTO_BYTES（5MB）を超える量を content-length 無しで流す
+        return streamedResponse(5 * 1024 * 1024 + 1)
+      }
+      return new Response('', { status: 404 })
+    }) as typeof fetch
+
+    const result = await importRepresentativePhotoFromUrlCore(
+      db,
+      vendorId,
+      'https://vendor.example.com/huge-stream.jpg',
+      fetchImpl,
+      bucket,
+    )
+    expect(result).toEqual({
+      ok: false,
+      error: '画像を取得できませんでした（取得失敗、または上限 5MB 超過）',
+    })
+  })
+
   it('fetch 自体が例外を投げても失敗を返す（投げ直さない）', async () => {
     const vendorId = await makeVendor('例外業者2')
     const { bucket } = fakeBucket()
@@ -457,8 +618,9 @@ describe('deleteRepresentativePhotoObjects', () => {
     })
     const { bucket, deletedKeys } = fakeBucket()
 
-    await deleteRepresentativePhotoObjects(db, vendorId, bucket)
+    const result = await deleteRepresentativePhotoObjects(db, vendorId, bucket)
 
+    expect(result).toEqual({ ok: true })
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(row.representativePhotoKey).toBeNull()
     expect(deletedKeys).toEqual(
@@ -467,5 +629,15 @@ describe('deleteRepresentativePhotoObjects', () => {
         `vendors/${vendorId}/representative-thumb.jpg`,
       ]),
     )
+  })
+
+  it('業者が存在しない id には何もしない（R2 delete を呼ばずに失敗を返す）', async () => {
+    const { bucket, del } = fakeBucket()
+    const nonExistentId = '99999999-9999-9999-9999-999999999999'
+
+    const result = await deleteRepresentativePhotoObjects(db, nonExistentId, bucket)
+
+    expect(result).toEqual({ ok: false, error: '業者が見つかりません' })
+    expect(del).not.toHaveBeenCalled()
   })
 })

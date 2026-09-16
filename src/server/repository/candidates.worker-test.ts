@@ -11,6 +11,7 @@ import {
   setVendorRepresentativePhotoKey,
   upsertProperty,
   upsertVendor,
+  vendorExists,
 } from './candidates'
 import { upsertPlace } from './places'
 import { actor, db, reset } from './test-helpers'
@@ -148,6 +149,19 @@ describe('vendors', () => {
       websiteUrl: 'https://vendor.example.com/',
       faviconKey: null,
     })
+  })
+
+  it('vendorExists は実在する id だけ true を返す（R2 write/delete の前段ガード用）', async () => {
+    const id = await upsertVendor(
+      db,
+      { name: '存在確認業者', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    expect(await vendorExists(db, id)).toBe(true)
+    expect(await vendorExists(db, '99999999-9999-9999-9999-999999999999')).toBe(false)
+
+    await deleteVendorCascade(db, id)
+    expect(await vendorExists(db, id)).toBe(false)
   })
 })
 

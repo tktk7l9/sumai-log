@@ -40,7 +40,4 @@ export const importRepresentativePhotoFromUrl = createServerFn({ method: 'POST' 
 /** 業者フォームの「削除」（代表者の顔写真） */
 export const deleteRepresentativePhoto = createServerFn({ method: 'POST' })
   .validator(vendorIdInput)
-  .handler(async ({ data }) => {
-    await deleteRepresentativePhotoObjects(getDb(), data.vendorId)
-    return { ok: true as const }
-  })
+  .handler(async ({ data }) => deleteRepresentativePhotoObjects(getDb(), data.vendorId))

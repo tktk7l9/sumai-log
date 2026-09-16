@@ -23,6 +23,7 @@ import {
   listVendorsWithWebsite,
   setVendorFaviconKey,
   setVendorRepresentativePhotoKey,
+  vendorExists,
 } from './repository'
 import { fetchWithGuardedRedirects } from './safeFetch'
 import { deletePhotoObjects, getPhotosBucket } from './storage'
@@ -36,6 +37,10 @@ const USER_AGENT = 'sumai-log/1.0'
 const ERROR_MESSAGE_MAX = 200
 const NO_ICON_FOUND_ERROR = 'アイコンが見つかりませんでした'
 const NOT_AN_IMAGE_ERROR = '画像ファイルではありません（JPEG/PNG/WebP のみ）'
+const VENDOR_NOT_FOUND_ERROR = '業者が見つかりません'
+/** pickFaviconCandidates が返す配列は最大 6 件（宣言 5 + favicon.ico の保険）だが、
+ * 呼び出し側でも明示的に切って外向き fetch 数（HTML 1 + アイコン最大 6 = 最大 7）を保証する。 */
+const MAX_FAVICON_CANDIDATES_TO_TRY = 6
 
 function errorMessage(e: unknown): string {
   const message = e instanceof Error ? e.message : '取得に失敗しました'
@@ -134,7 +139,7 @@ export async function fetchFaviconForVendor(
     // （newsFetcher.ts の finalUrl と同じ理由）。取得自体に失敗したら websiteUrl のまま。
     const candidates = pickFaviconCandidates(html, htmlResult?.finalUrl ?? websiteUrl)
 
-    for (const candidateUrl of candidates) {
+    for (const candidateUrl of candidates.slice(0, MAX_FAVICON_CANDIDATES_TO_TRY)) {
       if (!isAllowedRemoteUrl(candidateUrl)) continue
       const iconResult = await fetchCapped(candidateUrl, fetchImpl, ICON_TIMEOUT_MS, ICON_MAX_BYTES)
       if (!iconResult) continue
@@ -204,6 +209,9 @@ export async function importRepresentativePhotoFromUrlCore(
   bucket: R2Bucket = getPhotosBucket(),
 ): Promise<ImportPhotoResult> {
   try {
+    // R2 へ書く前に業者の実在を確認する（存在しない id に書くと孤児オブジェクトが残る。
+    // api.vendor-photos.$vendorId.tsx のアップロード経路と同じ判定）
+    if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
     if (!isAllowedRemoteUrl(url)) return { ok: false, error: 'URL が許可されていません' }
 
     const photoResult = await fetchCapped(
@@ -229,13 +237,24 @@ export async function importRepresentativePhotoFromUrlCore(
   }
 }
 
-/** representative_photo_key を消し、R2 の display/thumb オブジェクトも消す */
+export type DeletePhotoResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * representative_photo_key を消し、R2 の display/thumb オブジェクトも消す。
+ * 業者が実在しない id には何もしない（存在確認は importRepresentativePhotoFromUrlCore と同じ理由）。
+ */
 export async function deleteRepresentativePhotoObjects(
   db: Db,
   vendorId: string,
   bucket: R2Bucket = getPhotosBucket(),
-): Promise<void> {
-  await setVendorRepresentativePhotoKey(db, vendorId, null)
-  const keys = vendorImageKeys(vendorId)
-  await deletePhotoObjects([keys.displayKey, keys.thumbKey], bucket)
+): Promise<DeletePhotoResult> {
+  try {
+    if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
+    await setVendorRepresentativePhotoKey(db, vendorId, null)
+    const keys = vendorImageKeys(vendorId)
+    await deletePhotoObjects([keys.displayKey, keys.thumbKey], bucket)
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) }
+  }
 }
