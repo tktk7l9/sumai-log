@@ -13,11 +13,18 @@ import {
   listEventsBetween,
   listPlacesWithLinks,
   listVisitsWithLinks,
+  reorderPhotoRows,
   upsertVisit,
 } from './repository'
 import { deletePhotoObjects } from './storage'
+import { reorderPhotosInput } from './visits.schema'
 import { dateField, idField, idInput, optionalText } from './zod'
 import { listLinkTargets } from './places'
+
+// reorderPhotosInput は visits.schema.ts から（テストの都合で分離した理由はそちら参照）。
+// 公開する import パス（'./visits' から reorderPhotosInput/ReorderPhotosInput を取れる）は変えない。
+export { reorderPhotosInput }
+export type { ReorderPhotosInput } from './visits.schema'
 
 export const visitInput = z.object({
   id: idField.optional(),
@@ -65,6 +72,15 @@ export const deletePhoto = createServerFn({ method: 'POST' })
     if (row) await deletePhotoObjects([row.displayKey, row.thumbKey])
     return { ok: row !== null }
   })
+
+/** 写真の並び替え。photoIds に指定した順で sortOrder を 0,1,… に振り直す。
+ * その見学記録に属さない id が混ざっていたら何もせず ok: false（CommentThread の
+ * deleteComment と同じパターン） */
+export const reorderPhotos = createServerFn({ method: 'POST' })
+  .validator(reorderPhotosInput)
+  .handler(async ({ data }) => ({
+    ok: await reorderPhotoRows(getDb(), data.visitId, data.photoIds),
+  }))
 
 /** 見学記録フォームの選択肢。予定は直近 180 日 */
 export const visitFormOptions = createServerFn().handler(async () => {

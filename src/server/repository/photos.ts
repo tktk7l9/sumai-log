@@ -55,3 +55,32 @@ export async function photoKeysOfVisit(db: Db, visitId: string): Promise<string[
     .where(eq(photos.visitId, visitId))
   return rows.flatMap((r) => [r.d, r.t])
 }
+
+/**
+ * 並び替え。photoIds はその見学記録の写真 id を新しい順で並べたもの。
+ * 「本当にその visit に属する写真だけか」をここで確認する（UUID を知っていれば
+ * 他人の見学記録の写真の sort_order を書き換えられてしまうのを防ぐ）。
+ * 1 件でも属さない・件数が合わなければ何もせず false を返す。
+ * 更新は db.batch で 1 つのアトミックな単位にする（tags.ts の replaceTags と同じ理由）。
+ */
+export async function reorderPhotoRows(
+  db: Db,
+  visitId: string,
+  photoIds: string[],
+): Promise<boolean> {
+  // 空配列は呼び出し側の zod（min(1)）で通常は弾かれるが、repository 単体で
+  // 呼ばれても db.batch に空配列を渡さないようここでも早く抜ける
+  if (photoIds.length === 0) return false
+  const owned = new Set(
+    (await db.select({ id: photos.id }).from(photos).where(eq(photos.visitId, visitId))).map(
+      (r) => r.id,
+    ),
+  )
+  if (photoIds.length !== owned.size || !photoIds.every((id) => owned.has(id))) return false
+
+  const [first, ...rest] = photoIds.map((id, index) =>
+    db.update(photos).set({ sortOrder: index }).where(eq(photos.id, id)),
+  )
+  await db.batch([first, ...rest])
+  return true
+}

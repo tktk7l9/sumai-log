@@ -15,7 +15,13 @@ import { VisitForm } from '../components/visits/VisitForm'
 import { ATTENDEES_LABEL, type Photo } from '../db/schema'
 import { formatDateWithWeekday } from '../lib/calendar'
 import { listCommentsFor } from '../server/comments'
-import { deletePhoto, deleteVisit, getVisit, visitFormOptions } from '../server/visits'
+import {
+  deletePhoto,
+  deleteVisit,
+  getVisit,
+  reorderPhotos,
+  visitFormOptions,
+} from '../server/visits'
 
 export const Route = createFileRoute('/records_/visits/$id')({
   component: Page,
@@ -43,6 +49,7 @@ function Page() {
   const router = useRouter()
   const removeVisit = useServerFn(deleteVisit)
   const removePhoto = useServerFn(deletePhoto)
+  const reorder = useServerFn(reorderPhotos)
   const [editing, setEditing] = useState(false)
 
   async function handleDeleteVisit() {
@@ -65,6 +72,15 @@ function Page() {
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
     }
+  }
+
+  async function handleReorderPhotos(photoIds: string[]) {
+    const { ok } = await reorder({ data: { visitId: visit.id, photoIds } })
+    if (!ok) {
+      notifications.show({ message: '並び替えを保存できませんでした', color: 'red' })
+      return
+    }
+    await router.invalidate()
   }
 
   return (
@@ -132,7 +148,7 @@ function Page() {
       <Stack gap="xs">
         <Title order={2}>写真</Title>
         <PhotoUploader visitId={visit.id} onUploaded={() => router.invalidate()} />
-        <PhotoGrid photos={photos} onDelete={handleDeletePhoto} />
+        <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onReorder={handleReorderPhotos} />
       </Stack>
 
       <CommentThread
