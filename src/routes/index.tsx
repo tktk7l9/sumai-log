@@ -37,7 +37,7 @@ function Home() {
     Route.useLoaderData()
   return (
     // 節と節の間は PageShell の Stack（24px）が引き受ける。ここで入れ子にしない
-    <PageShell title="住まいログ" description="二人の家探しの記録" inlineDescription>
+    <PageShell>
       <UpcomingEvents events={upcoming} />
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} />
       <HomeNews items={news} />
