@@ -118,18 +118,25 @@ export async function setVendorRepresentativePhotoKey(
  * 一律拒否するサーバー）でファビコンの自動取得も失敗していることが多いため、設定画面の
  * カードで `describeFetchError`（src/lib/news/errors.ts）を使い回して同じ文言を出すのに使う
  * （ファビコン取得自体は成否だけを返し、HTTP ステータスつきの理由を保存する列を別途
- * 持っていないため、業者のお知らせの取得結果を手がかりにする）。
+ * 持っていないため、業者のお知らせの取得結果を手がかりにする）。ただし news_url と
+ * website_url が別ホストのこともあるため `newsUrl` も返す。呼び出し側（settings.tsx）は
+ * `sameHost(newsUrl, websiteUrl)`（src/lib/news/url.ts）が true のときだけこのヒントを
+ * 見せる（別ホストなら推測に過ぎないという PR #12 レビュー指摘への対応）。
  */
 export async function listVendorsWithWebsite(
   db: Db,
 ): Promise<
-  Pick<Vendor, 'id' | 'name' | 'websiteUrl' | 'faviconKey' | 'faviconSource' | 'newsFetchError'>[]
+  Pick<
+    Vendor,
+    'id' | 'name' | 'websiteUrl' | 'newsUrl' | 'faviconKey' | 'faviconSource' | 'newsFetchError'
+  >[]
 > {
   return db
     .select({
       id: vendors.id,
       name: vendors.name,
       websiteUrl: vendors.websiteUrl,
+      newsUrl: vendors.newsUrl,
       faviconKey: vendors.faviconKey,
       faviconSource: vendors.faviconSource,
       newsFetchError: vendors.newsFetchError,

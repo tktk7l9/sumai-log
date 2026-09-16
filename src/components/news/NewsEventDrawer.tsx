@@ -5,10 +5,11 @@ import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
 
 /**
- * カレンダーで情報レイヤーのイベントをタップしたときに開くドロワーの中身
- * （src/routes/calendar.tsx の FormDrawer に載せる）。「行く」で自分の予定に
- * 変換すると（router.invalidate 後、同じ news をこの props に渡し直せば）
- * plannedEventId が付き、ボタンが自動的に「予定を見る」に変わる。
+ * お知らせをタップしたときに開くドロワーの中身。カレンダーの情報レイヤー
+ * （src/routes/calendar.tsx の FormDrawer）と、お知らせのアジェンダ表示
+ * （src/components/news/NewsAgenda.tsx の FormDrawer）の両方で使う共通部品。
+ * 「行く」で自分の予定に変換すると（router.invalidate 後、同じ news をこの props に
+ * 渡し直せば）plannedEventId が付き、ボタンが自動的に「予定を見る」に変わる。
  */
 export function NewsEventDrawer({
   news,
