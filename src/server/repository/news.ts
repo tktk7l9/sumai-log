@@ -83,6 +83,9 @@ export async function listNewsEventsBetween(
   return rows.map((r) => ({ ...r.news, vendorName: r.vendorName }))
 }
 
+/** カレンダーの情報レイヤー・/news・ホームのブロックで共通に使う「業者名付きお知らせ」の型 */
+export type NewsEventRow = Awaited<ReturnType<typeof listNewsEventsBetween>>[number]
+
 /** newsUrl が設定されている業者（= 取得対象）だけを返す。設定ページの一覧・cron の対象探索用 */
 export async function listNewsSources(
   db: Db,
