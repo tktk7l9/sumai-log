@@ -9,6 +9,8 @@
  * Date.now() は使わない（呼び出し時刻に依存しない純粋関数にするため）。
  */
 
+import { formatDateSlash } from './calendar'
+
 const DATE_TIME_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/
 
@@ -45,7 +47,8 @@ function pad(n: number): string {
 }
 
 /**
- * JST の 'YYYY-MM-DD HH:mm'（withTime: false なら 'YYYY-MM-DD'）に直す。
+ * JST の 'YYYY/MM/DD HH:mm'（withTime: false なら 'YYYY/MM/DD'）に直す。日付の表示は
+ * 全て `/` 区切りに統一する（所有者の要望。src/lib/calendar.ts の formatDateSlash）。
  * 解釈できない文字列はそのまま返す。
  */
 export function formatJst(value: string, opts?: { withTime?: boolean }): string {
@@ -53,14 +56,23 @@ export function formatJst(value: string, opts?: { withTime?: boolean }): string 
   if (utcMs === null) return value
 
   const jst = new Date(utcMs + 9 * 60 * 60 * 1000)
-  const datePart = `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}`
+  const datePart = formatDateSlash(
+    `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}`,
+  )
   if (opts?.withTime === false) return datePart
   return `${datePart} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
 }
 
-/** JST の 'YYYY-MM-DD' キー。アプリ内の呼び出し元は今は無い。lib の公開 API として維持 */
+/**
+ * JST の 'YYYY-MM-DD' キー（ハイフン区切りのまま。表示用の formatJst とは別で、こちらは
+ * 「キー」なので `/` 区切りにしない）。アプリ内の呼び出し元は今は無い。lib の公開 API として維持
+ */
 export function toJstDateKey(value: string): string {
-  return formatJst(value, { withTime: false })
+  const utcMs = parseToUtcMs(value)
+  if (utcMs === null) return value
+
+  const jst = new Date(utcMs + 9 * 60 * 60 * 1000)
+  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}`
 }
 
 /** JST の 'HH:mm' だけを返す。解釈できない文字列は空文字（見出しに時刻が要らない場面向け） */

@@ -18,6 +18,7 @@ export async function reset() {
     'videos',
     'comments',
     'tags',
+    'sources',
     'places',
     'vendor_news',
     'vendors',

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { findAffiliation, resolveAffiliations } from './affiliations'
 
-// AFFILIATIONS は id 2 件だけの固定データ（実在の団体名・URL は仕様上コードに残す約束）。
+// AFFILIATIONS は id 3 件だけの固定データ（実在の団体名・URL は仕様上コードに残す約束）。
 // 「未知の id」の検証だけ架空の値を使う。
 
 describe('findAffiliation', () => {

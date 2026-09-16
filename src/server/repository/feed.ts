@@ -10,6 +10,7 @@ import {
   photos,
   places,
   properties,
+  sources,
   vendors,
   videos,
   visits,
@@ -141,6 +142,22 @@ export async function recentVideos(db: Db, n: number): Promise<FeedItem[]> {
     at: v.updatedAt,
     by: v.createdBy,
     href: { to: '/records/videos/$id', params: { id: v.id } },
+  }))
+}
+
+/** href はどれも一覧ページ（/sources）を指す。情報源に詳細ページが無いため、
+ * href.params は付けない（recentVendors 等と違い id ページへは飛ばせない） */
+export async function recentSources(db: Db, n: number): Promise<FeedItem[]> {
+  const rows = await db.select().from(sources).orderBy(desc(sources.updatedAt)).limit(n)
+  return rows.map((s) => ({
+    kind: 'source',
+    id: s.id,
+    title: s.name,
+    subtitle: s.handle ?? undefined,
+    action: actionFor(s.createdAt, s.updatedAt),
+    at: s.updatedAt,
+    by: s.createdBy,
+    href: { to: '/sources' },
   }))
 }
 

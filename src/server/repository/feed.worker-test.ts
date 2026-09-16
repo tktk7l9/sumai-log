@@ -11,11 +11,13 @@ import {
   recentPhotos,
   recentPlaces,
   recentProperties,
+  recentSources,
   recentVendors,
   recentVideos,
   recentVisits,
 } from './feed'
 import { upsertPlace } from './places'
+import { upsertSource } from './sources'
 import { db, reset } from './test-helpers'
 import { upsertVideo } from './videos'
 
@@ -480,5 +482,58 @@ describe('recentProperties', () => {
       subtitle: '東京都渋谷区',
       href: { to: '/candidates/properties/$id', params: { id } },
     })
+  })
+})
+
+describe('recentSources', () => {
+  it('情報源は名前を題名に、handle を副題に、一覧（/sources）への href を持つ', async () => {
+    const id = await upsertSource(
+      db,
+      {
+        kind: 'youtube',
+        name: 'テストチャンネル',
+        url: 'https://www.youtube.com/@example-house',
+        handle: '@example-house',
+        channelId: null,
+        genre: 'knowledge',
+        description: null,
+        avatarUrl: null,
+        vendorId: null,
+        affiliation: null,
+        sortOrder: 0,
+      },
+      actorA,
+    )
+    const [item] = await recentSources(db, 10)
+    expect(item).toMatchObject({
+      kind: 'source',
+      id,
+      title: 'テストチャンネル',
+      subtitle: '@example-house',
+      by: actorA,
+      href: { to: '/sources' },
+    })
+  })
+
+  it('handle が無ければ subtitle は undefined', async () => {
+    await upsertSource(
+      db,
+      {
+        kind: 'site',
+        name: 'テストサイト',
+        url: 'https://example.com',
+        handle: null,
+        channelId: null,
+        genre: 'knowledge',
+        description: null,
+        avatarUrl: null,
+        vendorId: null,
+        affiliation: null,
+        sortOrder: 0,
+      },
+      actorA,
+    )
+    const [item] = await recentSources(db, 10)
+    expect(item.subtitle).toBeUndefined()
   })
 })

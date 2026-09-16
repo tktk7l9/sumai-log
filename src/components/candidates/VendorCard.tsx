@@ -1,4 +1,4 @@
-import { Badge, Card, Group, Stack, Text } from '@mantine/core'
+import { Avatar, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
 
@@ -6,6 +6,7 @@ import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { resolveAffiliations } from '../../lib/affiliations'
 import { formatTsubo } from '../../lib/format'
 import { termIdForMetric } from '../../lib/glossary'
+import { photoUrl, representativeThumbKeyFromDisplayKey } from '../../lib/photos'
 import { StatusBadge } from './StatusBadge'
 import { VendorLinks } from './VendorLinks'
 
@@ -31,9 +32,20 @@ export function VendorCard({
             onClick={(e) => e.stopPropagation()}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
-            <Text component="span" fw={700} lineClamp={2} lh={1.4}>
-              {vendor.name}
-            </Text>
+            <Group gap={6} wrap="nowrap" align="center">
+              <Avatar
+                src={vendor.faviconKey ? photoUrl(vendor.faviconKey) : null}
+                size={20}
+                radius="xs"
+                color="gray"
+                alt=""
+              >
+                {vendor.name.charAt(0)}
+              </Avatar>
+              <Text component="span" fw={700} lineClamp={2} lh={1.4}>
+                {vendor.name}
+              </Text>
+            </Group>
           </Link>
           <StatusBadge status={vendor.status} />
         </Group>
@@ -46,9 +58,19 @@ export function VendorCard({
           </Group>
         ) : null}
         {vendor.kind === 'koumuten' && vendor.representative ? (
-          <Text size="sm" c="dimmed">
-            代表: {vendor.representative}
-          </Text>
+          <Group gap={6} wrap="nowrap" align="center">
+            {vendor.representativePhotoKey ? (
+              <Avatar
+                src={photoUrl(representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey))}
+                size={28}
+                radius="xl"
+                alt=""
+              />
+            ) : null}
+            <Text size="sm" c="dimmed">
+              代表: {vendor.representative}
+            </Text>
+          </Group>
         ) : null}
         <Group gap="xs">
           <Badge variant="default">{VENDOR_KIND_LABEL[vendor.kind]}</Badge>
@@ -120,18 +142,27 @@ export function VendorCard({
             </Group>
           ) : null}
         </Group>
-        <Group justify="space-between" align="center" wrap="nowrap">
-          <Group gap="md" c="dimmed">
-            <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
-            {vendor.placeCount > 0 ? (
-              <Group gap={4}>
-                <MapPin size={14} aria-hidden />
-                <Text size="sm">{vendor.placeCount} 箇所</Text>
-              </Group>
-            ) : null}
+        {/* 坪単価・箇所数・リンクのどれも無ければ行自体を出さない。formatTsubo は
+            常に「—」を返すため、この行だけ表示すると中身の無い「—」だけの行が
+            残ってカード下部に余白ができて見える（所有者の指摘）。 */}
+        {vendor.pricePerTsuboMin != null ||
+        vendor.pricePerTsuboMax != null ||
+        vendor.placeCount > 0 ||
+        vendor.websiteUrl ||
+        vendor.socialUrls.length > 0 ? (
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Group gap="md" c="dimmed">
+              <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
+              {vendor.placeCount > 0 ? (
+                <Group gap={4}>
+                  <MapPin size={14} aria-hidden />
+                  <Text size="sm">{vendor.placeCount} 箇所</Text>
+                </Group>
+              ) : null}
+            </Group>
+            <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="sm" />
           </Group>
-          <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="sm" />
-        </Group>
+        ) : null}
       </Stack>
     </Card>
   )

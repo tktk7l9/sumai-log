@@ -17,11 +17,13 @@ import { Route as MapRouteImport } from './routes/map'
 import { Route as NewsRouteImport } from './routes/news'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as GlossaryTermIdRouteImport } from './routes/glossary_.$termId'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
+import { Route as ApiVendorPhotosVendorIdRouteImport } from './routes/api.vendor-photos.$vendorId'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
 import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
 import { Route as RecordsVideosIdRouteImport } from './routes/records_.videos.$id'
@@ -67,6 +69,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SourcesRoute = SourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
   id: '/api/geocode',
   path: '/api/geocode',
@@ -90,6 +97,11 @@ const PlacesIdRoute = PlacesIdRouteImport.update({
 const ApiPhotosSplatRoute = ApiPhotosSplatRouteImport.update({
   id: '/api/photos/$',
   path: '/api/photos/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVendorPhotosVendorIdRoute = ApiVendorPhotosVendorIdRouteImport.update({
+  id: '/api/vendor-photos/$vendorId',
+  path: '/api/vendor-photos/$vendorId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CandidatesPropertiesIdRoute = CandidatesPropertiesIdRouteImport.update({
@@ -122,11 +134,13 @@ export interface FileRoutesByFullPath {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records/videos/$id': typeof RecordsVideosIdRoute
@@ -141,11 +155,13 @@ export interface FileRoutesByTo {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records/videos/$id': typeof RecordsVideosIdRoute
@@ -161,11 +177,13 @@ export interface FileRoutesById {
   '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
+  '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/glossary_/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
   '/records_/videos/$id': typeof RecordsVideosIdRoute
@@ -182,11 +200,13 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
     | '/records/videos/$id'
@@ -201,11 +221,13 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
     | '/records/videos/$id'
@@ -220,11 +242,13 @@ export interface FileRouteTypes {
     | '/news'
     | '/records'
     | '/settings'
+    | '/sources'
     | '/api/geocode'
     | '/api/oembed'
     | '/glossary_/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-photos/$vendorId'
     | '/candidates_/properties/$id'
     | '/candidates_/vendors/$id'
     | '/records_/videos/$id'
@@ -240,11 +264,13 @@ export interface RootRouteChildren {
   NewsRoute: typeof NewsRoute
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
+  SourcesRoute: typeof SourcesRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiOembedRoute: typeof ApiOembedRoute
   GlossaryTermIdRoute: typeof GlossaryTermIdRoute
   PlacesIdRoute: typeof PlacesIdRoute
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
+  ApiVendorPhotosVendorIdRoute: typeof ApiVendorPhotosVendorIdRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
   CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
   RecordsVideosIdRoute: typeof RecordsVideosIdRoute
@@ -309,6 +335,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sources': {
+      id: '/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/geocode': {
       id: '/api/geocode'
       path: '/api/geocode'
@@ -342,6 +375,13 @@ declare module '@tanstack/react-router' {
       path: '/api/photos/$'
       fullPath: '/api/photos/$'
       preLoaderRoute: typeof ApiPhotosSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vendor-photos/$vendorId': {
+      id: '/api/vendor-photos/$vendorId'
+      path: '/api/vendor-photos/$vendorId'
+      fullPath: '/api/vendor-photos/$vendorId'
+      preLoaderRoute: typeof ApiVendorPhotosVendorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/candidates_/properties/$id': {
@@ -384,11 +424,13 @@ const rootRouteChildren: RootRouteChildren = {
   NewsRoute: NewsRoute,
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,
+  SourcesRoute: SourcesRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiOembedRoute: ApiOembedRoute,
   GlossaryTermIdRoute: GlossaryTermIdRoute,
   PlacesIdRoute: PlacesIdRoute,
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,
+  ApiVendorPhotosVendorIdRoute: ApiVendorPhotosVendorIdRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
   CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
   RecordsVideosIdRoute: RecordsVideosIdRoute,

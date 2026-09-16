@@ -12,11 +12,23 @@ export function dateKey(startsAt: string): string {
 
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
-/** 'YYYY-MM-DD' を '2026-09-20（日）' に直す。読めない文字列はそのまま返す。 */
+/**
+ * 日付の表示は全て `/` 区切りに統一する（所有者の要望）。'YYYY-MM-DD' を
+ * 'YYYY/MM/DD' に直すだけの単一の実装。ハイフン区切りでない・形が合わない文字列は
+ * そのまま返す（他の formatXxx と同じフォールバック方針）。dateKey/検索パラメータ/
+ * DB の値は触らない（あくまで表示のときにこれを通す）。
+ */
+export function formatDateSlash(key: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
+  if (!m) return key
+  return `${m[1]}/${m[2]}/${m[3]}`
+}
+
+/** 'YYYY-MM-DD' を '2026/09/20（日）' に直す。読めない文字列はそのまま返す。 */
 export function formatDateWithWeekday(key: string): string {
   const day = dayOfWeek(key)
   if (day === null) return key
-  return `${key}（${WEEKDAY_LABELS[day]}）`
+  return `${formatDateSlash(key)}（${WEEKDAY_LABELS[day]}）`
 }
 
 /**

@@ -36,6 +36,27 @@
       "when": 1789531486153,
       "tag": "0004_vendor_representative_affiliations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789540437969,
+      "tag": "0005_vendor_images",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789544191186,
+      "tag": "0006_vendor_affiliation_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789547381731,
+      "tag": "0007_sources",
+      "breakpoints": true
     }
   ]
 }

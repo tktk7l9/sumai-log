@@ -127,8 +127,8 @@ describe('termIdForMetric', () => {
 describe('GLOSSARY（データの体裁）', () => {
   const ids = new Set(GLOSSARY.map((t) => t.id))
 
-  it('89 語・14 図解で、どの図解も少なくとも 1 語から使われている', () => {
-    expect(GLOSSARY).toHaveLength(89)
+  it('90 語・14 図解で、どの図解も少なくとも 1 語から使われている', () => {
+    expect(GLOSSARY).toHaveLength(90)
     expect(DIAGRAM_IDS).toHaveLength(14)
     const used = new Set(GLOSSARY.map((t) => t.diagram).filter(Boolean))
     expect([...DIAGRAM_IDS].filter((d) => !used.has(d))).toEqual([])
