@@ -29,6 +29,14 @@ export function PropertyCard({ property }: { property: Property }) {
             </Text>
             <StatusBadge status={property.status} />
           </Group>
+          {property.address ? (
+            <Group gap={4} c="dimmed">
+              <MapPin size={14} aria-hidden />
+              <Text size="sm" c="dimmed" lineClamp={1}>
+                {property.address}
+              </Text>
+            </Group>
+          ) : null}
           {stationText ? (
             <Group gap={4} c="dimmed">
               <MapPin size={14} aria-hidden />

@@ -52,7 +52,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <MantineProvider theme={theme} defaultColorScheme="auto">
-          <DatesProvider settings={{ locale: 'ja', firstDayOfWeek: 0 }}>
+          <DatesProvider settings={{ locale: 'ja', firstDayOfWeek: 1, weekendDays: [0, 6] }}>
             <Notifications position="top-center" />
             <AppLayout>{children}</AppLayout>
           </DatesProvider>
