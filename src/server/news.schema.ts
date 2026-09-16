@@ -1,6 +1,5 @@
 import { z } from 'zod'
 
-import { monthKeys } from '../lib/calendar'
 import { dateField, idField } from './zod'
 
 /**
@@ -24,24 +23,10 @@ export const listVendorNewsInput = z.object({
 })
 export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
 
-/** 'YYYY-MM' を月初〜月末の範囲（'YYYY-MM-DD'）に直す。カレンダーの情報レイヤー用。 */
-export const newsEventsForMonthInput = z
-  .object({
-    // 月は 01〜12 だけを許す（例: 13 や 00 を通すと monthKeys が '2026-13-01' のような
-    // 空の結果を静かに作ってしまう）。
-    ym: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, '年月は YYYY-MM の形式で指定してください'),
-  })
-  .transform(({ ym }) => {
-    const [year, month] = ym.split('-').map(Number)
-    const days = monthKeys(year, month)
-    return { from: days[0], to: days[days.length - 1] }
-  })
-export type NewsEventsForMonthInput = z.input<typeof newsEventsForMonthInput>
-
 /**
  * カレンダーの情報レイヤー用（月をまたぐ表示範囲）。カレンダー画面の月表示は前後の週が
- * はみ出すぶん広めに取る（src/routes/calendar.tsx の visibleRange）ため、月境界で
- * 切ってしまう newsEventsForMonth ではなく、こちらで実際の表示範囲そのものを渡す。
+ * はみ出すぶん広めに取る（src/routes/calendar.tsx の visibleRange）ため、月単位で
+ * 区切らず、こちらで実際の表示範囲そのものを渡す。
  */
 export const newsEventsBetweenInput = z.object({ from: dateField, to: dateField })
 export type NewsEventsBetweenInput = z.input<typeof newsEventsBetweenInput>

@@ -52,7 +52,7 @@ export const Route = createFileRoute('/calendar')({
       listLinkTargets(),
       listPlaces(),
       // 情報レイヤー用。月をまたいではみ出す表示範囲（visibleRange）と同じ from/to で取る
-      // （newsEventsForMonth の月単位だと、月表示が前後にはみ出す週ぶんの情報が漏れる）
+      // （月単位で区切ると、月表示が前後にはみ出す週ぶんの情報が漏れる）
       newsEventsBetween({ data: { from, to } }),
     ])
     return { ...range, targets, places, date, newsEvents: news.news }

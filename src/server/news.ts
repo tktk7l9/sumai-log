@@ -6,12 +6,7 @@ import { vendorNews, vendors } from '../db/schema'
 import { truncate } from '../lib/news/text'
 import { currentActorEmail } from './members'
 import { fetchAllVendorNews } from './newsFetcher'
-import {
-  listVendorNewsInput,
-  newsEventsBetweenInput,
-  newsEventsForMonthInput,
-  planVisitInput,
-} from './news.schema'
+import { listVendorNewsInput, newsEventsBetweenInput, planVisitInput } from './news.schema'
 import {
   linkPlannedEvent,
   listNews,
@@ -22,7 +17,7 @@ import {
 
 // バリデータは news.schema.ts から（テストの都合で分離した理由はそちら参照）。
 // 公開する import パス（'./news' から取れる）は変えない。
-export { listVendorNewsInput, newsEventsBetweenInput, newsEventsForMonthInput, planVisitInput }
+export { listVendorNewsInput, newsEventsBetweenInput, planVisitInput }
 
 // events.schema.ts の eventInput と同じ上限（予定のタイトルは最大 200 字）。
 const EVENT_TITLE_MAX = 200
@@ -35,18 +30,10 @@ export const listVendorNews = createServerFn()
     return { news }
   })
 
-/** カレンダーの情報レイヤー用。'YYYY-MM' の月内でイベント判定済みのお知らせ */
-export const newsEventsForMonth = createServerFn()
-  .validator(newsEventsForMonthInput)
-  .handler(async ({ data }) => {
-    const news = await listNewsEventsBetween(getDb(), data.from, data.to)
-    return { news }
-  })
-
 /**
  * カレンダーの情報レイヤー用（任意の期間）。月表示は前後の週がはみ出すぶん広めに
- * 範囲を取る（calendar.tsx の visibleRange）ため、月単位の newsEventsForMonth では
- * 範囲をまたぐ週の情報が漏れる。実際に表示している from/to をそのまま渡す。
+ * 範囲を取る（calendar.tsx の visibleRange）ため、月単位で区切ると範囲をまたぐ
+ * 週の情報が漏れる。実際に表示している from/to をそのまま渡す。
  */
 export const newsEventsBetween = createServerFn()
   .validator(newsEventsBetweenInput)

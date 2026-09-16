@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:test'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
@@ -377,5 +378,112 @@ describe('vendor 削除時の cascade', () => {
     await deleteVendorCascade(db, vendorId)
 
     expect(await db.select().from(vendorNews)).toHaveLength(0)
+  })
+})
+
+describe('vendors の再取り込み（scripts/lib/seed.mjs の upsertStatement と同じ形）', () => {
+  /**
+   * scripts/lib/seed.mjs は以前 `INSERT OR REPLACE INTO vendors` を使っていたが、
+   * SQLite の REPLACE は主キー衝突時に既存行を DELETE してから INSERT し直すため、
+   * `vendor_news.vendor_id`（ON DELETE CASCADE）を巻き込んで vendor_news を
+   * 全部消してしまっていた（`npm run import:seed` の再実行という、実際に
+   * 起こりうる操作で発生する）。ここでは実 D1 に対して、seed.mjs の
+   * upsertStatement が実際に生成する形（INSERT ... ON CONFLICT(id) DO UPDATE、
+   * id・created_by・created_at 以外の列を更新）をそのまま流し、DELETE を経由
+   * しない＝vendor_news が cascade で消えないことを確認する。
+   */
+  it('vendors を INSERT ... ON CONFLICT(id) DO UPDATE で再取り込みしても vendor_news は残る', async () => {
+    const vendorId = crypto.randomUUID()
+    const now = '2026-09-01 00:00:00'
+
+    // scripts/lib/seed.mjs の upsertStatement('vendors', {...}) が渡す列とまったく同じ並び
+    const columns = [
+      'id',
+      'name',
+      'kind',
+      'hq',
+      'representative',
+      'service_areas',
+      'affiliations',
+      'ua_value',
+      'c_value_published',
+      'seismic_grade',
+      'long_term_certified',
+      'price_per_tsubo_min',
+      'price_per_tsubo_max',
+      'structure',
+      'features',
+      'status',
+      'source_url',
+      'website_url',
+      'social_urls',
+      'news_url',
+      'news_source',
+      'created_by',
+      'created_at',
+      'updated_at',
+    ]
+    const initialValues = [
+      `'${vendorId}'`,
+      "'再取り込みテスト業者'",
+      "'koumuten'",
+      'NULL',
+      'NULL',
+      "'[]'",
+      "'[]'",
+      'NULL',
+      '0',
+      'NULL',
+      '0',
+      'NULL',
+      'NULL',
+      'NULL',
+      'NULL',
+      "'interested'",
+      'NULL',
+      'NULL',
+      "'[]'",
+      'NULL',
+      'NULL',
+      `'${actor}'`,
+      `'${now}'`,
+      `'${now}'`,
+    ]
+
+    await env.DB.exec(
+      `INSERT INTO vendors (${columns.join(', ')}) VALUES (${initialValues.join(', ')});`,
+    )
+
+    await insertNewsIfNew(db, [
+      {
+        vendorId,
+        url: 'https://news.example.com/reimport-check',
+        title: '再取り込み確認用のお知らせ',
+        publishedOn: '2026-09-01',
+      },
+    ])
+    expect(
+      await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId)),
+    ).toHaveLength(1)
+
+    // upsertStatement と同じ形で「再取り込み」する: 同じ id、name だけ変えて、
+    // id・created_by・created_at 以外の列を ON CONFLICT DO UPDATE で更新する。
+    const updateColumns = columns.filter((c) => !['id', 'created_by', 'created_at'].includes(c))
+    const updatedValues = initialValues.map((v, i) =>
+      columns[i] === 'name' ? "'再取り込みテスト業者（更新後）'" : v,
+    )
+    const setClause = updateColumns.map((c) => `${c} = excluded.${c}`).join(', ')
+    await env.DB.exec(
+      `INSERT INTO vendors (${columns.join(', ')}) VALUES (${updatedValues.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${setClause};`,
+    )
+
+    // vendor_news が cascade で消えていない
+    const rows = await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId))
+    expect(rows).toHaveLength(1)
+    expect(rows[0].title).toBe('再取り込み確認用のお知らせ')
+
+    // 再取り込みで name はちゃんと更新されている（upsert が効いている）
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
+    expect(vendor.name).toBe('再取り込みテスト業者（更新後）')
   })
 })

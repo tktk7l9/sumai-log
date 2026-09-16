@@ -27,6 +27,12 @@ import { fetchNewsNow, newsSources as loadNewsSources } from '../server/news'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 
+/** 「業者のお知らせ」カードで取得 URL を短く見せる（全文は title 属性で見られる）。 */
+const NEWS_URL_DISPLAY_MAX = 40
+function truncateForDisplay(url: string): string {
+  return url.length > NEWS_URL_DISPLAY_MAX ? `${url.slice(0, NEWS_URL_DISPLAY_MAX)}…` : url
+}
+
 export const Route = createFileRoute('/settings')({
   component: Page,
   loader: async () => {
@@ -183,6 +189,11 @@ function Page() {
                       {v.newsSource ? NEWS_SOURCE_LABEL[v.newsSource] : '方式未設定'}
                     </Badge>
                   </Group>
+                  {v.newsUrl ? (
+                    <Text size="xs" c="dimmed" title={v.newsUrl} style={{ wordBreak: 'break-all' }}>
+                      {truncateForDisplay(v.newsUrl)}
+                    </Text>
+                  ) : null}
                   <Text size="xs" c="dimmed">
                     最終取得: {v.newsFetchedAt ? formatJst(v.newsFetchedAt) : '未取得'}
                   </Text>

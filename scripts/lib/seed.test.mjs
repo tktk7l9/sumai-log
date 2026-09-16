@@ -211,25 +211,41 @@ function fictionalSeed(overrides = {}) {
   }
 }
 
-test('buildStatements: settings の INSERT OR REPLACE 文が含まれる', () => {
+test('buildStatements: settings の INSERT ... ON CONFLICT(key) DO UPDATE 文が含まれる', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO settings'))
   assert.ok(stmt, 'settings statement が見つからない')
-  assert.match(stmt, /INSERT OR REPLACE INTO settings/)
+  assert.match(stmt, /^INSERT INTO settings/)
+  assert.match(stmt, /ON CONFLICT\(key\) DO UPDATE SET/)
+  assert.doesNotMatch(stmt, /OR REPLACE/)
   assert.match(stmt, /'homeAreas'/)
   assert.match(stmt, /\["架空市"\]/)
 })
 
-test('buildStatements: vendors/places/events/visits/videos の INSERT OR REPLACE 文が生成される', () => {
+test('buildStatements: vendors/places/events/visits/videos は INSERT ... ON CONFLICT(id) DO UPDATE 文が生成される（OR REPLACE は使わない）', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
-  assert.ok(sql.some((s) => s.includes('INTO vendors')))
-  assert.ok(sql.some((s) => s.includes('INTO places')))
-  assert.ok(sql.some((s) => s.includes('INTO events')))
-  assert.ok(sql.some((s) => s.includes('INTO visits')))
-  assert.ok(sql.some((s) => s.includes('INTO videos')))
-  for (const stmt of sql) {
-    assert.match(stmt, /^INSERT OR REPLACE INTO/)
+  // settings だけ主キーが key なので別テストで見る。ここでは id が主キーのテーブルだけ見る。
+  const idKeyedStatements = sql.filter((s) => !s.includes('INTO settings'))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO vendors')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO places')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO events')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO visits')))
+  assert.ok(idKeyedStatements.some((s) => s.includes('INTO videos')))
+  for (const stmt of idKeyedStatements) {
+    assert.match(stmt, /^INSERT INTO/)
+    assert.match(stmt, /ON CONFLICT\(id\) DO UPDATE SET/)
+    assert.doesNotMatch(stmt, /OR REPLACE/)
   }
+})
+
+test('buildStatements: vendors の ON CONFLICT DO UPDATE は created_by/created_at を更新対象から除く（他の列は更新する）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
+  assert.doesNotMatch(vendorStmt, /created_by = excluded\.created_by/)
+  assert.doesNotMatch(vendorStmt, /created_at = excluded\.created_at/)
+  assert.match(vendorStmt, /name = excluded\.name/)
+  assert.match(vendorStmt, /updated_at = excluded\.updated_at/)
 })
 
 test('buildStatements: created_by に actorEmail が入る', () => {
