@@ -5,6 +5,7 @@ import {
   comments,
   properties,
   vendors,
+  type FaviconSource,
   type NewProperty,
   type NewVendor,
   type Vendor,
@@ -57,23 +58,42 @@ export async function vendorExists(db: Db, id: string): Promise<boolean> {
 }
 
 /**
- * favicon_key を vendors.updated_at を動かさずに差し替える。markNewsFetched
+ * favicon_key / favicon_source を vendors.updated_at を動かさずに差し替える。markNewsFetched
  * （repository/news.ts）と同じ理由: 自動取得のたびにホームの「最近の更新」フィードへ
- * 業者が浮上してしまうのを避ける。戻り値は差し替え前の値（無ければ null）。
+ * 業者が浮上してしまうのを避ける。戻り値は差し替え前の favicon_key（無ければ null）。
  * 呼び出し側はこれを使って古い R2 オブジェクトを消せる。
+ *
+ * `source` は呼び出し側が明示する: 自動取得（fetchFaviconForVendor）は 'auto'、業者フォームの
+ * 手動アップロード（uploadVendorFaviconCore）は 'manual'、削除（deleteVendorFaviconObjects）は
+ * key と一緒に null を渡して両方クリアする。
  */
 export async function setVendorFaviconKey(
   db: Db,
   id: string,
   key: string | null,
+  source: FaviconSource | null,
 ): Promise<string | null> {
   const [before] = await db
     .select({ faviconKey: vendors.faviconKey })
     .from(vendors)
     .where(eq(vendors.id, id))
     .limit(1)
-  await db.update(vendors).set({ faviconKey: key }).where(eq(vendors.id, id))
+  await db.update(vendors).set({ faviconKey: key, faviconSource: source }).where(eq(vendors.id, id))
   return before?.faviconKey ?? null
+}
+
+/**
+ * favicon_source の現在値。saveVendor（candidates.ts）のインライン取得ガード用:
+ * 手動アップロード後は websiteUrl が変わっても自動取得で上書きしない
+ * （非 force の refreshAllVendorFavicons と同じ方針）。
+ */
+export async function getVendorFaviconSource(db: Db, id: string): Promise<FaviconSource | null> {
+  const [row] = await db
+    .select({ faviconSource: vendors.faviconSource })
+    .from(vendors)
+    .where(eq(vendors.id, id))
+    .limit(1)
+  return row?.faviconSource ?? null
 }
 
 /** representative_photo_key 版。setVendorFaviconKey と同じ方針（updated_at は動かさない） */
@@ -91,16 +111,28 @@ export async function setVendorRepresentativePhotoKey(
   return before?.representativePhotoKey ?? null
 }
 
-/** 設定画面「候補のサイトアイコン」用。website_url がある業者のみ（force 判定は呼び出し側） */
+/**
+ * 設定画面「候補のサイトアイコン」用。website_url がある業者のみ（force 判定は呼び出し側）。
+ * `faviconSource` は refreshAllVendorFavicons が非 force のとき 'manual' の業者を除外するために
+ * 使う。`newsFetchError` はお知らせ取得と同じ業者・同じ拒否理由（Cloudflare の IP レンジを
+ * 一律拒否するサーバー）でファビコンの自動取得も失敗していることが多いため、設定画面の
+ * カードで `describeFetchError`（src/lib/news/errors.ts）を使い回して同じ文言を出すのに使う
+ * （ファビコン取得自体は成否だけを返し、HTTP ステータスつきの理由を保存する列を別途
+ * 持っていないため、業者のお知らせの取得結果を手がかりにする）。
+ */
 export async function listVendorsWithWebsite(
   db: Db,
-): Promise<Pick<Vendor, 'id' | 'name' | 'websiteUrl' | 'faviconKey'>[]> {
+): Promise<
+  Pick<Vendor, 'id' | 'name' | 'websiteUrl' | 'faviconKey' | 'faviconSource' | 'newsFetchError'>[]
+> {
   return db
     .select({
       id: vendors.id,
       name: vendors.name,
       websiteUrl: vendors.websiteUrl,
       faviconKey: vendors.faviconKey,
+      faviconSource: vendors.faviconSource,
+      newsFetchError: vendors.newsFetchError,
     })
     .from(vendors)
     .where(isNotNull(vendors.websiteUrl))

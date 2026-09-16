@@ -14,6 +14,7 @@ import {
   countPlacesByVendor,
   deletePropertyCascade,
   deleteVendorCascade,
+  getVendorFaviconSource,
   getVendorWebsiteUrl,
   readHomeAreas,
   upsertProperty,
@@ -156,13 +157,21 @@ export const saveVendor = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const db = getDb()
     // websiteUrl が新規/変更されたときだけファビコンを取りに行く（design 通り）。
-    // 既存の websiteUrl と同じなら毎回叩き直さない。取得は fetchFaviconForVendor
-    // 自身が例外を投げない設計だが、念のため .catch で保存自体は必ず成功させる。
-    // 保存を長時間ブロックしないよう、ここだけ短い予算（SAVE_FAVICON_BUDGET。最悪 8 秒）で
-    // 呼ぶ。ここで見つからなくても設定画面の「アイコンを取得」（フルの予算）で拾える。
+    // 既存の websiteUrl と同じなら毎回叩き直さない。favicon_source が 'manual'（業者フォームの
+    // 手動アップロード）の業者は対象外にする（refreshAllVendorFavicons の非 force と同じ方針。
+    // 手動アップロードした直後に websiteUrl 以外のフィールドを保存しただけで自動取得に
+    // 上書きされてしまうのを防ぐ）。取得は fetchFaviconForVendor 自身が例外を投げない設計
+    // だが、念のため .catch で保存自体は必ず成功させる。保存を長時間ブロックしないよう、
+    // ここだけ短い予算（SAVE_FAVICON_BUDGET。最悪 8 秒）で呼ぶ。ここで見つからなくても
+    // 設定画面の「アイコンを取得」（フルの予算）で拾える。
     const previousWebsiteUrl = data.id ? await getVendorWebsiteUrl(db, data.id) : null
+    const previousFaviconSource = data.id ? await getVendorFaviconSource(db, data.id) : null
     const id = await upsertVendor(db, data, await currentActorEmail())
-    if (data.websiteUrl && data.websiteUrl !== previousWebsiteUrl) {
+    if (
+      data.websiteUrl &&
+      data.websiteUrl !== previousWebsiteUrl &&
+      previousFaviconSource !== 'manual'
+    ) {
       await fetchFaviconForVendor(
         db,
         id,

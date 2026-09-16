@@ -5,6 +5,7 @@ import { comments, places, vendors } from '../../db/schema'
 import {
   deletePropertyCascade,
   deleteVendorCascade,
+  getVendorFaviconSource,
   getVendorWebsiteUrl,
   listVendorsWithWebsite,
   setVendorFaviconKey,
@@ -82,7 +83,7 @@ describe('vendors', () => {
     )
     const [before] = await db.select().from(vendors).where(eq(vendors.id, id))
 
-    const prevFavicon = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.png`)
+    const prevFavicon = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.png`, 'auto')
     expect(prevFavicon).toBeNull()
     const prevPhoto = await setVendorRepresentativePhotoKey(
       db,
@@ -93,17 +94,38 @@ describe('vendors', () => {
 
     let [after] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(after.faviconKey).toBe(`vendors/${id}/favicon.png`)
+    expect(after.faviconSource).toBe('auto')
     expect(after.representativePhotoKey).toBe(`vendors/${id}/representative-display.jpg`)
     expect(after.updatedAt).toBe(before.updatedAt)
 
-    // 2 回目は「差し替え前の値」として 1 回目に設定したキーが返る
-    const prevFavicon2 = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.ico`)
+    // 2 回目は「差し替え前の値」として 1 回目に設定したキーが返り、source も差し替わる
+    const prevFavicon2 = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.ico`, 'manual')
     expect(prevFavicon2).toBe(`vendors/${id}/favicon.png`)
+    ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
+    expect(after.faviconSource).toBe('manual')
+
+    // key に null・source に null を渡すと両方消せる（削除の形）
+    const prevFavicon3 = await setVendorFaviconKey(db, id, null, null)
+    expect(prevFavicon3).toBe(`vendors/${id}/favicon.ico`)
+    ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
+    expect(after.faviconKey).toBeNull()
+    expect(after.faviconSource).toBeNull()
 
     // null を渡すと消せる
     await setVendorRepresentativePhotoKey(db, id, null)
     ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(after.representativePhotoKey).toBeNull()
+  })
+
+  it('getVendorFaviconSource は favicon_source を返し、未設定は null', async () => {
+    const id = await upsertVendor(
+      db,
+      { name: 'ソース確認工務店', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    expect(await getVendorFaviconSource(db, id)).toBeNull()
+    await setVendorFaviconKey(db, id, `vendors/${id}/favicon.png`, 'manual')
+    expect(await getVendorFaviconSource(db, id)).toBe('manual')
   })
 
   it('getVendorWebsiteUrl は website_url を返し、無い業者は null', async () => {
@@ -148,6 +170,8 @@ describe('vendors', () => {
       name: 'URLあり',
       websiteUrl: 'https://vendor.example.com/',
       faviconKey: null,
+      faviconSource: null,
+      newsFetchError: null,
     })
   })
 
