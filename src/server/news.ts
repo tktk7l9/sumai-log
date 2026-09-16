@@ -22,7 +22,7 @@ export { listVendorNewsInput, newsEventsBetweenInput, planVisitInput }
 // events.schema.ts の eventInput と同じ上限（予定のタイトルは最大 200 字）。
 const EVENT_TITLE_MAX = 200
 
-/** `/news` ページ・ホームの「業者のお知らせ」ブロック用。新しい順・ページング可 */
+/** `/news` ページ（月ごと。from/to で絞り込み）・ホームの「お知らせ」ブロック用。新しい順 */
 export const listVendorNews = createServerFn()
   .validator(listVendorNewsInput)
   .handler(async ({ data }) => {

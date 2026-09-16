@@ -15,10 +15,16 @@ import { dateField, idField } from './zod'
 
 export const listVendorNewsInput = z.object({
   vendorId: idField.optional(),
-  // 上限は 201: /news の「もっと見る」は表示上限 200 件ぶんに 1 件足して問い合わせ、
-  // その 1 件が実際に返ってきたかどうかで「まだ先があるか」を判定する
-  // （src/routes/news.tsx）。ぴったり 200 件で終わる空振りクリックを避けるため。
-  limit: z.number().int().min(1).max(201).default(50),
+  // 公開日（published_on）の期間で絞り込む。/news の月ごとのアジェンダ（fix round 1）が
+  // その月の初日/末日を渡す。どちらも省略すれば期間の絞り込み無し（ホームの最新 N 件は
+  // 期間を意識しない呼び出しのまま）。newsEventsBetweenInput と違い両方 optional
+  // （片方だけ・両方無し、のどれも呼び出し側の都合であり得るため）。
+  from: dateField.optional(),
+  to: dateField.optional(),
+  // 1 か月ぶんの安全上限。「もっと見る」ページング（旧: 表示上限 +1 件を問い合わせて
+  // hasMore を判定するトリック）は fix round 1 で /news から無くなったため、
+  // 上限は素直に 200 にした（以前の 201 はそのトリック専用だった）。
+  limit: z.number().int().min(1).max(200).default(50),
   offset: z.number().int().min(0).default(0),
 })
 export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
