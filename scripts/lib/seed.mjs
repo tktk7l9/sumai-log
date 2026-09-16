@@ -18,7 +18,8 @@ export { normalizeAddress, normalizeSocialUrls }
 
 /**
  * slug（人間が読める識別子）から決定的に id を作る。
- * 同じ文字列は常に同じ id になるので、`INSERT OR REPLACE` による再取り込みが冪等になる。
+ * 同じ文字列は常に同じ id になるので、再取り込みが冪等になる（同じ id への
+ * INSERT ... ON CONFLICT DO UPDATE が常に「同じ行の更新」になる）。
  *
  * 呼び出し側は `<種類>:<slug>` のように種類を前置して渡す（例: `vendor:some-koumuten`）。
  * 種類をプレフィックスすることで、異なるテーブル間で slug 文字列がたまたま
@@ -64,10 +65,36 @@ export function parseGsiResponse(json) {
   return { lat, lng, title }
 }
 
-function insertStatement(table, row) {
+/**
+ * 冪等な `INSERT ... ON CONFLICT DO UPDATE` 文を作る。
+ *
+ * 以前は `INSERT OR REPLACE` を使っていたが、SQLite の REPLACE は主キーが
+ * 衝突した既存行を一度 DELETE してから INSERT し直す。外部キーを ON で
+ * 有効にしていると、その DELETE が `ON DELETE CASCADE` の子行まで巻き込んで
+ * 消してしまう（例: vendors を REPLACE すると vendor_news が cascade で消える）。
+ * `ON CONFLICT DO UPDATE` は既存行をその場で UPDATE するだけで DELETE を
+ * 経由しないため、子行は残る。
+ *
+ * `conflictColumn` は衝突判定に使う主キー列（既定 'id'。settings だけ 'key'）。
+ * `excludeFromUpdate` に挙げた列（既定で created_by・created_at。存在しない
+ * テーブルでは単に無視される）と `conflictColumn` 自身を除く全列を
+ * `col = excluded.col` で UPDATE 対象にする。
+ */
+function upsertStatement(
+  table,
+  row,
+  { conflictColumn = 'id', excludeFromUpdate = ['created_by', 'created_at'] } = {},
+) {
   const columns = Object.keys(row)
   const values = columns.map((c) => sqlString(row[c]))
-  return `INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')});`
+  const updateColumns = columns.filter(
+    (c) => c !== conflictColumn && !excludeFromUpdate.includes(c),
+  )
+  const updateClause = updateColumns.map((c) => `${c} = excluded.${c}`).join(', ')
+  return (
+    `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')}) ` +
+    `ON CONFLICT(${conflictColumn}) DO UPDATE SET ${updateClause};`
+  )
 }
 
 /**
@@ -83,8 +110,38 @@ function resolveId(map, slug, kind) {
   return id
 }
 
+// src/db/schema.ts の NEWS_SOURCES と同じ値。plain .mjs から TS を import できないため
+// 値を重複させている（他の enum も seed.mjs ではリテラルのまま検証している）。
+const NEWS_SOURCES = ['rss', 'html-list']
+
+/** newsSource が指定されているのに未知の値なら、どの業者のどの値かがわかるメッセージで例外を投げる */
+function validateNewsSource(vendorSlug, newsSource) {
+  if (newsSource === undefined || newsSource === null) return
+  if (!NEWS_SOURCES.includes(newsSource)) {
+    throw new Error(
+      `vendor ${vendorSlug}: unknown newsSource: ${newsSource} (expected one of ${NEWS_SOURCES.join(', ')})`,
+    )
+  }
+}
+
+// src/content/affiliations.ts の AFFILIATION_IDS と同じ値。plain .mjs から TS を import
+// できないため値を重複させている（NEWS_SOURCES と同じ理由）。
+const AFFILIATION_IDS = ['iedukuri100', 'miratsugu']
+
+/** affiliations に未知の id が混ざっていたら、どの業者のどの値かがわかるメッセージで例外を投げる */
+function validateAffiliations(vendorSlug, affiliations) {
+  if (affiliations === undefined || affiliations === null) return
+  for (const id of affiliations) {
+    if (!AFFILIATION_IDS.includes(id)) {
+      throw new Error(
+        `vendor ${vendorSlug}: unknown affiliation: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+  }
+}
+
 /**
- * seed.local.json の内容を D1 の INSERT OR REPLACE 文へ変換する。
+ * seed.local.json の内容を D1 の INSERT ... ON CONFLICT DO UPDATE 文へ変換する。
  *
  * @param {object} seed - seed.local.json をパースしたオブジェクト
  * @param {object} opts
@@ -104,11 +161,15 @@ export function buildStatements(seed, opts) {
   // --- settings ---------------------------------------------------------
   if (seed.settings?.homeAreas) {
     sql.push(
-      insertStatement('settings', {
-        key: 'homeAreas',
-        value: JSON.stringify(seed.settings.homeAreas),
-        updated_at: now,
-      }),
+      upsertStatement(
+        'settings',
+        {
+          key: 'homeAreas',
+          value: JSON.stringify(seed.settings.homeAreas),
+          updated_at: now,
+        },
+        { conflictColumn: 'key' },
+      ),
     )
   }
 
@@ -118,13 +179,17 @@ export function buildStatements(seed, opts) {
     vendorIdBySlug[v.slug] = slugToId(`vendor:${v.slug}`)
   }
   for (const v of seed.vendors ?? []) {
+    validateNewsSource(v.slug, v.newsSource)
+    validateAffiliations(v.slug, v.affiliations)
     sql.push(
-      insertStatement('vendors', {
+      upsertStatement('vendors', {
         id: vendorIdBySlug[v.slug],
         name: v.name,
         kind: v.kind,
         hq: v.hq ?? null,
+        representative: v.representative ?? null,
         service_areas: JSON.stringify(v.serviceAreas ?? []),
+        affiliations: JSON.stringify(v.affiliations ?? []),
         ua_value: v.uaValue ?? null,
         c_value_published: v.cValuePublished ?? false,
         seismic_grade: v.seismicGrade ?? null,
@@ -137,6 +202,8 @@ export function buildStatements(seed, opts) {
         source_url: v.sourceUrl ?? null,
         website_url: v.websiteUrl ?? null,
         social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
+        news_url: v.newsUrl ?? null,
+        news_source: v.newsSource ?? null,
         created_by: actorEmail,
         created_at: now,
         updated_at: now,
@@ -152,7 +219,7 @@ export function buildStatements(seed, opts) {
   for (const p of seed.places ?? []) {
     const coord = coords[p.slug]
     sql.push(
-      insertStatement('places', {
+      upsertStatement('places', {
         id: placeIdBySlug[p.slug],
         name: p.name,
         kind: p.kind,
@@ -178,7 +245,7 @@ export function buildStatements(seed, opts) {
   }
   for (const e of seed.events ?? []) {
     sql.push(
-      insertStatement('events', {
+      upsertStatement('events', {
         id: eventIdBySlug[e.slug],
         title: e.title,
         kind: e.kind,
@@ -203,7 +270,7 @@ export function buildStatements(seed, opts) {
   }
   for (const vi of seed.visits ?? []) {
     sql.push(
-      insertStatement('visits', {
+      upsertStatement('visits', {
         id: visitIdBySlug[vi.slug],
         event_id: resolveId(eventIdBySlug, vi.event, 'event'),
         place_id: resolveId(placeIdBySlug, vi.place, 'place'),
@@ -236,7 +303,7 @@ export function buildStatements(seed, opts) {
       if (!size) return // 実寸を知らない写真は SQL を作らない（sips 変換前の 1 回目呼び出し）
 
       sql.push(
-        insertStatement('photos', {
+        upsertStatement('photos', {
           id: photoId,
           visit_id: visitId,
           display_key: displayKey,
@@ -256,7 +323,7 @@ export function buildStatements(seed, opts) {
   // --- videos -------------------------------------------------------------------
   for (const vid of seed.videos ?? []) {
     sql.push(
-      insertStatement('videos', {
+      upsertStatement('videos', {
         id: slugToId(`video:${vid.videoId}`),
         url: vid.url,
         video_id: vid.videoId,

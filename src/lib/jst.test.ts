@@ -24,6 +24,13 @@ describe('parseToUtcMs', () => {
     expect(parseToUtcMs('')).toBeNull()
   })
 
+  it('形式は合っていても実在しない月日（Date.parse が NaN を返す）は null', () => {
+    // 9月32日は存在しない（Date.parse がロールオーバーせず NaN を返すケース）
+    expect(parseToUtcMs('2026-09-32T09:00:00+09:00')).toBeNull()
+    // 13月も存在しない
+    expect(parseToUtcMs('2026-13-01T09:00:00+09:00')).toBeNull()
+  })
+
   it('秒の小数部（new Date().toISOString() の形）付き Z を UTC ミリ秒に直す', () => {
     expect(parseToUtcMs('2030-01-05T17:04:28.333Z')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 333))
   })
@@ -67,6 +74,10 @@ describe('formatJst', () => {
     expect(formatJst('')).toBe('')
   })
 
+  it('実在しない月日（parseToUtcMs が null）もそのまま返す（NaN-NaN-NaN にならない）', () => {
+    expect(formatJst('2026-09-32T09:00:00+09:00')).toBe('2026-09-32T09:00:00+09:00')
+  })
+
   it('時刻の無い日付だけの文字列（watchedOn 等）は withTime: false ならそのまま通る', () => {
     expect(formatJst('2030-01-05', { withTime: false })).toBe('2030-01-05')
   })
@@ -79,6 +90,10 @@ describe('toJstDateKey', () => {
 
   it('解釈できない文字列はそのまま返す', () => {
     expect(toJstDateKey('invalid')).toBe('invalid')
+  })
+
+  it('実在しない月日もそのまま返す', () => {
+    expect(toJstDateKey('2026-09-32T09:00:00+09:00')).toBe('2026-09-32T09:00:00+09:00')
   })
 })
 

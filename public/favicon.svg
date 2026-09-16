@@ -1,14 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="住まいログ">
   <title>住まいログ</title>
-  <rect width="64" height="64" rx="14" fill="#ca7654" />
-  <text
-    x="32"
-    y="32"
-    text-anchor="middle"
-    dominant-baseline="central"
-    font-family="-apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', Meiryo, 'Segoe UI', sans-serif"
-    font-size="38"
-    font-weight="700"
-    fill="#ffffff"
-  >住</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d98a66" />
+      <stop offset="1" stop-color="#b45f3a" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <!-- 家: 屋根と煙突は少し落ち着いたクリーム、壁は明るいクリーム -->
+  <rect x="41" y="17" width="5" height="10" rx="1" fill="#f1e4d4" />
+  <polygon points="32,11 9,32 55,32" fill="#f1e4d4" />
+  <rect x="16" y="29" width="32" height="24" rx="2.5" fill="#faf7f2" />
+  <!-- 記録: 家の中のチェックリスト（二人の記録） -->
+  <circle cx="23" cy="36.5" r="1.9" fill="#ca7654" />
+  <path d="M28 36.5 H41" stroke="#ca7654" stroke-width="2.6" stroke-linecap="round" />
+  <circle cx="23" cy="42.5" r="1.9" fill="#ca7654" />
+  <path d="M28 42.5 H41" stroke="#ca7654" stroke-width="2.6" stroke-linecap="round" />
+  <circle cx="23" cy="48.5" r="1.9" fill="#e0b39e" />
+  <path d="M28 48.5 H37" stroke="#e0b39e" stroke-width="2.6" stroke-linecap="round" />
 </svg>

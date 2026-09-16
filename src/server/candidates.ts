@@ -3,10 +3,11 @@ import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
+import { AFFILIATION_IDS, AFFILIATIONS } from '../content/affiliations'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { normalizeSocialUrls } from '../lib/social'
-import { VENDOR_KINDS, places, properties, vendors } from '../db/schema'
+import { NEWS_SOURCES, VENDOR_KINDS, places, properties, vendors } from '../db/schema'
 import { currentActorEmail } from './members'
 import {
   countPlacesByVendor,
@@ -16,27 +17,53 @@ import {
   upsertProperty,
   upsertVendor,
 } from './repository'
-import { idField, idInput, numberOrEmpty, optionalInt, optionalText, optionalUrl } from './zod'
+import {
+  idField,
+  idInput,
+  numberOrEmpty,
+  optionalHttpsUrl,
+  optionalInt,
+  optionalText,
+  optionalUrl,
+} from './zod'
 
-export const vendorInput = z.object({
-  id: idField.optional(),
-  name: z.string().trim().min(1, '名前は必須です').max(200),
-  kind: z.enum(VENDOR_KINDS),
-  hq: optionalText,
-  serviceAreas: z.array(z.string().trim().min(1).max(50)).max(100),
-  uaValue: numberOrEmpty(z.number().min(0).max(5)),
-  cValuePublished: z.boolean(),
-  seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),
-  longTermCertified: z.boolean(),
-  pricePerTsuboMin: optionalInt,
-  pricePerTsuboMax: optionalInt,
-  structure: optionalText,
-  features: optionalText,
-  status: z.enum(CANDIDATE_STATUSES),
-  sourceUrl: optionalUrl,
-  websiteUrl: optionalUrl,
-  socialUrls: z.array(z.string().trim().max(500)).max(200).transform(normalizeSocialUrls),
-})
+export const vendorInput = z
+  .object({
+    id: idField.optional(),
+    name: z.string().trim().min(1, '名前は必須です').max(200),
+    kind: z.enum(VENDOR_KINDS),
+    hq: optionalText,
+    // optionalText はヘルパの形固定（max 2000）のためここでは使えない（videos.schema.ts と同じ理由）。
+    representative: z
+      .string()
+      .trim()
+      .max(60)
+      .transform((v) => (v === '' ? null : v))
+      .nullable()
+      .optional(),
+    serviceAreas: z.array(z.string().trim().min(1).max(50)).max(100),
+    affiliations: z
+      .array(z.enum(AFFILIATION_IDS))
+      .max(AFFILIATIONS.length)
+      .default([])
+      .transform((arr) => Array.from(new Set(arr))),
+    uaValue: numberOrEmpty(z.number().min(0).max(5)),
+    cValuePublished: z.boolean(),
+    seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),
+    longTermCertified: z.boolean(),
+    pricePerTsuboMin: optionalInt,
+    pricePerTsuboMax: optionalInt,
+    structure: optionalText,
+    features: optionalText,
+    status: z.enum(CANDIDATE_STATUSES),
+    sourceUrl: optionalUrl,
+    websiteUrl: optionalUrl,
+    socialUrls: z.array(z.string().trim().max(500)).max(200).transform(normalizeSocialUrls),
+    // お知らせの取得元。URL を空にしたら方式も一緒に null へ戻す（design.md §1）。
+    newsUrl: optionalHttpsUrl,
+    newsSource: z.enum(NEWS_SOURCES).nullable(),
+  })
+  .transform((v) => ({ ...v, newsSource: v.newsUrl ? v.newsSource : null }))
 export type VendorInput = z.infer<typeof vendorInput>
 
 export const propertyInput = z.object({

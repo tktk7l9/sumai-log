@@ -42,6 +42,32 @@ describe('vendors', () => {
     const [place] = await db.select().from(places).where(eq(places.id, placeId))
     expect(place.vendorId).toBeNull()
   })
+
+  it('代表者名・加盟団体は JSON 配列で往復し、未指定なら null / 空配列になる', async () => {
+    const id = await upsertVendor(
+      db,
+      {
+        name: '乙工務店',
+        kind: 'koumuten',
+        serviceAreas: [],
+        representative: '架空太郎',
+        affiliations: ['iedukuri100', 'miratsugu'],
+      },
+      actor,
+    )
+    let [row] = await db.select().from(vendors).where(eq(vendors.id, id))
+    expect(row.representative).toBe('架空太郎')
+    expect(row.affiliations).toEqual(['iedukuri100', 'miratsugu'])
+
+    const otherId = await upsertVendor(
+      db,
+      { name: '丙工務店', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    ;[row] = await db.select().from(vendors).where(eq(vendors.id, otherId))
+    expect(row.representative).toBeNull()
+    expect(row.affiliations).toEqual([])
+  })
 })
 
 describe('properties', () => {

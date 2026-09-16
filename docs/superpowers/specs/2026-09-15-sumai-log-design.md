@@ -123,3 +123,24 @@
 - 地図: 住所で取れた／手貼り／座標なし の 3 通りの描画と出典表示
 - モバイル: 390×844 のスモーク（下タブ・FAB・全画面フォーム・地図・写真グリッド）。1280 でも崩れない
 - デプロイ: `wrangler deployments list` の `Created` が最新コミットと一致すること
+
+## 10. 業者のお知らせ取得（2026-09-16 追加）
+
+候補業者のお知らせページから 1 日 1 回、定期的に情報を取得しタイムライン表示・カレンダーの
+情報レイヤーに載せる機能。詳細（取得元と方式・データ設計・イベント日程の抽出・画面・
+セキュリティ制約・所有者の作業）は別紙: `docs/superpowers/specs/2026-09-16-vendor-news-design.md`。
+
+`## 4. データモデル`（本紙）への追加分:
+
+- `vendor_news`（新規テーブル。migration 0003）: `vendor_id`（→ `vendors.id`、削除時 cascade）・
+  `url`（UNIQUE、新着判定のキー）・`title`・`summary`・`published_on`・`event_start`/
+  `event_end`/`event_kind`（イベントと判定したときだけ）・`planned_event_id`（→ `events.id`、
+  「行く」で作った自分の予定。削除時 set null）・`first_seen_at`
+- `vendors` への追加列（migration 0003）: `news_url`・`news_source`（`rss` | `html-list`）・
+  `news_fetched_at`・`news_fetch_error`
+- `vendors` への追加列（migration 0004）: `representative`（代表者名。任意）・`affiliations`
+  （加盟団体 id の JSON 配列。既定 `[]`。`src/content/affiliations.ts` のデータと結びつき、
+  用語集の該当語へバッジから飛べる）
+
+Cron（`wrangler.jsonc` の `triggers.crons`）と Worker の自前エントリ（`src/server.ts`）は
+`AGENTS.md` を参照。
