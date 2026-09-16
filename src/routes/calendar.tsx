@@ -11,14 +11,17 @@ import { z } from 'zod'
 import { EventForm } from '../components/calendar/EventForm'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
+import { NewsEventDrawer } from '../components/news/NewsEventDrawer'
 import { PageShell } from '../components/PageShell'
+import { extractErrorMessage } from '../lib/formError'
 import { dateKey, formatDateWithWeekday } from '../lib/calendar'
 import { holidayName } from '../lib/holidays'
-import { toScheduleEvents, type OwnEventPayload } from '../lib/scheduleEvents'
+import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../lib/scheduleLabels'
 import { deleteEvent, listEventsBetween } from '../server/events'
+import { newsEventsBetween, planVisitFromNews } from '../server/news'
 import { listLinkTargets, listPlaces } from '../server/places'
-import type { EventWithLinks } from '../server/repository'
+import type { EventWithLinks, NewsEventRow } from '../server/repository'
 
 const search = z.object({
   // 表示中の月 'YYYY-MM'。無ければ今月
@@ -44,12 +47,15 @@ export const Route = createFileRoute('/calendar')({
     const date = deps.d ?? (deps.m ? `${deps.m}-01` : todayKeyJst())
     const view = deps.v ?? 'month'
     const { from, to } = visibleRange(date, view)
-    const [range, targets, places] = await Promise.all([
+    const [range, targets, places, news] = await Promise.all([
       listEventsBetween({ data: { from, to } }),
       listLinkTargets(),
       listPlaces(),
+      // 情報レイヤー用。月をまたいではみ出す表示範囲（visibleRange）と同じ from/to で取る
+      // （newsEventsForMonth の月単位だと、月表示が前後にはみ出す週ぶんの情報が漏れる）
+      newsEventsBetween({ data: { from, to } }),
     ])
-    return { ...range, targets, places, date }
+    return { ...range, targets, places, date, newsEvents: news.news }
   },
 })
 
@@ -80,13 +86,20 @@ function visibleRange(date: string, view: 'day' | 'week' | 'month'): { from: str
 }
 
 function Page() {
-  const { events, targets, places, date } = Route.useLoaderData()
+  const { events, targets, places, date, newsEvents } = Route.useLoaderData()
   const { d, v } = Route.useSearch()
   const navigate = useNavigate({ from: '/calendar' })
   const router = useRouter()
   const remove = useServerFn(deleteEvent)
+  const planVisit = useServerFn(planVisitFromNews)
   const [editing, setEditing] = useState<EventWithLinks | null>(null)
   const [creating, setCreating] = useState(false)
+  // 情報レイヤーのドロワーは id だけ持つ（news 自体は loader データから毎回引き直す）。
+  // こうしておくと「行く」後の router.invalidate() で newsEvents が更新されたとき、
+  // 同じドロワーを開いたまま plannedEventId 付きの最新の news に自然と切り替わり、
+  // ボタンが「行く」→「予定を見る」に変わる。
+  const [newsDrawerNewsId, setNewsDrawerNewsId] = useState<string | null>(null)
+  const [planningNewsId, setPlanningNewsId] = useState<string | null>(null)
   // 'year' は URL に持たせない（v の search スキーマに無い）ので、ヘッダーから
   // 選ばれても表示だけローカル state で切り替える
   const [view, setView] = useState<ScheduleViewLevel>(v ?? 'month')
@@ -95,8 +108,14 @@ function Page() {
     setView(v ?? 'month')
   }, [v])
 
-  const scheduleEvents = useMemo(() => toScheduleEvents(events), [events])
+  const scheduleEvents = useMemo<ScheduleEventData<CalendarPayload>[]>(
+    () => [...toScheduleEvents(events), ...newsToScheduleEvents(newsEvents)],
+    [events, newsEvents],
+  )
   const selected = d ?? date
+  const newsDrawerNews = newsDrawerNewsId
+    ? (newsEvents.find((n) => n.id === newsDrawerNewsId) ?? null)
+    : null
 
   function navigateToDay(next: string) {
     // Schedule のコールバックは型上 'YYYY-MM-DD' だが実際は 'YYYY-MM-DD HH:mm:ss' で来るため、
@@ -112,10 +131,14 @@ function Page() {
   }
 
   function handleEventClick(ev: ScheduleEventData) {
-    const payload = ev.payload as OwnEventPayload | undefined
+    const payload = ev.payload as CalendarPayload | undefined
     if (!payload) return
-    const found = events.find((e) => e.id === payload.eventId)
-    if (found) setEditing(found)
+    if (payload.kind === 'own') {
+      const found = events.find((e) => e.id === payload.eventId)
+      if (found) setEditing(found)
+      return
+    }
+    setNewsDrawerNewsId(payload.newsId)
   }
 
   async function handleDelete(e: EventWithLinks) {
@@ -128,6 +151,29 @@ function Page() {
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
     }
+  }
+
+  /** お知らせドロワーの「行く」。予定化してから同じ日を選択する（ドロワーは開いたまま） */
+  async function handlePlanVisit(news: NewsEventRow) {
+    setPlanningNewsId(news.id)
+    try {
+      await planVisit({ data: { newsId: news.id } })
+      await router.invalidate()
+      notifications.show({ message: '予定を追加しました' })
+      if (news.eventStart) navigateToDay(news.eventStart)
+    } catch (error) {
+      notifications.show({ message: extractErrorMessage(error), color: 'red' })
+    } finally {
+      setPlanningNewsId(null)
+    }
+  }
+
+  /** お知らせドロワーの「予定を見る」（既に「行く」済み）。自分の予定の編集ドロワーへ */
+  function handleViewPlannedEvent(news: NewsEventRow) {
+    setNewsDrawerNewsId(null)
+    const found = news.plannedEventId ? events.find((e) => e.id === news.plannedEventId) : undefined
+    if (found) setEditing(found)
+    else if (news.eventStart) navigateToDay(news.eventStart)
   }
 
   function dayProps(key: string) {
@@ -170,6 +216,38 @@ function Page() {
           weekViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
           dayViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
         />
+        <Group gap="sm" wrap="wrap">
+          <Group gap={6} wrap="nowrap">
+            <span
+              aria-hidden
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                display: 'inline-block',
+                backgroundColor: 'var(--mantine-color-clay-6)',
+              }}
+            />
+            <Text size="xs" c="dimmed">
+              自分たちの予定
+            </Text>
+          </Group>
+          <Group gap={6} wrap="nowrap">
+            <span
+              aria-hidden
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                display: 'inline-block',
+                border: '1px solid var(--mantine-color-gray-6)',
+              }}
+            />
+            <Text size="xs" c="dimmed">
+              業者のお知らせ（情報）
+            </Text>
+          </Group>
+        </Group>
         <Group gap="xs">
           <Text fw={700}>{formatDateWithWeekday(selected)}</Text>
           {holidayName(selected) ? (
@@ -203,6 +281,20 @@ function Page() {
               削除
             </Button>
           </Stack>
+        ) : null}
+      </FormDrawer>
+      <FormDrawer
+        opened={newsDrawerNews !== null}
+        onClose={() => setNewsDrawerNewsId(null)}
+        title="業者のお知らせ"
+      >
+        {newsDrawerNews ? (
+          <NewsEventDrawer
+            news={newsDrawerNews}
+            planning={planningNewsId === newsDrawerNews.id}
+            onPlan={() => handlePlanVisit(newsDrawerNews)}
+            onViewEvent={() => handleViewPlannedEvent(newsDrawerNews)}
+          />
         ) : null}
       </FormDrawer>
     </PageShell>

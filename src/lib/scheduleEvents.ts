@@ -1,10 +1,14 @@
 import type { ScheduleEventData } from '@mantine/schedule'
 
-import type { EventWithLinks } from '../server/repository'
+import type { EventWithLinks, NewsEventRow } from '../server/repository'
 import { dateKey, splitStartsAt } from './calendar'
 
 /** カレンダーの予定は「自分たちの予定」だけ。外部由来のイベントは無いので kind は固定。 */
 export type OwnEventPayload = { kind: 'own'; eventId: string }
+/** 業者のお知らせ（情報レイヤー）。「行く」で自分の予定に変換するまでは own にならない。 */
+export type NewsEventPayload = { kind: 'news'; newsId: string }
+/** Schedule に渡すイベントの payload は、自分の予定・業者のお知らせのどちらか */
+export type CalendarPayload = OwnEventPayload | NewsEventPayload
 
 const KIND_COLOR: Record<EventWithLinks['kind'], string> = {
   visit: 'clay',
@@ -75,4 +79,37 @@ export function toScheduleEvents(
 
     return { id: e.id, title: e.title, start, end, color, payload }
   })
+}
+
+/**
+ * 業者のお知らせ（イベント判定済みのもの）を @mantine/schedule の情報レイヤー用
+ * ScheduleEventData に変換する（純粋関数）。design.md §4「カレンダー」のとおり、
+ * 自分の予定とは別に常にグレーで描く（「行く」で自分の予定になっても、この情報
+ * レイヤーからは消さない＝両方表示され続ける）。event_start/event_end が無い行
+ * （イベント未判定）は呼び出し側で既に除かれている前提だが、念のためここでも
+ * eventStart が無い行は捨てる。
+ *
+ * 終日イベントとして扱う（`toScheduleEvents` の終日ケースと同じ 00:00:00〜翌日
+ * 00:00:00）。event_end が無ければ単日（event_start と同じ日）とみなす。
+ * id は自分の予定の id と衝突しないよう `news-` を前置する（同じ Schedule に
+ * 両方の配列を混ぜて渡すため）。
+ */
+export function newsToScheduleEvents(
+  items: readonly NewsEventRow[],
+): ScheduleEventData<NewsEventPayload>[] {
+  return items
+    .filter((n): n is NewsEventRow & { eventStart: string } => n.eventStart !== null)
+    .map((n) => {
+      const start = n.eventStart
+      const end = n.eventEnd ?? start
+      const payload: NewsEventPayload = { kind: 'news', newsId: n.id }
+      return {
+        id: `news-${n.id}`,
+        title: `${n.vendorName} ${n.title}`,
+        start: `${start} 00:00:00`,
+        end: `${nextDay(end)} 00:00:00`,
+        color: 'gray',
+        payload,
+      }
+    })
 }

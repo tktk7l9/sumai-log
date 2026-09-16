@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { EventWithLinks } from '../server/repository'
-import { nextDay, toScheduleEvents } from './scheduleEvents'
+import type { EventWithLinks, NewsEventRow } from '../server/repository'
+import { newsToScheduleEvents, nextDay, toScheduleEvents } from './scheduleEvents'
 
 const base: EventWithLinks = {
   id: 'e1',
@@ -106,5 +106,61 @@ describe('toScheduleEvents', () => {
   it('payload は自分たちの予定の id を持つ', () => {
     const [result] = toScheduleEvents([ev({ id: 'f' })])
     expect(result.payload).toEqual({ kind: 'own', eventId: 'f' })
+  })
+})
+
+const newsBase: NewsEventRow = {
+  id: 'n1',
+  vendorId: 'v1',
+  vendorName: 'テスト工務店',
+  url: 'https://example.com/news/1',
+  title: '完成見学会のお知らせ',
+  summary: null,
+  publishedOn: '2030-01-01',
+  eventStart: '2030-01-05',
+  eventEnd: '2030-01-05',
+  eventKind: '完成見学会',
+  plannedEventId: null,
+  firstSeenAt: '2030-01-01 00:00:00',
+  createdAt: '2030-01-01 00:00:00',
+  updatedAt: '2030-01-01 00:00:00',
+}
+
+const news = (overrides: Partial<NewsEventRow>): NewsEventRow => ({ ...newsBase, ...overrides })
+
+describe('newsToScheduleEvents', () => {
+  it('単日イベントは 00:00:00〜翌日 00:00:00、色は常に gray', () => {
+    const [result] = newsToScheduleEvents([news({})])
+    expect(result).toEqual({
+      id: 'news-n1',
+      title: 'テスト工務店 完成見学会のお知らせ',
+      start: '2030-01-05 00:00:00',
+      end: '2030-01-06 00:00:00',
+      color: 'gray',
+      payload: { kind: 'news', newsId: 'n1' },
+    })
+  })
+
+  it('複数日イベントは event_end の翌日まで', () => {
+    const [result] = newsToScheduleEvents([
+      news({ eventStart: '2030-01-05', eventEnd: '2030-01-07' }),
+    ])
+    expect(result.start).toBe('2030-01-05 00:00:00')
+    expect(result.end).toBe('2030-01-08 00:00:00')
+  })
+
+  it('event_end が無ければ event_start と同じ日を終端にする', () => {
+    const [result] = newsToScheduleEvents([news({ eventStart: '2030-01-05', eventEnd: null })])
+    expect(result.start).toBe('2030-01-05 00:00:00')
+    expect(result.end).toBe('2030-01-06 00:00:00')
+  })
+
+  it('event_start が無ければ（イベント未判定）除外する', () => {
+    expect(newsToScheduleEvents([news({ eventStart: null, eventEnd: null })])).toEqual([])
+  })
+
+  it('planned_event_id が付いていても情報レイヤーからは消さない', () => {
+    const [result] = newsToScheduleEvents([news({ plannedEventId: 'e1' })])
+    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1' })
   })
 })

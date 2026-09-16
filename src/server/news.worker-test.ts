@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { listVendorNewsInput, newsEventsForMonthInput, planVisitInput } from './news.schema'
+import {
+  listVendorNewsInput,
+  newsEventsBetweenInput,
+  newsEventsForMonthInput,
+  planVisitInput,
+} from './news.schema'
 
 /**
  * fetchNewsNow / planVisitFromNews は createServerFn でラップされているため、
@@ -53,6 +58,22 @@ describe('newsEventsForMonthInput', () => {
   it('範囲外の月（00・13）は拒否する', () => {
     expect(newsEventsForMonthInput.safeParse({ ym: '2026-13' }).success).toBe(false)
     expect(newsEventsForMonthInput.safeParse({ ym: '2026-00' }).success).toBe(false)
+  })
+})
+
+describe('newsEventsBetweenInput', () => {
+  it('YYYY-MM-DD の from/to をそのまま通す（月をまたいでもよい）', () => {
+    const result = newsEventsBetweenInput.safeParse({ from: '2026-08-25', to: '2026-10-07' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ from: '2026-08-25', to: '2026-10-07' })
+    }
+  })
+
+  it('形式が違えば拒否する', () => {
+    expect(newsEventsBetweenInput.safeParse({ from: '2026/09/01', to: '2026-09-30' }).success).toBe(
+      false,
+    )
   })
 })
 

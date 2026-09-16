@@ -1,6 +1,15 @@
 import { AppShell, Group, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
 import { Link, useLocation } from '@tanstack/react-router'
-import { BookOpen, Building2, CalendarDays, House, Map, NotebookPen, Settings } from 'lucide-react'
+import {
+  BookOpen,
+  Building2,
+  CalendarDays,
+  House,
+  Map,
+  Newspaper,
+  NotebookPen,
+  Settings,
+} from 'lucide-react'
 
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
 
@@ -32,6 +41,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             住まいログ
           </Text>
           <Group gap="xs" wrap="nowrap">
+            <NavLink
+              component={Link}
+              to="/news"
+              label="お知らせ"
+              leftSection={<Newspaper size={18} aria-hidden />}
+              active={isNavItemActive(pathname, '/news')}
+              aria-current={isNavItemActive(pathname, '/news') ? 'page' : undefined}
+              w="auto"
+              px="xs"
+            />
             <NavLink
               component={Link}
               to="/glossary"

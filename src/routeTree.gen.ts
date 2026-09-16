@@ -14,6 +14,7 @@ import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as CandidatesRouteImport } from './routes/candidates'
 import { Route as GlossaryRouteImport } from './routes/glossary'
 import { Route as MapRouteImport } from './routes/map'
+import { Route as NewsRouteImport } from './routes/news'
 import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
@@ -49,6 +50,11 @@ const GlossaryRoute = GlossaryRouteImport.update({
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NewsRoute = NewsRouteImport.update({
+  id: '/news',
+  path: '/news',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecordsRoute = RecordsRouteImport.update({
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/candidates': typeof CandidatesRoute
   '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
+  '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/candidates': typeof CandidatesRoute
   '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
+  '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/candidates': typeof CandidatesRoute
   '/glossary': typeof GlossaryRoute
   '/map': typeof MapRoute
+  '/news': typeof NewsRoute
   '/records': typeof RecordsRoute
   '/settings': typeof SettingsRoute
   '/api/geocode': typeof ApiGeocodeRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/glossary'
     | '/map'
+    | '/news'
     | '/records'
     | '/settings'
     | '/api/geocode'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/glossary'
     | '/map'
+    | '/news'
     | '/records'
     | '/settings'
     | '/api/geocode'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/candidates'
     | '/glossary'
     | '/map'
+    | '/news'
     | '/records'
     | '/settings'
     | '/api/geocode'
@@ -225,6 +237,7 @@ export interface RootRouteChildren {
   CandidatesRoute: typeof CandidatesRoute
   GlossaryRoute: typeof GlossaryRoute
   MapRoute: typeof MapRoute
+  NewsRoute: typeof NewsRoute
   RecordsRoute: typeof RecordsRoute
   SettingsRoute: typeof SettingsRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
@@ -273,6 +286,13 @@ declare module '@tanstack/react-router' {
       path: '/map'
       fullPath: '/map'
       preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/news': {
+      id: '/news'
+      path: '/news'
+      fullPath: '/news'
+      preLoaderRoute: typeof NewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/records': {
@@ -361,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   CandidatesRoute: CandidatesRoute,
   GlossaryRoute: GlossaryRoute,
   MapRoute: MapRoute,
+  NewsRoute: NewsRoute,
   RecordsRoute: RecordsRoute,
   SettingsRoute: SettingsRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,

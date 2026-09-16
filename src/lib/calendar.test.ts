@@ -6,8 +6,11 @@ import {
   composeStartsAt,
   dateKey,
   formatDateWithWeekday,
+  formatEventBadge,
   formatEventTime,
+  formatShortDateWithWeekday,
   groupByDay,
+  groupByDayKeepOrder,
   monthKeys,
   splitStartsAt,
 } from './calendar'
@@ -108,5 +111,89 @@ describe('compareStartsAt', () => {
     expect(compareStartsAt('2030-01-05', '2030-01-05T09:00:00+09:00')).toBeLessThan(0)
     expect(compareStartsAt('2030-01-06', '2030-01-05T23:00:00+09:00')).toBeGreaterThan(0)
     expect(compareStartsAt('2030-01-05', '2030-01-05')).toBe(0)
+  })
+})
+
+describe('formatShortDateWithWeekday', () => {
+  it('月日をゼロ埋めせず半角括弧で曜日を付ける（土）', () => {
+    expect(formatShortDateWithWeekday('2026-09-12')).toBe('9/12(土)')
+  })
+
+  it('日曜も同じ形式（日）', () => {
+    expect(formatShortDateWithWeekday('2026-09-13')).toBe('9/13(日)')
+  })
+
+  it('読めない文字列はそのまま返す', () => {
+    expect(formatShortDateWithWeekday('invalid')).toBe('invalid')
+  })
+})
+
+describe('formatEventBadge', () => {
+  it('eventKind が無ければ null', () => {
+    expect(formatEventBadge(null, '2026-09-12', '2026-09-12')).toBeNull()
+  })
+
+  it('eventStart が無ければ null', () => {
+    expect(formatEventBadge('見学会', null, null)).toBeNull()
+  })
+
+  it('eventEnd が無ければ単日表記', () => {
+    expect(formatEventBadge('見学会', '2026-09-12', null)).toBe('見学会 9/12(土)')
+  })
+
+  it('eventEnd が eventStart と同じなら単日表記', () => {
+    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-12')).toBe('見学会 9/12(土)')
+  })
+
+  it('eventEnd が違えば範囲表記', () => {
+    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-13')).toBe('見学会 9/12(土)〜9/13(日)')
+  })
+})
+
+describe('groupByDayKeepOrder', () => {
+  it('渡した順のまま日付キーでまとめる（並べ替えない）', () => {
+    const groups = groupByDayKeepOrder(
+      [
+        { id: 'a', publishedOn: '2026-09-13' },
+        { id: 'b', publishedOn: '2026-09-13' },
+        { id: 'c', publishedOn: '2026-09-10' },
+      ],
+      (item) => item.publishedOn,
+    )
+    expect(groups).toEqual([
+      {
+        day: '2026-09-13',
+        items: [
+          { id: 'a', publishedOn: '2026-09-13' },
+          { id: 'b', publishedOn: '2026-09-13' },
+        ],
+      },
+      { day: '2026-09-10', items: [{ id: 'c', publishedOn: '2026-09-10' }] },
+    ])
+  })
+
+  it('同じ日付キーが離れて出てきても同じグループに合流する', () => {
+    const groups = groupByDayKeepOrder(
+      [
+        { id: 'a', publishedOn: '2026-09-13' },
+        { id: 'b', publishedOn: '2026-09-10' },
+        { id: 'c', publishedOn: '2026-09-13' },
+      ],
+      (item) => item.publishedOn,
+    )
+    expect(groups).toEqual([
+      {
+        day: '2026-09-13',
+        items: [
+          { id: 'a', publishedOn: '2026-09-13' },
+          { id: 'c', publishedOn: '2026-09-13' },
+        ],
+      },
+      { day: '2026-09-10', items: [{ id: 'b', publishedOn: '2026-09-10' }] },
+    ])
+  })
+
+  it('空配列は空配列', () => {
+    expect(groupByDayKeepOrder([], (item: { publishedOn: string }) => item.publishedOn)).toEqual([])
   })
 })

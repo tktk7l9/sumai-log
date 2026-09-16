@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { monthKeys } from '../lib/calendar'
-import { idField } from './zod'
+import { dateField, idField } from './zod'
 
 /**
  * news.ts から分離した理由: events.schema.ts / videos.schema.ts と同じ
@@ -34,6 +34,14 @@ export const newsEventsForMonthInput = z
     return { from: days[0], to: days[days.length - 1] }
   })
 export type NewsEventsForMonthInput = z.input<typeof newsEventsForMonthInput>
+
+/**
+ * カレンダーの情報レイヤー用（月をまたぐ表示範囲）。カレンダー画面の月表示は前後の週が
+ * はみ出すぶん広めに取る（src/routes/calendar.tsx の visibleRange）ため、月境界で
+ * 切ってしまう newsEventsForMonth ではなく、こちらで実際の表示範囲そのものを渡す。
+ */
+export const newsEventsBetweenInput = z.object({ from: dateField, to: dateField })
+export type NewsEventsBetweenInput = z.input<typeof newsEventsBetweenInput>
 
 export const planVisitInput = z.object({ newsId: idField })
 export type PlanVisitInput = z.input<typeof planVisitInput>
