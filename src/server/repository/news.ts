@@ -8,6 +8,7 @@ import {
   vendorNews,
   vendors,
 } from '../../db/schema'
+import { extractEvent } from '../../lib/news/eventDate'
 
 /**
  * insertNewsIfNew に渡す1件分。id・first_seen_at・created_at・updated_at はここで
@@ -129,6 +130,46 @@ export async function markNewsFetched(
     .update(vendors)
     .set({ newsFetchedAt: sql`(datetime('now'))`, newsFetchError: error })
     .where(eq(vendors.id, vendorId))
+}
+
+/**
+ * 設定ページの「日程を再解析」。`eventDate.ts` の抽出ロジックが直った後に、
+ * 既存の vendor_news 全件へ再適用して差分だけ更新する（design のトレードオフ:
+ * 取得時に1回だけ判定する方針は変えず、ロジック改善時だけ手動で再計算できる
+ * 逃げ道を用意する）。`planned_event_id`（「行く」で紐づけた自分の予定）は
+ * 触らない。`vendors.updated_at` もここでは一切触らない（vendors テーブル自体を
+ * 更新しないため自動的に動かない）。
+ */
+export async function reparseNewsEventDates(db: Db): Promise<{ checked: number; updated: number }> {
+  const rows = await db
+    .select({
+      id: vendorNews.id,
+      title: vendorNews.title,
+      summary: vendorNews.summary,
+      publishedOn: vendorNews.publishedOn,
+      eventStart: vendorNews.eventStart,
+      eventEnd: vendorNews.eventEnd,
+      eventKind: vendorNews.eventKind,
+    })
+    .from(vendorNews)
+
+  let updated = 0
+  for (const row of rows) {
+    const event = extractEvent(`${row.title} ${row.summary ?? ''}`, row.publishedOn)
+    const nextStart = event?.start ?? null
+    const nextEnd = event?.end ?? null
+    const nextKind = event?.kind ?? null
+    if (nextStart === row.eventStart && nextEnd === row.eventEnd && nextKind === row.eventKind) {
+      continue
+    }
+    await db
+      .update(vendorNews)
+      .set({ eventStart: nextStart, eventEnd: nextEnd, eventKind: nextKind })
+      .where(eq(vendorNews.id, row.id))
+    updated++
+  }
+
+  return { checked: rows.length, updated }
 }
 
 /** 「行く」で作った自分の予定（events）に紐づける */
