@@ -1,57 +1,81 @@
-import { Button, Chip, Group, Stack } from '@mantine/core'
+import { Button, Chip, Group, Stack, Text } from '@mantine/core'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import dayjs from 'dayjs'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { z } from 'zod'
 
-import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { NewsAgenda } from '../components/news/NewsAgenda'
 import { UUID_SHAPE } from '../lib/ids'
 import { listVendorNews, newsSources } from '../server/news'
 
-/** 1 ページぶんの件数。「もっと見る」を押すごとに PAGE_SIZE 件ずつ増やす */
-const PAGE_SIZE = 50
-/** 表示する件数の上限（4 ページぶん） */
-const MAX_LIMIT = 200
+/** 1 か月ぶんの安全上限（もっと見るページングは fix round 1 で廃止。通常は届かない） */
+const MONTH_LIMIT = 200
+
+const MONTH_SHAPE = /^\d{4}-\d{2}$/
 
 const newsSearchSchema = z.object({
   // 絞り込み対象の業者 id。壊れた値（手打ち・古いブックマーク等）は絞り込み無しに倒す
   v: z.string().regex(UUID_SHAPE).optional().catch(undefined),
-  // 「もっと見る」を押した回数 + 1（1 なら PAGE_SIZE 件、2 なら PAGE_SIZE*2 件…）
-  p: z.coerce
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_LIMIT / PAGE_SIZE)
-    .optional()
-    .catch(undefined),
+  // 表示中の月 'YYYY-MM'。無ければ今月（JST）。壊れた値は今月に倒す
+  m: z.string().regex(MONTH_SHAPE).optional().catch(undefined),
 })
+
+/**
+ * JST の 'YYYY-MM'（今月）。calendar.tsx の todayKeyJst と同じ理由でローカルに計算する
+ * （server/events.ts の nowJstIso をここで import すると、そちらが import する getDb 等が
+ * クライアントバンドルに含まれてしまう懸念があるため。settings.tsx が members 絡みで
+ * 同じ理由から回避しているのと同じパターン）。
+ */
+function currentMonthJst(): string {
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** 'YYYY-MM' の初日〜末日（どちらも 'YYYY-MM-DD'） */
+function monthRange(month: string): { from: string; to: string } {
+  const start = dayjs(`${month}-01T00:00:00`)
+  return { from: start.format('YYYY-MM-DD'), to: start.endOf('month').format('YYYY-MM-DD') }
+}
+
+/** 'YYYY-MM' を n か月ずらす（負数で過去へ） */
+function shiftMonth(month: string, delta: number): string {
+  return dayjs(`${month}-01T00:00:00`).add(delta, 'month').format('YYYY-MM')
+}
+
+/** 'YYYY-MM' を '2026年9月' に直す */
+function formatMonthLabel(month: string): string {
+  const [year, m] = month.split('-')
+  return `${year}年${Number(m)}月`
+}
 
 export const Route = createFileRoute('/news')({
   component: Page,
   validateSearch: (s) => newsSearchSchema.parse(s),
-  loaderDeps: ({ search }) => ({ v: search.v, p: search.p }),
+  loaderDeps: ({ search }) => ({ v: search.v, m: search.m }),
   loader: async ({ deps }) => {
-    const limit = Math.min(MAX_LIMIT, PAGE_SIZE * (deps.p ?? 1))
-    // 表示上限に +1 件だけ多く問い合わせ、その 1 件が返ってきたかどうかで
-    // 「もっと見る」を出すかを正確に判定する（ちょうど limit 件で終わる空振り
-    // クリックを避ける。listVendorNewsInput の limit 上限は 201 まで許容済み）。
-    const [{ news: fetched }, { sources }] = await Promise.all([
-      listVendorNews({ data: { vendorId: deps.v, limit: limit + 1, offset: 0 } }),
+    const month = deps.m ?? currentMonthJst()
+    const { from, to } = monthRange(month)
+    const [{ news }, { sources }] = await Promise.all([
+      listVendorNews({ data: { vendorId: deps.v, from, to, limit: MONTH_LIMIT, offset: 0 } }),
       newsSources(),
     ])
-    const hasMore = fetched.length > limit
-    return { news: fetched.slice(0, limit), sources, limit, hasMore }
+    return { news, sources, month }
   },
 })
 
 function Page() {
-  const { news, sources, limit, hasMore } = Route.useLoaderData()
-  const { v, p } = Route.useSearch()
+  const { news, sources, month } = Route.useLoaderData()
+  const { v } = Route.useSearch()
   const navigate = useNavigate({ from: '/news' })
+  const range = monthRange(month)
+  // 今月より先（未来の月）へは進めない。今月そのものは見られる（「次の月」は今月を
+  // 表示しているときだけ無効にする）
+  const canGoNext = month < currentMonthJst()
 
-  // hasMore は loader が limit+1 件を問い合わせて実測済み（正確な判定）。
-  // 表示上限に既に達している場合はこれ以上増やせないので出さない。
-  const canLoadMore = hasMore && limit < MAX_LIMIT
+  function goToMonth(next: string) {
+    navigate({ search: (s) => ({ ...s, m: next }), replace: true })
+  }
 
   return (
     <PageShell title="お知らせ">
@@ -61,7 +85,7 @@ function Page() {
             value={v ?? null}
             onChange={(next) =>
               navigate({
-                search: (s) => ({ ...s, v: (next as string) || undefined, p: undefined }),
+                search: (s) => ({ ...s, v: (next as string) || undefined }),
                 replace: true,
               })
             }
@@ -76,24 +100,33 @@ function Page() {
           </Chip.Group>
         ) : null}
 
-        {news.length === 0 ? (
-          <EmptyState emoji="📰" title="まだお知らせはありません" />
-        ) : (
-          <>
-            <NewsAgenda items={news} />
-            {canLoadMore ? (
-              <Button
-                variant="light"
-                fullWidth
-                onClick={() =>
-                  navigate({ search: (s) => ({ ...s, p: (p ?? 1) + 1 }), replace: true })
-                }
-              >
-                もっと見る
-              </Button>
-            ) : null}
-          </>
-        )}
+        <Group justify="space-between" wrap="nowrap">
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            leftSection={<ChevronLeft size={16} aria-hidden />}
+            onClick={() => goToMonth(shiftMonth(month, -1))}
+          >
+            前の月
+          </Button>
+          <Text fw={700}>{formatMonthLabel(month)}</Text>
+          <Button
+            variant="subtle"
+            size="compact-sm"
+            rightSection={<ChevronRight size={16} aria-hidden />}
+            disabled={!canGoNext}
+            onClick={() => goToMonth(shiftMonth(month, 1))}
+          >
+            次の月
+          </Button>
+        </Group>
+
+        <NewsAgenda
+          items={news}
+          rangeStart={range.from}
+          rangeEnd={range.to}
+          emptyLabel="この月のお知らせはありません"
+        />
       </Stack>
     </PageShell>
   )

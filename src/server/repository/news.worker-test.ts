@@ -214,6 +214,97 @@ describe('listNews', () => {
     // 新しい順: お知らせ4, お知らせ3, お知らせ2, お知らせ1, お知らせ0 → offset 1, limit 2
     expect(page.map((r) => r.title)).toEqual(['お知らせ3', 'お知らせ2'])
   })
+
+  it('from/to（published_on、境界含む）で絞り込める（/news の月ごとのアジェンダ用）', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    await insertRow({
+      id: 'before-month',
+      vendorId,
+      url: 'https://news.example.com/before-month',
+      title: '月より前',
+      publishedOn: '2026-08-31',
+      firstSeenAt: '2026-08-31 00:00:00',
+    })
+    await insertRow({
+      id: 'first-day',
+      vendorId,
+      url: 'https://news.example.com/first-day',
+      title: '月初日（境界）',
+      publishedOn: '2026-09-01',
+      firstSeenAt: '2026-09-01 00:00:00',
+    })
+    await insertRow({
+      id: 'mid-month',
+      vendorId,
+      url: 'https://news.example.com/mid-month',
+      title: '月の中',
+      publishedOn: '2026-09-15',
+      firstSeenAt: '2026-09-15 00:00:00',
+    })
+    await insertRow({
+      id: 'last-day',
+      vendorId,
+      url: 'https://news.example.com/last-day',
+      title: '月末日（境界）',
+      publishedOn: '2026-09-30',
+      firstSeenAt: '2026-09-30 00:00:00',
+    })
+    await insertRow({
+      id: 'after-month',
+      vendorId,
+      url: 'https://news.example.com/after-month',
+      title: '月より後',
+      publishedOn: '2026-10-01',
+      firstSeenAt: '2026-10-01 00:00:00',
+    })
+
+    const rows = await listNews(db, { from: '2026-09-01', to: '2026-09-30', limit: 200, offset: 0 })
+    expect(rows.map((r) => r.id)).toEqual(['last-day', 'mid-month', 'first-day'])
+  })
+
+  it('from/to を省略すれば従来どおり期間を絞らない', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    await insertRow({
+      id: 'old',
+      vendorId,
+      url: 'https://news.example.com/old-unbounded',
+      title: '古い',
+      publishedOn: '2018-01-01',
+      firstSeenAt: '2018-01-01 00:00:00',
+    })
+    const rows = await listNews(db, { limit: 200, offset: 0 })
+    expect(rows.map((r) => r.id)).toContain('old')
+  })
+
+  it('vendorId と from/to を同時に指定できる（AND で絞り込む）', async () => {
+    const vendorA = await makeVendor('A工務店')
+    const vendorB = await makeVendor('B工務店')
+    await insertRow({
+      id: 'a-in-month',
+      vendorId: vendorA,
+      url: 'https://news.example.com/a-in-month',
+      title: 'Aの月内',
+      publishedOn: '2026-09-10',
+      firstSeenAt: '2026-09-10 00:00:00',
+    })
+    await insertRow({
+      id: 'b-in-month',
+      vendorId: vendorB,
+      url: 'https://news.example.com/b-in-month',
+      title: 'Bの月内',
+      publishedOn: '2026-09-10',
+      firstSeenAt: '2026-09-10 00:00:00',
+    })
+
+    const rows = await listNews(db, {
+      vendorId: vendorA,
+      from: '2026-09-01',
+      to: '2026-09-30',
+      limit: 200,
+      offset: 0,
+    })
+    expect(rows.map((r) => r.id)).toEqual(['a-in-month'])
+  })
 })
 
 describe('listNewsEventsBetween', () => {

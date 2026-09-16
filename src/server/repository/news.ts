@@ -50,15 +50,24 @@ export async function insertNewsIfNew(db: Db, rows: NewNews[]): Promise<number> 
   return added
 }
 
+/**
+ * `from`/`to`（どちらも published_on との比較、境界含む）は /news の月ごとのアジェンダ
+ * （fix round 1）向け。どちらも省略すれば従来どおり期間を絞らない（ホームの最新 N 件など）。
+ */
 export async function listNews(
   db: Db,
-  opts: { vendorId?: string; limit: number; offset: number },
+  opts: { vendorId?: string; from?: string; to?: string; limit: number; offset: number },
 ): Promise<(VendorNews & { vendorName: string })[]> {
+  const conditions = [
+    opts.vendorId ? eq(vendorNews.vendorId, opts.vendorId) : undefined,
+    opts.from ? gte(vendorNews.publishedOn, opts.from) : undefined,
+    opts.to ? lte(vendorNews.publishedOn, opts.to) : undefined,
+  ].filter((c) => c !== undefined)
   const rows = await db
     .select({ news: vendorNews, vendorName: vendors.name })
     .from(vendorNews)
     .innerJoin(vendors, eq(vendorNews.vendorId, vendors.id))
-    .where(opts.vendorId ? eq(vendorNews.vendorId, opts.vendorId) : undefined)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(vendorNews.publishedOn), desc(vendorNews.firstSeenAt))
     .limit(opts.limit)
     .offset(opts.offset)
