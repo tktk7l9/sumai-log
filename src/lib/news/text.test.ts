@@ -86,6 +86,45 @@ describe('stripTags', () => {
   it('空文字は空文字', () => {
     expect(stripTags('')).toBe('')
   })
+
+  it('エンティティでエスケープされた偽タグは、デコード後にもう一度走査して記号だけ落とす', () => {
+    // <script>alert(1)</script> がエスケープされて本文として書かれているケース。
+    // 生の <script> と違って中身ごと隠すのではなく、記号（山括弧）だけ落として
+    // 中身の alert(1) はテキストとして残る。
+    expect(stripTags('&lt;script&gt;alert(1)&lt;/script&gt;')).toBe('alert(1)')
+  })
+
+  it('script/style は名前の境界を見る（<scriptx> は script タグ扱いしない）', () => {
+    // 中身ごと消える本物の script/style と違い、<scriptx> はただのタグとして
+    // 記号だけ落ち、中身のテキストは残る。
+    expect(stripTags('<scriptx>keep</scriptx>')).toBe('keep')
+  })
+
+  it('HTML コメントは中身ごと落ちる（内部に > があっても誤終端しない）', () => {
+    expect(stripTags('前<!-- a > b -->後')).toBe('前 後')
+  })
+
+  it('未終端のコメント・script・タグはそこから先を丸ごと捨てる', () => {
+    expect(stripTags('前<!-- 閉じないコメント')).toBe('前')
+    expect(stripTags('前<script>閉じないスクリプト')).toBe('前')
+    expect(stripTags('前<div class="閉じないタグ')).toBe('前')
+  })
+
+  it('script/style の閉じタグ自体はあっても、その終端 `>` が無ければ丸ごと捨てる', () => {
+    expect(stripTags('前<script>alert(1)</script')).toBe('前')
+  })
+
+  it('閉じない `<` が大量にあっても 1 秒未満で終わる（線形走査の確認）', () => {
+    const start = performance.now()
+    const result = stripTags('<'.repeat(200_000))
+    const elapsed = performance.now() - start
+    expect(result).toBe('')
+    expect(elapsed).toBeLessThan(1000)
+  })
+
+  it('MAX_INPUT_LENGTH を超える入力は空文字', () => {
+    expect(stripTags('a'.repeat(2_000_001))).toBe('')
+  })
 })
 
 describe('truncate', () => {
@@ -100,5 +139,14 @@ describe('truncate', () => {
 
   it('空文字は空文字', () => {
     expect(truncate('', 5)).toBe('')
+  })
+
+  it('サロゲートペア（絵文字）の真ん中では切らない', () => {
+    // 'AB' + 😀（サロゲートペア2ユニット） + 'CD'
+    const text = 'AB😀CD'
+    // max=3 はペアの真ん中（高位サロゲートの直後）で割れる位置 → 1 文字手前で切る
+    expect(truncate(text, 3)).toBe('AB')
+    // max=4 はペアの直後（割れない）→ 絵文字を含めて切る
+    expect(truncate(text, 4)).toBe('AB😀')
   })
 })

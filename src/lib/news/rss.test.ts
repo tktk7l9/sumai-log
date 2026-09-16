@@ -92,21 +92,40 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('title 要素が無い item は空文字にする（description 無しは null）', () => {
+  it('title 要素が無い item は落ちる（タイトルが空では意味が無いため）', () => {
     const xml = feed(`
       <item>
         <link>https://news.example.com/topics/11</link>
         <pubDate>Sat, 04 Jan 2026 09:00:00 +0900</pubDate>
       </item>
     `)
-    expect(parseRss(xml)).toEqual([
-      {
-        url: 'https://news.example.com/topics/11',
-        title: '',
-        summary: null,
-        publishedOn: '2026-01-04',
-      },
-    ])
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('title の中身が空白だけの item も落ちる', () => {
+    const xml = feed(`
+      <item>
+        <title>   </title>
+        <link>https://news.example.com/topics/11</link>
+        <pubDate>Sat, 04 Jan 2026 09:00:00 +0900</pubDate>
+      </item>
+    `)
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('title は200字に切り詰める', () => {
+    const longTitle = 'あ'.repeat(500)
+    const xml = feed(`
+      <item>
+        <title>${longTitle}</title>
+        <link>https://news.example.com/topics/13</link>
+        <pubDate>Sat, 04 Jan 2026 09:00:00 +0900</pubDate>
+      </item>
+    `)
+    const result = parseRss(xml)
+    expect(result).toHaveLength(1)
+    expect(result[0].title).toBe('あ'.repeat(200))
+    expect(result[0].title.length).toBe(200)
   })
 
   it('description は stripTags のうえ 300 字に切り詰める', () => {
@@ -133,5 +152,69 @@ describe('parseRss', () => {
 
   it('item が無いチャンネルは空配列', () => {
     expect(parseRss(feed(''))).toEqual([])
+  })
+
+  it('日が範囲外（32日）の pubDate を持つ item は落ちる', () => {
+    const xml = feed(`
+      <item>
+        <title>日付が範囲外</title>
+        <link>https://news.example.com/topics/20</link>
+        <pubDate>Sat, 32 Sep 2026 09:00:00 +0900</pubDate>
+      </item>
+    `)
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('実在しない日（2月31日）が Date.parse で翌月へ繰り上がる item は落ちる', () => {
+    const xml = feed(`
+      <item>
+        <title>実在しない日付</title>
+        <link>https://news.example.com/topics/21</link>
+        <pubDate>Sun, 31 Feb 2026 09:00:00 +0900</pubDate>
+      </item>
+    `)
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('実在する日の pubDate は正しく解決する（32日・31日の回帰確認）', () => {
+    const xml = feed(`
+      <item>
+        <title>正しい日付</title>
+        <link>https://news.example.com/topics/22</link>
+        <pubDate>Thu, 15 Jan 2026 09:00:00 +0900</pubDate>
+      </item>
+    `)
+    const result = parseRss(xml)
+    expect(result).toHaveLength(1)
+    expect(result[0].publishedOn).toBe('2026-01-15')
+  })
+
+  it('時刻が範囲外（25時）で Date.parse が NaN になる pubDate の item は落ちる', () => {
+    const xml = feed(`
+      <item>
+        <title>時刻が範囲外</title>
+        <link>https://news.example.com/topics/23</link>
+        <pubDate>Sat, 12 Sep 2026 25:00:00 +0900</pubDate>
+      </item>
+    `)
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('JST 変換で年が5桁に繰り上がる極端な日付は落ちる（結果が YYYY-MM-DD にならない）', () => {
+    // 9999年12月31日20:00 UTC + 9時間 = 10000年1月1日05:00 JST。
+    // getUTCFullYear() は年を4桁にゼロ埋めしないため、そのまま連結すると
+    // 「10000-01-01」になり ^\d{4}-\d{2}-\d{2}$ に一致しない。
+    const xml = feed(`
+      <item>
+        <title>極端な日付</title>
+        <link>https://news.example.com/topics/24</link>
+        <pubDate>Thu, 31 Dec 9999 20:00:00 +0000</pubDate>
+      </item>
+    `)
+    expect(parseRss(xml)).toEqual([])
+  })
+
+  it('MAX_INPUT_LENGTH を超える入力は空配列', () => {
+    expect(parseRss('a'.repeat(2_000_001))).toEqual([])
   })
 })

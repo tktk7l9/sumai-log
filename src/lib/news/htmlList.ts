@@ -5,7 +5,7 @@
  */
 
 import type { NewsCandidate } from './rss'
-import { decodeEntities, stripTags, truncate } from './text'
+import { decodeEntities, MAX_INPUT_LENGTH, pad, stripTags, truncate } from './text'
 
 const TITLE_MAX = 200
 
@@ -14,10 +14,6 @@ const LI_PATTERN = /<li\b[^>]*>([\s\S]*?)<\/li>/gi
 // 「YYYY年M月D日」「YYYY.MM.DD」「YYYY/M/D」のいずれか。leftmost の一致を採る。
 const DATE_PATTERN =
   /(\d{4})年(\d{1,2})月(\d{1,2})日|(\d{4})\.(\d{1,2})\.(\d{1,2})|(\d{4})\/(\d{1,2})\/(\d{1,2})/
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
-}
 
 type DateMatch = { start: number; end: number; publishedOn: string }
 
@@ -66,9 +62,12 @@ function resolveHttpUrl(href: string, baseUrl: string): string | null {
  * `<li>` 要素ごとに、最初の `<a href>` と最初の日付表記を取り出して候補にする。
  * href が無い・http(s) に解決できない・日付表記が無い li は捨てる。
  * タイトルは stripTags 済みのテキストから日付表記を取り除いたもの（200 字まで）。
- * summary は常に null（一覧ページに本文の抜粋は無いため）。
+ * summary は常に null（一覧ページに本文の抜粋は無いため）。入力が
+ * MAX_INPUT_LENGTH を超える場合は空配列。
  */
 export function parseHtmlList(html: string, baseUrl: string): NewsCandidate[] {
+  if (html.length > MAX_INPUT_LENGTH) return []
+
   const candidates: NewsCandidate[] = []
 
   for (const liMatch of html.matchAll(LI_PATTERN)) {

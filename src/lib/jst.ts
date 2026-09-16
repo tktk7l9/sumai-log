@@ -23,21 +23,21 @@ export function parseToUtcMs(value: string): number | null {
   const match = DATE_TIME_PATTERN.exec(value)
   if (!match) return null
   const [, year, month, day, hour, minute, second, fraction, offset] = match
-  if (offset) {
-    return Date.parse(
-      `${year}-${month}-${day}T${hour}:${minute}:${second}${fraction ?? ''}${offset}`,
-    )
-  }
-  const ms = fraction ? Math.round(Number(fraction) * 1000) : 0
-  return Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second),
-    ms,
-  )
+  const ms = offset
+    ? Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}${fraction ?? ''}${offset}`)
+    : Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(hour),
+        Number(minute),
+        Number(second),
+        fraction ? Math.round(Number(fraction) * 1000) : 0,
+      )
+  // 正規表現の形は合っていても月日が実在しない（'2026-09-32' 等）と
+  // Date.parse は NaN を返す。null にして「読めない」扱いに合流させる
+  // （呼び出し側は既に utcMs === null を見ている）。
+  return Number.isNaN(ms) ? null : ms
 }
 
 function pad(n: number): string {
