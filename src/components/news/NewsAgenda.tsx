@@ -1,4 +1,4 @@
-import { Badge, Group, Text, UnstyledButton } from '@mantine/core'
+import { Badge, Group, Stack, Text, UnstyledButton } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { AgendaView } from '@mantine/schedule'
 import type { AgendaViewProps, ScheduleEventData } from '@mantine/schedule'
@@ -106,30 +106,41 @@ export function NewsAgenda({
     navigate({ to: '/calendar' })
   }
 
+  // AgendaView の既定レンダリングは行内側に padding を持つ（agendaViewEventBody）が、
+  // renderEvent を渡すとその内側マークアップは使われず自前で組み立てる必要がある。
+  // ここで padding/gap を持たせないと、行同士が境界線だけでくっついて見える
+  // （所有者の報告、2026-09-16）。業者名／タイトル／バッジをそれぞれ別の行にして
+  // 4px の gap で束ね、行全体に上下 8px の padding を持たせる（タップ領域は
+  // 44px を十分超える）。行どうしの区切りは AgendaView 既定の border-bottom
+  // （rootProps 経由）をそのまま使う。
   const renderEvent: AgendaViewProps['renderEvent'] = (event, rootProps) => {
     const payload = event.payload as NewsEventPayload | undefined
     const item = payload ? items.find((n) => n.id === payload.newsId) : undefined
     if (!item) return <UnstyledButton {...rootProps} />
     return (
       <UnstyledButton {...rootProps}>
-        <Group gap={6} wrap="wrap" align="center">
-          <Text size="sm" c="dimmed" span>
+        <Stack gap={4} py={8} px="sm">
+          <Text size="sm" c="dimmed">
             {item.vendorName}
           </Text>
-          <Text size="sm" fw={600} span>
+          <Text size="sm" fw={600}>
             {item.title}
           </Text>
-          <EventBadge
-            eventKind={item.eventKind}
-            eventStart={item.eventStart}
-            eventEnd={item.eventEnd}
-          />
-          {item.plannedEventId ? (
-            <Badge size="xs" variant="light">
-              予定あり
-            </Badge>
+          {item.eventKind || item.plannedEventId ? (
+            <Group gap={6} wrap="wrap" align="center">
+              <EventBadge
+                eventKind={item.eventKind}
+                eventStart={item.eventStart}
+                eventEnd={item.eventEnd}
+              />
+              {item.plannedEventId ? (
+                <Badge size="xs" variant="light">
+                  予定あり
+                </Badge>
+              ) : null}
+            </Group>
           ) : null}
-        </Group>
+        </Stack>
       </UnstyledButton>
     )
   }
@@ -137,6 +148,7 @@ export function NewsAgenda({
   return (
     <>
       <AgendaView
+        className="news-agenda"
         rangeStart={range.start}
         rangeEnd={range.end}
         events={agendaEvents}
