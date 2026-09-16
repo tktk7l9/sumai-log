@@ -49,8 +49,12 @@ export const vendors = sqliteTable(
     name: text('name').notNull(),
     kind: text('kind', { enum: VENDOR_KINDS }).notNull().default('koumuten'),
     hq: text('hq'),
+    /** 代表者名。工務店の場合に一覧へ表示する */
+    representative: text('representative'),
     /** 施工エリア（市区町村名の配列）。設定の homeAreas と照合する */
     serviceAreas: jsonList('service_areas'),
+    /** 加盟団体の id の配列（`src/content/affiliations.ts` の Affiliation['id']） */
+    affiliations: jsonList('affiliations'),
     uaValue: real('ua_value'),
     cValuePublished: integer('c_value_published', { mode: 'boolean' }).notNull().default(false),
     seismicGrade: integer('seismic_grade'),

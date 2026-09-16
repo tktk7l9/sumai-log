@@ -3,6 +3,7 @@ import { asc, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
+import { AFFILIATION_IDS, AFFILIATIONS } from '../content/affiliations'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { normalizeSocialUrls } from '../lib/social'
@@ -23,7 +24,20 @@ export const vendorInput = z.object({
   name: z.string().trim().min(1, '名前は必須です').max(200),
   kind: z.enum(VENDOR_KINDS),
   hq: optionalText,
+  // optionalText はヘルパの形固定（max 2000）のためここでは使えない（videos.schema.ts と同じ理由）。
+  representative: z
+    .string()
+    .trim()
+    .max(60)
+    .transform((v) => (v === '' ? null : v))
+    .nullable()
+    .optional(),
   serviceAreas: z.array(z.string().trim().min(1).max(50)).max(100),
+  affiliations: z
+    .array(z.enum(AFFILIATION_IDS))
+    .max(AFFILIATIONS.length)
+    .default([])
+    .transform((arr) => Array.from(new Set(arr))),
   uaValue: numberOrEmpty(z.number().min(0).max(5)),
   cValuePublished: z.boolean(),
   seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),

@@ -97,6 +97,22 @@ function validateNewsSource(vendorSlug, newsSource) {
   }
 }
 
+// src/content/affiliations.ts の AFFILIATION_IDS と同じ値。plain .mjs から TS を import
+// できないため値を重複させている（NEWS_SOURCES と同じ理由）。
+const AFFILIATION_IDS = ['iedukuri100', 'miratsugu']
+
+/** affiliations に未知の id が混ざっていたら、どの業者のどの値かがわかるメッセージで例外を投げる */
+function validateAffiliations(vendorSlug, affiliations) {
+  if (affiliations === undefined || affiliations === null) return
+  for (const id of affiliations) {
+    if (!AFFILIATION_IDS.includes(id)) {
+      throw new Error(
+        `vendor ${vendorSlug}: unknown affiliation: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+  }
+}
+
 /**
  * seed.local.json の内容を D1 の INSERT OR REPLACE 文へ変換する。
  *
@@ -133,13 +149,16 @@ export function buildStatements(seed, opts) {
   }
   for (const v of seed.vendors ?? []) {
     validateNewsSource(v.slug, v.newsSource)
+    validateAffiliations(v.slug, v.affiliations)
     sql.push(
       insertStatement('vendors', {
         id: vendorIdBySlug[v.slug],
         name: v.name,
         kind: v.kind,
         hq: v.hq ?? null,
+        representative: v.representative ?? null,
         service_areas: JSON.stringify(v.serviceAreas ?? []),
+        affiliations: JSON.stringify(v.affiliations ?? []),
         ua_value: v.uaValue ?? null,
         c_value_published: v.cValuePublished ?? false,
         seismic_grade: v.seismicGrade ?? null,

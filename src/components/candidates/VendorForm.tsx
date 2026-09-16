@@ -2,6 +2,7 @@ import {
   Button,
   Checkbox,
   Group,
+  MultiSelect,
   NumberInput,
   Select,
   Stack,
@@ -15,18 +16,28 @@ import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
+import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
 import { VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 
-/** socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ */
-type Values = Omit<VendorInput, 'id' | 'socialUrls'> & { socialUrls: string }
+/**
+ * socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ。
+ * affiliations は MultiSelect が素の string[] で onChange を返すので、フォーム上は緩めた型にし、
+ * 送信時に AffiliationId[] へ戻す（実際の選択肢は AFFILIATIONS の id に限られる）。
+ */
+type Values = Omit<VendorInput, 'id' | 'socialUrls' | 'affiliations'> & {
+  socialUrls: string
+  affiliations: string[]
+}
 
 const empty: Values = {
   name: '',
   kind: 'koumuten',
   hq: null,
+  representative: null,
   serviceAreas: [],
+  affiliations: [],
   uaValue: null,
   cValuePublished: false,
   seismicGrade: null,
@@ -68,6 +79,7 @@ export function VendorForm({
           ...(vendor ? { id: vendor.id } : {}),
           ...values,
           socialUrls: values.socialUrls.split('\n'),
+          affiliations: values.affiliations as AffiliationId[],
         },
       })
       await router.invalidate()
@@ -105,7 +117,20 @@ export function VendorForm({
           splitChars={[',', '、']}
           {...form.getInputProps('serviceAreas')}
         />
+        <MultiSelect
+          label="加盟団体"
+          data={AFFILIATIONS.map((a) => ({ value: a.id, label: `${a.name}（${a.shortName}）` }))}
+          searchable={false}
+          clearable
+          {...form.getInputProps('affiliations')}
+        />
         <TextInput label="本社" {...form.getInputProps('hq')} value={form.values.hq ?? ''} />
+        <TextInput
+          label="代表者名"
+          description="工務店の場合に一覧へ出ます"
+          {...form.getInputProps('representative')}
+          value={form.values.representative ?? ''}
+        />
         <Group grow>
           <NumberInput
             label="UA値"
