@@ -56,6 +56,36 @@
   が両実装に同じケースを流して固定している。直すときは両方直してこのテストを green に保つ
 - 見た目のトークンは `src/theme.ts`（Mantine テーマ・配色）と `src/styles.css`（`--sumai-*` の
   CSS 変数）に集約。コントラストは本文 4.5:1・UI 部品（ボーダー等）3:1 を満たすこと
+- 業者のお知らせ取得（`src/lib/news/`）は純粋関数のみ: `rss.ts`（RSS 2.0 の `<item>` 抽出）・
+  `htmlList.ts`（`<li>` お知らせ一覧の抽出）・`eventDate.ts`（タイトル/要約からイベント日程を
+  抽出）・`text.ts`（タグ除去・長さ制限）に加えて、`url.ts`（取得してよい URL かの判定。https
+  限定・ユーザー情報や非既定ポートを拒否・ローカル/内部ホストやリテラル IP を拒否。Workers の
+  `fetch` はそもそもプライベートネットワークへ経路を持たないため多層防御の一つ）と
+  `charset.ts`（`Content-Type` の `charset` → 本文先頭 2KB の `<meta charset>` sniff → 既定
+  `utf-8` の順で文字コードを判定。html-list の古いサイトは Shift_JIS 等を返しうる）
+- 実際に fetch するのは `src/server/newsFetcher.ts`。1 ソースあたり 10 秒タイムアウト
+  （`AbortSignal.timeout`）・1 MB 上限（`content-length` があれば先に弾き、無ければストリームを
+  数えながら超過時点で打ち切る）。業者ごとに try/catch で独立させ、1 社の失敗（想定内のエラーも
+  想定外の例外も）が他の業者の取得を止めない。取得結果の記録
+  （`src/server/repository/news.ts` の `markNewsFetched`）は成功/失敗どちらでも
+  `vendors.news_fetched_at`/`news_fetch_error` だけを更新し、**`vendors.updated_at` は
+  動かさない**（動かすと毎朝の自動取得のたびにホームの「最近の更新」フィードへ業者が
+  浮上してしまうため）
+- `src/server.ts` が Worker の自前エントリ（`wrangler.jsonc` の `main` はここを指す。
+  TanStack Start 既定の `@tanstack/react-start/server-entry` を `main` から直接指す構成では
+  ない）。`createServerEntry({ fetch: createStartHandler(defaultStreamHandler) })` の結果を
+  スプレッドして `fetch` はそのまま使い、`scheduled` だけを足して Cron
+  （`wrangler.jsonc` の `triggers.crons` = `"0 21 * * *"` = 06:00 JST）から
+  `fetchAllVendorNews` を呼ぶ。`scheduled` は `ctx.waitUntil` の中で実行し、その中で拾い
+  切れなかった例外も外へは投げない（投げても誰も拾わない）
+- `wrangler.jsonc` の `routes`（カスタムドメイン `sumai-log.app`）は、所有者がダッシュボードで
+  アタッチした実体を設定ファイル側にも反映したもの（ダッシュボードでの操作が先、設定ファイルは
+  後追いで正本を揃える）。`main`・`triggers`・`routes` のいずれかを変えたら `npm run build` の
+  後に `dist/server/wrangler.json` で反映されているか確認する
+- 本番 D1 への一回きりの書き込み（初期データ投入・業者の代表者名やお知らせ URL の設定など）は
+  Claude からは実行しない（本番書き込みは通らない）。SQL ファイルを `seed.local/out/`
+  （gitignore 済み。コミットしない）に用意し、所有者が
+  `npx wrangler d1 execute sumai-log --remote --file <path> -y` で実行する
 
 ## スキーマを変えたら
 
@@ -73,3 +103,4 @@ npm run cf-typegen   # バインディングや vars を増やしたとき
 ## 参照
 
 仕様: `docs/superpowers/specs/2026-09-15-sumai-log-design.md`
+業者のお知らせ取得の仕様: `docs/superpowers/specs/2026-09-16-vendor-news-design.md`

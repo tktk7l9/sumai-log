@@ -17,6 +17,11 @@
   "observability": { "enabled": true },
   "upload_source_maps": true,
 
+  // カスタムドメイン。2026-09-16 に所有者がダッシュボードでアタッチ済み。ここに書くのは
+  // 設定を後追いで揃えるため（実体は既にダッシュボード側にある）。既定の workers.dev
+  // ホストもそのまま生きる（Access アプリは両方のホスト名をカバーする設定）。
+  "routes": [{ "pattern": "sumai-log.app", "custom_domain": true }],
+
   // 毎朝 6 時（JST）に業者のお知らせを取得する（design.md §1）。
   "triggers": { "crons": ["0 21 * * *"] },
 
