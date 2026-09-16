@@ -167,7 +167,9 @@ export function RecentFeed({ items, members }: { items: FeedItem[]; members: Mem
                         {formatJstTime(item.at)}
                       </Text>
                       <div style={{ flexShrink: 0, paddingTop: 2 }}>
-                        <MemberChip email={item.by} members={members} />
+                        {/* アイコンの隣の名前は出さない（所有者の要望）。誰が書いたかは
+                            丸の色と title/aria-label（読み上げ・ホバー）に残す */}
+                        <MemberChip email={item.by} members={members} iconOnly />
                       </div>
                       <Text size="sm" style={{ flex: 1, minWidth: 0 }}>
                         {sentence.before}

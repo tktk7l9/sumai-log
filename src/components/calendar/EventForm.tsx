@@ -109,7 +109,7 @@ export function EventForm({
         <DateInput
           label="日付"
           required
-          valueFormat="YYYY-MM-DD"
+          valueFormat="YYYY/MM/DD"
           value={form.values.date ? new Date(`${form.values.date}T00:00:00`) : null}
           onChange={(d) => form.setFieldValue('date', d ? dayjs(d).format('YYYY-MM-DD') : '')}
         />
