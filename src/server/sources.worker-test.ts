@@ -41,8 +41,13 @@ describe('sourceInput', () => {
     if (result.success) expect(result.data.kind).toBe('site')
   })
 
-  it('URL が http(s) で始まらなければ拒否する', () => {
-    const result = sourceInput.safeParse({ ...base, url: 'ftp://example.com' })
+  it('URL が https で始まらなければ拒否する（http も含む）', () => {
+    expect(sourceInput.safeParse({ ...base, url: 'ftp://example.com' }).success).toBe(false)
+    expect(sourceInput.safeParse({ ...base, url: 'http://example.com' }).success).toBe(false)
+  })
+
+  it('URL が許可されていないホストなら拒否する（SSRF 対策）', () => {
+    const result = sourceInput.safeParse({ ...base, url: 'https://localhost/feed' })
     expect(result.success).toBe(false)
   })
 

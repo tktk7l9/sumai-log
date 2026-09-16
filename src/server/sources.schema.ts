@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import { AFFILIATION_IDS } from '../content/affiliations'
 import { SOURCE_GENRE_IDS } from '../content/sourceGenres'
+import { isAllowedRemoteUrl } from '../lib/news/url'
 import { isAllowedAvatarUrl, parseYoutubeChannelUrl } from '../lib/sources'
 import { idField } from './zod'
 
@@ -19,16 +20,17 @@ const NAME_MAX = 200
 const DESCRIPTION_MAX = 200
 const HANDLE_MAX = 100
 
-/** 情報源の URL（外部リンク・「取得」で fetch する対象になりうる）。http(s):// のみ。
- * 実際に fetch してよいか（SSRF 対策）は src/server/sourcesFetcher.ts が fetch 直前に
- * isAllowedRemoteUrl で判定する（VendorForm の websiteUrl と同じ役割分担: 保存時は
- * スキームだけ、SSRF チェックは fetch 時）。 */
+/** 情報源の URL（外部リンク・YouTube チャンネルなら「取得」で fetch する対象にもなる）。
+ * https のみ（seed.mjs の validateSource と同じ規則に揃える）。さらに isAllowedRemoteUrl
+ * （SSRF 対策のホスト名チェック）も保存時にかける。site 種別は「取得」で fetch されないが、
+ * 将来 fetch する可能性・入口をひとつの規則に揃える目的で、ここでも同じ判定を通す。 */
 export const sourceUrl = z
   .string()
   .trim()
   .min(1, 'URL は必須です')
   .max(URL_MAX)
-  .refine((v) => /^https?:\/\//.test(v), 'URL は http(s):// で始めてください')
+  .refine((v) => /^https:\/\//.test(v), 'URL は https:// で始めてください')
+  .refine((v) => isAllowedRemoteUrl(v), 'URL が許可されていません')
 
 const trimmedOptional = (max: number) =>
   z

@@ -21,12 +21,11 @@ export const saveSource = createServerFn({ method: 'POST' })
     id: await upsertSource(getDb(), data, await currentActorEmail()),
   }))
 
+/** 行が既に無ければ ok: false（deletePhoto と同じパターン。videos.ts の deleteVideo と
+ * 違い、こちらは対象の有無を呼び出し元へ返す） */
 export const deleteSource = createServerFn({ method: 'POST' })
   .validator(idInput)
-  .handler(async ({ data }) => {
-    await deleteSourceRow(getDb(), data.id)
-    return { ok: true as const }
-  })
+  .handler(async ({ data }) => ({ ok: (await deleteSourceRow(getDb(), data.id)) !== null }))
 
 /** フォームの「取得」ボタン。YouTube チャンネル URL だけを対象にする
  * （sourcesFetcher.ts 参照）。実処理は createServerFn の外（素の関数）に置いてあり、

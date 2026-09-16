@@ -79,3 +79,9 @@ export function isAllowedAvatarUrl(url: string): boolean {
   }
   return parsed.protocol === 'https:' && AVATAR_HOSTS.has(parsed.hostname.toLowerCase())
 }
+
+/** sources.url の重複（D1 の UNIQUE 制約違反）をユーザー向けに言い換えるときの文言。
+ * src/server/repository/sources.ts（検出して投げる側）と
+ * src/components/sources/SourceForm.tsx（URL 欄のフィールドエラーに出す側）の両方が
+ * この定数を使う（文字列の重複を避け、どちらかだけ直して食い違う事故を防ぐ）。 */
+export const DUPLICATE_URL_ERROR = 'この URL は登録済みです'

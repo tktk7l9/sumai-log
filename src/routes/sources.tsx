@@ -54,9 +54,14 @@ function Page() {
     if (!deleting) return
     setRemoving(true)
     try {
-      await remove({ data: { id: deleting.id } })
+      const result = await remove({ data: { id: deleting.id } })
       await router.invalidate()
-      notifications.show({ message: '情報源を削除しました' })
+      // ok: false は「既に消えていた」（もう一方の端末が先に削除した等）。行はどのみち
+      // 無いので一覧側は router.invalidate() で正しい状態になる。文言だけ変える
+      notifications.show({
+        message: result.ok ? '情報源を削除しました' : '既に削除されていました',
+        color: result.ok ? undefined : 'yellow',
+      })
       setDeleting(null)
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
