@@ -6,7 +6,7 @@ import { useState } from 'react'
 
 import { extractErrorMessage } from '../../lib/formError'
 import { fitWithin } from '../../lib/imageResize'
-import { photoUrl, vendorImageKeys } from '../../lib/photos'
+import { photoUrl, representativeThumbKeyFromDisplayKey } from '../../lib/photos'
 import {
   deleteRepresentativePhoto,
   importRepresentativePhotoFromUrl,
@@ -57,14 +57,19 @@ async function uploadFile(vendorId: string, file: File): Promise<void> {
  * JPEG に縮小してから /api/vendor-photos/<vendorId> へ POST）・URL から取り込む
  * （サーバー側は Canvas が無いので原寸のまま保存。design の既知の限界）・削除の 3 操作。
  * vendorId が無い（＝まだ保存していない新規業者）ときは操作できない旨だけ出す。
+ *
+ * サムネ表示には `representativePhotoKey`（vendors.representative_photo_key の実際の値）が
+ * 要る: 鍵に stamp を挟むようになったため（immutable キャッシュ対策）、vendorId だけからは
+ * 現在の鍵を作れない。thumb キーは保存された display キーの末尾を置き換えて求める。
  */
 export function RepresentativePhotoField({
   vendorId,
-  hasPhoto,
+  representativePhotoKey,
 }: {
   vendorId: string | null
-  hasPhoto: boolean
+  representativePhotoKey: string | null
 }) {
+  const hasPhoto = representativePhotoKey != null
   const router = useRouter()
   const importFromUrl = useServerFn(importRepresentativePhotoFromUrl)
   const removePhoto = useServerFn(deleteRepresentativePhoto)
@@ -147,7 +152,11 @@ export function RepresentativePhotoField({
       </Text>
       <Group gap="sm" align="center" wrap="nowrap">
         <Avatar
-          src={hasPhoto ? photoUrl(vendorImageKeys(vendorId).thumbKey) : null}
+          src={
+            representativePhotoKey
+              ? photoUrl(representativeThumbKeyFromDisplayKey(representativePhotoKey))
+              : null
+          }
           size={64}
           radius="50%"
           color="gray"

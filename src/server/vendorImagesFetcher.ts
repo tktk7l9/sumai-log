@@ -15,6 +15,7 @@ import { extForType, pickFaviconCandidates, sniffFaviconType } from '../lib/favi
 import { isAllowedRemoteUrl } from '../lib/news/url'
 import {
   MAX_IMPORTED_PHOTO_BYTES,
+  representativeThumbKeyFromDisplayKey,
   sniffImageType,
   vendorFaviconKey,
   vendorImageKeys,
@@ -41,6 +42,29 @@ const VENDOR_NOT_FOUND_ERROR = '業者が見つかりません'
 /** pickFaviconCandidates が返す配列は最大 6 件（宣言 5 + favicon.ico の保険）だが、
  * 呼び出し側でも明示的に切って外向き fetch 数（HTML 1 + アイコン最大 6 = 最大 7）を保証する。 */
 const MAX_FAVICON_CANDIDATES_TO_TRY = 6
+/** 設定画面「アイコンを取得」からの呼び出しは、この既定の予算をそのまま使う */
+const DEFAULT_FAVICON_BUDGET: Required<FaviconFetchBudget> = {
+  htmlTimeoutMs: HTML_TIMEOUT_MS,
+  iconTimeoutMs: ICON_TIMEOUT_MS,
+  maxCandidates: MAX_FAVICON_CANDIDATES_TO_TRY,
+}
+/**
+ * saveVendor（candidates.ts）が保存のたびに inline で待つ分だけの、うんと短い予算。
+ * HTML 4s + 候補最大 2 件 × 2s = 最悪 8s。保存を長時間ブロックしないための上限で、
+ * ここで見つからなくても設定画面の「アイコンを取得」（既定の予算）が拾える。
+ * （リダイレクトが hop ごとにこの秒数を使うため、hop が続く極端なケースでは
+ * 合計がこれを超えうるが、通常の 0〜1 hop では合計 ≤8s に収まる）
+ */
+export const SAVE_FAVICON_BUDGET: FaviconFetchBudget = {
+  htmlTimeoutMs: 4_000,
+  iconTimeoutMs: 2_000,
+  maxCandidates: 2,
+}
+/** 設定画面「アイコンを取得」/「取り直す」1 回の呼び出しで処理する業者数の上限。
+ * 業者 1 件で最悪 HTML 1 回 + 候補最大 6 回 = 7 回の外向き fetch（:142 で保証）を
+ * 直列に行うため、無制限に回すとサブリクエスト数・応答時間の両方が業者数に比例して
+ * 際限なく伸びる。超えたぶんは remaining で返し、UI から「もう一度押す」で続きを処理する。 */
+const MAX_VENDORS_PER_REFRESH_CALL = 10
 
 function errorMessage(e: unknown): string {
   const message = e instanceof Error ? e.message : '取得に失敗しました'
@@ -118,10 +142,20 @@ async function fetchCapped(
 
 export type FaviconFetchResult = { ok: true; key: string } | { ok: false; error: string }
 
+/** fetchFaviconForVendor の呼び出し元ごとに変える外向き fetch の予算。省略した項目は
+ * 既定の予算（設定画面「アイコンを取得」と同じ、フル）を使う。 */
+export type FaviconFetchBudget = {
+  htmlTimeoutMs?: number
+  iconTimeoutMs?: number
+  maxCandidates?: number
+}
+
 /**
  * 1 業者ぶんファビコンを取得して R2 に置き、favicon_key を更新する。
  * 例外は投げない（design 通り）。候補を順に試し、画像として sniff できた最初の 1 件を使う。
- * キーが変わった（拡張子違い等）場合は前のオブジェクトを消す。
+ * 鍵には stamp（base36 の Date.now()）を挟むので、差し替えのたびに新しい URL になる
+ * （配信は immutable キャッシュなので、同じ URL のままだと差し替えが反映されない）。
+ * 前の favicon_key（差し替え前の値）は必ず削除する（stamp が違えば常に別キーになるため）。
  */
 export async function fetchFaviconForVendor(
   db: Db,
@@ -129,25 +163,34 @@ export async function fetchFaviconForVendor(
   websiteUrl: string,
   fetchImpl: typeof fetch = fetch,
   bucket: R2Bucket = getPhotosBucket(),
+  budget: FaviconFetchBudget = {},
+  // stamp 生成用。既定は実時計（Date.now）。テストで「差し替えたら鍵が変わる」ことを
+  // 検証するとき、同一ミリ秒内に 2 回呼ぶと実時計では偶然同じ stamp になりうるため、
+  // 注入できるようにしてある（fetchImpl/bucket と同じ DI の流儀）。
+  now: () => number = Date.now,
 ): Promise<FaviconFetchResult> {
+  const htmlTimeoutMs = budget.htmlTimeoutMs ?? DEFAULT_FAVICON_BUDGET.htmlTimeoutMs
+  const iconTimeoutMs = budget.iconTimeoutMs ?? DEFAULT_FAVICON_BUDGET.iconTimeoutMs
+  const maxCandidates = budget.maxCandidates ?? DEFAULT_FAVICON_BUDGET.maxCandidates
   try {
     if (!isAllowedRemoteUrl(websiteUrl)) return { ok: false, error: 'URL が許可されていません' }
 
-    const htmlResult = await fetchCapped(websiteUrl, fetchImpl, HTML_TIMEOUT_MS, HTML_MAX_BYTES)
+    const htmlResult = await fetchCapped(websiteUrl, fetchImpl, htmlTimeoutMs, HTML_MAX_BYTES)
     const html = htmlResult ? new TextDecoder('utf-8').decode(htmlResult.bytes) : ''
     // 相対 href は実際に本文を返した最終的な URL（リダイレクト後）基準で解決する
     // （newsFetcher.ts の finalUrl と同じ理由）。取得自体に失敗したら websiteUrl のまま。
     const candidates = pickFaviconCandidates(html, htmlResult?.finalUrl ?? websiteUrl)
 
-    for (const candidateUrl of candidates.slice(0, MAX_FAVICON_CANDIDATES_TO_TRY)) {
+    for (const candidateUrl of candidates.slice(0, maxCandidates)) {
       if (!isAllowedRemoteUrl(candidateUrl)) continue
-      const iconResult = await fetchCapped(candidateUrl, fetchImpl, ICON_TIMEOUT_MS, ICON_MAX_BYTES)
+      const iconResult = await fetchCapped(candidateUrl, fetchImpl, iconTimeoutMs, ICON_MAX_BYTES)
       if (!iconResult) continue
       const bytes = iconResult.bytes
       const type = sniffFaviconType(bytes)
       if (!type) continue
 
-      const key = vendorFaviconKey(vendorId, extForType(type))
+      const stamp = now().toString(36)
+      const key = vendorFaviconKey(vendorId, extForType(type), stamp)
       await bucket.put(key, bytes, { httpMetadata: { contentType: type } })
       const previousKey = await setVendorFaviconKey(db, vendorId, key)
       if (previousKey && previousKey !== key) {
@@ -167,21 +210,56 @@ export type RefreshFaviconResult = {
   vendorName: string
 } & FaviconFetchResult
 
+export type RefreshAllFaviconsResult = {
+  results: RefreshFaviconResult[]
+  /** 今回の呼び出しで実際に処理した件数 */
+  processed: number
+  /** 対象のうち今回処理しなかった件数。0 より大きければ「もう一度押す」で続きを処理できる */
+  remaining: number
+}
+
 /**
- * website_url がある全業者を対象にファビコンを取得する。`force` が false なら
+ * favicon_key に埋め込まれた stamp（`favicon-{stamp}.<ext>`）から取得時刻（ミリ秒）を読む。
+ * 未取得（null）・旧形式（stamp 無し）はどちらも「最も古い」＝最優先で扱う
+ * （refreshAllVendorFavicons の oldest-first 判定用。取得時刻を別列で持たずに済む）。
+ */
+function faviconStampMs(faviconKey: string | null): number {
+  if (!faviconKey) return 0
+  const m = /\/favicon-([0-9a-z]+)\./.exec(faviconKey)
+  if (!m) return 0
+  const parsed = Number.parseInt(m[1], 36)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+/**
+ * website_url がある業者を対象にファビコンを取得する。`force` が false なら
  * 既に favicon_key がある業者は対象外（design 通り）。1 社の失敗は次の業者を止めない。
+ *
+ * 1 回の呼び出しで処理するのは最大 MAX_VENDORS_PER_REFRESH_CALL（10）社まで
+ * （業者 1 件で最悪 7 回の外向き fetch を直列に行うため、無制限だと応答時間・
+ * サブリクエスト数が業者数に比例して際限なく伸びる）。`force` が false のときは
+ * 対象がそもそも「未取得」だけなので処理順は先着順、`force` が true（取り直す）
+ * のときは favicon_key の stamp が古い（＝最後に取得してから時間が経っている、
+ * または未取得の）業者から優先する。処理しきれなかった分は `remaining` で返し、
+ * 設定画面から「もう一度押す」ことで続きを拾える（次回はその 10 社の stamp が
+ * 新しくなっているので、自然に次の 10 社へ順番が回る）。
  */
 export async function refreshAllVendorFavicons(
   db: Db,
   opts: { force: boolean } = { force: false },
   fetchImpl: typeof fetch = fetch,
   bucket: R2Bucket = getPhotosBucket(),
-): Promise<RefreshFaviconResult[]> {
+): Promise<RefreshAllFaviconsResult> {
   const withSite = await listVendorsWithWebsite(db)
-  const targets = withSite.filter((v) => opts.force || v.faviconKey === null)
+  const eligible = withSite.filter((v) => opts.force || v.faviconKey === null)
+  const targets = opts.force
+    ? [...eligible].sort((a, b) => faviconStampMs(a.faviconKey) - faviconStampMs(b.faviconKey))
+    : eligible
+  const toProcess = targets.slice(0, MAX_VENDORS_PER_REFRESH_CALL)
+  const remaining = targets.length - toProcess.length
 
   const results: RefreshFaviconResult[] = []
-  for (const v of targets) {
+  for (const v of toProcess) {
     if (!v.websiteUrl) continue
     try {
       const outcome = await fetchFaviconForVendor(db, v.id, v.websiteUrl, fetchImpl, bucket)
@@ -190,7 +268,7 @@ export async function refreshAllVendorFavicons(
       results.push({ vendorId: v.id, vendorName: v.name, ok: false, error: errorMessage(e) })
     }
   }
-  return results
+  return { results, processed: toProcess.length, remaining }
 }
 
 export type ImportPhotoResult = { ok: true; key: string } | { ok: false; error: string }
@@ -207,6 +285,8 @@ export async function importRepresentativePhotoFromUrlCore(
   url: string,
   fetchImpl: typeof fetch = fetch,
   bucket: R2Bucket = getPhotosBucket(),
+  // stamp 生成用。既定は実時計（fetchFaviconForVendor と同じ DI の理由）。
+  now: () => number = Date.now,
 ): Promise<ImportPhotoResult> {
   try {
     // R2 へ書く前に業者の実在を確認する（存在しない id に書くと孤児オブジェクトが残る。
@@ -227,10 +307,15 @@ export async function importRepresentativePhotoFromUrlCore(
     const type = sniffImageType(bytes)
     if (!type) return { ok: false, error: NOT_AN_IMAGE_ERROR }
 
-    const keys = vendorImageKeys(vendorId)
+    const stamp = now().toString(36)
+    const keys = vendorImageKeys(vendorId, stamp)
     await bucket.put(keys.displayKey, bytes, { httpMetadata: { contentType: type } })
     await bucket.put(keys.thumbKey, bytes, { httpMetadata: { contentType: type } })
-    await setVendorRepresentativePhotoKey(db, vendorId, keys.displayKey)
+    const previousKey = await setVendorRepresentativePhotoKey(db, vendorId, keys.displayKey)
+    if (previousKey && previousKey !== keys.displayKey) {
+      const previousThumbKey = representativeThumbKeyFromDisplayKey(previousKey)
+      await deletePhotoObjects([previousKey, previousThumbKey], bucket).catch(() => {})
+    }
     return { ok: true, key: keys.displayKey }
   } catch (e) {
     return { ok: false, error: errorMessage(e) }
@@ -250,9 +335,13 @@ export async function deleteRepresentativePhotoObjects(
 ): Promise<DeletePhotoResult> {
   try {
     if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
-    await setVendorRepresentativePhotoKey(db, vendorId, null)
-    const keys = vendorImageKeys(vendorId)
-    await deletePhotoObjects([keys.displayKey, keys.thumbKey], bucket)
+    // 消す対象のキーは vendorId だけからは分からない（stamp を含むため）。
+    // 差し替え前の値として DB に保存されている実際のキーを読んでから消す。
+    const previousKey = await setVendorRepresentativePhotoKey(db, vendorId, null)
+    if (previousKey) {
+      const previousThumbKey = representativeThumbKeyFromDisplayKey(previousKey)
+      await deletePhotoObjects([previousKey, previousThumbKey], bucket)
+    }
     return { ok: true }
   } catch (e) {
     return { ok: false, error: errorMessage(e) }

@@ -201,7 +201,7 @@ export function VendorForm({
         />
         <RepresentativePhotoField
           vendorId={vendor?.id ?? null}
-          hasPhoto={vendor?.representativePhotoKey != null}
+          representativePhotoKey={vendor?.representativePhotoKey ?? null}
         />
         <Group grow>
           <NumberInput

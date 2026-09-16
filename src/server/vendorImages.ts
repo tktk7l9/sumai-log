@@ -25,10 +25,11 @@ export const faviconSources = createServerFn().handler(async () => {
   return { vendors }
 })
 
-/** 設定画面「候補のサイトアイコン」の「アイコンを取得」/「取り直す」ボタン */
+/** 設定画面「候補のサイトアイコン」の「アイコンを取得」/「取り直す」ボタン。
+ * 戻り値は { results, processed, remaining }（refreshAllVendorFavicons と同じ形）。 */
 export const refreshVendorFavicons = createServerFn({ method: 'POST' })
   .validator(refreshVendorFaviconsInput)
-  .handler(async ({ data }) => ({ results: await refreshAllVendorFavicons(getDb(), data) }))
+  .handler(async ({ data }) => refreshAllVendorFavicons(getDb(), data))
 
 /** 業者フォームの「URL から取り込む」 */
 export const importRepresentativePhotoFromUrl = createServerFn({ method: 'POST' })

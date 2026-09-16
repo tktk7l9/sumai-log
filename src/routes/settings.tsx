@@ -136,8 +136,8 @@ function Page() {
     }
     setFetchingFavicons(true)
     try {
-      const { results } = await refreshFaviconsFn({ data: { force } })
-      if (results.length === 0) {
+      const { results, remaining } = await refreshFaviconsFn({ data: { force } })
+      if (results.length === 0 && remaining === 0) {
         notifications.show({
           message: force
             ? '対象の業者がありません'
@@ -151,6 +151,14 @@ function Page() {
         } else {
           notifications.show({ message: `${name}: アイコンを取得しました` })
         }
+      }
+      // 1 回の呼び出しで処理する業者数には上限があるので、残りがあれば続けて押してもらう
+      // （次回は今回処理した分の stamp が新しくなっているので、自然に次の分へ順番が回る）
+      if (remaining > 0) {
+        notifications.show({
+          message: `残り ${remaining} 件（もう一度押してください）`,
+          color: 'blue',
+        })
       }
       await router.invalidate()
     } catch (error) {

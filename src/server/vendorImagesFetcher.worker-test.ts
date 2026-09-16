@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { vendors } from '../db/schema'
+import { representativeThumbKeyFromDisplayKey } from '../lib/photos'
 import { upsertVendor } from './repository/candidates'
 import { actor, db, reset } from './repository/test-helpers'
 import {
@@ -69,6 +70,17 @@ const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 const ICO_BYTES = new Uint8Array([0x00, 0x00, 0x01, 0x00, 1, 0])
 const HTML_WITH_ICON = '<html><head><link rel="icon" href="/icon.png"></head></html>'
 
+// 鍵に stamp（base36 の Date.now()）が挟まるようになった（immutable キャッシュ対策）ので、
+// 完全一致ではなく形だけを見る。asymmetric matcher として toEqual に直接埋め込める。
+function faviconKeyMatching(vendorId: string, ext: string) {
+  return expect.stringMatching(new RegExp(`^vendors/${vendorId}/favicon-[0-9a-z]+\\.${ext}$`))
+}
+function representativeDisplayKeyMatching(vendorId: string) {
+  return expect.stringMatching(
+    new RegExp(`^vendors/${vendorId}/representative-[0-9a-z]+-display\\.jpg$`),
+  )
+}
+
 describe('fetchFaviconForVendor', () => {
   it('HTML の <link rel="icon"> を辿って画像を R2 に置き、favicon_key を更新する', async () => {
     const vendorId = await makeVendor('テスト工務店')
@@ -89,11 +101,12 @@ describe('fetchFaviconForVendor', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.png` })
-    expect(objects.get(`vendors/${vendorId}/favicon.png`)?.contentType).toBe('image/png')
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'png') })
+    if (!result.ok) throw new Error('unreachable')
+    expect(objects.get(result.key)?.contentType).toBe('image/png')
 
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
-    expect(row.faviconKey).toBe(`vendors/${vendorId}/favicon.png`)
+    expect(row.faviconKey).toBe(result.key)
   })
 
   it('candidate が画像として sniff できなければ次を試し、全滅なら失敗を返す', async () => {
@@ -156,13 +169,18 @@ describe('fetchFaviconForVendor', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
-    expect(objects.get(`vendors/${vendorId}/favicon.ico`)?.contentType).toBe('image/x-icon')
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
+    if (!result.ok) throw new Error('unreachable')
+    expect(objects.get(result.key)?.contentType).toBe('image/x-icon')
   })
 
-  it('拡張子が変わったら前の favicon オブジェクトを消す', async () => {
+  it('拡張子が変わっても・同じ拡張子でも、差し替えたら前の favicon オブジェクトを消す（鍵は毎回 stamp が違う）', async () => {
     const vendorId = await makeVendor('拡張子変更業者')
     const { bucket, deletedKeys } = fakeBucket()
+    // 2 回とも同じミリ秒内に呼ぶと実時計では偶然同じ stamp になりうるので、
+    // カウンタを注入して stamp が必ず違う値になるようにする（fetchFaviconForVendor の now 引数）
+    let clock = 1_700_000_000_000
+    const now = () => clock++
     const firstFetch = fakeFetch((url) => {
       if (url === 'https://vendor.example.com/')
         return new Response(HTML_WITH_ICON, { status: 200 })
@@ -176,8 +194,11 @@ describe('fetchFaviconForVendor', () => {
       'https://vendor.example.com/',
       firstFetch,
       bucket,
+      {},
+      now,
     )
-    expect(first).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.png` })
+    expect(first).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'png') })
+    if (!first.ok) throw new Error('unreachable')
 
     const HTML_WITH_ICO = '<html><head><link rel="shortcut icon" href="/legacy.ico"></head></html>'
     const secondFetch = fakeFetch((url) => {
@@ -192,9 +213,13 @@ describe('fetchFaviconForVendor', () => {
       'https://vendor.example.com/',
       secondFetch,
       bucket,
+      {},
+      now,
     )
-    expect(second).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
-    expect(deletedKeys).toContain(`vendors/${vendorId}/favicon.png`)
+    expect(second).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
+    if (!second.ok) throw new Error('unreachable')
+    expect(second.key).not.toBe(first.key)
+    expect(deletedKeys).toContain(first.key)
   })
 
   it('予期しない例外が飛んでも投げ直さず失敗を返す', async () => {
@@ -248,7 +273,7 @@ describe('fetchFaviconForVendor', () => {
     expect(blockedHostFetched).toBe(false)
     // HTML 取得は失敗扱い（html=''）になるが、favicon.ico の保険は
     // pickFaviconCandidates('', websiteUrl) からも常に得られるので取得自体は成功する
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
   })
 
   it('許可されたホストへのリダイレクト（HTML 取得中）は追従して候補を拾える', async () => {
@@ -276,7 +301,7 @@ describe('fetchFaviconForVendor', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.png` })
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'png') })
   })
 
   it('候補が 6 件を超える HTML でも外向き fetch は HTML 1 回 + 候補最大 6 回 = 最大 7 回に収まる', async () => {
@@ -342,8 +367,9 @@ describe('fetchFaviconForVendor', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
-    expect(objects.get(`vendors/${vendorId}/favicon.ico`)?.contentType).toBe('image/x-icon')
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
+    if (!result.ok) throw new Error('unreachable')
+    expect(objects.get(result.key)?.contentType).toBe('image/x-icon')
     expect(declaredCandidateFetched).toBe(false)
   })
 
@@ -370,7 +396,7 @@ describe('fetchFaviconForVendor', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/favicon.ico` })
+    expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
   })
 })
 
@@ -392,14 +418,21 @@ describe('refreshAllVendorFavicons', () => {
       return null
     })
 
-    const results = await refreshAllVendorFavicons(db, { force: false }, fetchImpl, bucket)
+    const { results, processed, remaining } = await refreshAllVendorFavicons(
+      db,
+      { force: false },
+      fetchImpl,
+      bucket,
+    )
     expect(results).toHaveLength(1)
     expect(results[0]).toEqual({
       vendorId: withoutFavicon,
       vendorName: '未取得業者',
       ok: true,
-      key: `vendors/${withoutFavicon}/favicon.png`,
+      key: faviconKeyMatching(withoutFavicon, 'png'),
     })
+    expect(processed).toBe(1)
+    expect(remaining).toBe(0)
     expect(withFavicon).toBeTruthy()
   })
 
@@ -417,9 +450,9 @@ describe('refreshAllVendorFavicons', () => {
       return null
     })
 
-    const results = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
+    const { results } = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
     expect(results).toEqual([
-      { vendorId, vendorName: '取り直し業者', ok: true, key: `vendors/${vendorId}/favicon.png` },
+      { vendorId, vendorName: '取り直し業者', ok: true, key: faviconKeyMatching(vendorId, 'png') },
     ])
   })
 
@@ -436,7 +469,7 @@ describe('refreshAllVendorFavicons', () => {
       return null
     })
 
-    const results = await refreshAllVendorFavicons(db, { force: false }, fetchImpl, bucket)
+    const { results } = await refreshAllVendorFavicons(db, { force: false }, fetchImpl, bucket)
     const byId = new Map(results.map((r) => [r.vendorId, r]))
     expect(byId.size).toBe(2)
     expect(byId.get(failing)?.ok).toBe(false)
@@ -444,8 +477,77 @@ describe('refreshAllVendorFavicons', () => {
       vendorId: ok,
       vendorName: '成功業者',
       ok: true,
-      key: `vendors/${ok}/favicon.png`,
+      key: faviconKeyMatching(ok, 'png'),
     })
+  })
+
+  it('1 回の呼び出しでは最大 10 社までしか処理せず、残りは remaining で返す', async () => {
+    // 未取得の業者を 12 社作る（force=false）
+    const vendorIds: string[] = []
+    for (let i = 0; i < 12; i++) {
+      vendorIds.push(
+        await makeVendor(`大量業者${i}`, { websiteUrl: `https://vendor${i}.example.com/` }),
+      )
+    }
+    const { bucket } = fakeBucket()
+    const fetchImpl = fakeFetch((url) => {
+      const m = /^https:\/\/vendor(\d+)\.example\.com\/$/.exec(url)
+      if (m) return new Response(`<link rel="icon" href="/icon.png">`, { status: 200 })
+      if (/^https:\/\/vendor\d+\.example\.com\/icon\.png$/.test(url)) {
+        return new Response(PNG_BYTES, { status: 200 })
+      }
+      return new Response('', { status: 404 })
+    })
+
+    const { results, processed, remaining } = await refreshAllVendorFavicons(
+      db,
+      { force: false },
+      fetchImpl,
+      bucket,
+    )
+    expect(processed).toBe(10)
+    expect(results).toHaveLength(10)
+    expect(remaining).toBe(2)
+    // 処理した 10 社はすべて元の 12 社のうちのどれか
+    for (const r of results) expect(vendorIds).toContain(r.vendorId)
+  })
+
+  it('force=true では favicon_key の stamp が古い（未取得含む）業者から優先する（oldest-first）', async () => {
+    // 先に 3 社をまとめて「取得済み」にし、stamp（取得時刻）に差を付ける
+    const older = await makeVendor('古い業者', {
+      websiteUrl: 'https://older.example.com/',
+      faviconKey: `vendors/dummy/favicon-${(Date.now() - 100_000).toString(36)}.png`,
+    })
+    const newer = await makeVendor('新しい業者', {
+      websiteUrl: 'https://newer.example.com/',
+      faviconKey: `vendors/dummy/favicon-${Date.now().toString(36)}.png`,
+    })
+    const neverFetched = await makeVendor('未取得業者', {
+      websiteUrl: 'https://never.example.com/',
+    })
+    const { bucket } = fakeBucket()
+    const order: string[] = []
+    const fetchImpl = fakeFetch((url) => {
+      const m = /^https:\/\/([a-z]+)\.example\.com\/$/.exec(url)
+      if (m) {
+        order.push(url)
+        return new Response(`<link rel="icon" href="/icon.png">`, { status: 200 })
+      }
+      if (/\/icon\.png$/.test(url)) return new Response(PNG_BYTES, { status: 200 })
+      return new Response('', { status: 404 })
+    })
+
+    const { results } = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
+    expect(results).toHaveLength(3)
+    // 未取得・最も古い取得済みの順で先に処理される
+    expect(order).toEqual([
+      'https://never.example.com/',
+      'https://older.example.com/',
+      'https://newer.example.com/',
+    ])
+    expect(neverFetched).toBeTruthy()
+    expect(older).toBeTruthy()
+    expect(newer).toBeTruthy()
   })
 })
 
@@ -466,17 +568,54 @@ describe('importRepresentativePhotoFromUrlCore', () => {
       fetchImpl,
       bucket,
     )
-    expect(result).toEqual({ ok: true, key: `vendors/${vendorId}/representative-display.jpg` })
-    expect(objects.get(`vendors/${vendorId}/representative-display.jpg`)?.contentType).toBe(
-      'image/png',
-    )
-    expect(objects.get(`vendors/${vendorId}/representative-thumb.jpg`)?.contentType).toBe(
-      'image/png',
-    )
-    expect(objects.get(`vendors/${vendorId}/representative-thumb.jpg`)?.body).toEqual(PNG_BYTES)
+    expect(result).toEqual({ ok: true, key: representativeDisplayKeyMatching(vendorId) })
+    if (!result.ok) throw new Error('unreachable')
+    const thumbKey = representativeThumbKeyFromDisplayKey(result.key)
+    expect(objects.get(result.key)?.contentType).toBe('image/png')
+    expect(objects.get(thumbKey)?.contentType).toBe('image/png')
+    expect(objects.get(thumbKey)?.body).toEqual(PNG_BYTES)
 
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
-    expect(row.representativePhotoKey).toBe(`vendors/${vendorId}/representative-display.jpg`)
+    expect(row.representativePhotoKey).toBe(result.key)
+  })
+
+  it('差し替えると前の display/thumb オブジェクトを消す（鍵は毎回 stamp が違うので孤児になりうる）', async () => {
+    const vendorId = await makeVendor('写真差し替え業者')
+    const { bucket, deletedKeys } = fakeBucket()
+    // 2 回とも同じミリ秒内に呼ぶと実時計では偶然同じ stamp になりうるので、
+    // カウンタを注入して stamp が必ず違う値になるようにする
+    let clock = 1_700_000_000_000
+    const now = () => clock++
+    const fetchImpl = fakeFetch((url) => {
+      if (url === 'https://vendor.example.com/rep.png')
+        return new Response(PNG_BYTES, { status: 200 })
+      return null
+    })
+
+    const first = await importRepresentativePhotoFromUrlCore(
+      db,
+      vendorId,
+      'https://vendor.example.com/rep.png',
+      fetchImpl,
+      bucket,
+      now,
+    )
+    if (!first.ok) throw new Error('unreachable')
+
+    const second = await importRepresentativePhotoFromUrlCore(
+      db,
+      vendorId,
+      'https://vendor.example.com/rep.png',
+      fetchImpl,
+      bucket,
+      now,
+    )
+    if (!second.ok) throw new Error('unreachable')
+
+    expect(second.key).not.toBe(first.key)
+    expect(deletedKeys).toEqual(
+      expect.arrayContaining([first.key, representativeThumbKeyFromDisplayKey(first.key)]),
+    )
   })
 
   it('許可されない URL（SSRF 対策）は fetch を呼ばずに失敗を返す', async () => {
@@ -612,10 +751,15 @@ describe('importRepresentativePhotoFromUrlCore', () => {
 })
 
 describe('deleteRepresentativePhotoObjects', () => {
-  it('representative_photo_key を null にし、R2 の display/thumb 両方を消す', async () => {
-    const vendorId = await makeVendor('削除対象業者', {
-      representativePhotoKey: `vendors/dummy/representative-display.jpg`,
-    })
+  it('representative_photo_key を null にし、DB に保存されている実際の display/thumb キーを消す（新形式）', async () => {
+    // vendorId だけからは stamp 込みの現在のキーを再現できないので、DB に保存された
+    // 実際の値（stamp 入り）を読んでから消すことを検証する（vendorId ベースの決め打ちではない）
+    const vendorId = await makeVendor('削除対象業者')
+    const storedKey = `vendors/${vendorId}/representative-1abc2d-display.jpg`
+    await db
+      .update(vendors)
+      .set({ representativePhotoKey: storedKey })
+      .where(eq(vendors.id, vendorId))
     const { bucket, deletedKeys } = fakeBucket()
 
     const result = await deleteRepresentativePhotoObjects(db, vendorId, bucket)
@@ -624,11 +768,35 @@ describe('deleteRepresentativePhotoObjects', () => {
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(row.representativePhotoKey).toBeNull()
     expect(deletedKeys).toEqual(
-      expect.arrayContaining([
-        `vendors/${vendorId}/representative-display.jpg`,
-        `vendors/${vendorId}/representative-thumb.jpg`,
-      ]),
+      expect.arrayContaining([storedKey, `vendors/${vendorId}/representative-1abc2d-thumb.jpg`]),
     )
+  })
+
+  it('旧形式（stamp 無し）のキーが保存されていても、その実際のキーを消す', async () => {
+    const vendorId = await makeVendor('削除対象業者（旧形式）')
+    const storedKey = `vendors/${vendorId}/representative-display.jpg`
+    await db
+      .update(vendors)
+      .set({ representativePhotoKey: storedKey })
+      .where(eq(vendors.id, vendorId))
+    const { bucket, deletedKeys } = fakeBucket()
+
+    const result = await deleteRepresentativePhotoObjects(db, vendorId, bucket)
+
+    expect(result).toEqual({ ok: true })
+    expect(deletedKeys).toEqual(
+      expect.arrayContaining([storedKey, `vendors/${vendorId}/representative-thumb.jpg`]),
+    )
+  })
+
+  it('representative_photo_key が無い業者には R2 delete を呼ばない（消すものが無い）', async () => {
+    const vendorId = await makeVendor('写真なし業者')
+    const { bucket, del } = fakeBucket()
+
+    const result = await deleteRepresentativePhotoObjects(db, vendorId, bucket)
+
+    expect(result).toEqual({ ok: true })
+    expect(del).not.toHaveBeenCalled()
   })
 
   it('業者が存在しない id には何もしない（R2 delete を呼ばずに失敗を返す）', async () => {

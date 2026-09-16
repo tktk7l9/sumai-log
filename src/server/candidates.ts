@@ -19,7 +19,7 @@ import {
   upsertProperty,
   upsertVendor,
 } from './repository'
-import { fetchFaviconForVendor } from './vendorImagesFetcher'
+import { SAVE_FAVICON_BUDGET, fetchFaviconForVendor } from './vendorImagesFetcher'
 import {
   idField,
   idInput,
@@ -158,10 +158,19 @@ export const saveVendor = createServerFn({ method: 'POST' })
     // websiteUrl が新規/変更されたときだけファビコンを取りに行く（design 通り）。
     // 既存の websiteUrl と同じなら毎回叩き直さない。取得は fetchFaviconForVendor
     // 自身が例外を投げない設計だが、念のため .catch で保存自体は必ず成功させる。
+    // 保存を長時間ブロックしないよう、ここだけ短い予算（SAVE_FAVICON_BUDGET。最悪 8 秒）で
+    // 呼ぶ。ここで見つからなくても設定画面の「アイコンを取得」（フルの予算）で拾える。
     const previousWebsiteUrl = data.id ? await getVendorWebsiteUrl(db, data.id) : null
     const id = await upsertVendor(db, data, await currentActorEmail())
     if (data.websiteUrl && data.websiteUrl !== previousWebsiteUrl) {
-      await fetchFaviconForVendor(db, id, data.websiteUrl).catch(() => {})
+      await fetchFaviconForVendor(
+        db,
+        id,
+        data.websiteUrl,
+        undefined,
+        undefined,
+        SAVE_FAVICON_BUDGET,
+      ).catch(() => {})
     }
     return { id }
   })

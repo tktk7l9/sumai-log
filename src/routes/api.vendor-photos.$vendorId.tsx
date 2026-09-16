@@ -2,10 +2,15 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { getDb } from '../db/client'
 import { isIdLike } from '../lib/ids'
-import { sniffImageType, validatePhotoUpload, vendorImageKeys } from '../lib/photos'
+import {
+  representativeThumbKeyFromDisplayKey,
+  sniffImageType,
+  validatePhotoUpload,
+  vendorImageKeys,
+} from '../lib/photos'
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { setVendorRepresentativePhotoKey, vendorExists } from '../server/repository'
-import { cleanupFailedUpload, getPhotosBucket } from '../server/storage'
+import { cleanupFailedUpload, deletePhotoObjects, getPhotosBucket } from '../server/storage'
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -63,12 +68,19 @@ export const Route = createFileRoute('/api/vendor-photos/$vendorId')({
         const db = getDb()
         if (!(await vendorExists(db, vendorId))) return json(404, { error: '業者が見つかりません' })
 
-        const keys = vendorImageKeys(vendorId)
+        // 鍵に stamp（base36 の Date.now()）を挟むので、差し替えのたびに新しい URL になる
+        // （配信は immutable キャッシュなので、同じ URL のままだと差し替えが反映されない）
+        const stamp = Date.now().toString(36)
+        const keys = vendorImageKeys(vendorId, stamp)
         const bucket = getPhotosBucket()
         try {
           await bucket.put(keys.displayKey, displayBytes, { httpMetadata: { contentType: type } })
           await bucket.put(keys.thumbKey, thumbBytes, { httpMetadata: { contentType: thumbType } })
-          await setVendorRepresentativePhotoKey(db, vendorId, keys.displayKey)
+          const previousKey = await setVendorRepresentativePhotoKey(db, vendorId, keys.displayKey)
+          if (previousKey && previousKey !== keys.displayKey) {
+            const previousThumbKey = representativeThumbKeyFromDisplayKey(previousKey)
+            await deletePhotoObjects([previousKey, previousThumbKey], bucket).catch(() => {})
+          }
         } catch (error) {
           await cleanupFailedUpload([keys.displayKey, keys.thumbKey], error)
         }

@@ -387,16 +387,38 @@ test('buildStatements: affiliationLinks.note が 60 字を超えると例外', (
   )
 })
 
-test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が入る（vendorId だけから決まる key）', () => {
+test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が stamp 入りで入る（vendorId + stamp から決まる key）', () => {
   const seed = fictionalSeed()
+  // now を固定すると stamp（= new Date(now).getTime().toString(36)）も決定的になる
+  const now = '2026-01-01T00:00:00.000Z'
   const { sql } = buildStatements(seed, {
     actorEmail: 'owner@example.com',
+    now,
     representativePhotoReady: new Set(['vendor-a']),
   })
   const vendorAId = slugToId('vendor:vendor-a')
+  const stamp = new Date(now).getTime().toString(36)
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
-  assert.match(vendorAStmt, new RegExp(`'vendors/${vendorAId}/representative-display\\.jpg'`))
+  assert.match(
+    vendorAStmt,
+    new RegExp(`'vendors/${vendorAId}/representative-${stamp}-display\\.jpg'`),
+  )
+})
+
+test('buildStatements: representativePhotoReady のキーは now が違えば違う stamp になる（差し替えのたびに URL が変わる）', () => {
+  const seed = fictionalSeed()
+  const first = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    now: '2026-01-01T00:00:00.000Z',
+    representativePhotoReady: new Set(['vendor-a']),
+  }).sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const second = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    now: '2026-06-01T00:00:00.000Z',
+    representativePhotoReady: new Set(['vendor-a']),
+  }).sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.notEqual(first, second)
 })
 
 test('buildStatements: representativePhotoReady に無い vendor は representative_photo_key が NULL のまま（未指定の既定も同じ）', () => {

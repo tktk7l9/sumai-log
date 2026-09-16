@@ -6,7 +6,7 @@ import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { resolveAffiliations } from '../../lib/affiliations'
 import { formatTsubo } from '../../lib/format'
 import { termIdForMetric } from '../../lib/glossary'
-import { photoUrl, vendorImageKeys } from '../../lib/photos'
+import { photoUrl, representativeThumbKeyFromDisplayKey } from '../../lib/photos'
 import { StatusBadge } from './StatusBadge'
 import { VendorLinks } from './VendorLinks'
 
@@ -61,7 +61,7 @@ export function VendorCard({
           <Group gap={6} wrap="nowrap" align="center">
             {vendor.representativePhotoKey ? (
               <Avatar
-                src={photoUrl(vendorImageKeys(vendor.id).thumbKey)}
+                src={photoUrl(representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey))}
                 size={28}
                 radius="xl"
                 alt=""
