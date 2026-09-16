@@ -37,6 +37,15 @@ function daysInMonth(year: number, month1to12: number): number {
   return new Date(Date.UTC(year, month1to12, 0)).getUTCDate()
 }
 
+/** 'YYYY-MM-DD' に days 日足した 'YYYY-MM-DD' を返す（負数も可） */
+export function addDays(key: string, days: number): string {
+  const [year, month, day] = key.split('-').map(Number)
+  const d = new Date(Date.UTC(year, month - 1, day + days))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')}`
+}
+
 export function monthKeys(year: number, month1to12: number): string[] {
   const n = daysInMonth(year, month1to12)
   const keys: string[] = []

@@ -104,7 +104,7 @@ function Page() {
                           </Group>
                         }
                         description={
-                          <Text size="xs" c="dimmed" lineClamp={1}>
+                          <Text size="xs" c="dimmed" lineClamp={2} span>
                             {term.summary}
                           </Text>
                         }
