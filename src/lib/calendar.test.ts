@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  addDays,
   compareStartsAt,
   composeStartsAt,
   dateKey,
@@ -79,6 +80,26 @@ describe('formatDateWithWeekday', () => {
 
   it('読めない文字列はそのまま返す', () => {
     expect(formatDateWithWeekday('invalid')).toBe('invalid')
+  })
+})
+
+describe('addDays', () => {
+  it('月をまたいで加算する', () => {
+    expect(addDays('2026-09-16', 27)).toBe('2026-10-13')
+    expect(addDays('2026-09-16', 1)).toBe('2026-09-17')
+  })
+
+  it('年をまたいで加算する', () => {
+    expect(addDays('2026-12-20', 27)).toBe('2027-01-16')
+  })
+
+  it('負数で日をさかのぼる', () => {
+    expect(addDays('2026-09-16', -1)).toBe('2026-09-15')
+  })
+
+  it('うるう年の 2 月をまたぐ', () => {
+    expect(addDays('2028-02-28', 1)).toBe('2028-02-29')
+    expect(addDays('2028-02-29', 1)).toBe('2028-03-01')
   })
 })
 
