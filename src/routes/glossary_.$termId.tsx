@@ -17,6 +17,10 @@ export const Route = createFileRoute('/glossary_/$termId')({
     if (!term) throw notFound()
     return { term, related: relatedTerms(GLOSSARY, term) }
   },
+  // notFoundComponent 側は loaderData が無いのでタブ名は __root.tsx の既定のまま
+  head: ({ loaderData }) => ({
+    meta: loaderData ? [{ title: `${loaderData.term.term} | 用語集 | 住まいログ` }] : [],
+  }),
 })
 
 // 一覧側の検索・絞り込み（`?q` `?c`）をそのまま「← 用語集」へ持ち帰る。
