@@ -38,7 +38,14 @@ const USER_AGENT = 'sumai-log/1.0'
 const ERROR_MESSAGE_MAX = 200
 const NO_ICON_FOUND_ERROR = 'アイコンが見つかりませんでした'
 const NOT_AN_IMAGE_ERROR = '画像ファイルではありません（JPEG/PNG/WebP のみ）'
-const VENDOR_NOT_FOUND_ERROR = '業者が見つかりません'
+export const VENDOR_NOT_FOUND_ERROR = '業者が見つかりません'
+/** 手動アップロードの上限（design 通り 512KB）。自動取得の ICON_MAX_BYTES と値は同じだが、
+ * 「サイトから取得するアイコン」と「フォームからアップロードされたファイル」は別の予算
+ * として意図的に定数を分けている（将来どちらかだけ変えたくなったときに独立して変えられる）。 */
+export const FAVICON_UPLOAD_MAX_BYTES = 512_000
+export const FAVICON_UPLOAD_TOO_LARGE_ERROR = `画像が大きすぎます（上限 ${FAVICON_UPLOAD_MAX_BYTES / 1000}KB）`
+export const FAVICON_UPLOAD_WRONG_TYPE_ERROR =
+  '画像ファイルではありません（PNG/JPEG/WebP/ICO のみ）'
 /** pickFaviconCandidates が返す配列は最大 6 件（宣言 5 + favicon.ico の保険）だが、
  * 呼び出し側でも明示的に切って外向き fetch 数（HTML 1 + アイコン最大 6 = 最大 7）を保証する。 */
 const MAX_FAVICON_CANDIDATES_TO_TRY = 6
@@ -192,7 +199,7 @@ export async function fetchFaviconForVendor(
       const stamp = now().toString(36)
       const key = vendorFaviconKey(vendorId, extForType(type), stamp)
       await bucket.put(key, bytes, { httpMetadata: { contentType: type } })
-      const previousKey = await setVendorFaviconKey(db, vendorId, key)
+      const previousKey = await setVendorFaviconKey(db, vendorId, key, 'auto')
       if (previousKey && previousKey !== key) {
         await deletePhotoObjects([previousKey], bucket).catch(() => {})
       }
@@ -235,6 +242,14 @@ function faviconStampMs(faviconKey: string | null): number {
  * website_url がある業者を対象にファビコンを取得する。`force` が false なら
  * 既に favicon_key がある業者は対象外（design 通り）。1 社の失敗は次の業者を止めない。
  *
+ * `force` が false のときは `favicon_source = 'manual'`（業者フォームからの手動アップロード）
+ * の業者も対象外にする: 手動アップロードは常に favicon_key を持つため、実際には
+ * 「favicon_key が無い業者だけ」というだけで既に除外されているが、由来を明示的に見て
+ * 除外することで「たまたま key が無いから除外されている」という偶然の防御ではなく
+ * 意図した仕様として自己文書化する。`force` が true（「取り直す」）のときは手動アップロード
+ * も対象に含める（design 通り: 手動アップロードは自動更新から保護されるが、明示的な
+ * 「取り直す」操作までは止めない）。
+ *
  * 1 回の呼び出しで処理するのは最大 MAX_VENDORS_PER_REFRESH_CALL（10）社まで
  * （業者 1 件で最悪 7 回の外向き fetch を直列に行うため、無制限だと応答時間・
  * サブリクエスト数が業者数に比例して際限なく伸びる）。`force` が false のときは
@@ -251,7 +266,9 @@ export async function refreshAllVendorFavicons(
   bucket: R2Bucket = getPhotosBucket(),
 ): Promise<RefreshAllFaviconsResult> {
   const withSite = await listVendorsWithWebsite(db)
-  const eligible = withSite.filter((v) => opts.force || v.faviconKey === null)
+  const eligible = withSite.filter(
+    (v) => opts.force || (v.faviconKey === null && v.faviconSource !== 'manual'),
+  )
   const targets = opts.force
     ? [...eligible].sort((a, b) => faviconStampMs(a.faviconKey) - faviconStampMs(b.faviconKey))
     : eligible
@@ -341,6 +358,74 @@ export async function deleteRepresentativePhotoObjects(
     if (previousKey) {
       const previousThumbKey = representativeThumbKeyFromDisplayKey(previousKey)
       await deletePhotoObjects([previousKey, previousThumbKey], bucket)
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) }
+  }
+}
+
+export type UploadFaviconResult = { ok: true; key: string } | { ok: false; error: string }
+
+/**
+ * サイトのアイコンを業者フォームから手動アップロードする（design 背景: Cloudflare からの
+ * アクセスを一律拒否するサーバーがあり、自動取得（fetchFaviconForVendor）が届かないため）。
+ * アップロード経路（src/routes/api.vendor-favicon.$vendorId.tsx）は multipart を
+ * パースして bytes を取り出すだけで、検証・R2 書き込み・DB 更新はここに集約する
+ * （vendorImagesFetcher.worker-test.ts から HTTP 層を経由せず直接テストできるように。
+ * ファイル分割の理由はファイル先頭のコメント参照）。
+ *
+ * 許可する画像形式は自動取得と同じ（sniffFaviconType。SVG は含めない — stored XSS 対策は
+ * src/lib/favicon.ts のコメント参照）。favicon_source を 'manual' にすることで、以後
+ * 非 force の自動更新（refreshAllVendorFavicons・saveVendor 保存時のインライン取得）から
+ * 除外される（「取り直す」= force はこの限りでない）。
+ */
+export async function uploadVendorFaviconCore(
+  db: Db,
+  vendorId: string,
+  bytes: Uint8Array,
+  bucket: R2Bucket = getPhotosBucket(),
+  // stamp 生成用。既定は実時計（fetchFaviconForVendor と同じ DI の理由）。
+  now: () => number = Date.now,
+): Promise<UploadFaviconResult> {
+  try {
+    if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
+    if (bytes.byteLength === 0 || bytes.byteLength > FAVICON_UPLOAD_MAX_BYTES) {
+      return { ok: false, error: FAVICON_UPLOAD_TOO_LARGE_ERROR }
+    }
+    const type = sniffFaviconType(bytes)
+    if (!type) return { ok: false, error: FAVICON_UPLOAD_WRONG_TYPE_ERROR }
+
+    const stamp = now().toString(36)
+    const key = vendorFaviconKey(vendorId, extForType(type), stamp)
+    await bucket.put(key, bytes, { httpMetadata: { contentType: type } })
+    const previousKey = await setVendorFaviconKey(db, vendorId, key, 'manual')
+    if (previousKey && previousKey !== key) {
+      await deletePhotoObjects([previousKey], bucket).catch(() => {})
+    }
+    return { ok: true, key }
+  } catch (e) {
+    return { ok: false, error: errorMessage(e) }
+  }
+}
+
+export type DeleteFaviconResult = { ok: true } | { ok: false; error: string }
+
+/**
+ * favicon_key / favicon_source を両方 NULL にし、R2 のファビコンオブジェクトも消す
+ * （業者フォームの「削除」ボタン用。自動取得・手動アップロードのどちらのキーでも同じ扱い）。
+ * 業者が実在しない id には何もしない（存在確認は deleteRepresentativePhotoObjects と同じ理由）。
+ */
+export async function deleteVendorFaviconObjects(
+  db: Db,
+  vendorId: string,
+  bucket: R2Bucket = getPhotosBucket(),
+): Promise<DeleteFaviconResult> {
+  try {
+    if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
+    const previousKey = await setVendorFaviconKey(db, vendorId, null, null)
+    if (previousKey) {
+      await deletePhotoObjects([previousKey], bucket)
     }
     return { ok: true }
   } catch (e) {

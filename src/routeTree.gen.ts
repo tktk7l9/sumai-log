@@ -23,6 +23,7 @@ import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as GlossaryTermIdRouteImport } from './routes/glossary_.$termId'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
+import { Route as ApiVendorFaviconVendorIdRouteImport } from './routes/api.vendor-favicon.$vendorId'
 import { Route as ApiVendorPhotosVendorIdRouteImport } from './routes/api.vendor-photos.$vendorId'
 import { Route as CandidatesPropertiesIdRouteImport } from './routes/candidates_.properties.$id'
 import { Route as CandidatesVendorsIdRouteImport } from './routes/candidates_.vendors.$id'
@@ -99,6 +100,12 @@ const ApiPhotosSplatRoute = ApiPhotosSplatRouteImport.update({
   path: '/api/photos/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiVendorFaviconVendorIdRoute =
+  ApiVendorFaviconVendorIdRouteImport.update({
+    id: '/api/vendor-favicon/$vendorId',
+    path: '/api/vendor-favicon/$vendorId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiVendorPhotosVendorIdRoute = ApiVendorPhotosVendorIdRouteImport.update({
   id: '/api/vendor-photos/$vendorId',
   path: '/api/vendor-photos/$vendorId',
@@ -140,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-favicon/$vendorId': typeof ApiVendorFaviconVendorIdRoute
   '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
@@ -161,6 +169,7 @@ export interface FileRoutesByTo {
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-favicon/$vendorId': typeof ApiVendorFaviconVendorIdRoute
   '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates/vendors/$id': typeof CandidatesVendorsIdRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/glossary_/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
+  '/api/vendor-favicon/$vendorId': typeof ApiVendorFaviconVendorIdRoute
   '/api/vendor-photos/$vendorId': typeof ApiVendorPhotosVendorIdRoute
   '/candidates_/properties/$id': typeof CandidatesPropertiesIdRoute
   '/candidates_/vendors/$id': typeof CandidatesVendorsIdRoute
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-favicon/$vendorId'
     | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-favicon/$vendorId'
     | '/api/vendor-photos/$vendorId'
     | '/candidates/properties/$id'
     | '/candidates/vendors/$id'
@@ -248,6 +260,7 @@ export interface FileRouteTypes {
     | '/glossary_/$termId'
     | '/places/$id'
     | '/api/photos/$'
+    | '/api/vendor-favicon/$vendorId'
     | '/api/vendor-photos/$vendorId'
     | '/candidates_/properties/$id'
     | '/candidates_/vendors/$id'
@@ -270,6 +283,7 @@ export interface RootRouteChildren {
   GlossaryTermIdRoute: typeof GlossaryTermIdRoute
   PlacesIdRoute: typeof PlacesIdRoute
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
+  ApiVendorFaviconVendorIdRoute: typeof ApiVendorFaviconVendorIdRoute
   ApiVendorPhotosVendorIdRoute: typeof ApiVendorPhotosVendorIdRoute
   CandidatesPropertiesIdRoute: typeof CandidatesPropertiesIdRoute
   CandidatesVendorsIdRoute: typeof CandidatesVendorsIdRoute
@@ -377,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPhotosSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/vendor-favicon/$vendorId': {
+      id: '/api/vendor-favicon/$vendorId'
+      path: '/api/vendor-favicon/$vendorId'
+      fullPath: '/api/vendor-favicon/$vendorId'
+      preLoaderRoute: typeof ApiVendorFaviconVendorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/vendor-photos/$vendorId': {
       id: '/api/vendor-photos/$vendorId'
       path: '/api/vendor-photos/$vendorId'
@@ -430,6 +451,7 @@ const rootRouteChildren: RootRouteChildren = {
   GlossaryTermIdRoute: GlossaryTermIdRoute,
   PlacesIdRoute: PlacesIdRoute,
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,
+  ApiVendorFaviconVendorIdRoute: ApiVendorFaviconVendorIdRoute,
   ApiVendorPhotosVendorIdRoute: ApiVendorPhotosVendorIdRoute,
   CandidatesPropertiesIdRoute: CandidatesPropertiesIdRoute,
   CandidatesVendorsIdRoute: CandidatesVendorsIdRoute,
