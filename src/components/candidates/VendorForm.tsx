@@ -17,7 +17,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
 import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
-import { VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { NEWS_SOURCES, VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 
@@ -50,6 +50,8 @@ const empty: Values = {
   sourceUrl: null,
   websiteUrl: null,
   socialUrls: '',
+  newsUrl: null,
+  newsSource: null,
 }
 
 export function VendorForm({
@@ -187,6 +189,28 @@ export function VendorForm({
           type="url"
           {...form.getInputProps('sourceUrl')}
           value={form.values.sourceUrl ?? ''}
+        />
+        <TextInput
+          label="お知らせの URL"
+          description="毎朝自動で取得します。https:// のみ入力できます（未設定なら取得しません）"
+          type="url"
+          placeholder="https://example.com/feed/"
+          {...form.getInputProps('newsUrl')}
+          value={form.values.newsUrl ?? ''}
+        />
+        <Select
+          label="取得方法"
+          description="お知らせの URL を設定したときに選びます"
+          data={NEWS_SOURCES.map((source) => ({
+            value: source,
+            label:
+              source === 'rss'
+                ? 'RSS/Atom フィード'
+                : 'トップページの一覧（樹々匠のような RSS 無しの会社）',
+          }))}
+          clearable
+          {...form.getInputProps('newsSource')}
+          value={form.values.newsSource ?? null}
         />
         <Textarea
           label="SNS の URL（1 行に 1 つ）"
