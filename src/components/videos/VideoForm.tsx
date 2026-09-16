@@ -200,7 +200,7 @@ export function VideoForm({
         <DateInput
           label="観た日"
           clearable
-          valueFormat="YYYY-MM-DD"
+          valueFormat="YYYY/MM/DD"
           value={form.values.watchedOn ? new Date(`${form.values.watchedOn}T00:00:00`) : null}
           onChange={(d) =>
             form.setFieldValue('watchedOn', d ? dayjs(d).format('YYYY-MM-DD') : null)

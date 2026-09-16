@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Camera } from 'lucide-react'
 
 import { ATTENDEES_LABEL } from '../../db/schema'
+import { formatDateSlash } from '../../lib/calendar'
 import { photoUrl } from '../../lib/photos'
 import type { VisitWithLinks } from '../../server/repository'
 
@@ -44,7 +45,7 @@ export function VisitCard({ visit }: { visit: VisitWithLinks }) {
           )}
           <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
             <Text size="xs" c="dimmed">
-              {visit.visitedOn}
+              {formatDateSlash(visit.visitedOn)}
             </Text>
             <Text fw={700} lineClamp={2} lh={1.4}>
               {label}

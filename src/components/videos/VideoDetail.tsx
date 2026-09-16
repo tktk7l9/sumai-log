@@ -19,7 +19,7 @@ import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { ATTENDEES_LABEL, type Comment, type Video } from '../../db/schema'
-import { formatJst } from '../../lib/jst'
+import { formatDateSlash } from '../../lib/calendar'
 import type { Member } from '../../lib/members'
 import { deleteVideo } from '../../server/videos'
 import { Row } from '../candidates/DetailRow'
@@ -102,9 +102,7 @@ export function VideoDetail({
       <Card withBorder padding="md">
         <Stack gap="xs">
           {video.channel ? <Row label="チャンネル" value={video.channel} /> : null}
-          {video.watchedOn ? (
-            <Row label="観た日" value={formatJst(video.watchedOn, { withTime: false })} />
-          ) : null}
+          {video.watchedOn ? <Row label="観た日" value={formatDateSlash(video.watchedOn)} /> : null}
           {vendor ? (
             <Row
               label="関連業者"

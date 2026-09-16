@@ -113,7 +113,7 @@ export function VisitForm({
         <DateInput
           label="日付"
           required
-          valueFormat="YYYY-MM-DD"
+          valueFormat="YYYY/MM/DD"
           value={form.values.visitedOn ? new Date(`${form.values.visitedOn}T00:00:00`) : null}
           onChange={(d) => form.setFieldValue('visitedOn', d ? dayjs(d).format('YYYY-MM-DD') : '')}
           error={form.errors.visitedOn}

@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Film } from 'lucide-react'
 
 import { ATTENDEES_LABEL } from '../../db/schema'
-import { formatJst } from '../../lib/jst'
+import { formatDateSlash } from '../../lib/calendar'
 import type { listVideos } from '../../server/videos'
 
 export type VideoRow = Awaited<ReturnType<typeof listVideos>>[number]
@@ -48,7 +48,7 @@ export function VideoCard({ video }: { video: VideoRow }) {
           <Group gap="xs" wrap="wrap">
             {video.watchedOn ? (
               <Text size="xs" c="dimmed">
-                {formatJst(video.watchedOn, { withTime: false })}
+                {formatDateSlash(video.watchedOn)}
               </Text>
             ) : null}
             <Badge variant="default" size="xs">

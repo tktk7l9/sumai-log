@@ -13,6 +13,7 @@ import { PhotoGrid } from '../components/visits/PhotoGrid'
 import { PhotoUploader } from '../components/visits/PhotoUploader'
 import { VisitForm } from '../components/visits/VisitForm'
 import { ATTENDEES_LABEL, type Photo } from '../db/schema'
+import { formatDateWithWeekday } from '../lib/calendar'
 import { listCommentsFor } from '../server/comments'
 import { deletePhoto, deleteVisit, getVisit, visitFormOptions } from '../server/visits'
 
@@ -68,7 +69,7 @@ function Page() {
 
   return (
     <PageShell
-      title={visit.visitedOn}
+      title={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">
           <Badge variant="default">{ATTENDEES_LABEL[visit.attendees]}</Badge>
