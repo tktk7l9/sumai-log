@@ -1,11 +1,15 @@
 /**
  * お知らせの本文（呼び出し側でタイトル＋要約を連結したもの）から、イベントの
- * 種別と日程を抜き出す（design.md §3）。種別語が一つも無い、または日付が一つも
- * 拾えなければイベントにしない（null）。
+ * 種別と日程を抜き出す（design.md §3）。種別語が一つも無い、または実在する
+ * 日付が一つも拾えなければイベントにしない（null）。
  *
  * 日付表現は投稿日の年を補って解決する（本文に明示の年が無ければ）。年をまたぐ
- * 判定は `inferYear` に切り出してある。
+ * 判定は `inferYear` に切り出してある。拾った日付は月1〜12・日を実在の暦
+ * （うるう年考慮）で検証し、実在しないものは個別に捨てる（他に実在する日が
+ * あればイベントは成立する）。
  */
+
+import { pad } from './text'
 
 export type EventKindLabel =
   '完成見学会' | '構造見学会' | '見学会' | '相談会' | 'セミナー' | 'イベント'
@@ -19,10 +23,6 @@ function detectKind(text: string): EventKindLabel | null {
   if (text.includes('セミナー')) return 'セミナー'
   if (text.includes('イベント')) return 'イベント'
   return null
-}
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0')
 }
 
 /**
@@ -42,11 +42,35 @@ function toIso(date: FoundDate): string {
   return `${date.year}-${pad(date.month)}-${pad(date.day)}`
 }
 
+function isLeapYear(year: number): boolean {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) return isLeapYear(year) ? 29 : 28
+  return [4, 6, 9, 11].includes(month) ? 30 : 31
+}
+
+/**
+ * 月1〜12・日がその年月に実在するか（うるう年考慮）。「1月32日」「2月30日」の
+ * ような、正規表現の形は合うが暦には無い日を弾くための最終フィルタ。
+ */
+function isRealDate(date: FoundDate): boolean {
+  return (
+    date.month >= 1 &&
+    date.month <= 12 &&
+    date.day >= 1 &&
+    date.day <= daysInMonth(date.year, date.month)
+  )
+}
+
 // 「YYYY年」は任意。「M月D日」は必須（曜日・祝の注記 `(土)` 等は無視して構わない。
 // 数字を含まないので後続の走査に影響しない）。
 const KANJI_DATE = /(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日/g
 // 「M月D日」の一部ではない、独立した「D日」（列挙・範囲の続き: `・18日` `〜23日` 等）。
 const BARE_DAY = /(\d{1,2})日/g
+
+type KanjiSpan = { start: number; end: number; year: number; month: number }
 
 /**
  * 「M月D日」（明示年つきも可）と、それに続く「D日」の列挙・範囲
@@ -55,7 +79,7 @@ const BARE_DAY = /(\d{1,2})日/g
  */
 function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
-  const spans: { start: number; end: number; year: number; month: number }[] = []
+  const spans: KanjiSpan[] = []
 
   for (const match of text.matchAll(KANJI_DATE)) {
     // matchAll の一致は必ず index を持つ（型定義上は optional なだけ）
@@ -72,7 +96,13 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
     if (spans.some((span) => start >= span.start && start < span.end)) continue
 
     // 同じ月とみなす直前の「M月D日」（無ければこの「D日」は手がかりが無いので捨てる）
-    const governing = [...spans].reverse().find((span) => span.start < start)
+    let governing: KanjiSpan | undefined
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (spans[i].start < start) {
+        governing = spans[i]
+        break
+      }
+    }
     if (!governing) continue
 
     dates.push({ year: governing.year, month: governing.month, day: Number(match[1]) })
@@ -85,22 +115,51 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
 const SLASH_RANGE =
   /(\d{1,2})\/(\d{1,2})(?:[-〜～](?:(\d{1,2})\/(\d{1,2})|\/(\d{1,2})|(\d{1,2})))?/g
 
+/**
+ * 範囲マーカー（`-` `〜` `～`）も曜日注記も無い、単独の「M/D」は分数表記との
+ * 誤検出があり得る（「参加費は通常の1/2です」「先着1/2程度」等）。直前・
+ * 直後にこれらの語があれば分数とみなして日付にしない。
+ *
+ * 誤検出を完全には無くせないトレードオフがある: 例えば「見学会の9/12開催」の
+ * ように、本当に日付を指していて直前に「の」が来る書き方は、この単純な
+ * 語リストでは分数と区別できず、日付を捨ててしまう。範囲の一部（`7/6-/7` 等）
+ * や `(土)` のような曜日注記が続く場合はこの判定の対象にせず常に日付として扱う。
+ */
+const FRACTION_TRAILING_WORDS = ['程度', '以下', '以上', '割', '%', '名', '円', 'の', '倍']
+const FRACTION_LEADING_WORDS = ['の', 'は', '約', '先着']
+
+function looksLikeFraction(text: string, start: number, end: number): boolean {
+  const after = text.slice(end)
+  const before = text.slice(0, start)
+  return (
+    FRACTION_TRAILING_WORDS.some((word) => after.startsWith(word)) ||
+    FRACTION_LEADING_WORDS.some((word) => before.endsWith(word))
+  )
+}
+
 /** 「M/D」「M/D-/D」「M/D-M/D」「M/D〜M/D」「M/D～D」を拾う。 */
 function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
 
   for (const match of text.matchAll(SLASH_RANGE)) {
     const startMonth = Number(match[1])
-    dates.push({
-      year: inferYear(startMonth, publishedOn),
-      month: startMonth,
-      day: Number(match[2]),
-    })
+    const startDay = Number(match[2])
+    const hasRange = match[3] !== undefined || match[5] !== undefined || match[6] !== undefined
+    const start = match.index as number
+    const end = start + match[0].length
+
+    if (!hasRange && looksLikeFraction(text, start, end)) continue
+
+    dates.push({ year: inferYear(startMonth, publishedOn), month: startMonth, day: startDay })
 
     if (match[3] !== undefined) {
       // M/D-M/D（月をまたぐこともある終端）
       const endMonth = Number(match[3])
-      dates.push({ year: inferYear(endMonth, publishedOn), month: endMonth, day: Number(match[4]) })
+      dates.push({
+        year: inferYear(endMonth, publishedOn),
+        month: endMonth,
+        day: Number(match[4]),
+      })
     } else if (match[5] !== undefined) {
       // M/D-/D（同月終端）
       dates.push({
@@ -124,9 +183,10 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
 /**
  * タイトル＋要約（呼び出し側で連結した `text`）からイベントの種別と日程を抜く。
  * 種別語（完成見学会 / 構造見学会 / 見学会（お住まい見学会・オープンハウスを含む）/
- * 相談会 / セミナー / イベント）が一つも無ければ null。日付表現が一つも
- * 拾えなければ null。複数の日が見つかれば最小を start・最大を end にする
- * （1 つなら両方同じ）。
+ * 相談会 / セミナー / イベント）が一つも無ければ null。実在する日付表現が
+ * 一つも拾えなければ null（1/32 や 2/30 のような実在しない日、分数表記と
+ * みなした M/D は個別に捨てる）。複数の日が見つかれば最小を start・最大を
+ * end にする（1 つなら両方同じ）。
  */
 export function extractEvent(
   text: string,
@@ -135,7 +195,9 @@ export function extractEvent(
   const kind = detectKind(text)
   if (!kind) return null
 
-  const dates = [...findKanjiDates(text, publishedOn), ...findSlashDates(text, publishedOn)]
+  const dates = [...findKanjiDates(text, publishedOn), ...findSlashDates(text, publishedOn)].filter(
+    isRealDate,
+  )
   if (dates.length === 0) return null
 
   const isoDates = dates.map(toIso)

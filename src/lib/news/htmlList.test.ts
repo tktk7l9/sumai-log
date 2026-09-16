@@ -94,4 +94,8 @@ describe('parseHtmlList', () => {
     expect(parseHtmlList('not html at all', BASE_URL)).toEqual([])
     expect(parseHtmlList('', BASE_URL)).toEqual([])
   })
+
+  it('MAX_INPUT_LENGTH を超える入力は空配列', () => {
+    expect(parseHtmlList('a'.repeat(2_000_001), BASE_URL)).toEqual([])
+  })
 })
