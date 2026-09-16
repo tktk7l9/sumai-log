@@ -40,6 +40,10 @@ export const VENDOR_KIND_LABEL: Record<(typeof VENDOR_KINDS)[number], string> = 
 
 /** 業者のお知らせ取得方式。rss = RSS 2.0 フィード、html-list = トップページの <ul><li> 一覧 */
 export const NEWS_SOURCES = ['rss', 'html-list'] as const
+export const NEWS_SOURCE_LABEL: Record<(typeof NEWS_SOURCES)[number], string> = {
+  rss: 'RSS',
+  'html-list': 'HTML',
+}
 
 /** 戸建ての業者 */
 export const vendors = sqliteTable(

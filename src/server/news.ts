@@ -1,0 +1,89 @@
+import { createServerFn } from '@tanstack/react-start'
+import { eq } from 'drizzle-orm'
+
+import { getDb } from '../db/client'
+import { vendorNews, vendors } from '../db/schema'
+import { truncate } from '../lib/news/text'
+import { currentActorEmail } from './members'
+import { fetchAllVendorNews } from './newsFetcher'
+import { listVendorNewsInput, newsEventsForMonthInput, planVisitInput } from './news.schema'
+import {
+  linkPlannedEvent,
+  listNews,
+  listNewsEventsBetween,
+  listNewsSources,
+  upsertEvent,
+} from './repository'
+
+// バリデータは news.schema.ts から（テストの都合で分離した理由はそちら参照）。
+// 公開する import パス（'./news' から取れる）は変えない。
+export { listVendorNewsInput, newsEventsForMonthInput, planVisitInput }
+
+// events.schema.ts の eventInput と同じ上限（予定のタイトルは最大 200 字）。
+const EVENT_TITLE_MAX = 200
+
+/** `/news` ページ・ホームの「業者のお知らせ」ブロック用。新しい順・ページング可 */
+export const listVendorNews = createServerFn()
+  .validator(listVendorNewsInput)
+  .handler(async ({ data }) => {
+    const news = await listNews(getDb(), data)
+    return { news }
+  })
+
+/** カレンダーの情報レイヤー用。'YYYY-MM' の月内でイベント判定済みのお知らせ */
+export const newsEventsForMonth = createServerFn()
+  .validator(newsEventsForMonthInput)
+  .handler(async ({ data }) => {
+    const news = await listNewsEventsBetween(getDb(), data.from, data.to)
+    return { news }
+  })
+
+/** 設定ページの「業者のお知らせ」カード一覧 */
+export const newsSources = createServerFn().handler(async () => {
+  const sources = await listNewsSources(getDb())
+  return { sources }
+})
+
+/** 設定ページの「今すぐ取得」。newsUrl が設定されている全業者を取得する */
+export const fetchNewsNow = createServerFn({ method: 'POST' }).handler(async () => {
+  const results = await fetchAllVendorNews(getDb())
+  return { results }
+})
+
+/**
+ * お知らせの「行く」。design.md §2 のとおり events に kind='visit' の予定を作り、
+ * vendor_news.planned_event_id に紐づける。既に紐づいていれば新しく作らず、
+ * その eventId をそのまま返す（何度押しても同じ予定を指す）。
+ */
+export const planVisitFromNews = createServerFn({ method: 'POST' })
+  .validator(planVisitInput)
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [news] = await db.select().from(vendorNews).where(eq(vendorNews.id, data.newsId)).limit(1)
+    if (!news) throw new Response('Not Found', { status: 404 })
+    if (news.plannedEventId) return { eventId: news.plannedEventId }
+    if (!news.eventStart) {
+      throw new Response('この見出しには日程がありません。', { status: 400 })
+    }
+
+    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, news.vendorId)).limit(1)
+    const title = truncate(`${vendor?.name ?? ''} ${news.title}`.trim(), EVENT_TITLE_MAX)
+
+    const eventId = await upsertEvent(
+      db,
+      {
+        title,
+        kind: 'visit',
+        startsAt: news.eventStart,
+        endsAt: null,
+        allDay: true,
+        placeId: null,
+        vendorId: news.vendorId,
+        propertyId: null,
+        note: news.url,
+      },
+      await currentActorEmail(),
+    )
+    await linkPlannedEvent(db, news.id, eventId)
+    return { eventId }
+  })
