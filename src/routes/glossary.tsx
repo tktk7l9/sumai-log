@@ -1,16 +1,43 @@
-import { Accordion, Stack } from '@mantine/core'
-import { createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { Accordion, Group, NavLink, Stack, Text } from '@mantine/core'
+import { createFileRoute, createLink, useLocation, useNavigate } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
+import { forwardRef, useEffect, useState } from 'react'
 import { z } from 'zod'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { GlossaryFilters } from '../components/glossary/GlossaryFilters'
-import { TermCard } from '../components/glossary/TermCard'
 import { GLOSSARY, GLOSSARY_CATEGORIES, type CategoryId } from '../content/glossary'
-import { findTerm, groupByCategory, relatedTerms, searchGlossary } from '../lib/glossary'
+import { findTerm, groupByCategory, searchGlossary } from '../lib/glossary'
 
 const CATEGORY_IDS = GLOSSARY_CATEGORIES.map((c) => c.id) as [CategoryId, ...CategoryId[]]
+
+// Mantine の NavLink は polymorphic component（component prop でタグ/コンポーネントを
+// 差し替えられる）なので、`component={Link}` に to/params を直接渡すと Mantine 側の
+// props 合成で TanStack Router のジェネリック推論が潰れて型エラーになる。
+// 素の <a> として振る舞う非ジェネリックなラッパーを createLink に渡すのが
+// TanStack Router 公式の推奨パターン（見た目は NavLink のまま、型だけ通す）。
+type TermNavLinkProps = {
+  label: React.ReactNode
+  description?: React.ReactNode
+  rightSection?: React.ReactNode
+} & Omit<React.ComponentPropsWithoutRef<'a'>, 'href' | 'onChange'>
+
+const TermNavLinkAnchor = forwardRef<HTMLAnchorElement, TermNavLinkProps>(
+  ({ label, description, rightSection, ...anchorProps }, ref) => (
+    <NavLink
+      component="a"
+      ref={ref}
+      label={label}
+      description={description}
+      rightSection={rightSection}
+      {...anchorProps}
+    />
+  ),
+)
+TermNavLinkAnchor.displayName = 'TermNavLinkAnchor'
+
+const NavLinkLink = createLink(TermNavLinkAnchor)
 
 const search = z.object({
   q: z.string().optional(),
@@ -22,10 +49,6 @@ export const Route = createFileRoute('/glossary')({
   validateSearch: (s) => search.parse(s),
 })
 
-// hash が指しているカテゴリを開き、見出しへスクロールするまでの猶予。
-// Accordion の既定トランジション(200ms)より少し長く取る。
-const HASH_SCROLL_DELAY_MS = 240
-
 function Page() {
   const { q, c } = Route.useSearch()
   const navigate = useNavigate({ from: '/glossary' })
@@ -36,18 +59,16 @@ function Page() {
   const filtered = c ? searched.filter((term) => term.category === c) : searched
   const groups = groupByCategory(filtered)
 
+  // 旧形式 `#term-<id>` で直接開かれた／ブックマークされたリンクを、詳細ページへ
+  // 案内する（バッジ類は書き換え済みだが、外部のブックマークや共有リンクは残りうる）。
   useEffect(() => {
     const raw = location.hash
     if (!raw.startsWith('term-')) return
     const id = raw.slice('term-'.length)
     const term = findTerm(GLOSSARY, id)
     if (!term) return
-    setOpenCategories((prev) => (prev.includes(term.category) ? prev : [...prev, term.category]))
-    const timer = window.setTimeout(() => {
-      document.getElementById(`term-${id}`)?.scrollIntoView({ block: 'start' })
-    }, HASH_SCROLL_DELAY_MS)
-    return () => window.clearTimeout(timer)
-  }, [location.hash])
+    navigate({ to: '/glossary/$termId', params: { termId: id }, replace: true })
+  }, [location.hash, navigate])
 
   // 検索・絞り込みを変えたら、畳んであった分類も開き直す（「性能 2」と出ているのに
   // 中身が見えず 0 件と誤解しないように）。
@@ -92,9 +113,31 @@ function Page() {
                   {group.category.label} {group.terms.length}
                 </Accordion.Control>
                 <Accordion.Panel>
-                  <Stack gap="xl">
+                  <Stack gap={0}>
                     {group.terms.map((term) => (
-                      <TermCard key={term.id} term={term} related={relatedTerms(GLOSSARY, term)} />
+                      <NavLinkLink
+                        key={term.id}
+                        to="/glossary/$termId"
+                        params={{ termId: term.id }}
+                        label={
+                          <Group gap={6} wrap="nowrap">
+                            <Text fw={600} span>
+                              {term.term}
+                            </Text>
+                            {term.reading ? (
+                              <Text size="xs" c="dimmed" span>
+                                {term.reading}
+                              </Text>
+                            ) : null}
+                          </Group>
+                        }
+                        description={
+                          <Text size="xs" c="dimmed" lineClamp={1}>
+                            {term.summary}
+                          </Text>
+                        }
+                        rightSection={<ChevronRight size={16} aria-hidden />}
+                      />
                     ))}
                   </Stack>
                 </Accordion.Panel>

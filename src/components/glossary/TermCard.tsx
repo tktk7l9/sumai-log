@@ -5,26 +5,38 @@ import type { GlossaryTerm } from '../../content/glossary'
 import { DIAGRAMS } from './diagrams'
 
 /**
- * 用語 1 件分の表示。見出し (`id="term-<id>"`) はページ内アンカー・スクロール先として
- * 使われるので、構造を変えるときはこの id を保つこと。
+ * 用語 1 件分の表示。詳細ページ（`/glossary/$termId`）で使う。
+ * `hideTitle` は詳細ページ用: `PageShell` が見出し（用語名・読み）を出すので、
+ * ここでの二重表示を避けたいときに渡す。見出しを出すときは `id="term-<id>"` を保つ
+ * （ページ内アンカーとして参照されうるため、害はない）。
  */
-export function TermCard({ term, related }: { term: GlossaryTerm; related: GlossaryTerm[] }) {
+export function TermCard({
+  term,
+  related,
+  hideTitle = false,
+}: {
+  term: GlossaryTerm
+  related: GlossaryTerm[]
+  hideTitle?: boolean
+}) {
   const Diagram = term.diagram ? DIAGRAMS[term.diagram] : undefined
 
   return (
     <Stack gap="xs">
-      <Stack gap={2}>
-        {/* AppShell.Header は fixed で高さ 52px。scrollIntoView がそのまま見出しを
-            viewport 上端に合わせるとヘッダの下に隠れるため、scroll-margin-top で逃がす */}
-        <Title order={3} id={`term-${term.id}`} fz="md" style={{ scrollMarginTop: 68 }}>
-          {term.term}
-        </Title>
-        {term.reading ? (
-          <Text size="xs" c="dimmed">
-            {term.reading}
-          </Text>
-        ) : null}
-      </Stack>
+      {hideTitle ? null : (
+        <Stack gap={2}>
+          {/* AppShell.Header は fixed で高さ 52px。ページ内アンカーで直接開いたとき
+              見出しがヘッダの下に隠れないよう、scroll-margin-top で逃がす */}
+          <Title order={3} id={`term-${term.id}`} fz="md" style={{ scrollMarginTop: 68 }}>
+            {term.term}
+          </Title>
+          {term.reading ? (
+            <Text size="xs" c="dimmed">
+              {term.reading}
+            </Text>
+          ) : null}
+        </Stack>
+      )}
 
       <Text size="sm" fw={600}>
         {term.summary}
@@ -76,8 +88,8 @@ export function TermCard({ term, related }: { term: GlossaryTerm; related: Gloss
             // フォーカス・読み上げ対象になる（VendorCard のバッジリンクと同じ形）。
             <Link
               key={r.id}
-              to="/glossary"
-              hash={`term-${r.id}`}
+              to="/glossary/$termId"
+              params={{ termId: r.id }}
               aria-label={`用語集で ${r.term} を見る`}
               style={{ textDecoration: 'none' }}
             >
