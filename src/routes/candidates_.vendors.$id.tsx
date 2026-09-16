@@ -31,8 +31,8 @@ function MetricLabel({
 }) {
   return (
     <Link
-      to="/glossary"
-      hash={`term-${termIdForMetric(metric)}`}
+      to="/glossary/$termId"
+      params={{ termId: termIdForMetric(metric) }}
       aria-label={`用語集で ${text} を見る`}
       style={{ color: 'inherit' }}
     >

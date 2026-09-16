@@ -1,30 +1,19 @@
-import { Accordion, Stack } from '@mantine/core'
-import { createFileRoute, useLocation, useNavigate } from '@tanstack/react-router'
+import { Accordion, Group, NavLink, Stack, Text } from '@mantine/core'
+import { createFileRoute, Link, useLocation, useNavigate } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { z } from 'zod'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
 import { GlossaryFilters } from '../components/glossary/GlossaryFilters'
-import { TermCard } from '../components/glossary/TermCard'
-import { GLOSSARY, GLOSSARY_CATEGORIES, type CategoryId } from '../content/glossary'
-import { findTerm, groupByCategory, relatedTerms, searchGlossary } from '../lib/glossary'
-
-const CATEGORY_IDS = GLOSSARY_CATEGORIES.map((c) => c.id) as [CategoryId, ...CategoryId[]]
-
-const search = z.object({
-  q: z.string().optional(),
-  c: z.enum(CATEGORY_IDS).optional(),
-})
+import { CATEGORY_IDS, glossarySearchSchema } from '../components/glossary/glossarySearch'
+import { GLOSSARY } from '../content/glossary'
+import { findTerm, groupByCategory, searchGlossary } from '../lib/glossary'
 
 export const Route = createFileRoute('/glossary')({
   component: Page,
-  validateSearch: (s) => search.parse(s),
+  validateSearch: (s) => glossarySearchSchema.parse(s),
 })
-
-// hash が指しているカテゴリを開き、見出しへスクロールするまでの猶予。
-// Accordion の既定トランジション(200ms)より少し長く取る。
-const HASH_SCROLL_DELAY_MS = 240
 
 function Page() {
   const { q, c } = Route.useSearch()
@@ -36,18 +25,16 @@ function Page() {
   const filtered = c ? searched.filter((term) => term.category === c) : searched
   const groups = groupByCategory(filtered)
 
+  // 旧形式 `#term-<id>` で直接開かれた／ブックマークされたリンクを、詳細ページへ
+  // 案内する（バッジ類は書き換え済みだが、外部のブックマークや共有リンクは残りうる）。
   useEffect(() => {
     const raw = location.hash
     if (!raw.startsWith('term-')) return
     const id = raw.slice('term-'.length)
     const term = findTerm(GLOSSARY, id)
     if (!term) return
-    setOpenCategories((prev) => (prev.includes(term.category) ? prev : [...prev, term.category]))
-    const timer = window.setTimeout(() => {
-      document.getElementById(`term-${id}`)?.scrollIntoView({ block: 'start' })
-    }, HASH_SCROLL_DELAY_MS)
-    return () => window.clearTimeout(timer)
-  }, [location.hash])
+    navigate({ to: '/glossary/$termId', params: { termId: id }, replace: true })
+  }, [location.hash, navigate])
 
   // 検索・絞り込みを変えたら、畳んであった分類も開き直す（「性能 2」と出ているのに
   // 中身が見えず 0 件と誤解しないように）。
@@ -92,9 +79,37 @@ function Page() {
                   {group.category.label} {group.terms.length}
                 </Accordion.Control>
                 <Accordion.Panel>
-                  <Stack gap="xl">
+                  <Stack gap={0}>
                     {group.terms.map((term) => (
-                      <TermCard key={term.id} term={term} related={relatedTerms(GLOSSARY, term)} />
+                      <NavLink
+                        key={term.id}
+                        renderRoot={(rootProps) => (
+                          <Link
+                            {...rootProps}
+                            to="/glossary/$termId"
+                            params={{ termId: term.id }}
+                            search={{ q, c }}
+                          />
+                        )}
+                        label={
+                          <Group gap={6}>
+                            <Text fw={600} span>
+                              {term.term}
+                            </Text>
+                            {term.reading ? (
+                              <Text size="xs" c="dimmed" span>
+                                {term.reading}
+                              </Text>
+                            ) : null}
+                          </Group>
+                        }
+                        description={
+                          <Text size="xs" c="dimmed" lineClamp={1}>
+                            {term.summary}
+                          </Text>
+                        }
+                        rightSection={<ChevronRight size={16} aria-hidden />}
+                      />
                     ))}
                   </Stack>
                 </Accordion.Panel>
