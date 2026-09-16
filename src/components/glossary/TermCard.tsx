@@ -1,43 +1,29 @@
-import { Alert, Badge, Group, Stack, Table, Text, Title } from '@mantine/core'
+import { Alert, Badge, Group, Stack, Table, Text } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
 import type { GlossaryTerm } from '../../content/glossary'
 import { DIAGRAMS } from './diagrams'
+import type { GlossarySearch } from './glossarySearch'
 
 /**
- * 用語 1 件分の表示。詳細ページ（`/glossary/$termId`）で使う。
- * `hideTitle` は詳細ページ用: `PageShell` が見出し（用語名・読み）を出すので、
- * ここでの二重表示を避けたいときに渡す。見出しを出すときは `id="term-<id>"` を保つ
- * （ページ内アンカーとして参照されうるため、害はない）。
+ * 用語 1 件分の表示。詳細ページ（`/glossary/$termId`）専用。
+ * 用語名・読みは `PageShell` の見出しが担うので、ここでは一言定義より下だけを描く。
+ * `search` は今の検索条件（`?q` `?c`）。関連語バッジで別の詳細に飛んでも、
+ * そこから「← 用語集」で一覧に戻ったときに絞り込みが消えないよう転送する。
  */
 export function TermCard({
   term,
   related,
-  hideTitle = false,
+  search,
 }: {
   term: GlossaryTerm
   related: GlossaryTerm[]
-  hideTitle?: boolean
+  search: GlossarySearch
 }) {
   const Diagram = term.diagram ? DIAGRAMS[term.diagram] : undefined
 
   return (
     <Stack gap="xs">
-      {hideTitle ? null : (
-        <Stack gap={2}>
-          {/* AppShell.Header は fixed で高さ 52px。ページ内アンカーで直接開いたとき
-              見出しがヘッダの下に隠れないよう、scroll-margin-top で逃がす */}
-          <Title order={3} id={`term-${term.id}`} fz="md" style={{ scrollMarginTop: 68 }}>
-            {term.term}
-          </Title>
-          {term.reading ? (
-            <Text size="xs" c="dimmed">
-              {term.reading}
-            </Text>
-          ) : null}
-        </Stack>
-      )}
-
       <Text size="sm" fw={600}>
         {term.summary}
       </Text>
@@ -90,6 +76,7 @@ export function TermCard({
               key={r.id}
               to="/glossary/$termId"
               params={{ termId: r.id }}
+              search={search}
               aria-label={`用語集で ${r.term} を見る`}
               style={{ textDecoration: 'none' }}
             >
