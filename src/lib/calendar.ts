@@ -1,3 +1,5 @@
+import { dayOfWeek } from './holidays'
+
 /**
  * 予定の日時表現。DB には TEXT で、終日は 'YYYY-MM-DD'、時刻ありは
  * 'YYYY-MM-DDTHH:MM:00+09:00'（日本時間のオフセットを明示）で入る。
@@ -6,6 +8,15 @@
 
 export function dateKey(startsAt: string): string {
   return startsAt.slice(0, 10)
+}
+
+export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
+
+/** 'YYYY-MM-DD' を '2026-09-20（日）' に直す。読めない文字列はそのまま返す。 */
+export function formatDateWithWeekday(key: string): string {
+  const day = dayOfWeek(key)
+  if (day === null) return key
+  return `${key}（${WEEKDAY_LABELS[day]}）`
 }
 
 export function composeStartsAt(date: string, time: string | null): string {

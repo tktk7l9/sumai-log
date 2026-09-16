@@ -62,3 +62,12 @@ export function formatJst(value: string, opts?: { withTime?: boolean }): string 
 export function toJstDateKey(value: string): string {
   return formatJst(value, { withTime: false })
 }
+
+/** JST の 'HH:mm' だけを返す。解釈できない文字列は空文字（見出しに時刻が要らない場面向け） */
+export function formatJstTime(value: string): string {
+  const utcMs = parseToUtcMs(value)
+  if (utcMs === null) return ''
+
+  const jst = new Date(utcMs + 9 * 60 * 60 * 1000)
+  return `${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`
+}

@@ -4,6 +4,7 @@ import {
   compareStartsAt,
   composeStartsAt,
   dateKey,
+  formatDateWithWeekday,
   formatEventTime,
   groupByDay,
   monthKeys,
@@ -64,6 +65,20 @@ describe('formatEventTime', () => {
 
   it('allDay が false でも時刻部が無ければ空文字にフォールバックする', () => {
     expect(formatEventTime({ startsAt: '2030-01-05', endsAt: null, allDay: false })).toBe('')
+  })
+})
+
+describe('formatDateWithWeekday', () => {
+  it('日曜は（日）が付く', () => {
+    expect(formatDateWithWeekday('2026-09-20')).toBe('2026-09-20（日）')
+  })
+
+  it('水曜は（水）が付く', () => {
+    expect(formatDateWithWeekday('2026-09-16')).toBe('2026-09-16（水）')
+  })
+
+  it('読めない文字列はそのまま返す', () => {
+    expect(formatDateWithWeekday('invalid')).toBe('invalid')
   })
 })
 
