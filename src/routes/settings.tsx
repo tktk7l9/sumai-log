@@ -93,7 +93,8 @@ function Page() {
       const { results } = await fetchNewsNowFn()
       const nameById = new Map(newsSources.map((v) => [v.id, v.name]))
       for (const r of results) {
-        const name = nameById.get(r.vendorId) ?? r.vendorId
+        // UUID をそのまま見せない（読んでも何の業者か分からない）
+        const name = nameById.get(r.vendorId) ?? '不明な業者'
         if (r.error) {
           notifications.show({ message: `${name}: エラー ${r.error}`, color: 'red' })
         } else {

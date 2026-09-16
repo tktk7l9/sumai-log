@@ -233,6 +233,32 @@ describe('fetchVendorNews', () => {
     const [after] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(after.newsFetchError).toBe('URL が許可されていません')
   })
+
+  it('fetchImpl には AbortSignal（タイムアウト用）と User-Agent ヘッダを渡す', async () => {
+    const vendorId = await makeVendor('テスト工務店', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: 'テスト工務店',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    let seenInit: RequestInit | undefined
+    const fetchImpl = (async (_url: string | URL, init?: RequestInit) => {
+      seenInit = init
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    await fetchVendorNews(db, vendor, fetchImpl)
+
+    expect(seenInit?.signal).toBeInstanceOf(AbortSignal)
+    expect((seenInit?.headers as Record<string, string> | undefined)?.['User-Agent']).toBe(
+      'sumai-log/1.0',
+    )
+  })
 })
 
 describe('fetchAllVendorNews', () => {
@@ -265,5 +291,53 @@ describe('fetchAllVendorNews', () => {
       fakeFetch(() => new Response(RSS_FEED, { status: 200 })),
     )
     expect(results).toEqual([])
+  })
+
+  it('insertNewsIfNew が例外を投げても markNewsFetched でエラーを記録し、次の業者の取得は続ける', async () => {
+    const failingId = await makeVendor('挿入失敗業者', {
+      newsUrl: 'https://fail-insert.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const okId = await makeVendor('成功業者2', {
+      newsUrl: 'https://ok2.example.com/feed/',
+      newsSource: 'rss',
+    })
+
+    // insertNewsIfNew 自体をスタブする代わりに、D1 の実際の外部キー制約を使って
+    // 「取得の最中に業者行が消える」という現実にありうる競合を再現する:
+    // fetchImpl がレスポンスを返す直前に業者行そのものを削除しておくと、続く
+    // insertNewsIfNew の INSERT が FOREIGN KEY 制約違反で例外を投げる（「壊れた行」）。
+    // url は vendorNews 全体で UNIQUE（業者ごとではない）なので、もう一方の業者
+    // （成功業者2）が使う RSS_FEED とは別の url を持つフィードを用意する。既に
+    // url が使われていて ON CONFLICT DO NOTHING でスキップされると、その行は
+    // そもそも INSERT されないため FOREIGN KEY 違反まで辿り着けなくなる。
+    const RSS_FEED_FOR_FAILING_VENDOR = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+  <item>
+    <title>削除された業者のお知らせ</title>
+    <link>https://fail-insert.example.com/topics/1</link>
+    <pubDate>Sat, 12 Sep 2026 09:00:00 +0900</pubDate>
+  </item>
+</channel></rss>`
+
+    const wrappedFetch = (async (url: string | URL) => {
+      if (String(url).startsWith('https://fail-insert.example.com')) {
+        await db.delete(vendors).where(eq(vendors.id, failingId))
+        return new Response(RSS_FEED_FOR_FAILING_VENDOR, { status: 200 })
+      }
+      return new Response(RSS_FEED, { status: 200 })
+    }) as typeof fetch
+
+    const results = await fetchAllVendorNews(db, wrappedFetch)
+    const byVendor = new Map(results.map((r) => [r.vendorId, r]))
+
+    const failing = byVendor.get(failingId)
+    expect(failing?.added).toBe(0)
+    expect(failing?.error).not.toBeNull()
+    // ERROR_MESSAGE_MAX（200字）に切り詰められている
+    expect(failing?.error?.length).toBeLessThanOrEqual(200)
+
+    // 失敗した業者の後でも次の業者は正常に取得できる（ループが止まらない）
+    expect(byVendor.get(okId)).toEqual({ vendorId: okId, added: 2, error: null })
   })
 })

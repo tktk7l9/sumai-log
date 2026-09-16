@@ -52,8 +52,8 @@ export function isAllowedNewsUrl(url: string): boolean {
   const hostname = normalizeHostname(parsed.hostname)
   if (hostname.startsWith('[')) return false // ブラケット付き IPv6 リテラル
   if (isIpv4Literal(hostname)) return false
-  // 完全一致の拒否判定はドット必須チェックより先に行う（'localhost' はドットを
-  // 含まないため、順序を逆にすると 55 行目のドット判定だけで弾かれてしまい、
+  // 完全一致の拒否判定は、この下のドット必須チェックより先に行う（'localhost' は
+  // ドットを含まないため、順序を逆にするとドット判定だけで弾かれてしまい、
   // ここの分岐がテストで踏めなくなる）。
   if (DENYLISTED_EXACT_HOSTS.has(hostname)) return false
   if (!hostname.includes('.')) return false

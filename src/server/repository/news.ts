@@ -20,17 +20,34 @@ export type NewNews = Omit<
 >
 
 /**
+ * 1 回の INSERT に含める行数。1 行あたり 9 個のバインドパラメータ
+ * （id・vendorId・url・title・summary・publishedOn・eventStart・eventEnd・eventKind）
+ * を使うため、D1 の 1 クエリあたりのバインドパラメータ上限（100）を踏まえて
+ * 9 × 10 = 90 に収まるよう 10 件ずつに分ける。RSS フィードは 1 回の取得で
+ * 十数件を超えることがあるため、分けずに 1 文で INSERT すると壊れた項目が無くても
+ * このパラメータ上限だけで INSERT 全体が失敗しうる。
+ */
+const INSERT_CHUNK_SIZE = 10
+
+/**
  * 新着だけ INSERT する。url が既にあれば何もしない（タイトル等の更新は追わない。
- * design.md §2 の方針どおり）。戻り値は実際に追加できた件数。
+ * design.md §2 の方針どおり）。戻り値は実際に追加できた件数（全チャンクの合計）。
+ * `onConflictDoNothing` はチャンクをまたいでも同じキー（url）で効くので、
+ * 分割しても冪等性（2 回目は 0 件）は変わらない。
  */
 export async function insertNewsIfNew(db: Db, rows: NewNews[]): Promise<number> {
   if (rows.length === 0) return 0
-  const inserted = await db
-    .insert(vendorNews)
-    .values(rows.map((r) => ({ ...r, id: crypto.randomUUID() })))
-    .onConflictDoNothing({ target: vendorNews.url })
-    .returning({ id: vendorNews.id })
-  return inserted.length
+  let added = 0
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + INSERT_CHUNK_SIZE)
+    const inserted = await db
+      .insert(vendorNews)
+      .values(chunk.map((r) => ({ ...r, id: crypto.randomUUID() })))
+      .onConflictDoNothing({ target: vendorNews.url })
+      .returning({ id: vendorNews.id })
+    added += inserted.length
+  }
+  return added
 }
 
 export async function listNews(

@@ -18,6 +18,8 @@ import { useState } from 'react'
 
 import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
 import { NEWS_SOURCES, VENDOR_KINDS, VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { extractFormError } from '../../lib/formError'
+import { isAllowedNewsUrl } from '../../lib/news/url'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 
@@ -70,7 +72,16 @@ export function VendorForm({
     initialValues: vendor
       ? { ...empty, ...vendor, socialUrls: vendor.socialUrls.join('\n') }
       : empty,
-    validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
+    validate: {
+      name: (v) => (v.trim() ? null : '名前は必須です'),
+      // サーバー側（optionalHttpsUrl）と同じ判定を先に見せる。送信してから
+      // 一般的なエラー文言だけ返ってくるより、どこが・なぜ悪いかをその場で伝える。
+      newsUrl: (v) => {
+        if (!v) return null
+        if (!/^https:\/\//.test(v)) return 'URL は https:// で始めてください'
+        return isAllowedNewsUrl(v) ? null : 'URL が許可されていません'
+      },
+    },
   })
 
   async function submit(values: Values) {
@@ -87,8 +98,13 @@ export function VendorForm({
       await router.invalidate()
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
       onSaved(id)
-    } catch {
-      notifications.show({ message: '保存できませんでした', color: 'red' })
+    } catch (error) {
+      // サーバー側の zod（optionalHttpsUrl 等）で拒否された場合、汎用の
+      // 「保存できませんでした」ではなく実際の理由を出す（src/components/videos/VideoForm.tsx
+      // と同じパターン）。対象フィールドが分かれば setFieldError でその場に出す。
+      const { message, path } = extractFormError(error)
+      notifications.show({ message, color: 'red' })
+      if (path) form.setFieldError(path, message)
     } finally {
       setSaving(false)
     }
@@ -204,9 +220,7 @@ export function VendorForm({
           data={NEWS_SOURCES.map((source) => ({
             value: source,
             label:
-              source === 'rss'
-                ? 'RSS/Atom フィード'
-                : 'トップページの一覧（樹々匠のような RSS 無しの会社）',
+              source === 'rss' ? 'RSS/Atom フィード' : 'トップページの一覧（RSS が無い会社向け）',
           }))}
           clearable
           {...form.getInputProps('newsSource')}

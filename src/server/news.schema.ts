@@ -23,7 +23,11 @@ export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
 
 /** 'YYYY-MM' を月初〜月末の範囲（'YYYY-MM-DD'）に直す。カレンダーの情報レイヤー用。 */
 export const newsEventsForMonthInput = z
-  .object({ ym: z.string().regex(/^\d{4}-\d{2}$/, '年月は YYYY-MM の形式で指定してください') })
+  .object({
+    // 月は 01〜12 だけを許す（例: 13 や 00 を通すと monthKeys が '2026-13-01' のような
+    // 空の結果を静かに作ってしまう）。
+    ym: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, '年月は YYYY-MM の形式で指定してください'),
+  })
   .transform(({ ym }) => {
     const [year, month] = ym.split('-').map(Number)
     const days = monthKeys(year, month)

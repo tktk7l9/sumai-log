@@ -100,6 +100,33 @@ describe('insertNewsIfNew', () => {
   it('空配列なら何もせず 0 を返す', async () => {
     expect(await insertNewsIfNew(db, [])).toBe(0)
   })
+
+  it('25件（10件ずつのチャンク境界をまたぐ件数）を一度に渡しても全件追加される', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      vendorId,
+      url: `https://news.example.com/chunk-${i}`,
+      title: `お知らせ${i}`,
+      publishedOn: '2026-09-01',
+    }))
+    const added = await insertNewsIfNew(db, rows)
+    expect(added).toBe(25)
+    const stored = await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId))
+    expect(stored).toHaveLength(25)
+  })
+
+  it('チャンクをまたいでも url の重複判定は効く（2回目は0件）', async () => {
+    const vendorId = await makeVendor('テスト工務店')
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      vendorId,
+      url: `https://news.example.com/dedupe-${i}`,
+      title: `お知らせ${i}`,
+      publishedOn: '2026-09-01',
+    }))
+    await insertNewsIfNew(db, rows)
+    const second = await insertNewsIfNew(db, rows)
+    expect(second).toBe(0)
+  })
 })
 
 describe('listNews', () => {
