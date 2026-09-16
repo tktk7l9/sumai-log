@@ -1,4 +1,15 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import {
+  ActionIcon,
+  Anchor,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Stack,
+  Text,
+  Title,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -17,6 +28,7 @@ import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
 import { termIdForMetric } from '../lib/glossary'
+import { photoUrl, representativeThumbKeyFromDisplayKey } from '../lib/photos'
 import { deleteVendor, getVendor } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
@@ -76,7 +88,20 @@ function Page() {
 
   return (
     <PageShell
-      title={vendor.name}
+      title={
+        <Group gap={8} wrap="nowrap" align="center" component="span">
+          <Avatar
+            src={vendor.faviconKey ? photoUrl(vendor.faviconKey) : null}
+            size={24}
+            radius="xs"
+            color="gray"
+            alt=""
+          >
+            {vendor.name.charAt(0)}
+          </Avatar>
+          {vendor.name}
+        </Group>
+      }
       actions={
         <Group gap="xs">
           <StatusBadge status={vendor.status} />
@@ -99,7 +124,28 @@ function Page() {
       <Card withBorder padding="md">
         <Stack gap="xs">
           <Row label="本社" value={vendor.hq} />
-          {vendor.representative ? <Row label="代表者" value={vendor.representative} /> : null}
+          {vendor.representative ? (
+            <Group justify="space-between" wrap="nowrap" align="center">
+              <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
+                代表者
+              </Text>
+              <Group gap="sm" wrap="nowrap" align="center">
+                {vendor.representativePhotoKey ? (
+                  <Avatar
+                    src={photoUrl(
+                      representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey),
+                    )}
+                    size={96}
+                    radius="50%"
+                    alt=""
+                  />
+                ) : null}
+                <Text size="sm" ta="right">
+                  {vendor.representative}
+                </Text>
+              </Group>
+            </Group>
+          ) : null}
           <Row
             label="施工エリア"
             value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}
@@ -160,27 +206,44 @@ function Page() {
       {vendor.affiliations.length > 0 ? (
         <Stack gap="xs">
           <Title order={2}>加盟団体</Title>
-          {resolveAffiliations(vendor.affiliations).map((a) => (
-            <Card key={a.id} withBorder padding="sm">
-              <Group justify="space-between" wrap="wrap" gap="xs">
-                <Text fw={600}>
-                  {a.name}（{a.shortName}）
-                </Text>
-                <Group gap="md">
-                  <Anchor href={a.url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink size={14} aria-hidden /> 公式サイト
-                  </Anchor>
-                  <Link
-                    to="/glossary/$termId"
-                    params={{ termId: a.glossaryId }}
-                    style={{ color: 'inherit' }}
-                  >
-                    用語集で読む
-                  </Link>
-                </Group>
-              </Group>
-            </Card>
-          ))}
+          {resolveAffiliations(vendor.affiliations).map((a) => {
+            const link = vendor.affiliationLinks[a.id]
+            return (
+              <Card key={a.id} withBorder padding="sm">
+                <Stack gap="xs">
+                  <Group justify="space-between" wrap="wrap" gap="xs">
+                    <Text fw={600}>
+                      {a.name}（{a.shortName}）
+                    </Text>
+                    <Group gap="md">
+                      <Anchor href={a.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} aria-hidden /> 公式サイト
+                      </Anchor>
+                      <Link
+                        to="/glossary/$termId"
+                        params={{ termId: a.glossaryId }}
+                        style={{ color: 'inherit' }}
+                      >
+                        用語集で読む
+                      </Link>
+                    </Group>
+                  </Group>
+                  {link ? (
+                    <Group justify="space-between" wrap="wrap" gap="xs">
+                      <Anchor href={link.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink size={14} aria-hidden /> 紹介ページ
+                      </Anchor>
+                      {link.note ? (
+                        <Text size="sm" c="dimmed">
+                          {link.note}
+                        </Text>
+                      ) : null}
+                    </Group>
+                  ) : null}
+                </Stack>
+              </Card>
+            )
+          })}
         </Stack>
       ) : null}
 

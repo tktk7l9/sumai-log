@@ -1,7 +1,7 @@
 import { Button, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
-import { dateKey } from '../../lib/calendar'
+import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
 import type { EventWithLinks } from '../../server/repository'
 
 export function PendingVisits({ events }: { events: EventWithLinks[] }) {
@@ -17,7 +17,7 @@ export function PendingVisits({ events }: { events: EventWithLinks[] }) {
               <Group justify="space-between" wrap="nowrap" align="center" gap="sm">
                 <Stack gap={2} style={{ minWidth: 0 }}>
                   <Text size="xs" c="dimmed">
-                    {dateKey(e.startsAt)}
+                    {formatDateWithWeekday(dateKey(e.startsAt))}
                   </Text>
                   <Text fw={600} lineClamp={2} lh={1.4}>
                     {e.title}

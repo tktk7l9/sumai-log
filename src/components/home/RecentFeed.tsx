@@ -111,6 +111,13 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
         </Link>
       )
     }
+    case 'source':
+      // 情報源には詳細ページが無いため、一覧（/sources）へのリンクにする
+      return (
+        <Link to="/sources" style={linkStyle}>
+          {children}
+        </Link>
+      )
     case 'comment':
       switch (item.href.to) {
         case '/records/visits/$id':
@@ -167,7 +174,9 @@ export function RecentFeed({ items, members }: { items: FeedItem[]; members: Mem
                         {formatJstTime(item.at)}
                       </Text>
                       <div style={{ flexShrink: 0, paddingTop: 2 }}>
-                        <MemberChip email={item.by} members={members} />
+                        {/* アイコンの隣の名前は出さない（所有者の要望）。誰が書いたかは
+                            丸の色と title/aria-label（読み上げ・ホバー）に残す */}
+                        <MemberChip email={item.by} members={members} iconOnly />
                       </div>
                       <Text size="sm" style={{ flex: 1, minWidth: 0 }}>
                         {sentence.before}

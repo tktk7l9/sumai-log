@@ -7,7 +7,7 @@ import { parseToUtcMs, toJstDateKey } from './jst'
  */
 
 export type FeedKind =
-  'visit' | 'event' | 'vendor' | 'property' | 'place' | 'video' | 'comment' | 'photo'
+  'visit' | 'event' | 'vendor' | 'property' | 'place' | 'video' | 'comment' | 'photo' | 'source'
 
 /** 新規追加か、既存レコードの更新か。comment/photo は常に 'add'（server/repository/feed.ts 参照） */
 export type FeedAction = 'add' | 'update'
@@ -42,6 +42,7 @@ export const FEED_KIND_LABEL: Record<FeedKind, string> = {
   video: '動画',
   comment: 'コメント',
   photo: '写真',
+  source: '情報源',
 }
 
 /** 同時刻のときの表示優先順（この並び順が優先度） */
@@ -52,6 +53,7 @@ const FEED_KIND_ORDER: readonly FeedKind[] = [
   'property',
   'place',
   'video',
+  'source',
   'comment',
   'photo',
 ]
@@ -116,6 +118,8 @@ export function feedSentence(item: FeedItem): { before: string; link: string; af
       return { before: '場所「', link: item.title, after: `」を${actionLabel}` }
     case 'video':
       return { before: '動画「', link: item.title, after: `」を${actionLabel}` }
+    case 'source':
+      return { before: '情報源「', link: item.title, after: `」を${actionLabel}` }
     case 'comment':
       return {
         before: '「',

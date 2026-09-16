@@ -14,15 +14,40 @@ export function authorBandColor(members: readonly Member[], email: string): stri
   return `var(--mantine-color-${findMember(members, email).color}-6)`
 }
 
-/** 丸いイニシャルと表示名。一覧では丸と左端の帯で「誰が」を追える */
-export function MemberChip({ email, members }: { email: string; members: readonly Member[] }) {
+/**
+ * 丸いイニシャルと表示名。一覧では丸と左端の帯で「誰が」を追える。
+ * `iconOnly` を立てると丸だけにして名前のテキストを出さない（最近の更新の行など、
+ * 誰が書いたかは左端の帯の色と合わせて既に分かる場面向け）。名前は丸の
+ * `title`/`aria-label` として残すので、アクセシビリティ上は失われない。
+ */
+export function MemberChip({
+  email,
+  members,
+  iconOnly = false,
+}: {
+  email: string
+  members: readonly Member[]
+  iconOnly?: boolean
+}) {
   const m = findMember(members, email)
+  const avatar = (
+    // 既定の light バリアント＝淡い地に濃い字。塗りつぶすと白字のコントラストが落ちる
+    <Avatar
+      size={22}
+      radius="xl"
+      color={m.color}
+      fz={11}
+      fw={700}
+      title={iconOnly ? m.displayName : undefined}
+      aria-label={iconOnly ? m.displayName : undefined}
+    >
+      {m.displayName.slice(0, 1)}
+    </Avatar>
+  )
+  if (iconOnly) return avatar
   return (
     <Group gap={6} wrap="nowrap">
-      {/* 既定の light バリアント＝淡い地に濃い字。塗りつぶすと白字のコントラストが落ちる */}
-      <Avatar size={22} radius="xl" color={m.color} fz={11} fw={700}>
-        {m.displayName.slice(0, 1)}
-      </Avatar>
+      {avatar}
       <Text size="xs" c="dimmed">
         {m.displayName}
       </Text>

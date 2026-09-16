@@ -20,6 +20,13 @@ describe('applySecurityHeaders', () => {
     expect(csp).toContain('https://i.ytimg.com')
   })
 
+  it('img-src に情報源（YouTube チャンネル）のアバターのホストが含まれる', () => {
+    const headers = applySecurityHeaders(new Headers())
+    const csp = headers.get('content-security-policy')
+    expect(csp).toContain('https://yt3.ggpht.com')
+    expect(csp).toContain('https://yt3.googleusercontent.com')
+  })
+
   it('geolocation は self だけ許可する', () => {
     const headers = applySecurityHeaders(new Headers())
     expect(headers.get('permissions-policy')).toContain('geolocation=(self)')

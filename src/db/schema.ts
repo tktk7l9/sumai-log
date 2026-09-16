@@ -59,6 +59,12 @@ export const vendors = sqliteTable(
     serviceAreas: jsonList('service_areas'),
     /** 加盟団体の id の配列（`src/content/affiliations.ts` の Affiliation['id']） */
     affiliations: jsonList('affiliations'),
+    /** 加盟団体ごとの、この業者向けの紹介ページ URL とメモ（星の意味等）。
+     * キーは affiliations と同じ Affiliation['id']。選ばなかった団体は入らない */
+    affiliationLinks: text('affiliation_links', { mode: 'json' })
+      .$type<Record<string, { url: string; note?: string }>>()
+      .notNull()
+      .default(sql`'{}'`),
     uaValue: real('ua_value'),
     cValuePublished: integer('c_value_published', { mode: 'boolean' }).notNull().default(false),
     seismicGrade: integer('seismic_grade'),
@@ -81,6 +87,13 @@ export const vendors = sqliteTable(
     newsFetchedAt: text('news_fetched_at'),
     /** 直近の取得失敗理由。成功時は null */
     newsFetchError: text('news_fetch_error'),
+    /** 代表者の顔写真。R2 キーは vendors/{id}/representative-display.jpg（vendorImageKeys）。
+     * サムネ（-thumb.jpg）は同じ vendorId から決定的に決まるので別列は持たない */
+    representativePhotoKey: text('representative_photo_key'),
+    /** サイトのファビコン。R2 キーは vendors/{id}/favicon.<ext>（vendorFaviconKey）。
+     * 拡張子がサイトごとに変わるため（png/ico/jpg/webp。SVG は扱わない理由は
+     * src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照）、鍵そのものを保持する */
+    faviconKey: text('favicon_key'),
     createdBy: createdBy(),
     ...timestamps,
   },
@@ -353,3 +366,44 @@ export type Video = typeof videos.$inferSelect
 export type NewVideo = typeof videos.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
+
+/** 情報収集（/sources）の情報源の種類。YouTube チャンネル URL から解析できたら
+ * 'youtube'、それ以外は 'site'（src/lib/sources.ts の parseYoutubeChannelUrl 参照） */
+export const SOURCE_KINDS = ['youtube', 'site'] as const
+
+/**
+ * 情報収集ページの情報源（主に YouTube チャンネル）。ジャンルは固定 enum ではなく
+ * `src/content/sourceGenres.ts` のデータで表す（妥当性は src/server/sources.schema.ts の
+ * zod 側で SOURCE_GENRE_IDS と照合する。vendors.status 等と違ってここでは drizzle の
+ * enum 制約を付けない）。
+ */
+export const sources = sqliteTable(
+  'sources',
+  {
+    id: id(),
+    kind: text('kind', { enum: SOURCE_KINDS }).notNull().default('youtube'),
+    name: text('name').notNull(),
+    url: text('url').notNull().unique(),
+    /** YouTube ハンドル（'@…'）。/channel/UC… だけの URL から登録した場合は無い */
+    handle: text('handle'),
+    /** YouTube チャンネル ID（'UC…'）。/@handle だけの URL では取得できないことがある */
+    channelId: text('channel_id'),
+    /** src/content/sourceGenres.ts の SourceGenre['id'] */
+    genre: text('genre').notNull(),
+    /** 最大 200 字（呼び出し側で切り詰める） */
+    description: text('description'),
+    /** https のみ。ホストは src/lib/sources.ts の isAllowedAvatarUrl で絞る */
+    avatarUrl: text('avatar_url'),
+    /** 候補の会社（vendors）と紐づける場合 */
+    vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
+    /** 加盟団体（src/content/affiliations.ts の Affiliation['id']）と紐づける場合 */
+    affiliation: text('affiliation'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    createdBy: createdBy(),
+    ...timestamps,
+  },
+  (t) => [index('sources_genre_idx').on(t.genre)],
+)
+
+export type Source = typeof sources.$inferSelect
+export type NewSource = typeof sources.$inferInsert

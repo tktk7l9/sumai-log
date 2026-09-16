@@ -126,7 +126,7 @@ function validateNewsSource(vendorSlug, newsSource) {
 
 // src/content/affiliations.ts の AFFILIATION_IDS と同じ値。plain .mjs から TS を import
 // できないため値を重複させている（NEWS_SOURCES と同じ理由）。
-const AFFILIATION_IDS = ['iedukuri100', 'miratsugu']
+const AFFILIATION_IDS = ['iedukuri100', 'miratsugu', 'kouzou-cram']
 
 /** affiliations に未知の id が混ざっていたら、どの業者のどの値かがわかるメッセージで例外を投げる */
 function validateAffiliations(vendorSlug, affiliations) {
@@ -135,6 +135,107 @@ function validateAffiliations(vendorSlug, affiliations) {
     if (!AFFILIATION_IDS.includes(id)) {
       throw new Error(
         `vendor ${vendorSlug}: unknown affiliation: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+  }
+}
+
+// src/content/sourceGenres.ts の SOURCE_GENRE_IDS と同じ値。plain .mjs から TS を import
+// できないため値を重複させている（NEWS_SOURCES/AFFILIATION_IDS と同じ理由）。
+const SOURCE_GENRE_IDS = [
+  'candidates',
+  'associations',
+  'knowledge',
+  'builders',
+  'hm',
+  'condo-reno',
+  'money',
+  'energy',
+  'owners',
+]
+
+// src/db/schema.ts の SOURCE_KINDS と同じ値。
+const SOURCE_KINDS = ['youtube', 'site']
+
+// src/lib/sources.ts の AVATAR_HOSTS と同じ値。plain .mjs から TS を import できないため
+// 値を重複させている（他の enum と同じ理由）。zod 側（sources.schema.ts の isAllowedAvatarUrl）
+// はホスト外の avatarUrl を黙って null に落とすが、seed はここで弾いて取り込みを止める
+// （データ入力ミスに気づけるように。値を書いた本人が seed.local.json を直せる）。
+const AVATAR_HOSTS = ['yt3.ggpht.com', 'yt3.googleusercontent.com', 'i.ytimg.com']
+
+/** 既知の YouTube チャンネル URL の形（src/lib/sources.ts の parseYoutubeChannelUrl と同じ
+ * 判定を、TS を import できない .mjs 側で最小限だけ再実装）。取り込み時の kind 自動判定用 */
+function looksLikeYoutubeChannelUrl(url) {
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  const hosts = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com']
+  if (!hosts.includes(parsed.hostname.toLowerCase())) return false
+  const [first] = parsed.pathname.split('/').filter(Boolean)
+  return Boolean(first)
+}
+
+/** 情報源の kind/genre/url/avatarUrl を検証する。どの slug のどの値が不正かがわかる
+ * メッセージで例外を投げる（validateAffiliations と同じ流儀） */
+function validateSource(s) {
+  if (s.kind !== undefined && s.kind !== null && !SOURCE_KINDS.includes(s.kind)) {
+    throw new Error(
+      `source ${s.slug}: unknown kind: ${s.kind} (expected one of ${SOURCE_KINDS.join(', ')})`,
+    )
+  }
+  if (!SOURCE_GENRE_IDS.includes(s.genre)) {
+    throw new Error(
+      `source ${s.slug}: unknown genre: ${s.genre} (expected one of ${SOURCE_GENRE_IDS.join(', ')})`,
+    )
+  }
+  if (!/^https:\/\//.test(s.url)) {
+    throw new Error(`source ${s.slug}: url must start with https://`)
+  }
+  if (s.avatarUrl != null) {
+    if (!/^https:\/\//.test(s.avatarUrl)) {
+      throw new Error(`source ${s.slug}: avatarUrl must start with https://`)
+    }
+    let avatarHost
+    try {
+      avatarHost = new URL(s.avatarUrl).hostname.toLowerCase()
+    } catch {
+      throw new Error(`source ${s.slug}: avatarUrl is not a valid URL: ${s.avatarUrl}`)
+    }
+    if (!AVATAR_HOSTS.includes(avatarHost)) {
+      throw new Error(
+        `source ${s.slug}: avatarUrl host not allowed: ${avatarHost} (expected one of ${AVATAR_HOSTS.join(', ')})`,
+      )
+    }
+  }
+  if (s.affiliation != null && !AFFILIATION_IDS.includes(s.affiliation)) {
+    throw new Error(
+      `source ${s.slug}: unknown affiliation: ${s.affiliation} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+    )
+  }
+}
+
+/**
+ * affiliationLinks（{ [affiliationId]: { url, note? } }）を検証する。省略は許容する
+ * （所有者の seed.local.json は一部の業者にしか付けない想定。src/server/candidates.ts の
+ * zod と同じ判定: キーは既知の affiliation id・url は https:// 始まり・note は 60 字以内）。
+ */
+function validateAffiliationLinks(vendorSlug, affiliationLinks) {
+  if (affiliationLinks === undefined || affiliationLinks === null) return
+  for (const [id, link] of Object.entries(affiliationLinks)) {
+    if (!AFFILIATION_IDS.includes(id)) {
+      throw new Error(
+        `vendor ${vendorSlug}: unknown affiliationLinks key: ${id} (expected one of ${AFFILIATION_IDS.join(', ')})`,
+      )
+    }
+    if (typeof link?.url !== 'string' || !/^https:\/\//.test(link.url)) {
+      throw new Error(`vendor ${vendorSlug}: affiliationLinks.${id}.url must start with https://`)
+    }
+    if (link.note !== undefined && link.note !== null && link.note.length > 60) {
+      throw new Error(
+        `vendor ${vendorSlug}: affiliationLinks.${id}.note must be 60 characters or less`,
       )
     }
   }
@@ -151,12 +252,27 @@ function validateAffiliations(vendorSlug, affiliations) {
  *   無い写真は photos テーブルへの INSERT 文を作らない（sips 変換前の 1 回目の呼び出し用）。
  * @param {Record<string, {lat:number,lng:number}>} [opts.coords] - place slug → 座標。
  *   無い place は lat/lng/geocode_source が NULL のまま（地図に出せない場所として扱われる）。
+ * @param {Set<string>} [opts.representativePhotoReady] - representativePhoto の sips 変換
+ *   （→ R2 アップロード）が済んだ vendor slug の集合。無い vendor は representative_photo_key
+ *   の列自体を出さない（R2 に実体が無いのに DB だけ「写真あり」を指さない・再取込のたびに
+ *   フォーム経由の値を NULL に巻き戻さないため）。ready な vendor のキーには stamp
+ *   （src/lib/photos.ts の vendorImageKeys と同じ形。immutable キャッシュ対策）を挟む。
+ *   stamp は `now` から決定的に作る（テストで固定できるように、実時計を直接は読まない）。
  * @returns {{ sql: string[], photos: Array<{visitSlug:string, src:string, photoId:string, displayKey:string, thumbKey:string, sortOrder:number}> }}
  */
 export function buildStatements(seed, opts) {
-  const { actorEmail, now = new Date().toISOString(), photoSizes = {}, coords = {} } = opts
+  const {
+    actorEmail,
+    now = new Date().toISOString(),
+    photoSizes = {},
+    coords = {},
+    representativePhotoReady = new Set(),
+  } = opts
 
   const sql = []
+  // representative_photo_key の stamp（src/lib/photos.ts の vendorImageKeys と同じ base36
+  // 形式）。`now` から決定的に作るので、テストで now を固定すれば stamp も固定できる。
+  const representativePhotoStamp = new Date(now).getTime().toString(36)
 
   // --- settings ---------------------------------------------------------
   if (seed.settings?.homeAreas) {
@@ -181,15 +297,18 @@ export function buildStatements(seed, opts) {
   for (const v of seed.vendors ?? []) {
     validateNewsSource(v.slug, v.newsSource)
     validateAffiliations(v.slug, v.affiliations)
+    validateAffiliationLinks(v.slug, v.affiliationLinks)
+    const vendorId = vendorIdBySlug[v.slug]
     sql.push(
       upsertStatement('vendors', {
-        id: vendorIdBySlug[v.slug],
+        id: vendorId,
         name: v.name,
         kind: v.kind,
         hq: v.hq ?? null,
         representative: v.representative ?? null,
         service_areas: JSON.stringify(v.serviceAreas ?? []),
         affiliations: JSON.stringify(v.affiliations ?? []),
+        affiliation_links: JSON.stringify(v.affiliationLinks ?? {}),
         ua_value: v.uaValue ?? null,
         c_value_published: v.cValuePublished ?? false,
         seismic_grade: v.seismicGrade ?? null,
@@ -204,6 +323,20 @@ export function buildStatements(seed, opts) {
         social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
         news_url: v.newsUrl ?? null,
         news_source: v.newsSource ?? null,
+        // representative_photo_key は src/lib/photos.ts の vendorImageKeys と同じ形
+        // （vendorId + stamp から決まる。stamp は immutable キャッシュ対策）。sips 変換
+        // （→ R2 アップロード）が済んだ業者だけ列自体を出す。favicon_key と同じ理由で
+        // キーごと省略する（値を null にするのではない）: upsertStatement は row に含まれる
+        // 列だけを UPDATE SET に載せるため、ここで列を省略すれば再取り込みのたびに
+        // ON CONFLICT DO UPDATE が走っても既存値は変わらない。値を null にしてしまうと
+        // （favicon_key と違って）常に列が出るぶん、seed に representativePhoto が
+        // 無いだけで、フォーム経由でアップロード済みの写真キーが NULL に巻き戻ってしまう
+        // （R2 の実体は残ったまま UI から見えなくなる）。
+        ...(representativePhotoReady.has(v.slug)
+          ? {
+              representative_photo_key: `vendors/${vendorId}/representative-${representativePhotoStamp}-display.jpg`,
+            }
+          : {}),
         created_by: actorEmail,
         created_at: now,
         updated_at: now,
@@ -339,6 +472,40 @@ export function buildStatements(seed, opts) {
         created_at: now,
         updated_at: now,
       }),
+    )
+  }
+
+  // --- sources ---------------------------------------------------------------
+  // url が自然キー（conflictColumn: 'url'）: 情報源としての同一性は URL で決まるため。
+  // フォームから先に同じ URL の行が作られていた場合（別 id・sources.url は UNIQUE）でも、
+  // ON CONFLICT(id) だと INSERT がその UNIQUE 違反で失敗して --file 実行全体が止まってしまう。
+  // ON CONFLICT(url) なら「同じ URL の行を id ごと seed の内容で上書きする」形になり、
+  // 冪等に取り込める（id が変わる＝所有者が手で足した行が seed の決定的な id に揃う）。
+  // 他のテーブルは id が自然キーなので ON CONFLICT(id) のまま変えない。
+  for (const s of seed.sources ?? []) {
+    validateSource(s)
+    sql.push(
+      upsertStatement(
+        'sources',
+        {
+          id: slugToId(`source:${s.slug}`),
+          kind: s.kind ?? (looksLikeYoutubeChannelUrl(s.url) ? 'youtube' : 'site'),
+          name: s.name,
+          url: s.url,
+          handle: s.handle ?? null,
+          channel_id: s.channelId ?? null,
+          genre: s.genre,
+          description: s.description ?? null,
+          avatar_url: s.avatarUrl ?? null,
+          vendor_id: resolveId(vendorIdBySlug, s.vendorSlug, 'vendor'),
+          affiliation: s.affiliation ?? null,
+          sort_order: s.sortOrder ?? 0,
+          created_by: actorEmail,
+          created_at: now,
+          updated_at: now,
+        },
+        { conflictColumn: 'url' },
+      ),
     )
   }
 

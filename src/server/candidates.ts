@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { AFFILIATION_IDS, AFFILIATIONS } from '../content/affiliations'
 import { CANDIDATE_STATUSES, statusRank } from '../lib/status'
+import { isAllowedNewsUrl } from '../lib/news/url'
 import { matchesHomeAreas } from '../lib/serviceArea'
 import { normalizeSocialUrls } from '../lib/social'
 import { NEWS_SOURCES, VENDOR_KINDS, places, properties, vendors } from '../db/schema'
@@ -13,10 +14,12 @@ import {
   countPlacesByVendor,
   deletePropertyCascade,
   deleteVendorCascade,
+  getVendorWebsiteUrl,
   readHomeAreas,
   upsertProperty,
   upsertVendor,
 } from './repository'
+import { SAVE_FAVICON_BUDGET, fetchFaviconForVendor } from './vendorImagesFetcher'
 import {
   idField,
   idInput,
@@ -47,6 +50,29 @@ export const vendorInput = z
       .max(AFFILIATIONS.length)
       .default([])
       .transform((arr) => Array.from(new Set(arr))),
+    // 加盟団体ごとの紹介ページ URL・メモ。キーは affiliations と同じ Affiliation['id']
+    // （partialRecord なので選ばなかった団体のキーは無くてよい）。url は
+    // optionalHttpsUrl と同じ判定（https のみ・isAllowedNewsUrl で SSRF 対策）だが
+    // こちらは必須（キーがある以上 URL は要る）
+    affiliationLinks: z
+      .partialRecord(
+        z.enum(AFFILIATION_IDS),
+        z.object({
+          url: z
+            .string()
+            .trim()
+            .max(500)
+            .refine((v) => /^https:\/\//.test(v), 'URL は https:// で始めてください')
+            .refine(isAllowedNewsUrl, 'URL が許可されていません'),
+          note: z
+            .string()
+            .trim()
+            .max(60)
+            .transform((v) => (v === '' ? undefined : v))
+            .optional(),
+        }),
+      )
+      .default({}),
     uaValue: numberOrEmpty(z.number().min(0).max(5)),
     cValuePublished: z.boolean(),
     seismicGrade: numberOrEmpty(z.number().int().min(1).max(3)),
@@ -127,9 +153,27 @@ export const getVendor = createServerFn()
 
 export const saveVendor = createServerFn({ method: 'POST' })
   .validator(vendorInput)
-  .handler(async ({ data }) => ({
-    id: await upsertVendor(getDb(), data, await currentActorEmail()),
-  }))
+  .handler(async ({ data }) => {
+    const db = getDb()
+    // websiteUrl が新規/変更されたときだけファビコンを取りに行く（design 通り）。
+    // 既存の websiteUrl と同じなら毎回叩き直さない。取得は fetchFaviconForVendor
+    // 自身が例外を投げない設計だが、念のため .catch で保存自体は必ず成功させる。
+    // 保存を長時間ブロックしないよう、ここだけ短い予算（SAVE_FAVICON_BUDGET。最悪 8 秒）で
+    // 呼ぶ。ここで見つからなくても設定画面の「アイコンを取得」（フルの予算）で拾える。
+    const previousWebsiteUrl = data.id ? await getVendorWebsiteUrl(db, data.id) : null
+    const id = await upsertVendor(db, data, await currentActorEmail())
+    if (data.websiteUrl && data.websiteUrl !== previousWebsiteUrl) {
+      await fetchFaviconForVendor(
+        db,
+        id,
+        data.websiteUrl,
+        undefined,
+        undefined,
+        SAVE_FAVICON_BUDGET,
+      ).catch(() => {})
+    }
+    return { id }
+  })
 
 export const deleteVendor = createServerFn({ method: 'POST' })
   .validator(idInput)

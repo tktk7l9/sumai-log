@@ -1,0 +1,1 @@
+ALTER TABLE `vendors` ADD `affiliation_links` text DEFAULT '{}' NOT NULL;

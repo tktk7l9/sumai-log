@@ -5,6 +5,7 @@ import {
   compareStartsAt,
   composeStartsAt,
   dateKey,
+  formatDateSlash,
   formatDateWithWeekday,
   formatEventBadge,
   formatEventTime,
@@ -72,13 +73,24 @@ describe('formatEventTime', () => {
   })
 })
 
-describe('formatDateWithWeekday', () => {
-  it('日曜は（日）が付く', () => {
-    expect(formatDateWithWeekday('2026-09-20')).toBe('2026-09-20（日）')
+describe('formatDateSlash', () => {
+  it('ハイフン区切りをスラッシュ区切りに直す', () => {
+    expect(formatDateSlash('2026-09-20')).toBe('2026/09/20')
   })
 
-  it('水曜は（水）が付く', () => {
-    expect(formatDateWithWeekday('2026-09-16')).toBe('2026-09-16（水）')
+  it('形が合わない文字列はそのまま返す', () => {
+    expect(formatDateSlash('invalid')).toBe('invalid')
+    expect(formatDateSlash('2026-9-20')).toBe('2026-9-20')
+  })
+})
+
+describe('formatDateWithWeekday', () => {
+  it('日曜は（日）が付く（スラッシュ区切り）', () => {
+    expect(formatDateWithWeekday('2026-09-20')).toBe('2026/09/20（日）')
+  })
+
+  it('水曜は（水）が付く（スラッシュ区切り）', () => {
+    expect(formatDateWithWeekday('2026-09-16')).toBe('2026/09/16（水）')
   })
 
   it('読めない文字列はそのまま返す', () => {

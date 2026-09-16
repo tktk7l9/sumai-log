@@ -288,7 +288,8 @@ test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL に
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
-  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ
+  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ。
+  // representative_photo_key は representativePhotoReady に無いので列ごと出ない（Finding 3 参照）
   assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
 })
 
@@ -333,6 +334,128 @@ test('buildStatements: affiliations に未知の id が混ざると例外（slug
     () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
     /vendor-a.*no-such-group/s,
   )
+})
+
+test('buildStatements: vendor の affiliationLinks が指定されれば vendors INSERT に JSON で入る', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = {
+    'kouzou-cram': { url: 'https://kouzou-cram.com/partnermap/example/', note: '構造 ★★★' },
+  }
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(
+    vendorAStmt,
+    /\{"kouzou-cram":\{"url":"https:\/\/kouzou-cram\.com\/partnermap\/example\/","note":"構造 ★★★"\}\}/,
+  )
+})
+
+test('buildStatements: affiliationLinks が未指定なら空オブジェクトになる（許容する）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorBStmt, /affiliations, affiliation_links/)
+  assert.match(vendorBStmt, /'\[\]', '\{\}'/)
+})
+
+test('buildStatements: affiliationLinks に未知の id が混ざると例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = { 'no-such-group': { url: 'https://example.com/' } }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*no-such-group/s,
+  )
+})
+
+test('buildStatements: affiliationLinks.url が https:// で始まらないと例外', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = { 'kouzou-cram': { url: 'http://example.com/' } }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*affiliationLinks\.kouzou-cram\.url/s,
+  )
+})
+
+test('buildStatements: affiliationLinks.note が 60 字を超えると例外', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliationLinks = {
+    'kouzou-cram': { url: 'https://example.com/', note: 'あ'.repeat(61) },
+  }
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*affiliationLinks\.kouzou-cram\.note/s,
+  )
+})
+
+test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が stamp 入りで入る（vendorId + stamp から決まる key）', () => {
+  const seed = fictionalSeed()
+  // now を固定すると stamp（= new Date(now).getTime().toString(36)）も決定的になる
+  const now = '2026-01-01T00:00:00.000Z'
+  const { sql } = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    now,
+    representativePhotoReady: new Set(['vendor-a']),
+  })
+  const vendorAId = slugToId('vendor:vendor-a')
+  const stamp = new Date(now).getTime().toString(36)
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(
+    vendorAStmt,
+    new RegExp(`'vendors/${vendorAId}/representative-${stamp}-display\\.jpg'`),
+  )
+})
+
+test('buildStatements: representativePhotoReady のキーは now が違えば違う stamp になる（差し替えのたびに URL が変わる）', () => {
+  const seed = fictionalSeed()
+  const first = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    now: '2026-01-01T00:00:00.000Z',
+    representativePhotoReady: new Set(['vendor-a']),
+  }).sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const second = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    now: '2026-06-01T00:00:00.000Z',
+    representativePhotoReady: new Set(['vendor-a']),
+  }).sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.notEqual(first, second)
+})
+
+test('buildStatements: representativePhotoReady に無い vendor は representative_photo_key が NULL のまま（未指定の既定も同じ）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.doesNotMatch(vendorAStmt, /representative-display\.jpg/)
+})
+
+// Finding 3 の回帰防止: representativePhoto を持たない（= representativePhotoReady に無い）
+// vendor を再取り込みしても、フォーム経由で既に付いている representative_photo_key を
+// NULL に巻き戻してはいけない（favicon_key と同じ「seed が触らない列」の扱い）。
+// upsertStatement は row に無い列を UPDATE SET にも出さないので、INSERT 文そのものに
+// `representative_photo_key` という語が一切現れないことを確認すれば「列ごと省略されている
+// （= 値を明示的に null で上書きしていない）」ことを厳密に検証できる。
+test('buildStatements: representativePhoto が無い vendor の INSERT 文に representative_photo_key 列自体が出ない（再取込で列を NULL に巻き戻さない）', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.doesNotMatch(vendorAStmt, /representative_photo_key/)
+  assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
+})
+
+test('buildStatements: representativePhotoReady に slug が入っている vendor だけ、その INSERT/UPDATE 文に representative_photo_key 列が出る', () => {
+  const seed = fictionalSeed()
+  const { sql } = buildStatements(seed, {
+    actorEmail: 'owner@example.com',
+    representativePhotoReady: new Set(['vendor-a']),
+  })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorAStmt, /representative_photo_key = excluded\.representative_photo_key/)
+  assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
 
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {
@@ -427,4 +550,176 @@ test('buildStatements: now を渡すと created_at/updated_at に使われる', 
   })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors'))
   assert.match(vendorStmt, /2026-01-01T00:00:00\.000Z/)
+})
+
+// --- sources ---------------------------------------------------------------
+
+function fictionalSource(overrides = {}) {
+  return {
+    slug: 'source-a',
+    kind: 'youtube',
+    name: '架空チャンネル',
+    url: 'https://www.youtube.com/@example-house',
+    handle: '@example-house',
+    channelId: null,
+    genre: 'knowledge',
+    description: '架空チャンネルの説明',
+    avatarUrl: 'https://yt3.googleusercontent.com/fake=s900',
+    vendorSlug: null,
+    affiliation: null,
+    sortOrder: 0,
+    ...overrides,
+  }
+}
+
+// url が自然キー（brief のレビュー指摘どおり）: フォームから先に同じ URL の行が
+// 別 id で作られていても、再取り込みが「別行の追加」にならず「その行の上書き」になる。
+test('buildStatements: sources は url を自然キーに INSERT ... ON CONFLICT(url) DO UPDATE 文が生成される（id ではない）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource()] })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.ok(stmt, 'sources statement が見つからない')
+  assert.match(stmt, /^INSERT INTO sources/)
+  assert.match(stmt, /ON CONFLICT\(url\) DO UPDATE SET/)
+  assert.doesNotMatch(stmt, /ON CONFLICT\(id\)/)
+  assert.doesNotMatch(stmt, /OR REPLACE/)
+  assert.match(stmt, /架空チャンネル/)
+})
+
+test('buildStatements: sources の ON CONFLICT(url) DO UPDATE は id も更新対象に含む（所有者が手で足した行の id を seed の決定的な id に揃える）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource()] })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, /id = excluded\.id/)
+  assert.doesNotMatch(stmt, /created_by = excluded\.created_by/)
+  assert.doesNotMatch(stmt, /created_at = excluded\.created_at/)
+})
+
+test('buildStatements: source の id は slugToId("source:" + slug) で決まる（冪等）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ slug: 'yt-example' })] })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, new RegExp(slugToId('source:yt-example')))
+})
+
+test('buildStatements: source の vendorSlug が指定されれば vendor_id が解決される', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ vendorSlug: 'vendor-a' })] })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, new RegExp(slugToId('vendor:vendor-a')))
+})
+
+test('buildStatements: source の vendorSlug が存在しない slug を参照するとエラー（slug を含む）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ vendorSlug: 'no-such-vendor' })] })
+  assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-vendor/)
+})
+
+test('buildStatements: source の kind を省略すると URL から自動判定される（YouTube チャンネル URL → youtube）', () => {
+  const seed = fictionalSeed({
+    sources: [fictionalSource({ kind: undefined, url: 'https://www.youtube.com/@example-house' })],
+  })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, /'youtube'/)
+})
+
+test('buildStatements: source の kind を省略し URL が YouTube チャンネルの形でなければ site になる', () => {
+  const seed = fictionalSeed({
+    sources: [fictionalSource({ kind: undefined, url: 'https://example.com/blog' })],
+  })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, /'site'/)
+})
+
+test('buildStatements: source の genre が未知なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ genre: 'no-such-genre' })] })
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /source-a.*no-such-genre/s,
+  )
+})
+
+test('buildStatements: source の kind が未知なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ kind: 'podcast' })] })
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /source-a.*podcast/s,
+  )
+})
+
+test('buildStatements: source の url が https:// で始まらなければ例外', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ url: 'http://example.com' })] })
+  assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /https:\/\//)
+})
+
+test('buildStatements: source の avatarUrl が https:// で始まらなければ例外', () => {
+  const seed = fictionalSeed({
+    sources: [fictionalSource({ avatarUrl: 'http://yt3.ggpht.com/fake' })],
+  })
+  assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /avatarUrl/)
+})
+
+// zod 側（sources.schema.ts の isAllowedAvatarUrl）と同じホスト許可リストを seed でも見る
+// （brief のレビュー指摘: 2 つの入口で規則がずれていた）
+test('buildStatements: source の avatarUrl が許可ホスト外なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed({
+    sources: [fictionalSource({ avatarUrl: 'https://evil.example/a.jpg' })],
+  })
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /source-a.*evil\.example/s,
+  )
+})
+
+test('buildStatements: source の avatarUrl は yt3.ggpht.com / i.ytimg.com も許可する', () => {
+  for (const avatarUrl of [
+    'https://yt3.ggpht.com/fake=s900',
+    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+  ]) {
+    const seed = fictionalSeed({ sources: [fictionalSource({ avatarUrl })] })
+    assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))
+  }
+})
+
+test('buildStatements: source の affiliation が未知なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource({ affiliation: 'no-such-affiliation' })] })
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /source-a.*no-such-affiliation/s,
+  )
+})
+
+test('buildStatements: source の affiliation（構造塾マップ含む既知の id）は許可される', () => {
+  for (const affiliation of ['iedukuri100', 'miratsugu', 'kouzou-cram']) {
+    const seed = fictionalSeed({ sources: [fictionalSource({ affiliation })] })
+    assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))
+  }
+})
+
+test('buildStatements: source の handle/channelId/description/avatarUrl/affiliation 未指定は NULL になる', () => {
+  const seed = fictionalSeed({
+    sources: [
+      {
+        slug: 'source-min',
+        name: '最小構成チャンネル',
+        url: 'https://www.youtube.com/@minimal',
+        genre: 'owners',
+        sortOrder: 0,
+      },
+    ],
+  })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, /最小構成チャンネル/)
+  // 6 個の NULL（handle, channel_id, description, avatar_url, vendor_id, affiliation）が
+  // 少なくとも入っていることだけ緩く確認する（列順に依存しすぎない）
+  const nullCount = (stmt.match(/NULL/g) ?? []).length
+  assert.ok(nullCount >= 6, `NULL の数が想定より少ない: ${nullCount}`)
+})
+
+test('sources が無い seed（sources キー自体が無い）でも buildStatements は例外にならない', () => {
+  const seed = fictionalSeed()
+  delete seed.sources
+  assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))
 })
