@@ -20,7 +20,10 @@ import { AFFILIATIONS, type AffiliationId } from '../../content/affiliations'
 import { SOURCE_GENRES, type SourceGenreId } from '../../content/sourceGenres'
 import type { Source } from '../../db/schema'
 import { extractErrorMessage, extractFormError } from '../../lib/formError'
+import { DUPLICATE_URL_ERROR } from '../../lib/sources'
 import { resolveSource, saveSource, type SourceInput } from '../../server/sources'
+
+const RESOLVE_EMPTY_MESSAGE = 'このページからは情報を取得できませんでした。手で入力してください'
 
 type Options = { vendors: { id: string; name: string }[] }
 type Values = Omit<SourceInput, 'id'>
@@ -87,12 +90,21 @@ export function SourceForm({
         notifications.show({ message: result.error, color: 'red' })
         return
       }
+      const { fields } = result
+      // 何ひとつ取れなかったとき（og タグが無いページ等）は「取得しました」と嘘をつかない。
+      // 既に入力・保存済みの値（編集中の行の avatarUrl/handle/channelId 等）も、
+      // 取れなかった項目は上書きしない＝空値で消さない（3項目とも「値があれば差し替え」に揃える）
+      const allEmpty = Object.values(fields).every((v) => v === null)
+      if (allEmpty) {
+        notifications.show({ message: RESOLVE_EMPTY_MESSAGE, color: 'yellow' })
+        return
+      }
       form.setValues({
-        ...(result.fields.name ? { name: result.fields.name } : {}),
-        ...(result.fields.description ? { description: result.fields.description } : {}),
-        avatarUrl: result.fields.avatarUrl,
-        handle: result.fields.handle,
-        channelId: result.fields.channelId,
+        ...(fields.name ? { name: fields.name } : {}),
+        ...(fields.description ? { description: fields.description } : {}),
+        ...(fields.avatarUrl ? { avatarUrl: fields.avatarUrl } : {}),
+        ...(fields.handle ? { handle: fields.handle } : {}),
+        ...(fields.channelId ? { channelId: fields.channelId } : {}),
       })
       notifications.show({ message: '取得しました' })
     } catch (error) {
@@ -112,7 +124,10 @@ export function SourceForm({
     } catch (error) {
       const { message, path } = extractFormError(error)
       notifications.show({ message, color: 'red' })
+      // 重複 URL（D1 の UNIQUE 制約違反、repository/sources.ts が言い換えたもの）はサーバー
+      // 側の zod issue ではないため path が付かない。message で判別して url 欄に出す
       if (path) form.setFieldError(path, message)
+      else if (message === DUPLICATE_URL_ERROR) form.setFieldError('url', message)
     } finally {
       setSaving(false)
     }

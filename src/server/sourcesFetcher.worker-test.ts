@@ -96,7 +96,7 @@ describe('resolveSourceCore', () => {
     if (!result.ok) expect(result.error).toContain('404')
   })
 
-  it('content-length が上限を超えていれば取得を諦める', async () => {
+  it('content-length ヘッダが大きくても無視して本文を読む（先頭だけ読む方針のため content-length 自体は見ない）', async () => {
     const fetchImpl = fakeFetch(
       () =>
         new Response('x', {
@@ -105,8 +105,57 @@ describe('resolveSourceCore', () => {
         }),
     )
     const result = await resolveSourceCore(CHANNEL_URL, fetchImpl)
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toContain('取得')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.fields).toEqual({
+        name: null,
+        description: null,
+        avatarUrl: null,
+        handle: '@example-house',
+        channelId: null,
+      })
+    }
+  })
+
+  it('本文が 1MB を大きく超えていても失敗にせず、先頭部分だけで解析する（3MB のストリーム・<head> は先頭 100KB 以内）', async () => {
+    const headBytes = new TextEncoder().encode(channelHtml())
+    expect(headBytes.byteLength).toBeLessThan(100 * 1024)
+    const totalBytes = 3 * 1024 * 1024
+    const chunkSize = 64 * 1024
+
+    let sent = 0
+    let headSent = false
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!headSent) {
+          headSent = true
+          controller.enqueue(headBytes)
+          sent += headBytes.byteLength
+          return
+        }
+        if (sent >= totalBytes) {
+          controller.close()
+          return
+        }
+        // 中身は何でもよい（メタタグに一致しなければ抽出結果に影響しない）ので 0 埋め
+        const size = Math.min(chunkSize, totalBytes - sent)
+        controller.enqueue(new Uint8Array(size))
+        sent += size
+      },
+    })
+    const fetchImpl = fakeFetch(() => new Response(stream, { status: 200 }))
+
+    const result = await resolveSourceCore(CHANNEL_URL, fetchImpl)
+    expect(result).toEqual({
+      ok: true,
+      fields: {
+        name: '架空チャンネル',
+        description: '架空チャンネルの説明',
+        avatarUrl: 'https://yt3.googleusercontent.com/fake=s900',
+        handle: '@example-house',
+        channelId: CHANNEL_ID,
+      },
+    })
   })
 
   it('fetch が例外を投げてもクラッシュせずエラーを返す', async () => {

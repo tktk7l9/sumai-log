@@ -550,15 +550,27 @@ function fictionalSource(overrides = {}) {
   }
 }
 
-test('buildStatements: sources は INSERT ... ON CONFLICT(id) DO UPDATE 文が生成される', () => {
+// url が自然キー（brief のレビュー指摘どおり）: フォームから先に同じ URL の行が
+// 別 id で作られていても、再取り込みが「別行の追加」にならず「その行の上書き」になる。
+test('buildStatements: sources は url を自然キーに INSERT ... ON CONFLICT(url) DO UPDATE 文が生成される（id ではない）', () => {
   const seed = fictionalSeed({ sources: [fictionalSource()] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
   assert.ok(stmt, 'sources statement が見つからない')
   assert.match(stmt, /^INSERT INTO sources/)
-  assert.match(stmt, /ON CONFLICT\(id\) DO UPDATE SET/)
+  assert.match(stmt, /ON CONFLICT\(url\) DO UPDATE SET/)
+  assert.doesNotMatch(stmt, /ON CONFLICT\(id\)/)
   assert.doesNotMatch(stmt, /OR REPLACE/)
   assert.match(stmt, /架空チャンネル/)
+})
+
+test('buildStatements: sources の ON CONFLICT(url) DO UPDATE は id も更新対象に含む（所有者が手で足した行の id を seed の決定的な id に揃える）', () => {
+  const seed = fictionalSeed({ sources: [fictionalSource()] })
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const stmt = sql.find((s) => s.includes('INTO sources'))
+  assert.match(stmt, /id = excluded\.id/)
+  assert.doesNotMatch(stmt, /created_by = excluded\.created_by/)
+  assert.doesNotMatch(stmt, /created_at = excluded\.created_at/)
 })
 
 test('buildStatements: source の id は slugToId("source:" + slug) で決まる（冪等）', () => {
@@ -624,6 +636,28 @@ test('buildStatements: source の avatarUrl が https:// で始まらなけれ�
     sources: [fictionalSource({ avatarUrl: 'http://yt3.ggpht.com/fake' })],
   })
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /avatarUrl/)
+})
+
+// zod 側（sources.schema.ts の isAllowedAvatarUrl）と同じホスト許可リストを seed でも見る
+// （brief のレビュー指摘: 2 つの入口で規則がずれていた）
+test('buildStatements: source の avatarUrl が許可ホスト外なら例外（slug と値を含む）', () => {
+  const seed = fictionalSeed({
+    sources: [fictionalSource({ avatarUrl: 'https://evil.example/a.jpg' })],
+  })
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /source-a.*evil\.example/s,
+  )
+})
+
+test('buildStatements: source の avatarUrl は yt3.ggpht.com / i.ytimg.com も許可する', () => {
+  for (const avatarUrl of [
+    'https://yt3.ggpht.com/fake=s900',
+    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+  ]) {
+    const seed = fictionalSeed({ sources: [fictionalSource({ avatarUrl })] })
+    assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))
+  }
 })
 
 test('buildStatements: source の affiliation が未知なら例外（slug と値を含む）', () => {

@@ -21,24 +21,26 @@ const ERROR_MESSAGE_MAX = 200
 const NOT_YOUTUBE_ERROR =
   'YouTube チャンネルの URL のみ自動取得できます（例: https://www.youtube.com/@channel）。手入力してください'
 const URL_NOT_ALLOWED_ERROR = 'URL が許可されていません'
-const FETCH_FAILED_ERROR = 'ページを取得できませんでした（サイズ上限超過、または読めない形式）'
 
 function errorMessage(e: unknown): string {
   const message = e instanceof Error ? e.message : '取得に失敗しました'
   return message.length > ERROR_MESSAGE_MAX ? message.slice(0, ERROR_MESSAGE_MAX) : message
 }
 
-/** レスポンス本文をバイト列のまま読む。newsFetcher.ts の readCappedBytes /
- * vendorImagesFetcher.ts の readCapped と同じ方針（content-length があれば先に弾く、
- * 無ければストリームを数えながら上限超過時点で打ち切る）。この上限はこのファイル専用。 */
-async function readCapped(response: Response, maxBytes: number): Promise<Uint8Array | null> {
-  const contentLength = response.headers.get('content-length')
-  if (contentLength && Number(contentLength) > maxBytes) return null
-
+/**
+ * レスポンス本文の**先頭 maxBytes だけ**を読む。og:title 等の `<meta>` は通常 `<head>`
+ * （ページの先頭）に出るため、ページ全体が maxBytes を超えていても先頭さえ読めれば
+ * 抽出には十分。newsFetcher.ts の readCappedBytes / vendorImagesFetcher.ts の readCapped
+ * （どちらも上限超過を「取得失敗」にする）とは方針が異なり、ここでは**サイズ超過をエラーに
+ * しない**: 先頭 maxBytes 分だけ読んだところでストリームを打ち切り（`reader.cancel()`）、
+ * 読めた分だけを返す。content-length ヘッダは見ない（大きいと分かっていても先頭は読みたい
+ * ため）。返り値は常に Uint8Array（null にはならない）。
+ */
+async function readPrefix(response: Response, maxBytes: number): Promise<Uint8Array> {
   const reader = response.body?.getReader()
   if (!reader) {
     const buf = new Uint8Array(await response.arrayBuffer())
-    return buf.byteLength > maxBytes ? null : buf
+    return buf.byteLength > maxBytes ? buf.slice(0, maxBytes) : buf
   }
 
   const chunks: Uint8Array[] = []
@@ -47,12 +49,18 @@ async function readCapped(response: Response, maxBytes: number): Promise<Uint8Ar
     const { done, value } = await reader.read()
     if (done) break
     if (!value) continue
-    total += value.byteLength
-    if (total > maxBytes) {
+    const remaining = maxBytes - total
+    if (remaining <= 0) {
       await reader.cancel().catch(() => {})
-      return null
+      break
     }
-    chunks.push(value)
+    const slice = value.byteLength > remaining ? value.subarray(0, remaining) : value
+    chunks.push(slice)
+    total += slice.byteLength
+    if (total >= maxBytes) {
+      await reader.cancel().catch(() => {})
+      break
+    }
   }
   const merged = new Uint8Array(total)
   let offset = 0
@@ -78,7 +86,9 @@ export type ResolveSourceResult =
  * URL が YouTube チャンネルの形（src/lib/sources.ts の parseYoutubeChannelUrl）でなければ
  * 即座にエラーを返す。そうでなければ、SSRF 対策の isAllowedRemoteUrl を通してから
  * `fetchWithGuardedRedirects`（10 秒タイムアウト・手動リダイレクト追従）でページを取得し、
- * 1MB 上限で読み、og:title/og:description/og:image/channelId を抜く（youtubeMeta.ts）。
+ * 先頭 1MB だけ読んで（`readPrefix`）og:title/og:description/og:image/channelId を抜く
+ * （youtubeMeta.ts）。ページ全体が 1MB を超えていても、`<head>` さえ先頭に収まっていれば
+ * 抽出でき、失敗にはしない（大きめの実チャンネルページでも「取得」が使えるように）。
  * URL のパス自体から分かる handle/channelId を優先し、無ければページから抜いた値で補う。
  * 例外は投げない（design 通り）。
  */
@@ -99,9 +109,7 @@ export async function resolveSourceCore(
     if ('error' in outcome) return { ok: false, error: outcome.error }
     if (!outcome.response.ok) return { ok: false, error: `HTTP ${outcome.response.status}` }
 
-    const bytes = await readCapped(outcome.response, MAX_HTML_BYTES)
-    if (!bytes) return { ok: false, error: FETCH_FAILED_ERROR }
-
+    const bytes = await readPrefix(outcome.response, MAX_HTML_BYTES)
     const html = new TextDecoder('utf-8').decode(bytes)
     const meta = extractYoutubeMeta(html)
     const avatarUrl = meta.imageUrl && isAllowedAvatarUrl(meta.imageUrl) ? meta.imageUrl : null

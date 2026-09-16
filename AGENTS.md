@@ -46,6 +46,11 @@
 - 写真は端末で縮小してから送る（表示用 1600px・サムネ 400px の JPEG）。R2 は非公開バケットで、
   配信は認証後に Worker 経由でストリームする。扱ってよいキーは `src/lib/photos.ts` の
   `isManagedPhotoKey` を通ったものだけ
+- 業者画像（代表者の顔写真・ファビコン）の R2 キーは `vendors/{id}/…-{stamp}` の形でバージョン
+  を持たせる（`{stamp}` は差し替えるたびに変わる値）。見学写真（`photos/{visitId}/{photoId}-…`）
+  と違って業者側のキーは元々 `vendorId` だけから決定的だったため、差し替え後も同じ URL を
+  `cache-control: immutable` で長期キャッシュしてしまい、再アップロードしても古い画像が
+  出続ける不具合があった（鍵にバージョンを持たせることで解決する）
 - 予定の日時（`startsAt`）は終日なら `YYYY-MM-DD`、時刻ありなら `YYYY-MM-DDTHH:MM:00+09:00`
   （日本時間のオフセットを明示）。日付キーは先頭 10 文字（`src/lib/calendar.ts`）。Date
   オブジェクトへ変換しない
@@ -63,6 +68,12 @@
   `fetch` はそもそもプライベートネットワークへ経路を持たないため多層防御の一つ）と
   `charset.ts`（`Content-Type` の `charset` → 本文先頭 2KB の `<meta charset>` sniff → 既定
   `utf-8` の順で文字コードを判定。html-list の古いサイトは Shift_JIS 等を返しうる）
+- 外向き fetch（業者のお知らせ・業者サイトのファビコン/代表者写真・情報源の YouTube
+  チャンネルページ取得の 4 経路）は全て `src/server/safeFetch.ts` の
+  `fetchWithGuardedRedirects` を経由する。`redirect: 'manual'` で受けた 3xx の `Location` を
+  「今いる URL」基準で解決し、hop ごとに `isAllowedRemoteUrl`（`src/lib/news/url.ts`）を
+  再判定してから次の hop を fetch する（最大 3 hop。許可されない hop 先には fetch しない）。
+  新しく外向き fetch を足すときはここを通すこと（自前で `fetch` を直接呼ばない）
 - 実際に fetch するのは `src/server/newsFetcher.ts`。1 ソースあたり 10 秒タイムアウト
   （`AbortSignal.timeout`）・1 MB 上限（`content-length` があれば先に弾き、無ければストリームを
   数えながら超過時点で打ち切る）。業者ごとに try/catch で独立させ、1 社の失敗（想定内のエラーも
