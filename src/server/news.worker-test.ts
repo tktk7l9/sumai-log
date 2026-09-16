@@ -24,8 +24,12 @@ describe('listVendorNewsInput', () => {
     }
   })
 
-  it('limit が 200 を超えたら拒否する', () => {
-    expect(listVendorNewsInput.safeParse({ limit: 201 }).success).toBe(false)
+  it('limit は 201（表示上限200 + hasMore 判定用の1件）まで許す', () => {
+    expect(listVendorNewsInput.safeParse({ limit: 201 }).success).toBe(true)
+  })
+
+  it('limit が 201 を超えたら拒否する', () => {
+    expect(listVendorNewsInput.safeParse({ limit: 202 }).success).toBe(false)
   })
 
   it('offset が負なら拒否する', () => {

@@ -14,7 +14,7 @@ import { listVendorNews, newsSources, planVisitFromNews } from '../server/news'
 
 /** 1 ページぶんの件数。「もっと見る」を押すごとに PAGE_SIZE 件ずつ増やす */
 const PAGE_SIZE = 50
-/** listVendorNewsInput の limit 上限（src/server/news.schema.ts）と揃える */
+/** 表示する件数の上限（4 ページぶん） */
 const MAX_LIMIT = 200
 
 const newsSearchSchema = z.object({
@@ -36,16 +36,20 @@ export const Route = createFileRoute('/news')({
   loaderDeps: ({ search }) => ({ v: search.v, p: search.p }),
   loader: async ({ deps }) => {
     const limit = Math.min(MAX_LIMIT, PAGE_SIZE * (deps.p ?? 1))
-    const [{ news }, { sources }] = await Promise.all([
-      listVendorNews({ data: { vendorId: deps.v, limit, offset: 0 } }),
+    // 表示上限に +1 件だけ多く問い合わせ、その 1 件が返ってきたかどうかで
+    // 「もっと見る」を出すかを正確に判定する（ちょうど limit 件で終わる空振り
+    // クリックを避ける。listVendorNewsInput の limit 上限は 201 まで許容済み）。
+    const [{ news: fetched }, { sources }] = await Promise.all([
+      listVendorNews({ data: { vendorId: deps.v, limit: limit + 1, offset: 0 } }),
       newsSources(),
     ])
-    return { news, sources, limit }
+    const hasMore = fetched.length > limit
+    return { news: fetched.slice(0, limit), sources, limit, hasMore }
   },
 })
 
 function Page() {
-  const { news, sources, limit } = Route.useLoaderData()
+  const { news, sources, limit, hasMore } = Route.useLoaderData()
   const { v, p } = Route.useSearch()
   const navigate = useNavigate({ from: '/news' })
   const router = useRouter()
@@ -65,9 +69,9 @@ function Page() {
     }
   }
 
-  // ちょうど limit 件返ってきたら「まだあるかもしれない」とみなす（実件数と一致していても
-  // 空振りのもう一押しで済む程度の誤差なので、正確な hasMore を別途は問い合わせない）
-  const canLoadMore = news.length === limit && limit < MAX_LIMIT
+  // hasMore は loader が limit+1 件を問い合わせて実測済み（正確な判定）。
+  // 表示上限に既に達している場合はこれ以上増やせないので出さない。
+  const canLoadMore = hasMore && limit < MAX_LIMIT
 
   return (
     <PageShell title="業者のお知らせ">

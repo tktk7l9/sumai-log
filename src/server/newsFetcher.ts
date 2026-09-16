@@ -150,6 +150,7 @@ export async function fetchVendorNews(
     return { added: 0, error: outcome.error }
   }
 
+  let added: number
   try {
     const rows: NewNews[] = outcome.candidates.map((c) => {
       const event = extractEvent(`${c.title} ${c.summary ?? ''}`, c.publishedOn)
@@ -165,10 +166,7 @@ export async function fetchVendorNews(
       }
     })
 
-    const added = await insertNewsIfNew(db, rows)
-    await markNewsFetched(db, vendor.id, null)
-    console.log(`news: ${vendor.id} added=${added} error=null`)
-    return { added, error: null }
+    added = await insertNewsIfNew(db, rows)
   } catch (e) {
     const message = errorMessage(e)
     // markNewsFetched 自体が失敗しても（例: 業者行が取得と同時に消えた）、
@@ -177,6 +175,29 @@ export async function fetchVendorNews(
     console.log(`news: ${vendor.id} added=0 error=${message}`)
     return { added: 0, error: message }
   }
+
+  // ここまで来た時点で追加（insertNewsIfNew）自体は成功している。added を
+  // このあとの markNewsFetched の成否に関わらず確実に返す（取り込みは終わって
+  // いるのに、最後の記録だけが失敗して「0 件」に化けるのを防ぐ）。
+  try {
+    await markNewsFetched(db, vendor.id, null)
+  } catch (e) {
+    const message = errorMessage(e)
+    await markNewsFetched(db, vendor.id, message).catch(() => {})
+    console.log(`news: ${vendor.id} added=${added} error=markNewsFetched failed: ${message}`)
+    return { added, error: message }
+  }
+
+  console.log(`news: ${vendor.id} added=${added} error=null`)
+  return { added, error: null }
+}
+
+export type FetchAllVendorNewsResult = {
+  vendorId: string
+  /** 呼び出し側（設定画面）が UUID をそのまま見せずに済むよう、業者名も一緒に返す */
+  vendorName: string
+  added: number
+  error: string | null
 }
 
 /**
@@ -186,17 +207,17 @@ export async function fetchVendorNews(
 export async function fetchAllVendorNews(
   db: Db,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ vendorId: string; added: number; error: string | null }[]> {
+): Promise<FetchAllVendorNewsResult[]> {
   const sources = await listNewsSources(db)
-  const results: { vendorId: string; added: number; error: string | null }[] = []
+  const results: FetchAllVendorNewsResult[] = []
   for (const vendor of sources) {
     try {
       const { added, error } = await fetchVendorNews(db, vendor, fetchImpl)
-      results.push({ vendorId: vendor.id, added, error })
+      results.push({ vendorId: vendor.id, vendorName: vendor.name, added, error })
     } catch (e) {
       const message = errorMessage(e)
       console.log(`news: ${vendor.id} added=0 error=${message}`)
-      results.push({ vendorId: vendor.id, added: 0, error: message })
+      results.push({ vendorId: vendor.id, vendorName: vendor.name, added: 0, error: message })
     }
   }
   return results

@@ -91,10 +91,10 @@ function Page() {
     setFetchingNews(true)
     try {
       const { results } = await fetchNewsNowFn()
-      const nameById = new Map(newsSources.map((v) => [v.id, v.name]))
       for (const r of results) {
-        // UUID をそのまま見せない（読んでも何の業者か分からない）
-        const name = nameById.get(r.vendorId) ?? '不明な業者'
+        // fetchAllVendorNews が業者名を返す（UUID をそのまま見せない）。
+        // 万一空文字が来ても（あり得ないはずだが）読める文言にフォールバックする
+        const name = r.vendorName || '不明な業者'
         if (r.error) {
           notifications.show({ message: `${name}: エラー ${r.error}`, color: 'red' })
         } else {
