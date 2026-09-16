@@ -1,4 +1,4 @@
-import { parseToUtcMs } from './jst'
+import { parseToUtcMs, toJstDateKey } from './jst'
 
 /**
  * ホームに出す横断フィード。見学記録・予定・業者・物件・場所・動画・コメント・写真を
@@ -8,11 +8,20 @@ import { parseToUtcMs } from './jst'
 export type FeedKind =
   'visit' | 'event' | 'vendor' | 'property' | 'place' | 'video' | 'comment' | 'photo'
 
+/** 新規追加か、既存レコードの更新か。comment/photo は常に 'add'（server/repository/feed.ts 参照） */
+export type FeedAction = 'add' | 'update'
+
+export const FEED_ACTION_LABEL: Record<FeedAction, string> = {
+  add: '追加',
+  update: '更新',
+}
+
 export type FeedItem = {
   kind: FeedKind
   id: string
   title: string
   subtitle?: string
+  action: FeedAction
   /** D1 の UTC datetime か ISO 文字列 */
   at: string
   /** メールアドレス */
@@ -68,4 +77,61 @@ export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: numbe
 
   entries.sort((a, b) => (a.ms !== b.ms ? b.ms - a.ms : a.order - b.order))
   return entries.slice(0, Math.max(0, limit)).map((e) => e.item)
+}
+
+/**
+ * フィードを日（JST の日付キー）でまとめる。items は既に新しい順（mergeFeed 後）
+ * を前提にしており、日の並び順は「最初に出てきた順」＝新しい日が先になる。
+ * 日内の順序は items の並びをそのまま保つ。
+ */
+export function groupFeedByDay(items: readonly FeedItem[]): { day: string; items: FeedItem[] }[] {
+  const order: string[] = []
+  const byDay = new Map<string, FeedItem[]>()
+  for (const item of items) {
+    const day = toJstDateKey(item.at)
+    const list = byDay.get(day)
+    if (list) list.push(item)
+    else {
+      order.push(day)
+      byDay.set(day, [item])
+    }
+  }
+  return order.map((day) => ({ day, items: byDay.get(day)! }))
+}
+
+/** コメント本文の表示上限（超えたら末尾に … を付けて切る） */
+const COMMENT_BODY_LIMIT = 40
+
+function truncate(text: string, limit: number): string {
+  return text.length > limit ? `${text.slice(0, limit)}…` : text
+}
+
+/**
+ * フィード 1 件を「◯◯「対象名」を追加/更新」の文にするための断片。
+ * link だけをクリック可能なリンクにする想定（対象名部分のみ）。
+ */
+export function feedSentence(item: FeedItem): { before: string; link: string; after: string } {
+  const actionLabel = FEED_ACTION_LABEL[item.action]
+  switch (item.kind) {
+    case 'visit':
+      return { before: '見学記録「', link: item.title, after: `」を${actionLabel}` }
+    case 'event':
+      return { before: '予定「', link: item.title, after: `」を${actionLabel}` }
+    case 'vendor':
+      return { before: '業者「', link: item.title, after: `」を${actionLabel}` }
+    case 'property':
+      return { before: '物件「', link: item.title, after: `」を${actionLabel}` }
+    case 'place':
+      return { before: '場所「', link: item.title, after: `」を${actionLabel}` }
+    case 'video':
+      return { before: '動画「', link: item.title, after: `」を${actionLabel}` }
+    case 'comment':
+      return {
+        before: '「',
+        link: item.subtitle ?? '（削除済み）',
+        after: `」にコメント：${truncate(item.title, COMMENT_BODY_LIMIT)}`,
+      }
+    case 'photo':
+      return { before: '「', link: item.subtitle ?? '見学記録', after: '」に写真を追加' }
+  }
 }

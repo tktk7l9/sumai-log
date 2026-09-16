@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatJst, parseToUtcMs, toJstDateKey } from './jst'
+import { formatJst, formatJstTime, parseToUtcMs, toJstDateKey } from './jst'
 
 describe('parseToUtcMs', () => {
   it('D1 の空白区切り（オフセット無し=UTC）を UTC ミリ秒に直す', () => {
@@ -79,5 +79,24 @@ describe('toJstDateKey', () => {
 
   it('解釈できない文字列はそのまま返す', () => {
     expect(toJstDateKey('invalid')).toBe('invalid')
+  })
+})
+
+describe('formatJstTime', () => {
+  it('D1 の空白区切り（オフセット無し=UTC）を JST の HH:mm に直す', () => {
+    expect(formatJstTime('2030-01-05 23:30:00')).toBe('08:30')
+  })
+
+  it('ISO の Z 付きも同じ結果になる', () => {
+    expect(formatJstTime('2030-01-05T23:30:00Z')).toBe('08:30')
+  })
+
+  it('秒の小数部付きも読む', () => {
+    expect(formatJstTime('2030-01-05T17:04:28.333Z')).toBe('02:04')
+  })
+
+  it('解釈できない文字列は空文字', () => {
+    expect(formatJstTime('not-a-date')).toBe('')
+    expect(formatJstTime('')).toBe('')
   })
 })

@@ -216,6 +216,41 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
   })
 })
 
+describe('action（add/update）', () => {
+  it('挿入直後は add（createdAt と updatedAt がほぼ同時刻）', async () => {
+    await upsertVendor(db, { name: '新規業者', kind: 'koumuten', serviceAreas: [] }, actorA)
+    const [item] = await recentVendors(db, 10)
+    expect(item.action).toBe('add')
+  })
+
+  it('5 分後にリポジトリの upsert で更新された行は update', async () => {
+    const id = crypto.randomUUID()
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
+      .toISOString()
+      .slice(0, 19)
+      .replace('T', ' ')
+    await db.insert(vendors).values({
+      id,
+      name: '更新される業者',
+      kind: 'koumuten',
+      serviceAreas: [],
+      createdBy: actorA,
+      createdAt: fiveMinAgo,
+      updatedAt: fiveMinAgo,
+    })
+    // 更新経路を通す（updatedAt は repository/candidates.ts の upsertVendor が
+    // sql`(datetime('now'))` で現在時刻に書き換える。createdAt は触らない）
+    await upsertVendor(
+      db,
+      { id, name: '更新される業者', kind: 'koumuten', serviceAreas: [] },
+      actorA,
+    )
+    const [item] = await recentVendors(db, 10)
+    expect(item.id).toBe(id)
+    expect(item.action).toBe('update')
+  })
+})
+
 describe('recentVisits / recentEvents', () => {
   it('見学記録は場所名を題名に、visitedOn を副題に、href は見学記録詳細', async () => {
     const placeId = await upsertPlace(db, { name: 'ギャラリーB', kind: 'gallery' }, actorA)
