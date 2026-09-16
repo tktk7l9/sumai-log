@@ -80,7 +80,7 @@ function Page() {
     try {
       await remove({ data: { id: vendor.id } })
       notifications.show({ message: '業者を削除しました' })
-      navigate({ to: '/candidates', search: { tab: 'vendors', coversHome: false } })
+      navigate({ to: '/candidates', search: { tab: 'vendors' } })
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
     }

@@ -194,7 +194,11 @@ function Page() {
           onViewChange={handleViewChange}
           events={scheduleEvents}
           labels={SCHEDULE_LABELS_JA}
-          layout="responsive"
+          // モバイルも PC と同じビュー（月/週/日）にする（所有者の要望、2026-09-16）。
+          // 'responsive' だとスマホ幅で MobileMonthView に切り替わり PC と見た目が変わって
+          // いた。layout="default" なら常に monthViewProps 等の通常ビューを使うので、
+          // 'responsive' 専用の mobileMonthViewProps は不要（渡しても使われない）
+          layout="default"
           mode="default"
           onDayClick={(next) => navigateToDay(next)}
           onEventClick={handleEventClick}
@@ -203,15 +207,6 @@ function Page() {
             weekendDays: [0, 6],
             highlightToday: true,
             getDayProps: dayProps,
-          }}
-          mobileMonthViewProps={{
-            firstDayOfWeek: 1,
-            weekendDays: [0, 6],
-            getDayProps: dayProps,
-            selectedDate: d ?? null,
-            onSelectedDateChange: (next) => {
-              if (next) navigateToDay(next)
-            },
           }}
           weekViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
           dayViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
@@ -244,7 +239,7 @@ function Page() {
               }}
             />
             <Text size="xs" c="dimmed">
-              業者のお知らせ（情報）
+              お知らせ（情報）
             </Text>
           </Group>
         </Group>
@@ -286,7 +281,7 @@ function Page() {
       <FormDrawer
         opened={newsDrawerNews !== null}
         onClose={() => setNewsDrawerNewsId(null)}
-        title="業者のお知らせ"
+        title="お知らせ"
       >
         {newsDrawerNews ? (
           <NewsEventDrawer
