@@ -12,6 +12,7 @@ import {
   listNews,
   listNewsEventsBetween,
   listNewsSources,
+  reparseNewsEventDates,
   upsertEvent,
 } from './repository'
 
@@ -52,6 +53,15 @@ export const newsSources = createServerFn().handler(async () => {
 export const fetchNewsNow = createServerFn({ method: 'POST' }).handler(async () => {
   const results = await fetchAllVendorNews(getDb())
   return { results }
+})
+
+/**
+ * 設定ページの「日程を再解析」。`extractEvent`（`src/lib/news/eventDate.ts`）の
+ * 取りこぼしを直した後、既存の vendor_news 全件に対して再計算し、変わった行だけ
+ * 更新する（`{ checked, updated }` を返す。ボタンの文言はこの2つの数を使う）。
+ */
+export const reparseNewsEvents = createServerFn({ method: 'POST' }).handler(async () => {
+  return await reparseNewsEventDates(getDb())
 })
 
 /**

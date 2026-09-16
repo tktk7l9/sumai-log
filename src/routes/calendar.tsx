@@ -1,4 +1,5 @@
 import { Badge, Button, Group, Stack, Text } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { Schedule } from '@mantine/schedule'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
@@ -103,6 +104,12 @@ function Page() {
   // 'year' は URL に持たせない（v の search スキーマに無い）ので、ヘッダーから
   // 選ばれても表示だけローカル state で切り替える
   const [view, setView] = useState<ScheduleViewLevel>(v ?? 'month')
+  // モバイルは月表示の1セルの高さを詰める必要がある（所有者の報告、2026-09-16。
+  // styles.css の該当コメント参照）。1日あたりの表示イベント数を 2→1 に減らすと
+  // Mantine 自身が `--month-view-max-events` を連動して下げ、高さも詰まる
+  // （CSS 側でこの変数を直接上書きしないのは、実際に描画するイベント数と
+  // ズレるため）。デスクトップ（sm 以上）は既定の 2 のまま
+  const isMobile = useMediaQuery('(max-width: 47.99em)', true)
 
   useEffect(() => {
     setView(v ?? 'month')
@@ -207,6 +214,7 @@ function Page() {
             weekendDays: [0, 6],
             highlightToday: true,
             getDayProps: dayProps,
+            maxEventsPerDay: isMobile ? 1 : 2,
           }}
           weekViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
           dayViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}

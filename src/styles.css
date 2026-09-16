@@ -180,3 +180,48 @@ a:focus-visible {
     height: calc(100dvh - 52px);
   }
 }
+
+/*
+ * `/calendar` の月表示（@mantine/schedule の MonthView）。既定は1セルの最小幅が
+ * 84px（7列で588px）あり、390px 幅のスマホでは7列が画面に収まらず横スクロール
+ * が要る（所有者の報告、2026-09-16）。sm 未満だけ、Styles API の静的クラス
+ * （`mantine-MonthView-*`。デスクトップと同じ CSS Modules クラスに加えて
+ * Mantine が付ける安定クラス名。DOM 調査で確認済み）を通じて `--min-day-width`
+ * を下げる。実際のセル幅はこの下限ではなく `flex: 0 0 calc(100% / 7)` の
+ * 計算値（コンテナ幅を7等分した値）になるので、下限を下げるだけで横スクロール
+ * せずに7列すべてが収まり、390px 幅の実機ではセル幅は約49〜51px になる
+ * （下限そのものは、それより極端に狭い端末でも下限に張り付いて詰まりすぎない
+ * ための保険）。
+ *
+ * 1セルの高さ（`calc(52px + var(--month-view-max-events, 2) * 24px)`）は
+ * ここでは触らない。この CSS 変数は Mantine 自身の varsResolver が
+ * `monthViewProps.maxEventsPerDay` から決めるため、ここで直接上書きすると
+ * 「何件まで表示してから+Nにまとめるか」という実際の描画ロジックと高さの
+ * 計算がズレてしまう。高さは `calendar.tsx` 側で画面幅に応じて
+ * `maxEventsPerDay` を出し分けることで揃える（1件なら 76px。週の行数×76px
+ * ＋曜日ヘッダーぶんが 390×844 の画面に収まる）。
+ *
+ * 日付の丸バッジ（monthViewDayLabel）はセルが狭くなる分だけ文字サイズを
+ * 落とす。デスクトップ（sm 以上）は一切変えない。
+ */
+@media (max-width: 47.99em) {
+  .mantine-MonthView-monthView {
+    --min-day-width: 2.5rem;
+  }
+
+  .mantine-MonthView-monthViewDayLabel {
+    font-size: var(--mantine-font-size-xs);
+    width: calc(1.375rem * var(--mantine-scale));
+  }
+}
+
+/*
+ * `NewsAgenda`（お知らせ。ホームの「お知らせ」ブロックと `/news` の両方で共有）の
+ * AgendaView。日付見出しは行との境界線だけだと区切りが弱いので、少し上に余白を
+ * 足す（所有者の報告、2026-09-16）。`.news-agenda`（NewsAgenda.tsx が渡す
+ * className）でスコープし、ホームの「これからの予定」（HomeAgenda、別の
+ * AgendaView インスタンス）には影響させない。
+ */
+.news-agenda .mantine-AgendaView-agendaViewDateHeader {
+  margin-top: 4px;
+}
