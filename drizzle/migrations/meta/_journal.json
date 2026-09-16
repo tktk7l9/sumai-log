@@ -29,6 +29,13 @@
       "when": 1789522536242,
       "tag": "0003_vendor_news",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789531486153,
+      "tag": "0004_vendor_representative_affiliations",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
 
 import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { resolveAffiliations } from '../../lib/affiliations'
 import { formatTsubo } from '../../lib/format'
 import { termIdForMetric } from '../../lib/glossary'
 import { StatusBadge } from './StatusBadge'
@@ -43,6 +44,11 @@ export function VendorCard({
               {vendor.hq}
             </Text>
           </Group>
+        ) : null}
+        {vendor.kind === 'koumuten' && vendor.representative ? (
+          <Text size="sm" c="dimmed">
+            代表: {vendor.representative}
+          </Text>
         ) : null}
         <Group gap="xs">
           <Badge variant="default">{VENDOR_KIND_LABEL[vendor.kind]}</Badge>
@@ -96,6 +102,21 @@ export function VendorCard({
                   <Badge variant="default">長期優良</Badge>
                 </Link>
               ) : null}
+            </Group>
+          ) : null}
+          {vendor.affiliations.length > 0 ? (
+            <Group gap="xs" onClick={(e) => e.stopPropagation()}>
+              {resolveAffiliations(vendor.affiliations).map((a) => (
+                <Link
+                  key={a.id}
+                  to="/glossary/$termId"
+                  params={{ termId: a.glossaryId }}
+                  aria-label={`用語集で ${a.name} を見る`}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <Badge variant="light">{a.shortName}</Badge>
+                </Link>
+              ))}
             </Group>
           ) : null}
         </Group>

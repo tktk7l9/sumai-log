@@ -291,6 +291,34 @@ test('buildStatements: newsSource が rss/html-list 以外なら例外（slug �
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /vendor-a.*atom/s)
 })
 
+test('buildStatements: vendor の representative/affiliations が指定されれば vendors INSERT に入る', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].representative = '山田太郎'
+  seed.vendors[0].affiliations = ['iedukuri100', 'miratsugu']
+  const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
+  const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
+  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.match(vendorAStmt, /'山田太郎'/)
+  assert.match(vendorAStmt, /\["iedukuri100","miratsugu"\]/)
+})
+
+test('buildStatements: vendor の representative/affiliations が未指定なら NULL / 空配列になる', () => {
+  const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
+  const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
+  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.match(vendorBStmt, /hq, representative, service_areas, affiliations/)
+  assert.match(vendorBStmt, /NULL, NULL, '\[\]', '\[\]'/)
+})
+
+test('buildStatements: affiliations に未知の id が混ざると例外（slug と値を含む）', () => {
+  const seed = fictionalSeed()
+  seed.vendors[0].affiliations = ['iedukuri100', 'no-such-group']
+  assert.throws(
+    () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
+    /vendor-a.*no-such-group/s,
+  )
+})
+
 test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {
   const seed = fictionalSeed()
   seed.vendors[0].name = "架空's工務店"
