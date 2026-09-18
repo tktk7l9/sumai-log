@@ -75,3 +75,19 @@ const METRIC_TERM_ID: Record<GlossaryMetric, string> = {
 export function termIdForMetric(metric: GlossaryMetric): string {
   return METRIC_TERM_ID[metric]
 }
+
+/**
+ * 「今日の用語」。日付キー（'YYYY-MM-DD'）から決定的に 1 語を選ぶ。同じ日は何度開いても
+ * 同じ語、日が変わると別の語になる（サーバーとクライアントで結果が揺れない）。
+ * 空配列なら null。
+ */
+export function termOfDay(terms: readonly GlossaryTerm[], dayKey: string): GlossaryTerm | null {
+  if (terms.length === 0) return null
+  // FNV-1a（32bit）。短い文字列でも日付の末尾 1 桁の違いが上位ビットまで散る
+  let hash = 0x811c9dc5
+  for (let i = 0; i < dayKey.length; i++) {
+    hash ^= dayKey.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193) >>> 0
+  }
+  return terms[hash % terms.length]
+}

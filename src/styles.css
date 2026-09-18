@@ -225,3 +225,32 @@ a:focus-visible {
 .news-agenda .mantine-AgendaView-agendaViewDateHeader {
   margin-top: 4px;
 }
+
+/*
+ * 上に引っ張って更新（src/components/PullToRefresh.tsx）のインジケータ。ヘッダの
+ * すぐ下に丸いバッジで出す。z-index はヘッダ（AppShell の 100 番台）より上、
+ * Drawer（200）より下。引いている間（data-pulling）は指に追従させるので transition を切る。
+ */
+.ptr-indicator {
+  position: fixed;
+  top: calc(52px + env(safe-area-inset-top, 0px));
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-clay-6);
+  box-shadow: var(--mantine-shadow-md);
+  border: 1px solid var(--mantine-color-default-border);
+  z-index: 150;
+  pointer-events: none;
+  transition:
+    transform 200ms ease,
+    opacity 200ms ease;
+}
+.ptr-indicator[data-pulling] {
+  transition: none;
+}
