@@ -13,6 +13,7 @@ import {
   relatedTerms,
   searchGlossary,
   termIdForMetric,
+  termOfDay,
 } from './glossary'
 
 /** 純粋関数の検証はこの架空の用語だけで行う（本物のデータに依存させない） */
@@ -221,5 +222,21 @@ describe('GLOSSARY（データの体裁）', () => {
       )
       expect({ id: term.id, ok }).toEqual({ id: term.id, ok: true })
     }
+  })
+})
+
+describe('termOfDay', () => {
+  it('同じ日は同じ語、空なら null', () => {
+    expect(termOfDay(fixtures, '2026-09-19')).toBe(termOfDay(fixtures, '2026-09-19'))
+    expect(termOfDay([], '2026-09-19')).toBeNull()
+  })
+  it('本物のデータで 1 か月ぶん回すと複数の語に散る', () => {
+    const ids = new Set(
+      Array.from(
+        { length: 30 },
+        (_, i) => termOfDay(GLOSSARY, `2026-10-${String(i + 1).padStart(2, '0')}`)?.id,
+      ),
+    )
+    expect(ids.size).toBeGreaterThan(10)
   })
 })
