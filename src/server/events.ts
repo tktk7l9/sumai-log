@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { events } from '../db/schema'
 import { addDays, dateKey, monthKeys } from '../lib/calendar'
-import { pendingVisitEvents, upcomingEvents } from '../lib/pending'
+import { pendingVisitEvents } from '../lib/pending'
 import { eventInput } from './events.schema'
 import { currentActorEmail } from './members'
 import {
@@ -93,7 +93,8 @@ export const deleteEvent = createServerFn({ method: 'POST' })
   })
 
 /**
- * ホーム用: 次の予定 3 件、「記録を書きませんか」、これからの予定（アジェンダ）4 週間ぶん。
+ * ホーム用: 「記録を書きませんか」と、これからの予定（アジェンダ）4 週間ぶん
+ * （「次の予定」はアジェンダと重複するため 2026-09-19 に廃止）。
  * アジェンダの窓（今日〜+27 日）は下の 90 日/365 日レンジに完全に含まれるので、
  * 同じ range を二度 DB に問い合わせず、取得済みの rows を絞り込むだけで済ませる。
  */
@@ -115,7 +116,6 @@ export const listHomeEvents = createServerFn().handler(async () => {
     return key >= agendaFrom && key <= agendaTo
   })
   return {
-    upcoming: upcomingEvents(rows, now, 3),
     pending: pendingVisitEvents(rows, recorded, now).slice(0, 5),
     agenda,
     agendaFrom,

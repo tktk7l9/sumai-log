@@ -33,7 +33,8 @@ export const visitInput = z.object({
   vendorId: idField.nullable(),
   propertyId: idField.nullable(),
   visitedOn: dateField,
-  attendees: z.enum(ATTENDEES),
+  // 同行者の入力欄は廃止（記録は基本二人で書く・2026-09-19）。列は残し常に既定値
+  attendees: z.enum(ATTENDEES).default('both'),
   good: optionalText,
   concerns: optionalText,
   qa: optionalText,

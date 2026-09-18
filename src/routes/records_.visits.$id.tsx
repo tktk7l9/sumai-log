@@ -1,4 +1,4 @@
-import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { ActionIcon, Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -12,7 +12,7 @@ import { Row } from '../components/candidates/DetailRow'
 import { PhotoGrid } from '../components/visits/PhotoGrid'
 import { PhotoUploader } from '../components/visits/PhotoUploader'
 import { VisitForm } from '../components/visits/VisitForm'
-import { ATTENDEES_LABEL, type Photo } from '../db/schema'
+import type { Photo } from '../db/schema'
 import { formatDateWithWeekday } from '../lib/calendar'
 import { listCommentsFor } from '../server/comments'
 import {
@@ -88,7 +88,6 @@ function Page() {
       title={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">
-          <Badge variant="default">{ATTENDEES_LABEL[visit.attendees]}</Badge>
           <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
             <Pencil size={16} />
           </ActionIcon>

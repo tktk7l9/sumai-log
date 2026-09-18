@@ -157,8 +157,7 @@ Zero Trust → Access → Applications → Add → Self-hosted:
 - Application name: `sumai-log` ／ Session duration: **730h（約1ヶ月）**
 - Application domain: `sumai-log.saitotakuya0719.workers.dev`
 - Identity providers: 既設の Google だけを選ぶ（Auto-redirect to identity を有効化）
-- Policy: Allow / Include → Emails → 利用者のアドレス（現在はオーナーのみ。パートナーの
-  Gmail アドレスが判明したら Include に追加する）
+- Policy: Allow / Include → Emails → 利用者のアドレス（オーナーとパートナーの 2 人）
 - 作成後の Overview で **Application Audience (AUD) Tag** をコピーし、`wrangler.jsonc` の
   `ACCESS_TEAM_DOMAIN` / `ACCESS_POLICY_AUD` に反映する（どちらも非秘密＝コミットしてよい）
 
@@ -221,8 +220,7 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
   - iOS のホーム画面アプリ（standalone）は Safari とログイン状態を共有しないため、ログインが
     繰り返し求められる場合は一度 Safari で本番 URL を開いてログインしてからホーム画面のアプリ
     に戻る
-- **妻の Gmail アドレスの追加**: 判明したら Access ポリシーの Include（上記 3）と secret の
-  `ACCESS_ALLOWED_EMAILS` / `MEMBERS`（上記 4）の両方に追記する。現在はオーナーのみ
+- ~~**妻の Gmail アドレスの追加**~~ ✅ 2026-09-18 に Access ポリシー・secret 2 つ・`.dev.vars`・Keyway へ反映済み
 - **用語集の本番確認 4 点**:
   1. 用語集で検索 → 戻るボタンが 1 回で戻る
   2. 検索語を入れたまま関連語バッジを押すと該当語へ飛ぶ

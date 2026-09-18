@@ -28,7 +28,8 @@ export const videoInput = z
       .nullable(),
     thumbnailUrl: optionalUrl,
     watchedOn: dateField.nullable(),
-    watchedBy: z.enum(ATTENDEES),
+    // 観た人の入力欄は廃止（2026-09-19）。列は残し常に既定値
+    watchedBy: z.enum(ATTENDEES).default('both'),
     tags: z.array(z.string().trim().min(1).max(30)).max(10),
     takeaways: z
       .string()
