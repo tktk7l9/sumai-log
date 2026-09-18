@@ -18,7 +18,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
-import { ATTENDEES_LABEL, type Comment, type Video } from '../../db/schema'
+import type { Comment, Video } from '../../db/schema'
 import { formatDateSlash } from '../../lib/calendar'
 import type { Member } from '../../lib/members'
 import { deleteVideo } from '../../server/videos'
@@ -66,7 +66,6 @@ export function VideoDetail({
       title={video.title}
       actions={
         <Group gap="xs">
-          <Badge variant="default">{ATTENDEES_LABEL[video.watchedBy]}</Badge>
           <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
             <Pencil size={16} />
           </ActionIcon>

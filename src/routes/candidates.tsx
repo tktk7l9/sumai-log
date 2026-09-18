@@ -61,7 +61,7 @@ function Page() {
   const showTabs = properties.length > 0
 
   return (
-    <PageShell title="候補" fab>
+    <PageShell title="候補" titleHidden fab>
       <Stack gap="md">
         {showTabs ? (
           <SegmentedControl

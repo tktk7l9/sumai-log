@@ -18,7 +18,14 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+      {
+        name: 'viewport',
+        // interactive-widget=resizes-content: Android Chrome でソフトキーボードが出たとき
+        // レイアウトビューポート自体を縮めて、下から出るフォーム Drawer がキーボードに
+        // 隠れないようにする（iOS Safari は無視するので FormDrawer 側で visualViewport を見る）
+        content:
+          'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
+      },
       { name: 'robots', content: 'noindex, nofollow, noarchive' },
       // theme-color はライト/ダーク 2 本を RootDocument の <head> に直接書く
       // （head() の meta 配列は name が同じタグを 1 本にまとめてしまうため）

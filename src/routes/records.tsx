@@ -73,7 +73,7 @@ function Page() {
   }
 
   return (
-    <PageShell title="記録" fab>
+    <PageShell title="記録" titleHidden fab>
       <Stack gap="md">
         <SegmentedControl
           fullWidth

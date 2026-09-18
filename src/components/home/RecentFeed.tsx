@@ -103,7 +103,7 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
       )
     case 'event': {
       // calendar は m（表示月）が無いと今月にフォールバックし、他の月の予定は
-      // 選択状態で表示されない（UpcomingEvents.tsx と同じく d から m を導く）
+      // 選択状態で表示されない（HomeAgenda と同じく d から m を導く）
       const d = item.href.search?.d ?? ''
       return (
         <Link to="/calendar" search={{ m: d.slice(0, 7), d }} style={linkStyle}>

@@ -189,7 +189,7 @@ function Page() {
   }
 
   return (
-    <PageShell title="予定" fab>
+    <PageShell title="予定" titleHidden fab>
       <Stack gap="md">
         <Schedule
           date={date}
