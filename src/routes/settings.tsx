@@ -13,7 +13,7 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
@@ -406,6 +406,21 @@ function Page() {
             <Row label="環境" value={environment} />
             <Row label="写真の保管 (R2)" value={photosReady ? '有効' : '未設定'} />
           </Stack>
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>アプリについて</Title>
+          <Text size="sm" c="dimmed">
+            機能や見た目の変更は変更履歴にまとめています。
+          </Text>
+          <Button
+            renderRoot={(rootProps) => <Link {...rootProps} to="/changelog" />}
+            variant="default"
+          >
+            変更履歴を見る
+          </Button>
         </Stack>
       </Card>
     </PageShell>
