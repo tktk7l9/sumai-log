@@ -6,7 +6,6 @@ import {
   Image,
   Loader,
   Select,
-  SegmentedControl,
   Stack,
   TagsInput,
   Textarea,
@@ -20,7 +19,7 @@ import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
 import { useEffect, useRef, useState } from 'react'
 
-import { ATTENDEES, ATTENDEES_LABEL, type Video } from '../../db/schema'
+import type { Video } from '../../db/schema'
 import { extractFormError } from '../../lib/formError'
 import { parseYouTubeId } from '../../lib/youtube'
 import { saveVideo, type VideoInput } from '../../server/videos'
@@ -42,7 +41,6 @@ const empty: Values = {
   channel: null,
   thumbnailUrl: null,
   watchedOn: null,
-  watchedBy: 'both',
   tags: [],
   takeaways: null,
   vendorId: null,
@@ -205,13 +203,6 @@ export function VideoForm({
           onChange={(d) =>
             form.setFieldValue('watchedOn', d ? dayjs(d).format('YYYY-MM-DD') : null)
           }
-        />
-        <SegmentedControl
-          fullWidth
-          aria-label="観た人"
-          data={ATTENDEES.map((a) => ({ value: a, label: ATTENDEES_LABEL[a] }))}
-          value={form.values.watchedBy}
-          onChange={(v) => form.setFieldValue('watchedBy', v as Values['watchedBy'])}
         />
         <TagsInput
           label="タグ"

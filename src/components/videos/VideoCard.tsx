@@ -2,7 +2,6 @@ import { AspectRatio, Badge, Card, Center, Group, Image, Stack, Text } from '@ma
 import { Link } from '@tanstack/react-router'
 import { Film } from 'lucide-react'
 
-import { ATTENDEES_LABEL } from '../../db/schema'
 import { formatDateSlash } from '../../lib/calendar'
 import type { listVideos } from '../../server/videos'
 
@@ -51,9 +50,6 @@ export function VideoCard({ video }: { video: VideoRow }) {
                 {formatDateSlash(video.watchedOn)}
               </Text>
             ) : null}
-            <Badge variant="default" size="xs">
-              {ATTENDEES_LABEL[video.watchedBy]}
-            </Badge>
           </Group>
           {video.tags.length > 0 ? (
             <Group gap={4}>
