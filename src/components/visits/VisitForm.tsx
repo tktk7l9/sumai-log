@@ -1,4 +1,4 @@
-import { Button, SegmentedControl, Select, Stack, Textarea } from '@mantine/core'
+import { Button, Select, Stack, Textarea } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
@@ -7,7 +7,7 @@ import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 
-import { ATTENDEES, ATTENDEES_LABEL, type Event, type Visit } from '../../db/schema'
+import type { Event, Visit } from '../../db/schema'
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
 import { saveVisit, type VisitInput } from '../../server/visits'
 import type { PlaceWithLinks } from '../../server/repository'
@@ -26,7 +26,6 @@ const empty: Omit<Values, 'visitedOn'> = {
   placeId: null,
   vendorId: null,
   propertyId: null,
-  attendees: 'both',
   good: null,
   concerns: null,
   qa: null,
@@ -117,12 +116,6 @@ export function VisitForm({
           value={form.values.visitedOn ? new Date(`${form.values.visitedOn}T00:00:00`) : null}
           onChange={(d) => form.setFieldValue('visitedOn', d ? dayjs(d).format('YYYY-MM-DD') : '')}
           error={form.errors.visitedOn}
-        />
-        <SegmentedControl
-          fullWidth
-          aria-label="同行者"
-          data={ATTENDEES.map((a) => ({ value: a, label: ATTENDEES_LABEL[a] }))}
-          {...form.getInputProps('attendees')}
         />
         <Select
           label="予定"

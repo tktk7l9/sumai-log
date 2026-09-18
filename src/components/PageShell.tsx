@@ -1,4 +1,4 @@
-import { Container, Group, Stack, Text, Title } from '@mantine/core'
+import { Container, Group, Stack, Text, Title, VisuallyHidden } from '@mantine/core'
 
 export function PageShell({
   title,
@@ -6,6 +6,7 @@ export function PageShell({
   actions,
   fab = false,
   inlineDescription = false,
+  titleHidden = false,
   children,
 }: {
   /** 省略すると見出しブロックを出さない（ホームのように節見出しから始めるページ用）。
@@ -18,13 +19,20 @@ export function PageShell({
   fab?: boolean
   /** true なら見出しと説明文を縦積みではなく 1 行（折り返しあり）で並べる */
   inlineDescription?: boolean
+  /** true なら h1 を支援技術にだけ伝えて画面には出さない（下タブのラベルと同じ文言で
+   * 冗長になるページ用。見出し階層は保つ）。description と actions も出さない */
+  titleHidden?: boolean
   children?: React.ReactNode
 }) {
   return (
     <Container size="sm" px={0} className={fab ? 'fab-clearance' : undefined}>
       {/* 見出しと中身の間は 24px（セクション間と同じ）。見出しの中は 4px で束ねる */}
       <Stack gap="lg">
-        {title === undefined ? (
+        {titleHidden ? (
+          <VisuallyHidden>
+            <Title order={1}>{title}</Title>
+          </VisuallyHidden>
+        ) : title === undefined ? (
           actions ? (
             <Stack pt={4}>{actions}</Stack>
           ) : null

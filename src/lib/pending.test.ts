@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { pendingVisitEvents, upcomingEvents, type PendingEvent } from './pending'
+import { pendingVisitEvents, type PendingEvent } from './pending'
 
 const ev = (
   id: string,
@@ -35,20 +35,5 @@ describe('pendingVisitEvents', () => {
   })
   it('空なら空', () => {
     expect(pendingVisitEvents([], new Set(), now)).toEqual([])
-  })
-})
-
-describe('upcomingEvents', () => {
-  it('今日以降を開始順に limit 件', () => {
-    const events = [
-      ev('c', '2030-01-12'),
-      ev('a', '2030-01-10'),
-      ev('b', '2030-01-11'),
-      ev('past', '2030-01-09'),
-    ]
-    expect(upcomingEvents(events, '2030-01-10T08:00:00+09:00', 2).map((e) => e.id)).toEqual([
-      'a',
-      'b',
-    ])
   })
 })

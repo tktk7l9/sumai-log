@@ -6,7 +6,6 @@ import { HomeAgenda } from '../components/home/HomeAgenda'
 import { HomeNews } from '../components/home/HomeNews'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
-import { UpcomingEvents } from '../components/home/UpcomingEvents'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { listVendorNews } from '../server/news'
@@ -34,8 +33,7 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const { upcoming, pending, feed, members, agenda, agendaFrom, agendaTo, news } =
-    Route.useLoaderData()
+  const { pending, feed, members, agenda, agendaFrom, agendaTo, news } = Route.useLoaderData()
   return (
     // 節と節の間は PageShell の Stack（24px）が引き受ける。ここで入れ子にしない
     <PageShell>
@@ -45,7 +43,6 @@ function Home() {
       <VisuallyHidden>
         <Title order={1}>住まいログ</Title>
       </VisuallyHidden>
-      <UpcomingEvents events={upcoming} />
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} />
       <HomeNews items={news} />
       <PendingVisits events={pending} />
