@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
+import { PullToRefresh } from './PullToRefresh'
 
 /** ヘッダ右側のリンク（下タブに無いページ）。並びは表示順 */
 const HEADER_LINKS = [
@@ -118,7 +119,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </AppShell.Navbar>
 
-      <AppShell.Main className="app-main">{children}</AppShell.Main>
+      <AppShell.Main className="app-main">
+        <PullToRefresh>{children}</PullToRefresh>
+      </AppShell.Main>
 
       {/* 下タブは 56px。ホームインジケータ分は .tabbar の padding-bottom で足すので、
           中身は h="100%" にして残りの高さに収める */}
