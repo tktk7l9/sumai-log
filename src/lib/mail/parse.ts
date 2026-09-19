@@ -84,6 +84,12 @@ function stripInlineTags(line: string): string {
  * HTML は壊れていたり巨大だったりし得るため、ここでは本文を失わないことを
  * 優先し、タグ除去は自前の stripInlineTags、入力上限は stripTags と同じ
  * MAX_INPUT_LENGTH を超えたら空文字にする独自ガードで対応する。
+ *
+ * stripTags と違い strip→decode→strip の 2 回目の走査はしない。つまり
+ * エンティティ復号後に現れる `<...>`（`&lt;b&gt;` 等）は剥がさない
+ * （表示上そう書かれていた文字なので残す。本文は React がテキストとして
+ * 描画するので HTML として解釈されない。詳細は parse.test.ts の該当テスト
+ * 参照）。
  */
 export function htmlToText(html: string): string {
   if (html.length > MAX_INPUT_LENGTH) return ''
