@@ -12,6 +12,15 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-09-20',
+    title: '業者のメルマガをお知らせに取り込む',
+    items: [
+      'news@sumai-log.app に転送したメルマガが、業者のお知らせとして表示され、見学会は予定の情報レイヤーにも出る',
+      '業者の編集に「メールの差出人ドメイン」。一致しないメールは設定の「メール取込」で業者を選んで取り込める',
+      'メール由来のお知らせは「メール」バッジ付きで、開くと本文が読める',
+    ],
+  },
+  {
     date: '2026-09-19',
     title: '地図を Google マップに置き換え',
     items: [
