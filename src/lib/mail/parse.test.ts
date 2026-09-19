@@ -68,4 +68,8 @@ describe('toParsedMail', () => {
     const p = await toParsedMail({ text: 'x' })
     expect(p.from).toBe('')
   })
+  it('text も html も無ければ本文は空文字', async () => {
+    const p = await toParsedMail({ from: { address: 'a@b.com' } })
+    expect(p.text).toBe('')
+  })
 })
