@@ -21,7 +21,7 @@ import { toJstDateKey } from '../src/lib/jst.ts'
 import { splitForwardedBlock } from '../src/lib/mail/forwarded.ts'
 import { matchVendorByDomain } from '../src/lib/mail/match.ts'
 import { splitMbox } from '../src/lib/mail/mbox.ts'
-import { toParsedMail } from '../src/lib/mail/parse.ts'
+import { extractBody, toParsedMail } from '../src/lib/mail/parse.ts'
 import { inboundToNews } from '../src/lib/mail/toNews.ts'
 import { sqlString } from './lib/seed.mjs'
 
@@ -52,7 +52,12 @@ function loadVendors(path: string): { id: string; name: string; newsEmailDomain:
 async function main() {
   const { mbox, vendors: vendorsPath } = parseArgs(process.argv.slice(2))
   const vendors = loadVendors(vendorsPath)
-  const messages = splitMbox(readFileSync(mbox, 'utf8'))
+  // latin1（1 バイト = 1 コードユニット）で読む: mbox には Shift_JIS のような 8 ビットの
+  // 本文がそのまま入っていることがあり、utf8 として読むと壊れた時点で復元できなくなる。
+  // 区切り（'From ' 行）は ASCII なので分割は文字列のままで正しく、各メッセージは
+  // Buffer.from(part, 'latin1') でバイト列に戻して postal-mime に渡す（charset の
+  // 解釈は postal-mime に任せる）。
+  const messages = splitMbox(readFileSync(mbox, 'latin1'))
   const nowIso = new Date().toISOString()
   const receivedOn = toJstDateKey(nowIso)
 
@@ -65,12 +70,16 @@ async function main() {
   let withEvent = 0
 
   for (const raw of messages) {
-    const parsed = await toParsedMail(await PostalMime.parse(raw))
+    const email = await PostalMime.parse(Buffer.from(raw, 'latin1'))
+    const parsed = await toParsedMail(email)
+    // mbox は本人の Takeout（信頼できる入力）なので無条件に本文を作る
+    // （Worker 側は認可が通ってからだけ呼ぶ。src/lib/mail/parse.ts の extractBody 参照）
+    const body = extractBody(email)
     let fromAddress = parsed.from
     let subject = parsed.subject
     let sentOn = parsed.date ? toJstDateKey(parsed.date) : null
-    let bodyText = parsed.text
-    const block = splitForwardedBlock(parsed.text)
+    let bodyText = body.text
+    const block = splitForwardedBlock(body.text)
     if (block) {
       fromAddress = block.from ?? fromAddress
       subject = block.subject ?? subject
@@ -126,7 +135,7 @@ async function main() {
           subject,
           sentOn,
           bodyText,
-          parsed.truncated ? 1 : 0,
+          body.truncated ? 1 : 0,
           status,
           null,
           vendor?.id ?? null,
