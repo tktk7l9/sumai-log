@@ -44,10 +44,9 @@ export function HomeAgenda({
         // AgendaView が渡す date は 'YYYY-MM-DD HH:mm:ss'（実質 'YYYY-MM-DD'）。
         // dateKey で日付部分に切り出し、次の予定と同じ書式（formatDateWithWeekday）に揃える
         dateHeaderFormat={(date) => formatDateWithWeekday(dateKey(date))}
-        // headerFormat は常に `${開始} – ${終了}` というテンプレートで結合されるため
-        // 空文字を返しても「 – 」だけが残ってしまう（ライブラリの仕様）。
-        // 非表示にはできないので、コンパクトな 'M/D' 表記にする
-        headerFormat="M/D"
+        // 「9/19 – 10/16」のようなレンジ見出しは不要（所有者の要望、2026-09-19）。
+        // headerFormat では消せない（常に `${開始} – ${終了}` で結合される）ので Styles API で隠す
+        styles={{ agendaViewHeader: { display: 'none' } }}
         onEventClick={handleEventClick}
       />
     </Stack>

@@ -227,30 +227,98 @@ a:focus-visible {
 }
 
 /*
- * 上に引っ張って更新（src/components/PullToRefresh.tsx）のインジケータ。ヘッダの
- * すぐ下に丸いバッジで出す。z-index はヘッダ（AppShell の 100 番台）より上、
- * Drawer（200）より下。引いている間（data-pulling）は指に追従させるので transition を切る。
+ * 上に引っ張って更新（src/components/PullToRefresh.tsx）。iOS 標準の見せ方に合わせ、
+ * 本文の先頭に引いたぶんの空き（.ptr-space）を作り、その中央に放射状 12 本のスピナーを置く。
+ * 引いている間（data-pulling）は指に追従させるので height の transition を切り、離した後は
+ * 空きが縮むアニメーションで戻る。更新中（data-spinning）は 12 本を順に濃くして回す。
  */
-.ptr-indicator {
-  position: fixed;
-  top: calc(52px + env(safe-area-inset-top, 0px));
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--mantine-color-body);
-  color: var(--mantine-color-clay-6);
-  box-shadow: var(--mantine-shadow-md);
-  border: 1px solid var(--mantine-color-default-border);
-  z-index: 150;
-  pointer-events: none;
-  transition:
-    transform 200ms ease,
-    opacity 200ms ease;
+.ptr-space {
+  position: relative;
+  height: 0;
+  overflow: hidden;
+  transition: height 220ms ease;
 }
-.ptr-indicator[data-pulling] {
+.ptr-space[data-pulling] {
   transition: none;
+}
+.ptr-spinner {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 28px;
+  height: 28px;
+  margin-left: -14px;
+  color: var(--mantine-color-gray-6);
+}
+.ptr-spinner span {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 2.5px;
+  height: 28px;
+  margin-left: -1.25px;
+  transform-origin: 50% 50%;
+}
+.ptr-spinner span::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.ptr-spinner[data-spinning] span::before {
+  animation: ptr-fade 1s linear infinite;
+}
+.ptr-spinner[data-spinning] span:nth-child(1)::before {
+  animation-delay: -1s;
+}
+.ptr-spinner[data-spinning] span:nth-child(2)::before {
+  animation-delay: -0.9167s;
+}
+.ptr-spinner[data-spinning] span:nth-child(3)::before {
+  animation-delay: -0.8333s;
+}
+.ptr-spinner[data-spinning] span:nth-child(4)::before {
+  animation-delay: -0.75s;
+}
+.ptr-spinner[data-spinning] span:nth-child(5)::before {
+  animation-delay: -0.6667s;
+}
+.ptr-spinner[data-spinning] span:nth-child(6)::before {
+  animation-delay: -0.5833s;
+}
+.ptr-spinner[data-spinning] span:nth-child(7)::before {
+  animation-delay: -0.5s;
+}
+.ptr-spinner[data-spinning] span:nth-child(8)::before {
+  animation-delay: -0.4167s;
+}
+.ptr-spinner[data-spinning] span:nth-child(9)::before {
+  animation-delay: -0.3333s;
+}
+.ptr-spinner[data-spinning] span:nth-child(10)::before {
+  animation-delay: -0.25s;
+}
+.ptr-spinner[data-spinning] span:nth-child(11)::before {
+  animation-delay: -0.1667s;
+}
+.ptr-spinner[data-spinning] span:nth-child(12)::before {
+  animation-delay: -0.0833s;
+}
+@keyframes ptr-fade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ptr-spinner[data-spinning] span::before {
+    animation: none;
+    opacity: 0.6;
+  }
 }

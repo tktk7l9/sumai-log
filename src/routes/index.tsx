@@ -2,14 +2,14 @@ import { Title, VisuallyHidden } from '@mantine/core'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { PageShell } from '../components/PageShell'
+import { GlossaryPick } from '../components/home/GlossaryPick'
 import { HomeAgenda } from '../components/home/HomeAgenda'
 import { HomeNews } from '../components/home/HomeNews'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
-import { TermOfDay } from '../components/home/TermOfDay'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
-import { getTermOfDay } from '../server/glossary'
+import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
 // getSettings() 経由で members を取る（server/members.ts を route から直接 import
 // すると、同ファイルの createServerFn でない currentActorEmail 等がクライアント
@@ -24,19 +24,19 @@ export const Route = createFileRoute('/')({
   loader: async () => {
     // アジェンダ（これからの予定）ぶんの予定は listHomeEvents が agenda/agendaFrom/agendaTo
     // として一緒に返す（同じ 90 日〜365 日レンジを二重に問い合わせない）
-    const [home, feed, { members }, { news }, termOfDay] = await Promise.all([
+    const [home, feed, { members }, { news }, glossaryPick] = await Promise.all([
       listHomeEvents(),
       recentFeed(),
       getSettings(),
       listVendorNews({ data: { limit: HOME_NEWS_LIMIT } }),
-      getTermOfDay(),
+      pickGlossaryTerm(),
     ])
-    return { ...home, feed, members, news, termOfDay }
+    return { ...home, feed, members, news, glossaryPick }
   },
 })
 
 function Home() {
-  const { pending, feed, members, agenda, agendaFrom, agendaTo, news, termOfDay } =
+  const { pending, feed, members, agenda, agendaFrom, agendaTo, news, glossaryPick } =
     Route.useLoaderData()
   return (
     // 節と節の間は PageShell の Stack（24px）が引き受ける。ここで入れ子にしない
@@ -47,7 +47,7 @@ function Home() {
       <VisuallyHidden>
         <Title order={1}>住まいログ</Title>
       </VisuallyHidden>
-      <TermOfDay term={termOfDay} />
+      <GlossaryPick term={glossaryPick} />
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} />
       <HomeNews items={news} />
       <PendingVisits events={pending} />
