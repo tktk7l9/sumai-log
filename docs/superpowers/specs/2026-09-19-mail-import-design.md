@@ -173,8 +173,9 @@ ALTER TABLE vendors ADD COLUMN news_email_domain TEXT;   -- カンマ区切り�
 - `src/lib/mail/parse.ts` — postal-mime の結果を `ParsedMail`（from/subject/date/messageId/text/
   forwardedFor）に正規化。HTML → テキスト、上限。
 - `src/lib/mail/forwarded.ts` — Gmail 手動転送ブロックの解析（`splitForwardedBlock`）。
-- `src/lib/mail/route.ts` — 経路判定 `classifyRoute(parsed, allowlist)` →
-  `{ kind: 'auto'|'manual'|'system'|'rejected', forwardedBy, reason }`。
+- `src/lib/mail/route.ts` — 経路判定 `classifyRoute(parsed, allowlist, envelopeFrom)` →
+  `{ kind: 'auto'|'manual'|'system'|'rejected', forwardedBy, reason }`。認可はヘッダではなく
+  エンベロープ送信者（Email Routing が検証済み）で行う。
 - `src/lib/mail/match.ts` — `matchVendorByDomain(fromAddress, vendors)`・
   `normalizeDomains(input)`（フォーム保存用）。
 - `src/lib/mail/toNews.ts` — `inboundToNews(mail, vendorId)`（§3-7 の変換。extractEvent 呼び出し）。
