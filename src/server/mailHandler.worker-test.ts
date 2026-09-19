@@ -60,6 +60,7 @@ describe('handleInboundMail', () => {
     const [news] = await db.select().from(vendorNews)
     expect(news.url).toBe('mail:<auto1@vendor.example>')
     expect(news.eventStart).toBe('2026-09-27')
+    expect(mail.newsId).toBe(news.id)
   })
 
   it('自動転送 + 業者不一致 → unassigned（本文は保存）', async () => {
@@ -67,6 +68,7 @@ describe('handleInboundMail', () => {
     const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
     expect(r.status).toBe('unassigned')
     const [mail] = await db.select().from(inboundMails)
+    expect(mail.status).toBe('unassigned')
     expect(mail.bodyText).toContain('完成見学会')
     expect(await db.select().from(vendorNews)).toHaveLength(0)
   })
@@ -88,6 +90,44 @@ describe('handleInboundMail', () => {
     const [mail] = await db.select().from(inboundMails)
     expect(mail.status).toBe('rejected')
     expect(mail.bodyText).toBeNull()
+  })
+
+  it('reject された後に正しく転送されると、同じ Message-ID の行が imported に生き返る', async () => {
+    const vendorId = await vendor('vendor.example')
+    const rejectedRaw = AUTO.replace(
+      'X-Forwarded-For: owner@example.com news@sumai.example\r\n',
+      '',
+    )
+    const first = await handleInboundMail(msg(rejectedRaw).message, db, allow, NOW)
+    expect(first.status).toBe('rejected')
+
+    const second = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
+    expect(second.status).toBe('imported')
+
+    const rows = await db.select().from(inboundMails)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].status).toBe('imported')
+    expect(rows[0].bodyText).toContain('完成見学会')
+    expect(rows[0].forwardedBy).toBe('owner@example.com')
+    expect(rows[0].vendorId).toBe(vendorId)
+  })
+
+  it('reject が 2 回目は duplicate になり、行は増えない', async () => {
+    const rejectedRaw = AUTO.replace(
+      'X-Forwarded-For: owner@example.com news@sumai.example\r\n',
+      '',
+    )
+    const { message: m1, state: s1 } = msg(rejectedRaw)
+    const first = await handleInboundMail(m1, db, allow, NOW)
+    expect(first.status).toBe('rejected')
+    expect(s1.rejected).toBe('not forwarded by owner')
+
+    const { message: m2, state: s2 } = msg(rejectedRaw)
+    const second = await handleInboundMail(m2, db, allow, NOW)
+    expect(second.status).toBe('duplicate')
+    expect(s2.rejected).toBe('not forwarded by owner')
+
+    expect(await db.select().from(inboundMails)).toHaveLength(1)
   })
 
   it('手動転送は転送ブロックから元の差出人・日付・件名を復元して照合する', async () => {
