@@ -173,6 +173,20 @@ export async function reparseNewsEventDates(db: Db): Promise<{ checked: number; 
 }
 
 /** 「行く」で作った自分の予定（events）に紐づける */
+/** 1 件（業者名付き）。無ければ null。カレンダーの「行く」（?plan=）が使う */
+export async function getNewsById(
+  db: Db,
+  id: string,
+): Promise<(VendorNews & { vendorName: string }) | null> {
+  const [row] = await db
+    .select({ news: vendorNews, vendorName: vendors.name })
+    .from(vendorNews)
+    .innerJoin(vendors, eq(vendorNews.vendorId, vendors.id))
+    .where(eq(vendorNews.id, id))
+    .limit(1)
+  return row ? { ...row.news, vendorName: row.vendorName } : null
+}
+
 export async function linkPlannedEvent(db: Db, newsId: string, eventId: string): Promise<void> {
   await db
     .update(vendorNews)
