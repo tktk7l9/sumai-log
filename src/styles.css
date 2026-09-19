@@ -141,10 +141,16 @@ a:focus-visible {
   box-shadow: var(--sumai-lift);
 }
 
-/* Leaflet の地図。高さは親が決める */
+/* Google マップ（PlacesMap）。高さは親が決める。キー未設定の案内文もこの枠に出す */
 .places-map {
   width: 100%;
   height: 100%;
+}
+/* AdvancedMarker の content。下端中央が座標に乗るので、ピンの尖りをそこに合わせる */
+.place-pin-wrap {
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
 }
 
 .place-pin {

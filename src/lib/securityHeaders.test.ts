@@ -13,11 +13,23 @@ describe('applySecurityHeaders', () => {
     expect(headers.get('cross-origin-opener-policy')).toBe('same-origin')
   })
 
-  it('img-src に地理院タイルと i.ytimg.com が含まれる', () => {
+  it('img-src に Google マップのホストと i.ytimg.com が含まれ、地理院タイルは含まれない', () => {
     const headers = applySecurityHeaders(new Headers())
     const csp = headers.get('content-security-policy')
-    expect(csp).toContain('https://cyberjapandata.gsi.go.jp')
+    expect(csp).toContain('https://maps.googleapis.com')
+    expect(csp).toContain('https://maps.gstatic.com')
     expect(csp).toContain('https://i.ytimg.com')
+    expect(csp).not.toContain('cyberjapandata.gsi.go.jp')
+  })
+
+  it('connect-src は self と Google マップ（ベクタータイル）だけ', () => {
+    const headers = applySecurityHeaders(new Headers())
+    const csp = headers.get('content-security-policy') ?? ''
+    const connect = csp
+      .split(';')
+      .find((d) => d.trim().startsWith('connect-src'))
+      ?.trim()
+    expect(connect).toBe("connect-src 'self' https://maps.googleapis.com")
   })
 
   it('img-src に情報源（YouTube チャンネル）のアバターのホストが含まれる', () => {
