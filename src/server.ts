@@ -78,7 +78,9 @@ async function onEmail(message: ForwardableEmailMessage, env: Env): Promise<void
   const db = drizzle(env.DB, { schema })
   try {
     const r = await handleInboundMail(message, db, parseAllowlist(env.ACCESS_ALLOWED_EMAILS))
-    console.log(`mail: ${r.status} domain=${r.fromDomain ?? '-'} subject=${r.subject.slice(0, 40)}`)
+    // system（Gmail の転送先確認）の件名には確認コードが入るのでログには出さない
+    const subject = r.status === 'system' ? '' : ` subject=${r.subject.slice(0, 40)}`
+    console.log(`mail: ${r.status} domain=${r.fromDomain ?? '-'}${subject}`)
   } catch (e) {
     console.log(`mail: failed error=${e instanceof Error ? e.message : String(e)}`)
   }
