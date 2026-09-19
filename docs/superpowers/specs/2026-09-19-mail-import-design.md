@@ -62,7 +62,7 @@ Gmail 転送先の確認メール ─────────┘        ↓
      で本文ごと保存し、確認コードを設定ページで読めるようにする。`vendor_news` には入れない。
      `From` だけそれを装っていてもエンベロープが google.com 系でなければ
      `setReject('envelope sender not trusted')` で拒否する。
-   - 正規化後のエンベロープが `ACCESS_ALLOWED_EMAILS` に無ければ
+   - 正規化後のエンベロープが許可リスト（`ACCESS_ALLOWED_EMAILS` と secret `MAIL_ALLOWED_SENDERS` の和。転送元の Gmail がログイン用と別のときに後者へ入れる）に無ければ
      `setReject('envelope sender not allowed')` し、`status='rejected'`・`rejectReason` で残す
      （差出人・件名だけ。本文は保存しない）。ここが唯一の認可判定。
    - エンベロープが許可リストにあれば受理。**自動転送か手動転送か**（見た目の分類。認可には

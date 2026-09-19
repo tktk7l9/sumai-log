@@ -24,4 +24,6 @@ GOOGLE_MAPS_MAP_ID=
 # ランダムな local part を推奨、例 news-a1b2c3d4@sumai-log.app
 # 本番は `printf '%s' '<そのアドレス>' | npx wrangler secret put MAIL_INBOX_ADDRESS`。
 # 空なら設定ページに「未設定」と出るだけで、受信そのものには影響しない。
+# メール取込を受理する転送元の Gmail（ログインの許可リストに加えて認める。カンマ区切り）
+MAIL_ALLOWED_SENDERS=
 MAIL_INBOX_ADDRESS=
