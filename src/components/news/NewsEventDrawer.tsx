@@ -3,7 +3,9 @@ import { useServerFn } from '@tanstack/react-start'
 import { useEffect, useState } from 'react'
 
 import { formatDateWithWeekday } from '../../lib/calendar'
+import { toJstDateKey } from '../../lib/jst'
 import { isMailNews } from '../../lib/mail/toNews'
+import { planButtonState } from '../../lib/news/planButton'
 import { getMailBody } from '../../server/mails'
 import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
@@ -30,6 +32,8 @@ export function NewsEventDrawer({
   onViewEvent: () => void
 }) {
   const mail = isMailNews(news.url)
+  // 「行く」は日程を判定できた今後のお知らせにだけ出す（lib/news/planButton）。今日は JST
+  const plan = planButtonState(news, toJstDateKey(new Date().toISOString()))
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
@@ -55,13 +59,17 @@ export function NewsEventDrawer({
       <Text size="xs" c="dimmed">
         公開日 {formatDateWithWeekday(news.publishedOn)}
       </Text>
-      {news.plannedEventId ? (
+      {plan.kind === 'view' ? (
         <Button onClick={onViewEvent}>予定を見る</Button>
-      ) : (
+      ) : plan.kind === 'plan' ? (
         <Button onClick={onPlan} loading={planning}>
-          行く
+          {plan.label}
         </Button>
-      )}
+      ) : plan.kind === 'ended' ? (
+        <Text size="sm" c="dimmed">
+          この日程は終了しました
+        </Text>
+      ) : null}
       {mail && news.mailId ? <MailBody mailId={news.mailId} /> : null}
     </Stack>
   )
