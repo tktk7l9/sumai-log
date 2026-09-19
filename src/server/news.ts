@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 
 import { getDb } from '../db/client'
 import { vendorNews, vendors } from '../db/schema'
+import { isMailNews } from '../lib/mail/toNews'
 import { truncate } from '../lib/news/text'
 import { currentActorEmail } from './members'
 import { fetchAllVendorNews } from './newsFetcher'
@@ -94,7 +95,9 @@ export const planVisitFromNews = createServerFn({ method: 'POST' })
         placeId: null,
         vendorId: news.vendorId,
         propertyId: null,
-        note: news.url,
+        // メール由来のお知らせの url は `mail:<Message-ID>`（開けない内部識別子）なので
+        // 予定のメモには入れない。本文は設定ページ／お知らせのドロワーから読める。
+        note: isMailNews(news.url) ? null : news.url,
       },
       await currentActorEmail(),
     )

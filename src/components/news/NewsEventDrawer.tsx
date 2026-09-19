@@ -1,6 +1,10 @@
-import { Anchor, Button, Stack, Text } from '@mantine/core'
+import { Anchor, Badge, Button, Loader, ScrollArea, Stack, Text } from '@mantine/core'
+import { useServerFn } from '@tanstack/react-start'
+import { useEffect, useState } from 'react'
 
 import { formatDateWithWeekday } from '../../lib/calendar'
+import { isMailNews } from '../../lib/mail/toNews'
+import { getMailBody } from '../../server/mails'
 import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
 
@@ -10,6 +14,9 @@ import { EventBadge } from './EventBadge'
  * （src/components/news/NewsAgenda.tsx の FormDrawer）の両方で使う共通部品。
  * 「行く」で自分の予定に変換すると（router.invalidate 後、同じ news をこの props に
  * 渡し直せば）plannedEventId が付き、ボタンが自動的に「予定を見る」に変わる。
+ *
+ * メール由来（url が mail:）は外部リンクが無いので、タイトルを文字で出し本文を下に表示する
+ * （設計 2026-09-19 §5）。本文は開いたときに取りに行く（一覧の payload に本文を含めない）。
  */
 export function NewsEventDrawer({
   news,
@@ -22,14 +29,24 @@ export function NewsEventDrawer({
   onPlan: () => void
   onViewEvent: () => void
 }) {
+  const mail = isMailNews(news.url)
   return (
     <Stack gap="sm">
       <Text size="sm" c="dimmed">
         {news.vendorName}
       </Text>
-      <Anchor href={news.url} target="_blank" rel="noopener noreferrer" fw={600}>
-        {news.title}
-      </Anchor>
+      {mail ? (
+        <Stack gap={4}>
+          <Badge size="xs" variant="light" style={{ alignSelf: 'flex-start' }}>
+            メール
+          </Badge>
+          <Text fw={600}>{news.title}</Text>
+        </Stack>
+      ) : (
+        <Anchor href={news.url} target="_blank" rel="noopener noreferrer" fw={600}>
+          {news.title}
+        </Anchor>
+      )}
       <EventBadge
         eventKind={news.eventKind}
         eventStart={news.eventStart}
@@ -45,6 +62,40 @@ export function NewsEventDrawer({
           行く
         </Button>
       )}
+      {mail && news.mailId ? <MailBody mailId={news.mailId} /> : null}
     </Stack>
+  )
+}
+
+function MailBody({ mailId }: { mailId: string }) {
+  const load = useServerFn(getMailBody)
+  const [body, setBody] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    let cancelled = false
+    setBody(undefined)
+    load({ data: { id: mailId } })
+      .then((r) => {
+        if (!cancelled) setBody(r.body)
+      })
+      .catch(() => {
+        if (!cancelled) setBody(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mailId, load])
+  if (body === undefined) return <Loader size="sm" />
+  if (body === null)
+    return (
+      <Text size="sm" c="dimmed">
+        本文を読み込めませんでした。
+      </Text>
+    )
+  return (
+    <ScrollArea.Autosize mah="50vh" type="auto">
+      <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
+        {body}
+      </Text>
+    </ScrollArea.Autosize>
   )
 }
