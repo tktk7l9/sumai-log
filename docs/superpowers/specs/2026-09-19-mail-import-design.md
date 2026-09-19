@@ -42,18 +42,27 @@ Gmail 転送先の確認メール ─────────┘        ↓
    `setReject('too large')`。ログにも残さない（本文を読まないため）。
 2. **解析**: `postal-mime` で `message.raw` を解析（新規依存。design.md §7 の例外として明記）。
    `Message-ID`・`From`・`Subject`・`Date`・`text`・`html`・`X-Forwarded-For` を使う。
-3. **経路の検証**（偽装対策。差出人だけでは判定しない）。次のどれかなら受理:
-   - **自動転送**: `X-Forwarded-For` ヘッダ（Gmail が付ける。値は `元アドレス 転送先`）に
-     `ACCESS_ALLOWED_EMAILS` のどれかが含まれる。
-   - **手動転送**: `From` が `ACCESS_ALLOWED_EMAILS` のどれか。この場合、本文先頭の Gmail 転送
-     ブロック（`---------- Forwarded message ---------` に続く `From:` `Date:` `Subject:` 行。
-     英語/日本語 UI 両方の見出し語）から元の差出人・日付・件名を復元し、ブロックより下を本文にする。
-     ブロックが無ければ転送したメールそのものを対象にする。
-   - **システム**: `From` が `forwarding-noreply@google.com`（Gmail の転送先確認）。
-     `status='system'` で本文ごと保存し、確認コードを設定ページで読めるようにする。
-     `vendor_news` には入れない。
-   - どれでもなければ `setReject('not forwarded by owner')` し、`status='rejected'`・
-     `rejectReason` で残す（差出人・件名だけ。本文は保存しない）。
+3. **経路の検証**（認可は **エンベロープ送信者**＝Cloudflare Email Routing が SMTP レベルで
+   検証済みの `message.from` だけで行う。`From` ヘッダや `X-Forwarded-For` ヘッダはメール本文の
+   一部で誰でも書ける＝偽装できるため、認可には使わない）:
+   - `message.from` を正規化（`normalizeEnvelopeAddress`: 小文字化・`<>` を外す・ローカル部の
+     `+タグ` を除去）。Gmail の自動転送はエンベロープを `owner+caf_=news=<転送先>@gmail.com`
+     に書き換える（`+タグ` を戻すと本人のアドレスに一致する）ため、この正規化が必須。
+   - 正規化後のドメインが `google.com`（またはそのサブドメイン）かつ `From` ヘッダが
+     `forwarding-noreply@google.com`（Gmail の転送先確認）なら **システム**: `status='system'`
+     で本文ごと保存し、確認コードを設定ページで読めるようにする。`vendor_news` には入れない。
+     `From` だけそれを装っていてもエンベロープが google.com 系でなければ
+     `setReject('envelope sender not trusted')` で拒否する。
+   - 正規化後のエンベロープが `ACCESS_ALLOWED_EMAILS` に無ければ
+     `setReject('envelope sender not allowed')` し、`status='rejected'`・`rejectReason` で残す
+     （差出人・件名だけ。本文は保存しない）。ここが唯一の認可判定。
+   - エンベロープが許可リストにあれば受理。**自動転送か手動転送か**（見た目の分類。認可には
+     関係しない）は `From` ヘッダで決める: `From` が `ACCESS_ALLOWED_EMAILS` に無ければ
+     **自動転送**（メール自体が業者のもの。`forwardedBy` = 正規化後のエンベロープ）。
+     `From` も `ACCESS_ALLOWED_EMAILS` のどれかなら **手動転送**（本人が書いた／転送した。
+     本文先頭の Gmail 転送ブロック — `---------- Forwarded message ---------` に続く
+     `From:` `Date:` `Subject:` 行。英語/日本語 UI 両方の見出し語 — から元の差出人・日付・件名を
+     復元し、ブロックより下を本文にする。ブロックが無ければ転送したメールそのものを対象にする）。
 4. **重複**: `messageId`（元メールの `Message-ID`。手動転送のときも転送ブロック内に無いので
    転送メール自身の `Message-ID`）が `inbound_mails.message_id` に既にあれば何もしない。
    `Message-ID` が無いメールは `sha256(from + subject + date)` を `messageId` の代わりに使う
