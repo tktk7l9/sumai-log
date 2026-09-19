@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Stack, Text } from '@mantine/core'
+import { Button, Group, Stack, Text } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { Schedule } from '@mantine/schedule'
@@ -15,7 +15,7 @@ import { FormDrawer } from '../components/FormDrawer'
 import { NewsEventDrawer } from '../components/news/NewsEventDrawer'
 import { PageShell } from '../components/PageShell'
 import { extractErrorMessage } from '../lib/formError'
-import { dateKey, formatDateWithWeekday } from '../lib/calendar'
+import { dateKey } from '../lib/calendar'
 import { holidayName } from '../lib/holidays'
 import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../lib/scheduleLabels'
@@ -250,14 +250,6 @@ function Page() {
               お知らせ（情報）
             </Text>
           </Group>
-        </Group>
-        <Group gap="xs">
-          <Text fw={700}>{formatDateWithWeekday(selected)}</Text>
-          {holidayName(selected) ? (
-            <Badge color="red" variant="light">
-              {holidayName(selected)}
-            </Badge>
-          ) : null}
         </Group>
       </Stack>
 

@@ -1,15 +1,8 @@
-import { Loader, VisuallyHidden } from '@mantine/core'
+import { VisuallyHidden } from '@mantine/core'
 import { useLocation, useRouter } from '@tanstack/react-router'
-import { ArrowDown } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import {
-  PULL_HOLD,
-  PULL_THRESHOLD,
-  pullDistance,
-  pullOpacity,
-  shouldRefresh,
-} from '../lib/pullToRefresh'
+import { PULL_HOLD, pullDistance, pullOpacity, shouldRefresh } from '../lib/pullToRefresh'
 
 /**
  * スマホで、ページ先頭にいるときに下へ引っ張ると loader を取り直す（router.invalidate）。
@@ -90,30 +83,25 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router])
 
-  const armed = pull >= PULL_THRESHOLD
+  // iOS 標準（UIRefreshControl）と同じ見せ方: 本文の先頭に引いたぶんの空きができ、
+  // その中で放射状のスピナーが濃くなっていき、離すと回る。浮いたバッジは出さない
   return (
     <>
       <div
-        className="ptr-indicator"
+        className="ptr-space"
         data-pulling={pull > 0 && !refreshing ? '' : undefined}
-        style={{
-          transform: `translate(-50%, ${pull - 48}px)`,
-          opacity: pullOpacity(pull),
-        }}
+        style={{ height: pull }}
         aria-hidden={!refreshing}
       >
-        {refreshing ? (
-          <Loader size="sm" />
-        ) : (
-          <ArrowDown
-            size={18}
-            aria-hidden
-            style={{
-              transform: `rotate(${armed ? 180 : 0}deg)`,
-              transition: 'transform 150ms ease',
-            }}
-          />
-        )}
+        <div
+          className="ptr-spinner"
+          data-spinning={refreshing ? '' : undefined}
+          style={{ opacity: pullOpacity(pull) }}
+        >
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} style={{ transform: `rotate(${i * 30}deg)` }} />
+          ))}
+        </div>
       </div>
       <div role="status" aria-live="polite">
         {refreshing ? <VisuallyHidden>更新中</VisuallyHidden> : null}
