@@ -2,14 +2,14 @@ import { Card, Group, Stack, Text, Title } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 import { BookOpen } from 'lucide-react'
 
-import type { TermOfDay as TermOfDayRow } from '../../server/glossary'
+import type { GlossaryPick as GlossaryPickRow } from '../../server/glossary'
 
-/** ホームの「今日の用語」。日替わりで用語集から 1 語。押すと用語集の詳細へ */
-export function TermOfDay({ term }: { term: TermOfDayRow | null }) {
+/** ホームの「用語集から」。開くたびにランダムに 1 語。押すと用語集の詳細へ */
+export function GlossaryPick({ term }: { term: GlossaryPickRow | null }) {
   if (!term) return null
   return (
     <Stack gap="sm">
-      <Title order={2}>今日の用語</Title>
+      <Title order={2}>用語集から</Title>
       <Link
         to="/glossary/$termId"
         params={{ termId: term.id }}
