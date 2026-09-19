@@ -18,6 +18,11 @@ export type NewInbound = Omit<NewInboundMail, 'id' | 'createdAt' | 'updatedAt'>
  * あったときのその時点の status（無ければ null）。呼び出し側（handleInboundMail）は
  * これを見て「reject 済みの行を、後から正しく転送されてきた内容で生き返らせる」
  * （reviveRejectedInboundMail）か、素直に「重複」として扱うかを判断する。
+ *
+ * 挿入に失敗した直後の SELECT で行が見つからない（衝突した相手をその隙に誰かが
+ * 消した）ときは、例外にせず `existingStatus: null` を返す。呼び出し側はそれを
+ * 「重複」として扱い、1 通のメールを取りこぼすだけで済ませる（設定ページから
+ * 再取込できる。ここで投げると server.ts のログ 1 行に化けるだけで何も残らない）。
  */
 export async function insertInboundMail(
   db: Db,
@@ -35,6 +40,7 @@ export async function insertInboundMail(
     .from(inboundMails)
     .where(eq(inboundMails.messageId, row.messageId))
     .limit(1)
+  if (!existing) return { id, created: false, existingStatus: null }
   return { id: existing.id, created: false, existingStatus: existing.status }
 }
 
