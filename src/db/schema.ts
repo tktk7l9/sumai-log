@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm'
-import { index, integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  type AnySQLiteColumn,
+} from 'drizzle-orm/sqlite-core'
 
 import { CANDIDATE_STATUSES } from '../lib/status'
 
@@ -92,6 +99,9 @@ export const vendors = sqliteTable(
     newsFetchedAt: text('news_fetched_at'),
     /** 直近の取得失敗理由。成功時は null */
     newsFetchError: text('news_fetch_error'),
+    /** メール取込（design 2026-09-19）: メルマガの差出人ドメイン。カンマ区切り・小文字。
+     * 一致（完全一致またはサブドメイン）したメールをこの業者のお知らせにする */
+    newsEmailDomain: text('news_email_domain'),
     /** 代表者の顔写真。R2 キーは vendors/{id}/representative-display.jpg（vendorImageKeys）。
      * サムネ（-thumb.jpg）は同じ vendorId から決定的に決まるので別列は持たない */
     representativePhotoKey: text('representative_photo_key'),
@@ -229,6 +239,10 @@ export const vendorNews = sqliteTable(
     eventKind: text('event_kind'),
     /** 「行く」で作った自分の予定。予定が消えたら null に戻す */
     plannedEventId: text('planned_event_id').references(() => events.id, { onDelete: 'set null' }),
+    /** メール由来のお知らせ。本文は inbound_mails.body_text にある（二重保存しない） */
+    mailId: text('mail_id').references((): AnySQLiteColumn => inboundMails.id, {
+      onDelete: 'set null',
+    }),
     /** 初回取得の日時 */
     firstSeenAt: text('first_seen_at')
       .notNull()
@@ -236,6 +250,48 @@ export const vendorNews = sqliteTable(
     ...timestamps,
   },
   (t) => [index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn)],
+)
+
+export const INBOUND_STATUSES = ['imported', 'unassigned', 'rejected', 'system'] as const
+export type InboundStatus = (typeof INBOUND_STATUSES)[number]
+export const INBOUND_STATUS_LABEL: Record<InboundStatus, string> = {
+  imported: '取込',
+  unassigned: '未割当',
+  rejected: '拒否',
+  system: 'システム',
+}
+
+/**
+ * news@ に届いたメールの全記録（設計 2026-09-19 §4）。未割当の置き場と受信ログを兼ねる。
+ * 人ではなく Worker が作るので created_by は持たない。
+ */
+export const inboundMails = sqliteTable(
+  'inbound_mails',
+  {
+    id: id(),
+    /** 元メールの Message-ID（<> 付き）。無ければ 'hash:<sha256>' */
+    messageId: text('message_id').notNull().unique(),
+    /** 受信時刻 ISO-8601 */
+    receivedAt: text('received_at').notNull(),
+    /** 元の差出人（手動転送なら転送ブロックの From） */
+    fromAddress: text('from_address').notNull(),
+    /** 経路: 自動転送なら X-Forwarded-For の元アドレス、手動転送なら From、mbox 取込なら 'mbox' */
+    forwardedBy: text('forwarded_by'),
+    subject: text('subject').notNull(),
+    /** 元メールの日付 YYYY-MM-DD（JST）。無ければ null */
+    sentOn: text('sent_on'),
+    /** rejected は null（本文を保存しない） */
+    bodyText: text('body_text'),
+    bodyTruncated: integer('body_truncated', { mode: 'boolean' }).notNull().default(false),
+    status: text('status', { enum: INBOUND_STATUSES }).notNull(),
+    rejectReason: text('reject_reason'),
+    vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
+    newsId: text('news_id').references((): AnySQLiteColumn => vendorNews.id, {
+      onDelete: 'set null',
+    }),
+    ...timestamps,
+  },
+  (t) => [index('inbound_mails_status_received_idx').on(t.status, t.receivedAt)],
 )
 
 export const ATTENDEES = ['both', 'husband', 'wife'] as const
@@ -365,6 +421,8 @@ export type Event = typeof events.$inferSelect
 export type NewEvent = typeof events.$inferInsert
 export type VendorNews = typeof vendorNews.$inferSelect
 export type NewVendorNews = typeof vendorNews.$inferInsert
+export type InboundMail = typeof inboundMails.$inferSelect
+export type NewInboundMail = typeof inboundMails.$inferInsert
 export type Visit = typeof visits.$inferSelect
 export type NewVisit = typeof visits.$inferInsert
 export type Photo = typeof photos.$inferSelect

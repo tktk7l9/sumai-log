@@ -126,6 +126,7 @@ const newsBase: NewsEventRow = {
   eventEnd: '2030-01-05',
   eventKind: '完成見学会',
   plannedEventId: null,
+  mailId: null,
   firstSeenAt: '2030-01-01 00:00:00',
   createdAt: '2030-01-01 00:00:00',
   updatedAt: '2030-01-01 00:00:00',
