@@ -31,6 +31,10 @@ export type HandleResult = {
  * 読む → 経路判定 → inbound_mails に記録 → 業者が決まれば vendor_news へ。
  * 例外は呼び出し側（server.ts）でログにする。ctx.waitUntil は使わない。
  *
+ * 信頼モデル（src/lib/mail/route.ts 参照）: 認可は `message.from`（Cloudflare Email Routing
+ * が検証済みのエンベロープ送信者）だけで行う。ヘッダ（`From:` / `X-Forwarded-For`）は
+ * メール本文の一部で偽装できるため、`classifyRoute` の第三引数として渡すだけで認可には使わない。
+ *
  * auto/manual 経路は常に status: 'unassigned' で記録し、業者が決まったときだけ
  * importMailAsNews に imported へ上げさせる（お知らせ化に失敗しても行は unassigned の
  * ままなので、設定ページから再取込できる。imported かつ newsId が無い、という
@@ -55,7 +59,7 @@ export async function handleInboundMail(
 
   const email = await PostalMime.parse(message.raw)
   const parsed = await toParsedMail(email)
-  const route = classifyRoute(parsed, allowlist)
+  const route = classifyRoute(parsed, allowlist, message.from)
   const receivedOn = toJstDateKey(nowIso)
 
   if (route.kind === 'rejected') {
