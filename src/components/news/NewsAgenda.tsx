@@ -8,6 +8,7 @@ import { useState } from 'react'
 
 import { extractErrorMessage } from '../../lib/formError'
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
+import { isMailNews } from '../../lib/mail/toNews'
 import { newsToAgendaEvents, type NewsEventPayload } from '../../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../../lib/scheduleLabels'
 import { planVisitFromNews } from '../../server/news'
@@ -129,8 +130,13 @@ export function NewsAgenda({
           <Text size="sm" fw={600}>
             {item.title}
           </Text>
-          {item.eventKind || item.plannedEventId ? (
+          {item.eventKind || item.plannedEventId || isMailNews(item.url) ? (
             <Group gap={6} wrap="wrap" align="center">
+              {isMailNews(item.url) ? (
+                <Badge size="xs" variant="outline" color="gray">
+                  メール
+                </Badge>
+              ) : null}
               <EventBadge
                 eventKind={item.eventKind}
                 eventStart={item.eventStart}
