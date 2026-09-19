@@ -57,6 +57,7 @@ const empty: Values = {
   socialUrls: '',
   newsUrl: null,
   newsSource: null,
+  newsEmailDomain: null,
 }
 
 export function VendorForm({
@@ -291,6 +292,13 @@ export function VendorForm({
           clearable
           {...form.getInputProps('newsSource')}
           value={form.values.newsSource ?? null}
+        />
+        <TextInput
+          label="メールの差出人ドメイン"
+          description="メルマガの差出人（@ の右）。カンマ区切りで複数可。news@sumai-log.app に転送されたメールをこの業者のお知らせにします"
+          placeholder="example.com, mail.example.com"
+          {...form.getInputProps('newsEmailDomain')}
+          value={form.values.newsEmailDomain ?? ''}
         />
         <Textarea
           label="SNS の URL（1 行に 1 つ）"
