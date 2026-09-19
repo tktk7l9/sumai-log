@@ -10,20 +10,25 @@ import { PlaceSheet } from '../components/map/PlaceSheet'
 import { PlacesMapLazy } from '../components/map/PlacesMapLazy'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { toMarkers } from '../lib/mapMarkers'
+import { getMapConfig } from '../server/mapConfig'
 import { listLinkTargets, listPlaces } from '../server/places'
 
 export const Route = createFileRoute('/map')({
   component: Page,
   loader: async () => {
-    const [places, targets] = await Promise.all([listPlaces(), listLinkTargets()])
-    return { places, targets }
+    const [places, targets, mapConfig] = await Promise.all([
+      listPlaces(),
+      listLinkTargets(),
+      getMapConfig(),
+    ])
+    return { places, targets, mapConfig }
   },
 })
 
 type Filter = 'all' | 'visited' | 'planned'
 
 function Page() {
-  const { places, targets } = Route.useLoaderData()
+  const { places, targets, mapConfig } = Route.useLoaderData()
   const router = useRouter()
   const [filter, setFilter] = useState<Filter>('all')
   const [sheetId, setSheetId] = useState<string | null>(null)
@@ -51,7 +56,14 @@ function Page() {
 
   return (
     <div className="map-page" style={{ position: 'relative' }}>
-      <PlacesMapLazy markers={markers} focusId={sheetId} center={center} onSelect={setSheetId} />
+      <PlacesMapLazy
+        markers={markers}
+        focusId={sheetId}
+        center={center}
+        onSelect={setSheetId}
+        apiKey={mapConfig.apiKey}
+        mapId={mapConfig.mapId}
+      />
 
       <Stack gap={6} style={{ position: 'absolute', top: 8, left: 8, right: 56, zIndex: 1000 }}>
         {/* 影を持つのは FAB だけ。地図の上の板は罫線と面の色で浮かせる */}
@@ -83,9 +95,9 @@ function Page() {
         radius="xl"
         aria-label="現在地"
         onClick={locateMe}
-        // 右上には Leaflet のズームコントロール（PlacesMap で position: 'topright'）が
-        // 高さ約 64px + 上マージン 10px で乗るため、その下に配置して重なりを避ける
-        style={{ position: 'absolute', top: 82, right: 8, zIndex: 1000 }}
+        // 右上には Google マップのズームコントロール（PlacesMap で INLINE_END_BLOCK_START）が
+        // 高さ約 81px + 上マージン 10px で乗るため、その下に配置して重なりを避ける
+        style={{ position: 'absolute', top: 100, right: 8, zIndex: 1000 }}
       >
         <LocateFixed size={18} aria-hidden />
       </ActionIcon>

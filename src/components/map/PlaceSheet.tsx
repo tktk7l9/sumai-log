@@ -28,7 +28,7 @@ export function PlaceSheet({
       size={300}
       title={place?.name}
       padding="md"
-      // Leaflet の操作コントロール（地図タブの現在地ボタンなど）は z-index: 1000 で
+      // 地図の上に重ねた操作コントロール（地図タブの現在地ボタンなど）は z-index: 1000 で
       // 描かれるため、Mantine の既定（modal: 200）のままだとシートの下に隠れる
       zIndex={1300}
     >

@@ -9,7 +9,7 @@ import { PULL_HOLD, pullDistance, pullOpacity, shouldRefresh } from '../lib/pull
  * ページ自体は再読み込みしない（フォームや検索条件はそのまま）。
  *
  * 効かせない場面:
- * - 地図タブ（Leaflet のドラッグと衝突する）
+ * - 地図タブ（Google マップのドラッグと衝突する）
  * - Drawer / Modal の中（フォームをスクロールしたいだけ）
  * - 自前でスクロールする箱の中でその箱が先頭にいないとき
  * - ページが先頭にいないとき（window.scrollY > 0）
@@ -114,7 +114,7 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
 /** ドロワー・地図・自前スクロール中の箱から始まったタッチは引っ張り更新にしない */
 function canPullFrom(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return true
-  if (target.closest('[role="dialog"], .leaflet-container')) return false
+  if (target.closest('[role="dialog"], .places-map')) return false
   for (let el: Element | null = target; el && el !== document.body; el = el.parentElement) {
     if (el.scrollTop > 0) return false
   }

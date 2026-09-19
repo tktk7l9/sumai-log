@@ -13,3 +13,8 @@ MEMBERS=owner@example.com:甲:teal,partner@example.com:乙:pink
 # 本番でのみ使う値（ローカルでは空でよい）
 ACCESS_TEAM_DOMAIN=
 ACCESS_POLICY_AUD=
+
+# Google マップ（地図タブ）。Maps JavaScript API のキー（HTTP リファラー制限つき・README「Google マップ」）。
+# 空なら地図の代わりに案内文が出る。Map ID は省略可（省略時は Google のサンプル用 DEMO_MAP_ID）
+GOOGLE_MAPS_API_KEY=
+GOOGLE_MAPS_MAP_ID=
