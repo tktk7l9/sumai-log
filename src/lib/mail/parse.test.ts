@@ -25,7 +25,18 @@ describe('htmlToText', () => {
     const elapsed = performance.now() - start
     // 閉じる '>' が最後まで見つからないので、タグとして解釈せずそのまま残す。
     expect(result).toBe(html)
-    expect(elapsed).toBeLessThan(500)
+    // CI 環境での揺れを見込んだ緩めの上限（線形時間であることを確認できれば十分で、
+    // 手元計測では 1ms 未満）。O(n^2) に戻っていれば数秒〜まったく終わらない規模になる。
+    expect(elapsed).toBeLessThan(2000)
+  })
+  it('エンティティ復号後に現れた角括弧は剥がさない（表示上の文字として残す）', () => {
+    // stripTags の strip→decode→strip という 2 回目の走査はしない、という
+    // 意図的な仕様（parse.ts の htmlToText コメント参照）。メール本文の
+    // &lt;b&gt; は「<b> という文字を見せたい」という意図で書かれているので、
+    // 復号後にタグとして解釈して消してしまうと表示上の文字が失われる。
+    // 本文は React がテキストとして描画する（HTML として解釈されない）ため、
+    // ここで残すことに安全上の問題は無い。
+    expect(htmlToText('<p>&lt;b&gt;太字&lt;/b&gt;</p>')).toBe('<b>太字</b>')
   })
 })
 
