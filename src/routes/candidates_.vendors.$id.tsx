@@ -199,6 +199,9 @@ function Page() {
               }
             />
           ) : null}
+          {vendor.newsEmailDomain ? (
+            <Row label="メール差出人" value={vendor.newsEmailDomain.split(',').join(', ')} />
+          ) : null}
         </Stack>
       </Card>
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
