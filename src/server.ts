@@ -69,7 +69,8 @@ async function runInboundCleanup(env: Env): Promise<void> {
 }
 
 /**
- * news@sumai-log.app に届いたメール（Email Routing → このWorker）。設計 2026-09-19 §3。
+ * 転送先アドレス（secret MAIL_INBOX_ADDRESS）に届いたメール（Email Routing → この Worker）。
+ * 設計 2026-09-19 §3。
  * 例外は捕まえてログ 1 行にする（投げると Routing 側で再送・バウンスになる）。
  * 本文・アドレス全体はログに出さない。
  */

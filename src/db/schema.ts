@@ -275,7 +275,7 @@ export const inboundMails = sqliteTable(
     receivedAt: text('received_at').notNull(),
     /** 元の差出人（手動転送なら転送ブロックの From） */
     fromAddress: text('from_address').notNull(),
-    /** 経路: 自動転送なら X-Forwarded-For の元アドレス、手動転送なら From、mbox 取込なら 'mbox' */
+    /** 正規化したエンベロープ送信者（自動転送・手動転送とも）。mbox 取込は 'mbox' */
     forwardedBy: text('forwarded_by'),
     subject: text('subject').notNull(),
     /** 元メールの日付 YYYY-MM-DD（JST）。無ければ null */

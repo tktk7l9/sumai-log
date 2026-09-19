@@ -295,7 +295,7 @@ export function VendorForm({
         />
         <TextInput
           label="メールの差出人ドメイン"
-          description="メルマガの差出人（@ の右）。カンマ区切りで複数可。news@sumai-log.app に転送されたメールをこの業者のお知らせにします"
+          description="メルマガの差出人（@ の右）。カンマ区切りで複数可。転送先アドレスに転送されたメールをこの業者のお知らせにします"
           placeholder="example.com, mail.example.com"
           {...form.getInputProps('newsEmailDomain')}
           value={form.values.newsEmailDomain ?? ''}

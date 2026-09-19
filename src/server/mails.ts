@@ -23,7 +23,8 @@ export const listMailImport = createServerFn().handler(async () => {
     listInboundMails(db, { status: 'unassigned', limit: UNASSIGNED_LIMIT }),
     listInboundMails(db, { limit: RECENT_LIMIT }),
   ])
-  return { inboxAddress: env.MAIL_INBOX_ADDRESS, unassigned, recent }
+  // 転送先アドレスは secret（設計 §7）。未設定なら null を返して画面に「未設定」と出す
+  return { inboxAddress: env.MAIL_INBOX_ADDRESS || null, unassigned, recent }
 })
 
 /** 未割当メールに業者を選んで取り込む */

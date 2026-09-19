@@ -43,13 +43,13 @@
    * 既定を production にして、設定漏れは必ず「拒否」側に倒す。
    * ACCESS_TEAM_DOMAIN / ACCESS_POLICY_AUD は非秘密（Task 10 で Access アプリ作成時の値に置き換え済み）。
    * ACCESS_ALLOWED_EMAILS と MEMBERS は secret（`wrangler secret put`）。ここに書かない。
+   * メール取込の転送先アドレス MAIL_INBOX_ADDRESS も secret にする（設計 2026-09-19 §7）:
+   * 推測できないアドレスであること自体が偽装への緩和策なので、public リポジトリに置かない。
    */
   "vars": {
     "ENVIRONMENT": "production",
     // Task 10 で作成した Access アプリ（Zero Trust API 経由）の値。AUD は公開識別子。
     "ACCESS_TEAM_DOMAIN": "https://odd-bush-1f0d.cloudflareaccess.com",
     "ACCESS_POLICY_AUD": "5635dc6786c82c3d06c1e7942ae8a9e80b275acdd127e85fc3be3bec23300ba3", // gitleaks:allow（秘密でない公開識別子。Access アプリの AUD tag）
-    // メール取込（設計 2026-09-19）。転送先アドレス。非秘密（設定ページに表示する）
-    "MAIL_INBOX_ADDRESS": "news@sumai-log.app",
   },
 }

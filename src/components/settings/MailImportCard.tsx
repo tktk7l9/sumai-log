@@ -34,7 +34,8 @@ export function MailImportCard({
   recent,
   vendors,
 }: {
-  inboxAddress: string
+  /** 転送先アドレス（secret MAIL_INBOX_ADDRESS）。未設定なら null */
+  inboxAddress: string | null
   unassigned: InboundMail[]
   recent: InboundMail[]
   vendors: { id: string; name: string }[]
@@ -43,10 +44,11 @@ export function MailImportCard({
   const assign = useServerFn(assignMail)
   const remove = useServerFn(deleteMail)
   const [choice, setChoice] = useState<Record<string, string | null>>({})
+  // `<mailId>:assign` / `<mailId>:delete`。押したボタンだけを回すため、行 id だけでは足りない
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run(id: string, action: () => Promise<unknown>, done: string) {
-    setBusy(id)
+  async function run(key: string, action: () => Promise<unknown>, done: string) {
+    setBusy(key)
     try {
       await action()
       await router.invalidate()
@@ -63,7 +65,8 @@ export function MailImportCard({
       <Stack gap="sm">
         <Title order={2}>メール取込</Title>
         <Text size="sm">
-          転送先: <Code>{inboxAddress}</Code>
+          転送先:{' '}
+          {inboxAddress ? <Code>{inboxAddress}</Code> : '未設定（secret MAIL_INBOX_ADDRESS）'}
         </Text>
         <Text size="xs" c="dimmed">
           Gmail の「転送先アドレス」にこの宛先を追加し、確認コードは下の受信ログ（システム）で読む。
@@ -103,11 +106,11 @@ export function MailImportCard({
                   />
                   <Button
                     size="xs"
-                    disabled={!choice[m.id]}
-                    loading={busy === m.id}
+                    disabled={!choice[m.id] || busy === `${m.id}:delete`}
+                    loading={busy === `${m.id}:assign`}
                     onClick={() =>
                       run(
-                        m.id,
+                        `${m.id}:assign`,
                         () => assign({ data: { mailId: m.id, vendorId: choice[m.id]! } }),
                         'お知らせに取り込みました',
                       )
@@ -119,8 +122,11 @@ export function MailImportCard({
                     size="xs"
                     variant="subtle"
                     color="red"
-                    loading={busy === m.id}
-                    onClick={() => run(m.id, () => remove({ data: { id: m.id } }), '削除しました')}
+                    disabled={busy === `${m.id}:assign`}
+                    loading={busy === `${m.id}:delete`}
+                    onClick={() =>
+                      run(`${m.id}:delete`, () => remove({ data: { id: m.id } }), '削除しました')
+                    }
                   >
                     削除
                   </Button>

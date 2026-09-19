@@ -103,7 +103,7 @@ CREATE TABLE inbound_mails (
   message_id TEXT NOT NULL UNIQUE,          -- 元メールの Message-ID か 'hash:<sha256>'
   received_at TEXT NOT NULL,                -- ISO-8601（受信時刻）
   from_address TEXT NOT NULL,               -- 元の差出人（手動転送なら転送ブロックの From）
-  forwarded_by TEXT,                        -- 経路（自動転送: X-Forwarded-For の元アドレス / 手動転送: From）
+  forwarded_by TEXT,                        -- 正規化したエンベロープ送信者（自動転送・手動転送とも）／mbox 取込は 'mbox'
   subject TEXT NOT NULL,
   sent_on TEXT,                             -- 元メールの日付 YYYY-MM-DD（JST）
   body_text TEXT,                           -- rejected は NULL
@@ -132,7 +132,7 @@ ALTER TABLE vendors ADD COLUMN news_email_domain TEXT;   -- カンマ区切り�
   例 `example.com, mail.example.com`。保存時に小文字化・空白除去・`@` があれば右側だけ）。
   業者詳細にも表示（設定済みのときだけ）。
 - **設定 → 「メール取込」カード**（お知らせカードの下）:
-  - 転送先アドレス `news@sumai-log.app`（wrangler.jsonc の var `MAIL_INBOX_ADDRESS`。非秘密）と
+  - 転送先アドレス（secret `MAIL_INBOX_ADDRESS`。未設定なら「未設定（secret MAIL_INBOX_ADDRESS）」）と
     Gmail 側の手順 2 行。
   - **未割当** `N` 件: 各行に 受信日時・差出人・件名・本文の先頭 100 字、業者 Select、
     「取り込む」「削除」。取り込むと §3-7 と同じ変換で `vendor_news` に入り `status='imported'`。
@@ -145,7 +145,7 @@ ALTER TABLE vendors ADD COLUMN news_email_domain TEXT;   -- カンマ区切り�
 
 ## 6. 過去分の一括取込（一回きりのスクリプト）
 
-`scripts/import-mbox.mjs`（`npm run import:mbox -- seed.local/mail.mbox`）:
+`scripts/import-mbox.ts`（`npm run import:mbox -- seed.local/mail.mbox`）:
 
 1. mbox を `From ` 行で分割し、各メールを **Worker と同じ純粋関数**（`src/lib/mail/*` を
    Node から import。postal-mime は Node でも動く）で解析・判定する。`X-Forwarded-For` は
@@ -167,24 +167,31 @@ ALTER TABLE vendors ADD COLUMN news_email_domain TEXT;   -- カンマ区切り�
 
 ## 7. インフラ
 
+- **転送先アドレスは secret**（§3-3 の緩和策）: local part は推測できないランダムなもの
+  （`news-xxxxxxxx@sumai-log.app` の形）にし、リポジトリには書かない。本番は
+  `printf '%s' 'news-xxxxxxxx@sumai-log.app' | npx wrangler secret put MAIL_INBOX_ADDRESS`。
+  他の secret と同じく Keyway にも push する。`.dev.vars` では空でよい（設定ページに
+  「未設定」と出るだけ）。
 - **Email Routing ルール**（こちらが API で作成。Worker デプロイ後）:
   `POST /zones/f6370db1…/email/routing/rules`
-  `{ matchers:[{type:'literal',field:'to',value:'news@sumai-log.app'}], actions:[{type:'worker',value:['sumai-log']}], enabled:true, name:'news to worker' }`。
-  catch-all は drop のまま。
-- **wrangler.jsonc**: var `MAIL_INBOX_ADDRESS = "news@sumai-log.app"`（非秘密）。バインディングは
-  不要（受信は Routing 側の設定だけ）。
-- **本人**: Gmail →「メール転送と POP/IMAP」→ 転送先に `news@sumai-log.app` を追加 → 設定ページの
+  `{ matchers:[{type:'literal',field:'to',value:'<secret と同じアドレス>'}], actions:[{type:'worker',value:['sumai-log']}], enabled:true, name:'news to worker' }`。
+  matcher のアドレスは secret `MAIL_INBOX_ADDRESS` と同じでなければならない（設定ページに
+  出るアドレスが実際の宛先になる）。catch-all は drop のまま。
+- **wrangler.jsonc**: var は無し（`MAIL_INBOX_ADDRESS` は secret）。バインディングも不要
+  （受信は Routing 側の設定だけ）。
+- **本人**: Gmail →「メール転送と POP/IMAP」→ 転送先にそのアドレスを追加 → 設定ページの
   受信ログ（system 行）に出る確認コードを入力 → フィルタ `from:(<業者Aのドメイン> OR <業者Bのドメイン>)`
   に「転送」を設定。業者 2 社の差出人ドメインを業者フォームに入力。
 
 ## 8. コード構成
 
-- `src/lib/mail/parse.ts` — postal-mime の結果を `ParsedMail`（from/subject/date/messageId/text/
-  forwardedFor）に正規化。HTML → テキスト、上限。
+- `src/lib/mail/parse.ts` — postal-mime の結果を `ParsedMail`（from/subject/date/messageId/
+  forwardedFor）に正規化（`toParsedMail`。件名・アドレスは上限で切る）と、本文のテキスト化
+  （`extractBody`。HTML → テキスト、上限）。本文は認可の後でしか作らない（§3-2）。
 - `src/lib/mail/forwarded.ts` — Gmail 手動転送ブロックの解析（`splitForwardedBlock`）。
 - `src/lib/mail/route.ts` — 経路判定 `classifyRoute(parsed, allowlist, envelopeFrom)` →
   `{ kind: 'auto'|'manual'|'system'|'rejected', forwardedBy, reason }`。認可はヘッダではなく
-  エンベロープ送信者（Email Routing が検証済み）で行う。
+  エンベロープ送信者で行う（その限界は §3-3）。
 - `src/lib/mail/match.ts` — `matchVendorByDomain(fromAddress, vendors)`・
   `normalizeDomains(input)`（フォーム保存用）。
 - `src/lib/mail/toNews.ts` — `inboundToNews(mail, vendorId)`（§3-7 の変換。extractEvent 呼び出し）。
@@ -192,7 +199,8 @@ ALTER TABLE vendors ADD COLUMN news_email_domain TEXT;   -- カンマ区切り�
 - `src/server/mails.ts` — server fn（`listInboundMails`・`assignMail`・`deleteMail`）。
 - `src/server/mailHandler.ts` — `handleInboundMail(message, env)`（server.ts から呼ぶ）。
 - `src/server.ts` — `email` ハンドラ追加、`scheduled` に cleanup を追加。
-- `scripts/import-mbox.mjs` + `scripts/lib/mbox.mjs`（分割）。
+- `scripts/import-mbox.ts` + `src/lib/mail/mbox.ts`（分割。mbox 分割は lib に置いて
+  100% カバレッジのゲートに乗せる）。
 
 lib は 100% カバレッジ（既存ゲート）。repository/handler は vitest（workers）で
 `inbound_mails`→`vendor_news` まで通す。`wrangler dev` では
