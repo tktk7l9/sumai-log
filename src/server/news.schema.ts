@@ -38,4 +38,8 @@ export const newsEventsBetweenInput = z.object({ from: dateField, to: dateField 
 export type NewsEventsBetweenInput = z.input<typeof newsEventsBetweenInput>
 
 export const planVisitInput = z.object({ newsId: idField })
+/** 「行く」で予定フォームを開くときに 1 件だけ引く（/calendar?plan=<newsId>） */
+export const newsIdInput = z.object({ id: idField })
+/** フォームで保存した予定をお知らせに紐づける（plannedEventId） */
+export const linkNewsEventInput = z.object({ newsId: idField, eventId: idField })
 export type PlanVisitInput = z.input<typeof planVisitInput>

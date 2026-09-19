@@ -26,7 +26,9 @@ export function EventForm({
   onSaved,
 }: {
   event: EventWithLinks | null
-  defaults?: Partial<Pick<Values, 'date' | 'placeId' | 'vendorId' | 'propertyId'>>
+  defaults?: Partial<
+    Pick<Values, 'date' | 'placeId' | 'vendorId' | 'propertyId' | 'title' | 'note'>
+  >
   targets: Targets
   places: PlaceWithLinks[]
   onSaved: (id: string) => void
@@ -48,7 +50,7 @@ export function EventForm({
         note: event.note,
       }
     : {
-        title: '',
+        title: defaults?.title ?? '',
         kind: 'visit',
         date: defaults?.date ?? dayjs().format('YYYY-MM-DD'),
         allDay: false,
@@ -57,7 +59,7 @@ export function EventForm({
         placeId: defaults?.placeId ?? null,
         vendorId: defaults?.vendorId ?? null,
         propertyId: defaults?.propertyId ?? null,
-        note: null,
+        note: defaults?.note ?? null,
       }
   const form = useForm<Values>({
     initialValues: initial,
