@@ -4,7 +4,7 @@
  * このファイルは素の Node でテストできる。
  */
 
-import { stripTags } from '../news/text'
+import { MAX_INPUT_LENGTH, decodeEntities, truncate } from '../news/text'
 
 export const MAX_BODY_CHARS = 100_000
 
@@ -36,20 +36,65 @@ export type RawParsed = {
 const BLOCK_END = /<\/(p|div|tr|li|h[1-6]|blockquote|table|section|article)\s*>/gi
 const BR = /<br\s*\/?>/gi
 const DROP_BLOCKS = /<(style|script|head)\b[\s\S]*?<\/\1\s*>/gi
-// 改行への置き換えが終わった後、行内に残る残りのタグ（<b> 等のインライン要素）を
-// 消す。stripTags はタグ 1 個を空白 1 個に置き換える仕様（隣接タグの単語が結合
-// しないため）なので、そのまま行に通すと `<b>ご案内</b>` のようなインライン
-// タグの前後に余計な空白が入ってしまう。ここで先にタグ記号だけを空文字で
-// 落としてから stripTags に渡す（実体参照の解決・残る空白の正規化だけを
-// stripTags に任せる）。
-const REMAINING_TAG = /<[^>]*>/g
 
-/** 段落と改行を保ってテキストにする（タグは stripTags の前に自前で除去し、余計な空白を入れない） */
+/**
+ * 改行への置き換えが終わった後、行内に残る残りのタグ（<b> 等のインライン要素や、
+ * BLOCK_END では消えない開始タグ `<div>` `<p>` 等）を取り除く。
+ *
+ * `<[^>]*>` を `.replace(..., 'g')` で当てる方式は使わない: src/lib/news/text.ts
+ * の stripTagsOnce と同じ理由で、閉じない `<` が大量にある入力（例: `<` を
+ * 20万個並べただけの文字列）でグローバルフラグの正規表現は一致に失敗する
+ * たびに次の位置からやり直すため O(n^2) になりうる（htmlToText はメール本文の
+ * HTML をそのまま受け取るため、ここで詰まると受信処理全体が固まる）。ここでは
+ * indexOf だけを使い、走査位置 i が単調に増える線形走査（O(n)）にする。
+ *
+ * 閉じる `>` が見つからない `<` に出会ったら、そこから先はタグとして解釈せず
+ * そのままテキストとして残す（stripTags のように「残りを丸ごと捨てる」ことは
+ * しない。壊れた/巨大な入力でも本文を失わない方をここでは優先する）。
+ */
+function stripInlineTags(line: string): string {
+  let result = ''
+  let i = 0
+  const n = line.length
+  while (i < n) {
+    const lt = line.indexOf('<', i)
+    if (lt === -1) {
+      result += line.slice(i)
+      break
+    }
+    result += line.slice(i, lt)
+    const gt = line.indexOf('>', lt)
+    if (gt === -1) {
+      result += line.slice(lt)
+      break
+    }
+    i = gt + 1
+  }
+  return result
+}
+
+/**
+ * 段落と改行を保ってテキストにする。タグの除去は stripInlineTags（線形走査）
+ * で行い、実体参照の解決だけ decodeEntities（src/lib/news/text.ts）に任せる。
+ *
+ * stripTags 自体はここでは使わない: stripTags はタグ 1 個を空白 1 個に
+ * 置き換える仕様（隣接タグの単語が結合しないため）なので、`<b>ご案内</b>`
+ * のようなインラインタグの前後に余計な空白が入ってしまう上、閉じない `<`
+ * に出会うと「残りを丸ごと捨てる」（src/lib/news/text.ts 参照）。メール本文の
+ * HTML は壊れていたり巨大だったりし得るため、ここでは本文を失わないことを
+ * 優先し、タグ除去は自前の stripInlineTags、入力上限は stripTags と同じ
+ * MAX_INPUT_LENGTH を超えたら空文字にする独自ガードで対応する。
+ */
 export function htmlToText(html: string): string {
+  if (html.length > MAX_INPUT_LENGTH) return ''
   const withBreaks = html.replace(DROP_BLOCKS, '').replace(BR, '\n').replace(BLOCK_END, '\n')
   return withBreaks
     .split('\n')
-    .map((line) => stripTags(line.replace(REMAINING_TAG, '')))
+    .map((line) =>
+      decodeEntities(stripInlineTags(line))
+        .replace(/[ \t]+/g, ' ')
+        .trim(),
+    )
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
@@ -62,7 +107,10 @@ export function normalizeBody(text: string): { text: string; truncated: boolean 
     .replace(/\n{3,}/g, '\n\n')
     .trim()
   if (collapsed.length <= MAX_BODY_CHARS) return { text: collapsed, truncated: false }
-  return { text: collapsed.slice(0, MAX_BODY_CHARS), truncated: true }
+  // collapsed.slice(0, MAX_BODY_CHARS) は使わない: サロゲートペア（絵文字等）の
+  // 真ん中で切れることがある。truncate（src/lib/news/text.ts）は割れる位置なら
+  // 1 文字分手前で切ってくれる。
+  return { text: truncate(collapsed, MAX_BODY_CHARS), truncated: true }
 }
 
 export async function fallbackMessageId(

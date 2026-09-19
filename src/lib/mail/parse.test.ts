@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { MAX_INPUT_LENGTH } from '../news/text'
 import { MAX_BODY_CHARS, fallbackMessageId, htmlToText, normalizeBody, toParsedMail } from './parse'
 
 describe('htmlToText', () => {
@@ -11,6 +12,21 @@ describe('htmlToText', () => {
   it('style / script の中身は出さない', () => {
     expect(htmlToText('<style>p{}</style><p>本文</p><script>x()</script>')).toBe('本文')
   })
+  it('MAX_INPUT_LENGTH を超えたら空文字（stripTags と同じ上限）', () => {
+    expect(htmlToText('a'.repeat(MAX_INPUT_LENGTH + 1))).toBe('')
+  })
+  it('閉じない "<" が大量にあっても線形時間で終わり、テキストとして残す', () => {
+    // 20万個の '<' + 'x'。`<[^>]*>` の正規表現を .replace(..., 'g') で当てる
+    // 実装だと、一致に失敗するたびに次の位置からやり直すため O(n^2) になり
+    // このテストは終わらない（実装は stripInlineTags を参照）。
+    const html = '<'.repeat(200_000) + 'x'
+    const start = performance.now()
+    const result = htmlToText(html)
+    const elapsed = performance.now() - start
+    // 閉じる '>' が最後まで見つからないので、タグとして解釈せずそのまま残す。
+    expect(result).toBe(html)
+    expect(elapsed).toBeLessThan(500)
+  })
 })
 
 describe('normalizeBody', () => {
@@ -20,6 +36,16 @@ describe('normalizeBody', () => {
   it('上限を超えたら切り捨てて truncated', () => {
     const r = normalizeBody('x'.repeat(MAX_BODY_CHARS + 10))
     expect(r.text.length).toBe(MAX_BODY_CHARS)
+    expect(r.truncated).toBe(true)
+  })
+  it('上限ちょうどの境界にサロゲートペアがあっても割らずに手前で切る', () => {
+    // 'x' を (MAX_BODY_CHARS - 1) 個 + 😀（サロゲートペア 2 コードユニット）+ 'y'。
+    // 単純な slice(0, MAX_BODY_CHARS) だと 😀 の上位サロゲートだけが残って
+    // 不正な文字列になる。
+    const input = 'x'.repeat(MAX_BODY_CHARS - 1) + '😀' + 'y'
+    const r = normalizeBody(input)
+    expect(r.text.length).toBe(MAX_BODY_CHARS - 1)
+    expect(r.text.endsWith('x')).toBe(true)
     expect(r.truncated).toBe(true)
   })
 })
