@@ -20,6 +20,7 @@ export async function reset() {
     'tags',
     'sources',
     'places',
+    'inbound_mails',
     'vendor_news',
     'vendors',
     'properties',
