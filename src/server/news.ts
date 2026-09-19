@@ -2,13 +2,20 @@ import { createServerFn } from '@tanstack/react-start'
 import { eq } from 'drizzle-orm'
 
 import { getDb } from '../db/client'
-import { vendorNews, vendors } from '../db/schema'
+import { events, vendorNews, vendors } from '../db/schema'
 import { isMailNews } from '../lib/mail/toNews'
 import { truncate } from '../lib/news/text'
 import { currentActorEmail } from './members'
 import { fetchAllVendorNews } from './newsFetcher'
-import { listVendorNewsInput, newsEventsBetweenInput, planVisitInput } from './news.schema'
 import {
+  linkNewsEventInput,
+  listVendorNewsInput,
+  newsEventsBetweenInput,
+  newsIdInput,
+  planVisitInput,
+} from './news.schema'
+import {
+  getNewsById,
   linkPlannedEvent,
   listNews,
   listNewsEventsBetween,
@@ -19,7 +26,13 @@ import {
 
 // バリデータは news.schema.ts から（テストの都合で分離した理由はそちら参照）。
 // 公開する import パス（'./news' から取れる）は変えない。
-export { listVendorNewsInput, newsEventsBetweenInput, planVisitInput }
+export {
+  linkNewsEventInput,
+  listVendorNewsInput,
+  newsEventsBetweenInput,
+  newsIdInput,
+  planVisitInput,
+}
 
 // events.schema.ts の eventInput と同じ上限（予定のタイトルは最大 200 字）。
 const EVENT_TITLE_MAX = 200
@@ -103,4 +116,31 @@ export const planVisitFromNews = createServerFn({ method: 'POST' })
     )
     await linkPlannedEvent(db, news.id, eventId)
     return { eventId }
+  })
+
+/** 「行く」で予定フォームを開くための 1 件取得（/calendar?plan=<newsId>） */
+export const getVendorNews = createServerFn()
+  .validator(newsIdInput)
+  .handler(async ({ data }) => ({ news: await getNewsById(getDb(), data.id) }))
+
+/**
+ * 予定フォームで保存した予定をお知らせに紐づける（所有者の要望 2026-09-20: 「行く」は
+ * 即作成ではなくフォームを開き、保存後にここで planned_event_id を付ける）。
+ * 既に紐づいていればそのまま（上書きしない）。予定が無ければ 404。
+ */
+export const linkNewsToEvent = createServerFn({ method: 'POST' })
+  .validator(linkNewsEventInput)
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [news] = await db.select().from(vendorNews).where(eq(vendorNews.id, data.newsId)).limit(1)
+    if (!news) throw new Response('Not Found', { status: 404 })
+    if (news.plannedEventId) return { eventId: news.plannedEventId }
+    const [event] = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.id, data.eventId))
+      .limit(1)
+    if (!event) throw new Response('Not Found', { status: 404 })
+    await linkPlannedEvent(db, news.id, event.id)
+    return { eventId: event.id }
   })
