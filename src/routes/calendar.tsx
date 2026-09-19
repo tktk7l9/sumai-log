@@ -17,10 +17,11 @@ import { PageShell } from '../components/PageShell'
 import { extractErrorMessage } from '../lib/formError'
 import { dateKey } from '../lib/calendar'
 import { holidayName } from '../lib/holidays'
+import { planEventDefaults } from '../lib/news/planDefaults'
 import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../lib/scheduleLabels'
 import { deleteEvent, listEventsBetween } from '../server/events'
-import { newsEventsBetween, planVisitFromNews } from '../server/news'
+import { getVendorNews, linkNewsToEvent, newsEventsBetween } from '../server/news'
 import { listLinkTargets, listPlaces } from '../server/places'
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 
@@ -37,26 +38,29 @@ const search = z.object({
     .optional(),
   // 表示ビュー。年表示はヘッダーから選べても URL には持たせない
   v: z.enum(['day', 'week', 'month']).optional(),
+  // お知らせの「行く」から来たとき: そのお知らせを初期値にした予定フォームを開く
+  plan: z.string().uuid().optional(),
 })
 
 export const Route = createFileRoute('/calendar')({
   component: Page,
   validateSearch: (s) => search.parse(s),
-  loaderDeps: ({ search }) => ({ m: search.m, d: search.d, v: search.v }),
+  loaderDeps: ({ search }) => ({ m: search.m, d: search.d, v: search.v, plan: search.plan }),
   loader: async ({ deps }) => {
     // サーバー側で「今日」を決める（クライアントの時計に依らない）
     const date = deps.d ?? (deps.m ? `${deps.m}-01` : todayKeyJst())
     const view = deps.v ?? 'month'
     const { from, to } = visibleRange(date, view)
-    const [range, targets, places, news] = await Promise.all([
+    const [range, targets, places, news, planNews] = await Promise.all([
       listEventsBetween({ data: { from, to } }),
       listLinkTargets(),
       listPlaces(),
       // 情報レイヤー用。月をまたいではみ出す表示範囲（visibleRange）と同じ from/to で取る
       // （月単位で区切ると、月表示が前後にはみ出す週ぶんの情報が漏れる）
       newsEventsBetween({ data: { from, to } }),
+      deps.plan ? getVendorNews({ data: { id: deps.plan } }).then((r) => r.news) : null,
     ])
-    return { ...range, targets, places, date, newsEvents: news.news }
+    return { ...range, targets, places, date, newsEvents: news.news, planNews }
   },
 })
 
@@ -87,12 +91,12 @@ function visibleRange(date: string, view: 'day' | 'week' | 'month'): { from: str
 }
 
 function Page() {
-  const { events, targets, places, date, newsEvents } = Route.useLoaderData()
+  const { events, targets, places, date, newsEvents, planNews } = Route.useLoaderData()
   const { d, v } = Route.useSearch()
   const navigate = useNavigate({ from: '/calendar' })
   const router = useRouter()
   const remove = useServerFn(deleteEvent)
-  const planVisit = useServerFn(planVisitFromNews)
+  const linkNews = useServerFn(linkNewsToEvent)
   const [editing, setEditing] = useState<EventWithLinks | null>(null)
   const [creating, setCreating] = useState(false)
   // 情報レイヤーのドロワーは id だけ持つ（news 自体は loader データから毎回引き直す）。
@@ -100,7 +104,6 @@ function Page() {
   // 同じドロワーを開いたまま plannedEventId 付きの最新の news に自然と切り替わり、
   // ボタンが「行く」→「予定を見る」に変わる。
   const [newsDrawerNewsId, setNewsDrawerNewsId] = useState<string | null>(null)
-  const [planningNewsId, setPlanningNewsId] = useState<string | null>(null)
   // 'year' は URL に持たせない（v の search スキーマに無い）ので、ヘッダーから
   // 選ばれても表示だけローカル state で切り替える
   const [view, setView] = useState<ScheduleViewLevel>(v ?? 'month')
@@ -160,19 +163,26 @@ function Page() {
     }
   }
 
-  /** お知らせドロワーの「行く」。予定化してから同じ日を選択する（ドロワーは開いたまま） */
-  async function handlePlanVisit(news: NewsEventRow) {
-    setPlanningNewsId(news.id)
+  /** お知らせドロワーの「行く」。即作成せず ?plan= を付けて初期値入りの予定フォームを開く */
+  function handlePlanVisit(news: NewsEventRow) {
+    setNewsDrawerNewsId(null)
+    navigate({ search: (s) => ({ ...s, plan: news.id }), replace: true })
+  }
+
+  // 「行く」から来た予定フォーム（?plan=）。初期値は planEventDefaults。閉じたら plan を外す
+  const planDefaults = planNews ? planEventDefaults(planNews) : null
+  function closePlan() {
+    navigate({ search: (s) => ({ ...s, plan: undefined }), replace: true })
+  }
+  async function handlePlanSaved(eventId: string) {
+    if (!planNews) return
     try {
-      await planVisit({ data: { newsId: news.id } })
+      await linkNews({ data: { newsId: planNews.id, eventId } })
       await router.invalidate()
-      notifications.show({ message: '予定を追加しました' })
-      if (news.eventStart) navigateToDay(news.eventStart)
     } catch (error) {
       notifications.show({ message: extractErrorMessage(error), color: 'red' })
-    } finally {
-      setPlanningNewsId(null)
     }
+    closePlan()
   }
 
   /** お知らせドロワーの「予定を見る」（既に「行く」済み）。自分の予定の編集ドロワーへ */
@@ -263,6 +273,17 @@ function Page() {
           onSaved={() => setCreating(false)}
         />
       </FormDrawer>
+      <FormDrawer opened={planDefaults !== null} onClose={closePlan} title="予定を追加">
+        {planDefaults ? (
+          <EventForm
+            event={null}
+            defaults={planDefaults}
+            targets={targets}
+            places={places}
+            onSaved={handlePlanSaved}
+          />
+        ) : null}
+      </FormDrawer>
       <FormDrawer opened={editing !== null} onClose={() => setEditing(null)} title="予定を編集">
         {editing ? (
           <Stack gap="md">
@@ -286,7 +307,7 @@ function Page() {
         {newsDrawerNews ? (
           <NewsEventDrawer
             news={newsDrawerNews}
-            planning={planningNewsId === newsDrawerNews.id}
+            planning={false}
             onPlan={() => handlePlanVisit(newsDrawerNews)}
             onViewEvent={() => handleViewPlannedEvent(newsDrawerNews)}
           />

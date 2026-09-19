@@ -1,17 +1,13 @@
 import { Badge, Group, Stack, Text, UnstyledButton } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
 import { AgendaView } from '@mantine/schedule'
 import type { AgendaViewProps, ScheduleEventData } from '@mantine/schedule'
-import { useNavigate, useRouter } from '@tanstack/react-router'
-import { useServerFn } from '@tanstack/react-start'
+import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
-import { extractErrorMessage } from '../../lib/formError'
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
 import { isMailNews } from '../../lib/mail/toNews'
 import { newsToAgendaEvents, type NewsEventPayload } from '../../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../../lib/scheduleLabels'
-import { planVisitFromNews } from '../../server/news'
 import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
 import { FormDrawer } from '../FormDrawer'
@@ -64,11 +60,8 @@ export function NewsAgenda({
   /** true なら「9/18 – 9/18」のようなレンジ見出しを出さない（ホーム用） */
   hideHeader?: boolean
 }) {
-  const router = useRouter()
   const navigate = useNavigate()
-  const planVisit = useServerFn(planVisitFromNews)
   const [drawerNewsId, setDrawerNewsId] = useState<string | null>(null)
-  const [planningId, setPlanningId] = useState<string | null>(null)
 
   const agendaEvents = newsToAgendaEvents(items)
   const range = rangeStart && rangeEnd ? { start: rangeStart, end: rangeEnd } : agendaRange(items)
@@ -80,17 +73,12 @@ export function NewsAgenda({
     if (payload) setDrawerNewsId(payload.newsId)
   }
 
-  async function handlePlan(news: NewsEventRow) {
-    setPlanningId(news.id)
-    try {
-      await planVisit({ data: { newsId: news.id } })
-      await router.invalidate()
-      notifications.show({ message: '予定を追加しました' })
-    } catch (error) {
-      notifications.show({ message: extractErrorMessage(error), color: 'red' })
-    } finally {
-      setPlanningId(null)
-    }
+  /** ドロワーの「行く」。即作成せず、カレンダーで予定フォーム（初期値入り）を開く（?plan=）。
+   * ボタンは日程のあるお知らせにしか出ない（planButtonState）ので eventStart はある */
+  function handlePlan(news: NewsEventRow) {
+    setDrawerNewsId(null)
+    const key = news.eventStart ?? news.publishedOn
+    navigate({ to: '/calendar', search: { m: key.slice(0, 7), d: key, plan: news.id } })
   }
 
   /** ドロワーの「予定を見る」（既に「行く」済み）。カレンダーの該当日へ移動する
@@ -177,7 +165,7 @@ export function NewsAgenda({
         {drawerNews ? (
           <NewsEventDrawer
             news={drawerNews}
-            planning={planningId === drawerNews.id}
+            planning={false}
             onPlan={() => handlePlan(drawerNews)}
             onViewEvent={() => handleViewEvent(drawerNews)}
           />
