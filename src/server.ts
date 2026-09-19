@@ -77,7 +77,12 @@ async function runInboundCleanup(env: Env): Promise<void> {
 async function onEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
   const db = drizzle(env.DB, { schema })
   try {
-    const r = await handleInboundMail(message, db, parseAllowlist(env.ACCESS_ALLOWED_EMAILS))
+    // メールの認可はログインの許可リストに加えて、転送元の Gmail（secret MAIL_ALLOWED_SENDERS・
+    // カンマ区切り）も受理する。ログインできるアドレスとメルマガが届くアドレスは別でよい
+    const allowlist = parseAllowlist(
+      [env.ACCESS_ALLOWED_EMAILS, env.MAIL_ALLOWED_SENDERS].filter(Boolean).join(','),
+    )
+    const r = await handleInboundMail(message, db, allowlist)
     // system（Gmail の転送先確認）の件名には確認コードが入るのでログには出さない
     const subject = r.status === 'system' ? '' : ` subject=${r.subject.slice(0, 40)}`
     console.log(`mail: ${r.status} domain=${r.fromDomain ?? '-'}${subject}`)

@@ -115,7 +115,7 @@ curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=owner@example.com
   -H 'Content-Type: message/rfc822' --data-binary @test/fixtures/mail-auto.eml
 ```
 
-認可はエンベロープ送信者（`from=`）で行うので、`.dev.vars` の `ACCESS_ALLOWED_EMAILS` に
+認可はエンベロープ送信者（`from=`）で行うので、`.dev.vars` の `ACCESS_ALLOWED_EMAILS`（または `MAIL_ALLOWED_SENDERS`）に
 あるアドレスを使う（業者のアドレスを入れると `mail: rejected ...` になる）。
 
 結果は `wrangler dev` のログ（`mail: imported ...`）と、設定ページの「メール取込」で確認する。
@@ -283,6 +283,8 @@ local part は推測できないランダムなものにする（例 `news-xxxxx
 残るのは `mail: failed ...` のログ 1 行だけで、そのメールは二度と来ない。
 
 **初回設定（所有者）**
+
+転送元の Gmail がログイン用のアドレスと別なら、そのアドレスを secret `MAIL_ALLOWED_SENDERS`（カンマ区切り）に入れる（`.dev.vars` と Keyway にも）。認可はログイン許可リストとこのリストの和で行う。
 
 1. 候補 → 業者の編集で「メールの差出人ドメイン」を入れる（メルマガの差出人の `@` の右）
 2. Gmail →「設定」→「メール転送と POP/IMAP」→ 転送先アドレスに secret と同じアドレスを追加
