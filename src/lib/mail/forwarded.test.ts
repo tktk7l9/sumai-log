@@ -54,6 +54,11 @@ describe('splitForwardedBlock', () => {
     expect(b?.from).toBe('a@b.com')
     expect(b?.body).toBe('body line')
   })
+  it('From / Subject の値が空なら null（値そのものが空文字）', () => {
+    const b = splitForwardedBlock('---------- Forwarded message ---------\nFrom:\nSubject:\n\nbody')
+    expect(b?.from).toBeNull()
+    expect(b?.subject).toBeNull()
+  })
 })
 
 describe('parseForwardedDate', () => {
