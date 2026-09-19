@@ -16,7 +16,10 @@ import { createServerEntry } from '@tanstack/react-start/server-entry'
 import { drizzle } from 'drizzle-orm/d1'
 
 import * as schema from './db/schema'
+import { parseAllowlist } from './lib/access'
+import { handleInboundMail } from './server/mailHandler'
 import { fetchAllVendorNews } from './server/newsFetcher'
+import { cleanupInboundMails } from './server/repository/mails'
 
 // グローバルの fetch を上書きしないよう startFetch と名付ける（このモジュール内で
 // うっかり fetch(...) と書いたら SSR ハンドラを呼んでしまう、を避ける）。
@@ -52,9 +55,41 @@ async function runScheduledNewsFetch(env: Env): Promise<void> {
   }
 }
 
+/** 受信ログの掃除（設計 2026-09-19 §4）: 拒否・システム行は 30 日で消す。取込・未割当は残す */
+const INBOUND_RETENTION_DAYS = 30
+async function runInboundCleanup(env: Env): Promise<void> {
+  try {
+    const db = drizzle(env.DB, { schema })
+    const cutoff = new Date(Date.now() - INBOUND_RETENTION_DAYS * 86400000).toISOString()
+    const removed = await cleanupInboundMails(db, cutoff)
+    console.log(`mail: cleanup removed=${removed}`)
+  } catch (e) {
+    console.log(`mail: cleanup failed error=${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+/**
+ * 転送先アドレス（secret MAIL_INBOX_ADDRESS）に届いたメール（Email Routing → この Worker）。
+ * 設計 2026-09-19 §3。
+ * 例外は捕まえてログ 1 行にする（投げると Routing 側で再送・バウンスになる）。
+ * 本文・アドレス全体はログに出さない。
+ */
+async function onEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
+  const db = drizzle(env.DB, { schema })
+  try {
+    const r = await handleInboundMail(message, db, parseAllowlist(env.ACCESS_ALLOWED_EMAILS))
+    // system（Gmail の転送先確認）の件名には確認コードが入るのでログには出さない
+    const subject = r.status === 'system' ? '' : ` subject=${r.subject.slice(0, 40)}`
+    console.log(`mail: ${r.status} domain=${r.fromDomain ?? '-'}${subject}`)
+  } catch (e) {
+    console.log(`mail: failed error=${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
 export default {
   fetch: workerFetch,
   scheduled: async (_controller: ScheduledController, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(runScheduledNewsFetch(env))
+    ctx.waitUntil(runScheduledNewsFetch(env).then(() => runInboundCleanup(env)))
   },
+  email: onEmail,
 } satisfies ExportedHandler<Env>

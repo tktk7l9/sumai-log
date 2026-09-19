@@ -18,3 +18,10 @@ ACCESS_POLICY_AUD=
 # 空なら地図の代わりに案内文が出る。Map ID は省略可（省略時は Google のサンプル用 DEMO_MAP_ID）
 GOOGLE_MAPS_API_KEY=
 GOOGLE_MAPS_MAP_ID=
+
+# メール取込（設計 2026-09-19 §7）の転送先アドレス。**secret** にする
+# （推測できないアドレスであること自体が偽装への緩和策。public リポジトリに置かない）。
+# ランダムな local part を推奨、例 news-a1b2c3d4@sumai-log.app
+# 本番は `printf '%s' '<そのアドレス>' | npx wrangler secret put MAIL_INBOX_ADDRESS`。
+# 空なら設定ページに「未設定」と出るだけで、受信そのものには影響しない。
+MAIL_INBOX_ADDRESS=

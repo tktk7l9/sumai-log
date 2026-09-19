@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { comments, places, vendors } from '../../db/schema'
+import { vendorInput } from '../candidates.schema'
 import {
   deletePropertyCascade,
   deleteVendorCascade,
@@ -218,5 +219,38 @@ describe('properties', () => {
     expect(place.propertyId).toBeNull()
     const [comment] = await db.select().from(comments).where(eq(comments.id, commentId))
     expect(comment).toBeUndefined()
+  })
+})
+
+describe('vendorInput.newsEmailDomain', () => {
+  const base = {
+    name: 'x',
+    kind: 'koumuten' as const,
+    serviceAreas: [],
+    affiliations: [],
+    affiliationLinks: {},
+    uaValue: null,
+    cValuePublished: false,
+    seismicGrade: null,
+    longTermCertified: false,
+    pricePerTsuboMin: null,
+    pricePerTsuboMax: null,
+    structure: null,
+    features: null,
+    status: 'interested' as const,
+    sourceUrl: null,
+    websiteUrl: null,
+    socialUrls: [],
+    newsUrl: null,
+    newsSource: null,
+    hq: null,
+    representative: null,
+  }
+  it('正規化して保存する。空は null', () => {
+    expect(
+      vendorInput.parse({ ...base, newsEmailDomain: ' A.com, info@B.com ' }).newsEmailDomain,
+    ).toBe('a.com,b.com')
+    expect(vendorInput.parse({ ...base, newsEmailDomain: '' }).newsEmailDomain).toBeNull()
+    expect(vendorInput.parse({ ...base, newsEmailDomain: null }).newsEmailDomain).toBeNull()
   })
 })

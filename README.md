@@ -104,6 +104,22 @@ npm run dev                      # http://localhost:3000
 | `npm run db:migrate:remote`       | 本番 D1 へ適用                                         |
 | `npm run deploy`                  | ビルドしてデプロイ                                     |
 
+### メール受信のローカル確認
+
+`wrangler dev` はメール投入用のエンドポイントを持つ（`npm run dev` の Vite 開発サーバーには無い）。
+
+```bash
+npm run build && npx wrangler dev --port 8787
+# 別ターミナルで（fixture は架空の差出人・本文）
+curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=owner@example.com&to=news-xxxxxxxx@sumai-log.app' \
+  -H 'Content-Type: message/rfc822' --data-binary @test/fixtures/mail-auto.eml
+```
+
+認可はエンベロープ送信者（`from=`）で行うので、`.dev.vars` の `ACCESS_ALLOWED_EMAILS` に
+あるアドレスを使う（業者のアドレスを入れると `mail: rejected ...` になる）。
+
+結果は `wrangler dev` のログ（`mail: imported ...`）と、設定ページの「メール取込」で確認する。
+
 ## 本番
 
 デプロイ先: `https://sumai-log.saitotakuya0719.workers.dev`（Cloudflare Access の背後）。
@@ -192,6 +208,8 @@ printf '%s' 'xxxxxxxx' | npx wrangler secret put GOOGLE_MAPS_MAP_ID
 ```bash
 printf '%s' 'owner@example.com' | npx wrangler secret put ACCESS_ALLOWED_EMAILS
 printf '%s' 'owner@example.com:名前:teal' | npx wrangler secret put MEMBERS
+# メール取込の転送先アドレス（推測できない local part にする。下の「メール取込」を参照）
+printf '%s' 'news-xxxxxxxx@sumai-log.app' | npx wrangler secret put MAIL_INBOX_ADDRESS
 npx wrangler secret list        # 名前だけ確認できる。値の正しさはログインして確かめる
 npm run deploy
 ```
@@ -214,8 +232,8 @@ Cloudflare の secret と Access ポリシーを更新したら、**Keyway vault
 keyway push -e development -f .dev.vars -y
 
 # 本番用の一時ファイルを作って push し、すぐ消す
-printf 'ENVIRONMENT=production\nACCESS_ALLOWED_EMAILS=%s\nMEMBERS=%s\nGOOGLE_MAPS_API_KEY=%s\n' \
-  '<実値>' '<実値>' '<実値>' > .dev.vars.production
+printf 'ENVIRONMENT=production\nACCESS_ALLOWED_EMAILS=%s\nMEMBERS=%s\nGOOGLE_MAPS_API_KEY=%s\nMAIL_INBOX_ADDRESS=%s\n' \
+  '<実値>' '<実値>' '<実値>' '<実値>' > .dev.vars.production
 keyway push -e production -f .dev.vars.production -y
 rm .dev.vars.production
 ```
@@ -235,6 +253,55 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
 （`POST /api/photos`）と配信（`GET /api/photos/<key>`）はこの経路に乗せず、
 `src/routes/api.photos.$.tsx` の TanStack Start server route（＝ミドルウェアを通る経路）
 として実装済み。
+
+### メール取込（転送先アドレスは secret）
+
+設計: `docs/superpowers/specs/2026-09-19-mail-import-design.md`。
+
+転送先アドレスは **secret** `MAIL_INBOX_ADDRESS` に入れる（リポジトリには書かない）。
+local part は推測できないランダムなものにする（例 `news-xxxxxxxx@sumai-log.app`）:
+認可はエンベロープ送信者で行い、Email Routing が送信ドメインの DMARC ポリシーに従って
+認証失敗メールを拒否するが、`gmail.com` は `p=none` なので偽装は通り得る。アドレスを
+知られないこと自体が緩和策になる（設計 §3-3）。設定ページの「メール取込」には secret の
+値がそのまま出る（未設定なら「未設定（secret MAIL_INBOX_ADDRESS）」）。
+
+**デプロイ順**（この順でないとメールを取りこぼす）
+
+1. `npm run db:migrate:remote` — migration 0009（`inbound_mails` / `vendor_news.mail_id` /
+   `vendors.news_email_domain`）を本番 D1 に適用する
+2. 転送先アドレスを secret に入れる:
+   `printf '%s' 'news-xxxxxxxx@sumai-log.app' | npx wrangler secret put MAIL_INBOX_ADDRESS`
+   （§4 と同じ手順で Keyway にも push する）
+3. `npm run deploy`（または main への push で Workers Builds）
+4. Email Routing の転送ルールを作る: そのアドレス → Worker `sumai-log`。**matcher のアドレスは
+   secret と同じ文字列**にする（catch-all は drop のまま）
+5. Gmail 側の設定（下の「初回設定」）へ
+
+**ルールより前にメールが届いても Worker は受け取れないだけ**（Cloudflare 側で配送されず、
+送信者にエラーが返るのでロスにはならない）。逆に **migration より前にルールを作ると、Worker が
+受け取って捨てる**: `onEmail` は例外を飲み込む設計（バウンスの繰り返しを避けるため）なので、
+残るのは `mail: failed ...` のログ 1 行だけで、そのメールは二度と来ない。
+
+**初回設定（所有者）**
+
+1. 候補 → 業者の編集で「メールの差出人ドメイン」を入れる（メルマガの差出人の `@` の右）
+2. Gmail →「設定」→「メール転送と POP/IMAP」→ 転送先アドレスに secret と同じアドレスを追加
+3. 設定ページ「メール取込」→ 直近の受信の「システム」行を開き、確認コードを Gmail に入力
+   （この確認メールは 4 のルールができてから届く）
+4. Gmail のフィルタ `from:(<業者Aのドメイン> OR <業者Bのドメイン>)` に「転送先: そのアドレス」を設定
+
+**過去分の一括取込（一回きり）**
+
+1. Gmail（PC）で `from:<ドメインA> OR from:<ドメインB>` を検索 → 全選択 → ラベル `sumai-import`
+2. Google Takeout → 「メール」だけ → ラベル `sumai-import` だけ → mbox をダウンロード →
+   `seed.local/mail.mbox` に置く（gitignore 済み）
+3. 業者一覧を書き出す:
+   `npx wrangler d1 execute sumai-log --remote --json --command "SELECT id, name, news_email_domain FROM vendors" > seed.local/out/vendors.json`
+4. `npm run import:mbox -- seed.local/mail.mbox --vendors seed.local/out/vendors.json`
+5. `npx wrangler d1 execute sumai-log --remote --file seed.local/out/mails.sql`
+6. 設定ページで未割当を確認し、業者を選んで取り込む
+
+拒否・システムの受信ログは 30 日で自動的に消える。取込済み・未割当は残る。
 
 ### 6. 所有者の作業
 
