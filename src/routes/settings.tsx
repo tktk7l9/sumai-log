@@ -21,13 +21,16 @@ import { ColorSchemeSetting } from '../components/ColorSchemeSetting'
 import { MemberChip } from '../components/MemberChip'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
+import { MailImportCard } from '../components/settings/MailImportCard'
 import { NEWS_SOURCE_LABEL } from '../db/schema'
 import { extractErrorMessage } from '../lib/formError'
 import { formatJst } from '../lib/jst'
 import { describeFetchError } from '../lib/news/errors'
 import { sameHost } from '../lib/news/url'
 import { photoUrl } from '../lib/photos'
+import { listMailImport } from '../server/mails'
 import { fetchNewsNow, newsSources as loadNewsSources, reparseNewsEvents } from '../server/news'
+import { listLinkTargets } from '../server/places'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
@@ -41,13 +44,22 @@ function truncateForDisplay(url: string): string {
 export const Route = createFileRoute('/settings')({
   component: Page,
   loader: async () => {
-    const [settings, tags, news, favicons] = await Promise.all([
+    const [settings, tags, news, favicons, mail, targets] = await Promise.all([
       getSettings(),
       listTagNames(),
       loadNewsSources(),
       loadFaviconSources(),
+      listMailImport(),
+      listLinkTargets(),
     ])
-    return { ...settings, tags, newsSources: news.sources, faviconVendors: favicons.vendors }
+    return {
+      ...settings,
+      tags,
+      newsSources: news.sources,
+      faviconVendors: favicons.vendors,
+      mail,
+      vendorOptions: targets.vendors,
+    }
   },
 })
 
@@ -61,6 +73,8 @@ function Page() {
     tags,
     newsSources,
     faviconVendors,
+    mail,
+    vendorOptions,
   } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveHomeAreas)
@@ -306,6 +320,13 @@ function Page() {
           </Group>
         </Stack>
       </Card>
+
+      <MailImportCard
+        inboxAddress={mail.inboxAddress}
+        unassigned={mail.unassigned}
+        recent={mail.recent}
+        vendors={vendorOptions}
+      />
 
       <Card withBorder padding="md">
         <Stack gap="sm">
