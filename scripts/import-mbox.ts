@@ -95,6 +95,7 @@ async function main() {
     const status = vendor ? 'imported' : 'unassigned'
     let newsId: string | null = null
     let newsSql: string | null = null
+    let newsUrl: string | null = null
     if (vendor) {
       const draft = inboundToNews(
         { messageId: parsed.messageId, subject, text: bodyText, sentOn },
@@ -102,6 +103,7 @@ async function main() {
         receivedOn,
       )
       newsId = crypto.randomUUID()
+      newsUrl = draft.url
       newsSql =
         `INSERT INTO vendor_news (id, vendor_id, url, title, summary, published_on, event_start, event_end, event_kind, mail_id) VALUES (` +
         [
@@ -139,7 +141,10 @@ async function main() {
           status,
           null,
           vendor?.id ?? null,
-          newsId,
+          // news_id はこの時点では NULL。vendor_news の INSERT の後に UPDATE で付ける
+          // （inbound_mails.news_id → vendor_news と vendor_news.mail_id → inbound_mails は
+          // 相互に FK なので、先に news_id を入れると FK 違反で全文が巻き戻る）
+          null,
           nowIso,
           nowIso,
         ]
@@ -147,7 +152,13 @@ async function main() {
           .join(', ') +
         `) ON CONFLICT(message_id) DO NOTHING;`,
     )
-    if (newsSql) lines.push(newsSql)
+    if (newsSql && newsId) {
+      lines.push(newsSql)
+      // 再実行で vendor_news が DO NOTHING になった場合も、url から既存の id を引いて紐づける
+      lines.push(
+        `UPDATE inbound_mails SET news_id = (SELECT id FROM vendor_news WHERE url = ${sqlString(newsUrl)}) WHERE id = ${sqlString(mailId)} AND news_id IS NULL;`,
+      )
+    }
   }
 
   const out = resolve(root, 'seed.local/out/mails.sql')
