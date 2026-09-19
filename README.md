@@ -45,7 +45,7 @@
   比較／マンション・リノベ／お金・ローン／太陽光・省エネ／施主の記録）に一覧表示する。
   URL を貼って「取得」を押すとチャンネル名・説明・アイコンを自動入力（YouTube チャンネルの
   URL のみ対応）。候補の業者・加盟団体と紐づけるとバッジから該当ページへ飛べる
-- **地図**: Leaflet + 地理院タイルで見学した場所・予定の場所を表示
+- **地図**: Google マップで見学した場所・予定の場所を表示
 - **用語集**: 断熱・耐震・お金・進め方などの用語 46 語と図解 14 点。検索・カテゴリで絞り込み、
   関連語バッジや候補カードの UA 値などの目安バッジから該当語へ飛べる
 - **PWA**: manifest とアイコンを用意済み（新しいアプリアイコン）。ホーム画面に追加すると
@@ -73,7 +73,7 @@ note を自動判定してアイコン付きリンクを出し、それ以外は
 | UI             | Mantine v9                                          |
 | DB             | Cloudflare D1 + Drizzle ORM                         |
 | ファイル       | Cloudflare R2（非公開バケット・Phase 2）            |
-| 地図           | Leaflet                                             |
+| 地図           | Google Maps JavaScript API（AdvancedMarker）        |
 | 認証           | Cloudflare Access（Google IdP）＋アプリ側 allowlist |
 
 ## セットアップ
@@ -161,6 +161,32 @@ Zero Trust → Access → Applications → Add → Self-hosted:
 - 作成後の Overview で **Application Audience (AUD) Tag** をコピーし、`wrangler.jsonc` の
   `ACCESS_TEAM_DOMAIN` / `ACCESS_POLICY_AUD` に反映する（どちらも非秘密＝コミットしてよい）
 
+### 3b. Google マップ（地図タブ）
+
+地図タブと場所の詳細は Google Maps JavaScript API（AdvancedMarker）で描く（2026-09-19 に
+地理院タイル + Leaflet から置き換え）。キーが無いと地図の代わりに案内文が出るだけで、他の
+機能は動く。
+
+1. [Google Cloud コンソール](https://console.cloud.google.com/) でプロジェクトを作り、
+   **請求先アカウント**を紐づける（2025-03 改定後は Dynamic Maps が月 10,000 回まで無料。
+   二人で使う分は無料枠に収まるが、カード登録は必須）
+2. 「API とサービス」→「ライブラリ」で **Maps JavaScript API** を有効にする
+3. 「認証情報」→「API キーを作成」→ 制限を設定:
+   - アプリケーションの制限: **HTTP リファラー**。`https://sumai-log.app/*`、
+     `https://sumai-log.saitotakuya0719.workers.dev/*`、`http://localhost:3000/*`
+   - API の制限: **Maps JavaScript API** だけ
+4. （任意）「地図管理」で Map ID を作ると Cloud スタイルが使える。作らなければ
+   `DEMO_MAP_ID` で既定スタイルのまま動く
+5. キーを secret に置く（リファラー制限つきの公開キーだが、public リポジトリに載せない）:
+
+```bash
+printf '%s' 'AIza...' | npx wrangler secret put GOOGLE_MAPS_API_KEY
+# Map ID を作った場合だけ
+printf '%s' 'xxxxxxxx' | npx wrangler secret put GOOGLE_MAPS_MAP_ID
+```
+
+`.dev.vars` の `GOOGLE_MAPS_API_KEY` にも同じ値を入れ、Keyway（§7）にも push する。
+
 ### 4. secret と `.dev.vars`
 
 ```bash
@@ -188,8 +214,8 @@ Cloudflare の secret と Access ポリシーを更新したら、**Keyway vault
 keyway push -e development -f .dev.vars -y
 
 # 本番用の一時ファイルを作って push し、すぐ消す
-printf 'ENVIRONMENT=production\nACCESS_ALLOWED_EMAILS=%s\nMEMBERS=%s\n' \
-  '<実値>' '<実値>' > .dev.vars.production
+printf 'ENVIRONMENT=production\nACCESS_ALLOWED_EMAILS=%s\nMEMBERS=%s\nGOOGLE_MAPS_API_KEY=%s\n' \
+  '<実値>' '<実値>' '<実値>' > .dev.vars.production
 keyway push -e production -f .dev.vars.production -y
 rm .dev.vars.production
 ```

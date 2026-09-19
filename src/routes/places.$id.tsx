@@ -13,22 +13,25 @@ import { PlaceForm } from '../components/places/PlaceForm'
 import { PlaceLocation } from '../components/places/PlaceLocation'
 import { PLACE_KIND_LABEL } from '../db/schema'
 import { listCommentsFor } from '../server/comments'
+import { getMapConfig } from '../server/mapConfig'
 import { deletePlace, getPlace, listLinkTargets } from '../server/places'
 
 export const Route = createFileRoute('/places/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, targets, commentData] = await Promise.all([
+    const [detail, targets, commentData, mapConfig] = await Promise.all([
       getPlace({ data: { id: params.id } }),
       listLinkTargets(),
       listCommentsFor({ data: { targetType: 'place', targetId: params.id } }),
+      getMapConfig(),
     ])
-    return { ...detail, targets, ...commentData }
+    return { ...detail, targets, ...commentData, mapConfig }
   },
 })
 
 function Page() {
-  const { place, vendor, property, visited, targets, comments, me, members } = Route.useLoaderData()
+  const { place, vendor, property, visited, targets, comments, me, members, mapConfig } =
+    Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deletePlace)
   const [editing, setEditing] = useState(false)
@@ -85,7 +88,7 @@ function Page() {
         </Stack>
       </Card>
 
-      <PlaceLocation place={place} visited={visited} />
+      <PlaceLocation place={place} visited={visited} mapConfig={mapConfig} />
 
       {place.note ? <Text style={{ whiteSpace: 'pre-wrap' }}>{place.note}</Text> : null}
 
