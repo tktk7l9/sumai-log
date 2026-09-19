@@ -77,6 +77,29 @@ describe('handleInboundMail', () => {
     expect(await db.select().from(vendorNews)).toHaveLength(0)
   })
 
+  it('HTML だけのメールでも本文をテキスト化して保存する', async () => {
+    const vendorId = await vendor('vendor.example')
+    const raw = [
+      'Message-ID: <html1@vendor.example>',
+      'From: Test Builder <news@vendor.example>',
+      'Date: Wed, 16 Sep 2026 10:05:00 +0900',
+      'Subject: 完成見学会のご案内',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      '<html><head><style>p{color:red}</style></head>',
+      '<body><p>9月27日(土) <b>完成見学会</b>を開催します。</p></body></html>',
+    ].join('\r\n')
+    const r = await handleInboundMail(msg(raw).message, db, allow, NOW)
+    expect(r.status).toBe('imported')
+    const [mail] = await db.select().from(inboundMails)
+    expect(mail.vendorId).toBe(vendorId)
+    // style の中身は出さず、タグは落ちてテキストだけが残る
+    expect(mail.bodyText).toBe('9月27日(土) 完成見学会を開催します。')
+    expect(mail.bodyTruncated).toBe(false)
+    const [news] = await db.select().from(vendorNews)
+    expect(news.eventStart).toBe('2026-09-27')
+  })
+
   it('同じ Message-ID を 2 回受けたら duplicate', async () => {
     await vendor('vendor.example')
     await handleInboundMail(msg(AUTO).message, db, allow, NOW)

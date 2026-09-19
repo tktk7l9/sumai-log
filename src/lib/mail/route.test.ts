@@ -65,6 +65,25 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'system' })
   })
 
+  it('ドメイン側に `@` が入ったエンベロープは system にしない（x@evil.example@google.com）', () => {
+    // 最初の `@` で割ると domain は `evil.example@google.com`。最後の `@` で割る実装だと
+    // `google.com` に見えてしまい、攻撃者の本文が system 行（確認コードとして展開表示
+    // される）として入る。どちらとも決められない形は信頼しない。
+    expect(
+      classifyRoute(
+        { from: GMAIL_FORWARDING_NOTICE, forwardedFor: [] },
+        allow,
+        'x@evil.example@google.com',
+      ),
+    ).toEqual({ kind: 'rejected', reason: 'envelope sender not trusted' })
+  })
+
+  it('`@` の無いエンベロープは rejected（not allowed）', () => {
+    expect(
+      classifyRoute({ from: 'news@vendor.example', forwardedFor: [] }, allow, 'no-at'),
+    ).toEqual({ kind: 'rejected', reason: 'envelope sender not allowed' })
+  })
+
   it('エンベロープが許可リストに無ければ From が何であっても rejected（not allowed）', () => {
     expect(
       classifyRoute(
