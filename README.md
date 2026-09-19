@@ -104,6 +104,19 @@ npm run dev                      # http://localhost:3000
 | `npm run db:migrate:remote`       | 本番 D1 へ適用                                         |
 | `npm run deploy`                  | ビルドしてデプロイ                                     |
 
+### メール受信のローカル確認
+
+`wrangler dev` はメール投入用のエンドポイントを持つ（`npm run dev` の Vite 開発サーバーには無い）。
+
+```bash
+npm run build && npx wrangler dev --port 8787
+# 別ターミナルで（fixture は架空の差出人・本文）
+curl -X POST 'http://localhost:8787/cdn-cgi/handler/email?from=news@vendor.example&to=news@sumai-log.app' \
+  -H 'Content-Type: message/rfc822' --data-binary @test/fixtures/mail-auto.eml
+```
+
+結果は `wrangler dev` のログ（`mail: imported ...`）と、設定ページの「メール取込」で確認する。
+
 ## 本番
 
 デプロイ先: `https://sumai-log.saitotakuya0719.workers.dev`（Cloudflare Access の背後）。
