@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import { MAX_INPUT_LENGTH } from '../news/text'
-import { MAX_BODY_CHARS, fallbackMessageId, htmlToText, normalizeBody, toParsedMail } from './parse'
+import {
+  ADDRESS_MAX,
+  MAX_BODY_CHARS,
+  SUBJECT_MAX,
+  extractBody,
+  fallbackMessageId,
+  htmlToText,
+  normalizeBody,
+  toParsedMail,
+} from './parse'
 
 describe('htmlToText', () => {
   it('br / p / div / li / tr の区切りを改行にし、タグと実体参照を落とす', () => {
@@ -11,6 +20,35 @@ describe('htmlToText', () => {
   })
   it('style / script の中身は出さない', () => {
     expect(htmlToText('<style>p{}</style><p>本文</p><script>x()</script>')).toBe('本文')
+  })
+  it('head と、属性つきの style も中身ごと落とす', () => {
+    expect(
+      htmlToText('<head><title>t</title></head><style type="text/css">p{}</style><p>本文</p>'),
+    ).toBe('本文')
+  })
+  it('タグ名の途中で一致しただけの要素（header）は落とさない', () => {
+    // `<head` で始まるが直後が英数字なので別のタグ。中身（見出し）を消してはいけない。
+    // `<header>` は改行を入れる対象（BLOCK_END）ではないので本文と地続きになる。
+    expect(htmlToText('<header>見出し</header><p>本文</p>')).toBe('見出し本文')
+  })
+  it('閉じない style ブロックは、そこから先を捨てる', () => {
+    expect(htmlToText('<p>本文</p><style>p{}')).toBe('本文')
+  })
+  it('閉じタグが "&gt;" で終わっていなくても、そこから先を捨てる', () => {
+    expect(htmlToText('<p>本文</p><style>p{}</style')).toBe('本文')
+  })
+  it('閉じない style が大量にあっても線形時間で終わる', () => {
+    // `<style>` を 20 万個（約 1.4MB。MAX_INPUT_LENGTH 未満なので中身の処理に入る）。
+    // `/<(style|script|head)\b[\s\S]*?<\/\1\s*>/g` の正規表現だと一致に失敗する
+    // たびに次の位置からやり直すため O(n^2) になり、このテストは終わらない
+    // （実測: 2 万個で 246ms・4 万個で 980ms・8 万個で 3.9 秒）。
+    const html = '<style>'.repeat(200_000)
+    const start = performance.now()
+    const result = htmlToText(html)
+    const elapsed = performance.now() - start
+    // 閉じタグが無いので最初の <style> から先を丸ごと捨てる
+    expect(result).toBe('')
+    expect(elapsed).toBeLessThan(2000)
   })
   it('MAX_INPUT_LENGTH を超えたら空文字（stripTags と同じ上限）', () => {
     expect(htmlToText('a'.repeat(MAX_INPUT_LENGTH + 1))).toBe('')
@@ -72,8 +110,34 @@ describe('fallbackMessageId', () => {
   })
 })
 
+describe('extractBody', () => {
+  it('text パートがあればそれを使う（html は見ない）', () => {
+    expect(extractBody({ text: 'テキスト本文', html: '<p>HTML本文</p>' })).toEqual({
+      text: 'テキスト本文',
+      truncated: false,
+    })
+  })
+  it('text が空白だけなら html をテキスト化する', () => {
+    expect(extractBody({ text: '   ', html: '<p>x</p><p>y</p>' })).toEqual({
+      text: 'x\ny',
+      truncated: false,
+    })
+  })
+  it('text が無ければ html をテキスト化する', () => {
+    expect(extractBody({ html: '<p>x</p>' })).toEqual({ text: 'x', truncated: false })
+  })
+  it('text も html も無ければ空文字', () => {
+    expect(extractBody({})).toEqual({ text: '', truncated: false })
+  })
+  it('上限を超えたら truncated', () => {
+    const r = extractBody({ text: 'x'.repeat(MAX_BODY_CHARS + 10) })
+    expect(r.text.length).toBe(MAX_BODY_CHARS)
+    expect(r.truncated).toBe(true)
+  })
+})
+
 describe('toParsedMail', () => {
-  it('text を優先し、ヘッダから X-Forwarded-For を拾う', async () => {
+  it('ヘッダだけを正規化する（本文は作らない）。X-Forwarded-For も拾う', async () => {
     const p = await toParsedMail({
       messageId: '<abc@example.com>',
       from: { address: 'News@Example.com' },
@@ -88,14 +152,14 @@ describe('toParsedMail', () => {
       from: 'news@example.com',
       subject: '件名',
       date: '2026-09-16T01:05:00.000Z',
-      text: 'テキスト本文',
+      // 本文は認可の後で extractBody が作る（ここでは常に空）
+      text: '',
       truncated: false,
       forwardedFor: ['owner@example.com', 'news@sumai.example'],
     })
   })
-  it('text が無ければ html をテキスト化。Message-ID が無ければ hash 代替。空の件名は空文字', async () => {
+  it('Message-ID が無ければ hash 代替。空の件名は空文字', async () => {
     const p = await toParsedMail({ from: { address: 'a@b.com' }, html: '<p>x</p><p>y</p>' })
-    expect(p.text).toBe('x\ny')
     expect(p.messageId).toMatch(/^hash:/)
     expect(p.subject).toBe('')
     expect(p.date).toBeNull()
@@ -105,8 +169,12 @@ describe('toParsedMail', () => {
     const p = await toParsedMail({ text: 'x' })
     expect(p.from).toBe('')
   })
-  it('text も html も無ければ本文は空文字', async () => {
-    const p = await toParsedMail({ from: { address: 'a@b.com' } })
-    expect(p.text).toBe('')
+  it('件名は SUBJECT_MAX で切る（拒否するメールでもヘッダは保存するため）', async () => {
+    const p = await toParsedMail({ subject: 'あ'.repeat(SUBJECT_MAX + 100) })
+    expect(p.subject.length).toBe(SUBJECT_MAX)
+  })
+  it('差出人アドレスは ADDRESS_MAX で切る', async () => {
+    const p = await toParsedMail({ from: { address: `${'a'.repeat(ADDRESS_MAX)}@example.com` } })
+    expect(p.from.length).toBe(ADDRESS_MAX)
   })
 })

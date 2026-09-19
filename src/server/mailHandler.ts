@@ -6,7 +6,7 @@ import { vendors } from '../db/schema'
 import { toJstDateKey } from '../lib/jst'
 import { splitForwardedBlock } from '../lib/mail/forwarded'
 import { domainOf, matchVendorByDomain } from '../lib/mail/match'
-import { toParsedMail } from '../lib/mail/parse'
+import { extractBody, toParsedMail } from '../lib/mail/parse'
 import { classifyRoute } from '../lib/mail/route'
 import { MAX_INPUT_LENGTH } from '../lib/news/text'
 import { importMailAsNews, insertInboundMail, reviveRejectedInboundMail } from './repository/mails'
@@ -31,9 +31,16 @@ export type HandleResult = {
  * 読む → 経路判定 → inbound_mails に記録 → 業者が決まれば vendor_news へ。
  * 例外は呼び出し側（server.ts）でログにする。ctx.waitUntil は使わない。
  *
- * 信頼モデル（src/lib/mail/route.ts 参照）: 認可は `message.from`（Cloudflare Email Routing
- * が検証済みのエンベロープ送信者）だけで行う。ヘッダ（`From:` / `X-Forwarded-For`）は
- * メール本文の一部で偽装できるため、`classifyRoute` の第三引数として渡すだけで認可には使わない。
+ * 信頼モデル（src/lib/mail/route.ts 参照）: 認可は `message.from`（Cloudflare Email Routing が
+ * 渡すエンベロープ送信者）だけで行う。ヘッダ（`From:` / `X-Forwarded-For`）はメール本文の
+ * 一部で偽装できるため、`classifyRoute` の第三引数として渡すだけで認可には使わない。
+ * Email Routing は送信ドメインの DMARC ポリシーに従って認証失敗メールを拒否するので、
+ * `google.com`（p=reject）を騙る system 経路は保護されるが、`gmail.com` は p=none のため
+ * エンベロープ送信者の偽装は Routing を通り得る。ヘッダより強い判定だが完全ではない
+ * （緩和策は転送先アドレスを推測できない secret にすること。SPF/ARC ヘッダ検証は follow-up）。
+ *
+ * この「誰でも送れる」前提があるので、**本文のテキスト化（重い）は経路が受理されてから**
+ * 行う: 拒否するメールでは extractBody を呼ばない（HTML → テキストは入力サイズに比例する）。
  *
  * auto/manual 経路は常に status: 'unassigned' で記録し、業者が決まったときだけ
  * importMailAsNews に imported へ上げさせる（お知らせ化に失敗しても行は unassigned の
@@ -87,6 +94,10 @@ export async function handleInboundMail(
     }
   }
 
+  // ここから先は受理済みの経路だけ。本文のテキスト化はこの位置より後でしか行わない
+  // （拒否されるメールで重い変換を走らせない。関数コメントの信頼モデル参照）。
+  const body = extractBody(email)
+
   if (route.kind === 'system') {
     const { created } = await insertInboundMail(db, {
       messageId: parsed.messageId,
@@ -95,8 +106,8 @@ export async function handleInboundMail(
       forwardedBy: null,
       subject: parsed.subject,
       sentOn: parsed.date ? toJstDateKey(parsed.date) : null,
-      bodyText: parsed.text,
-      bodyTruncated: parsed.truncated,
+      bodyText: body.text,
+      bodyTruncated: body.truncated,
       status: 'system',
       rejectReason: null,
       vendorId: null,
@@ -113,9 +124,9 @@ export async function handleInboundMail(
   let fromAddress = parsed.from
   let subject = parsed.subject
   let sentOn = parsed.date ? toJstDateKey(parsed.date) : null
-  let bodyText = parsed.text
+  let bodyText = body.text
   if (route.kind === 'manual') {
-    const block = splitForwardedBlock(parsed.text)
+    const block = splitForwardedBlock(body.text)
     if (block) {
       fromAddress = block.from ?? fromAddress
       subject = block.subject ?? subject
@@ -140,7 +151,7 @@ export async function handleInboundMail(
     subject,
     sentOn,
     bodyText,
-    bodyTruncated: parsed.truncated,
+    bodyTruncated: body.truncated,
     status: 'unassigned' as const,
     rejectReason: null,
     vendorId: vendor?.id ?? null,

@@ -39,12 +39,21 @@ Gmail 転送先の確認メール ─────────┘        ↓
 ハンドラは「読む → 判定 → 書く」だけにする。
 
 1. **サイズ**: `message.rawSize` が 2 MB（`MAX_INPUT_LENGTH` と同じ）を超えたら
-   `setReject('too large')`。ログにも残さない（本文を読まないため）。
+   `setReject('too large')`。行は残さない（本文を読まないため）が、`mail: too-large` の
+   ログ 1 行だけは出す（件名・本文は出さない）。
 2. **解析**: `postal-mime` で `message.raw` を解析（新規依存。design.md §7 の例外として明記）。
    `Message-ID`・`From`・`Subject`・`Date`・`text`・`html`・`X-Forwarded-For` を使う。
-3. **経路の検証**（認可は **エンベロープ送信者**＝Cloudflare Email Routing が SMTP レベルで
-   検証済みの `message.from` だけで行う。`From` ヘッダや `X-Forwarded-For` ヘッダはメール本文の
-   一部で誰でも書ける＝偽装できるため、認可には使わない）:
+   ヘッダの正規化（`toParsedMail`）と**本文のテキスト化（`extractBody`）は分ける**:
+   本文の変換は入力サイズに比例して重いので、経路が受理されてから（3 の後で）行う。
+   拒否するメールでは本文を触らない（誰でも送れる経路で CPU を使わせない）。
+3. **経路の検証**（認可は **エンベロープ送信者** ＝ `message.from` だけで行う。`From` ヘッダや
+   `X-Forwarded-For` ヘッダはメール本文の一部で誰でも書ける＝偽装できるため、認可には使わない。
+   ただしエンベロープ送信者も「絶対に偽装できない」わけではない: **Email Routing は送信
+   ドメインの DMARC ポリシーに従って認証失敗メールを拒否する**ので、`google.com` は
+   `p=reject` ＝ system 経路は保護されるが、`gmail.com` は `p=none` のためエンベロープ
+   送信者の偽装は Routing を通り得る。ヘッダより強い判定だが完全ではない。
+   緩和策: 転送先アドレスを推測できないもの（secret。§7）にする。
+   SPF/ARC ヘッダ検証は follow-up（§9））:
    - `message.from` を正規化（`normalizeEnvelopeAddress`: 小文字化・`<>` を外す・ローカル部の
      `+タグ` を除去）。Gmail の自動転送はエンベロープを `owner+caf_=news=<転送先>@gmail.com`
      に書き換える（`+タグ` を戻すと本人のアドレスに一致する）ため、この正規化が必須。
@@ -194,7 +203,9 @@ lib は 100% カバレッジ（既存ゲート）。repository/handler は vites
 
 添付の保存／メールの送信・返信／未割当の自動学習（一度割り当てたドメインを業者に自動登録する。
 必要になったら「取り込む」時に「このドメインを業者に登録」チェックを足す）／
-Gmail 以外の転送元（Outlook 等は `X-Forwarded-For` を付けないので手動転送で代替）。
+Gmail 以外の転送元（Outlook 等は `X-Forwarded-For` を付けないので手動転送で代替）／
+`Authentication-Results`/ARC（`d=google.com`）の検証による自動転送の厳密な認証
+（実メールでヘッダを確認してから）。
 
 ## 10. PII とテスト
 
