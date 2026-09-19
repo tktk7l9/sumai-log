@@ -5,9 +5,9 @@ import { lazy, Suspense, type ComponentProps } from 'react'
 const Inner = lazy(() => import('./PlacesMap').then((m) => ({ default: m.PlacesMap })))
 
 /**
- * Leaflet は window に依存するため SSR では評価できない。
+ * Google Maps JavaScript API は window に依存するため SSR では評価できない。
  * `ClientOnly` でハイドレーション後まで待ち、さらに `lazy` で PlacesMap 自体の
- * import（＝leaflet の import）もクライアントでしか走らせない。
+ * import（＝API ローダーの import）もクライアントでしか走らせない。
  */
 export function PlacesMapLazy(props: ComponentProps<typeof Inner>) {
   return (

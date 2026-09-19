@@ -3,9 +3,18 @@ import { MapPinOff } from 'lucide-react'
 
 import type { Place } from '../../db/schema'
 import { PlacesMapLazy } from '../map/PlacesMapLazy'
+import type { MapConfig } from '../../server/mapConfig'
 
 /** 詳細ページの地図枠。座標があれば PlacesMapLazy に 1 件だけピンを出す */
-export function PlaceLocation({ place, visited }: { place: Place; visited: boolean }) {
+export function PlaceLocation({
+  place,
+  visited,
+  mapConfig,
+}: {
+  place: Place
+  visited: boolean
+  mapConfig: MapConfig
+}) {
   if (place.lat == null || place.lng == null) {
     return (
       <Card withBorder padding="md" className="sunken">
@@ -27,6 +36,9 @@ export function PlaceLocation({ place, visited }: { place: Place; visited: boole
         <PlacesMapLazy
           markers={[{ id: place.id, name: place.name, lat: place.lat, lng: place.lng, visited }]}
           focusId={place.id}
+          apiKey={mapConfig.apiKey}
+          mapId={mapConfig.mapId}
+          gesture="cooperative"
         />
       </div>
       {place.geocodeSource === 'manual' ? (

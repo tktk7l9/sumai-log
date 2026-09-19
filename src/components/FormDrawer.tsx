@@ -55,7 +55,7 @@ export function FormDrawer({
   onClose: () => void
   title: string
   children: React.ReactNode
-  /** 既定は Mantine の modal 既定値（200）。地図タブでは Leaflet の操作コントロールが
+  /** 既定は Mantine の modal 既定値（200）。地図タブでは地図の上に重ねた操作コントロールが
    * z-index: 1000 で描かれるため、その上に出したいページから明示的に渡す */
   zIndex?: number
 }) {
