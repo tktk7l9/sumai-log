@@ -20,5 +20,5 @@ CREATE TABLE `inbound_mails` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `inbound_mails_message_id_unique` ON `inbound_mails` (`message_id`);--> statement-breakpoint
 CREATE INDEX `inbound_mails_status_received_idx` ON `inbound_mails` (`status`,`received_at`);--> statement-breakpoint
-ALTER TABLE `vendor_news` ADD `mail_id` text REFERENCES inbound_mails(id);--> statement-breakpoint
+ALTER TABLE `vendor_news` ADD `mail_id` text REFERENCES inbound_mails(id) ON DELETE SET NULL;--> statement-breakpoint
 ALTER TABLE `vendors` ADD `news_email_domain` text;

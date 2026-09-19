@@ -14,5 +14,10 @@ describe('inbound_mails', () => {
     )
     const vn = await env.DB.prepare('PRAGMA table_info(vendor_news)').all()
     expect(vn.results.map((r) => (r as { name: string }).name)).toContain('mail_id')
+
+    const fks = await env.DB.prepare('PRAGMA foreign_key_list(vendor_news)').all()
+    const mailIdFk = fks.results.find((r) => (r as { from: string }).from === 'mail_id') as
+      { on_delete: string } | undefined
+    expect(mailIdFk?.on_delete).toBe('SET NULL')
   })
 })
