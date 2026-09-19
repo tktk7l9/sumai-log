@@ -11,6 +11,7 @@ import {
   importMailAsNews,
   insertInboundMail,
   listInboundMails,
+  reviveRejectedInboundMail,
 } from './mails'
 import { actor, db, reset } from './test-helpers'
 
@@ -56,10 +57,56 @@ describe('insertInboundMail', () => {
     const a = await insertInboundMail(db, row())
     const b = await insertInboundMail(db, row({ subject: '別件名' }))
     expect(a.created).toBe(true)
-    expect(b).toEqual({ id: a.id, created: false })
+    expect(a.existingStatus).toBeNull()
+    expect(b).toEqual({ id: a.id, created: false, existingStatus: 'unassigned' })
     const rows = await db.select().from(inboundMails)
     expect(rows).toHaveLength(1)
     expect(rows[0].subject).toBe('完成見学会のご案内')
+  })
+
+  it('既存行が reject 済みなら existingStatus は rejected', async () => {
+    await insertInboundMail(
+      db,
+      row({
+        status: 'rejected',
+        rejectReason: 'not forwarded by owner',
+        bodyText: null,
+        forwardedBy: null,
+      }),
+    )
+    const b = await insertInboundMail(db, row())
+    expect(b.created).toBe(false)
+    expect(b.existingStatus).toBe('rejected')
+  })
+})
+
+describe('reviveRejectedInboundMail', () => {
+  it('reject 行を新しい内容で上書きし unassigned に戻す。news_id には触れない', async () => {
+    const { id } = await insertInboundMail(
+      db,
+      row({
+        status: 'rejected',
+        rejectReason: 'not forwarded by owner',
+        bodyText: null,
+        forwardedBy: null,
+      }),
+    )
+    await reviveRejectedInboundMail(
+      db,
+      id,
+      row({
+        receivedAt: '2026-09-18T00:00:00.000Z',
+        forwardedBy: 'owner@example.com',
+        bodyText: '復活後の本文',
+      }),
+    )
+    const [mail] = await db.select().from(inboundMails).where(eq(inboundMails.id, id))
+    expect(mail.status).toBe('unassigned')
+    expect(mail.rejectReason).toBeNull()
+    expect(mail.bodyText).toBe('復活後の本文')
+    expect(mail.forwardedBy).toBe('owner@example.com')
+    expect(mail.receivedAt).toBe('2026-09-18T00:00:00.000Z')
+    expect(mail.newsId).toBeNull()
   })
 })
 

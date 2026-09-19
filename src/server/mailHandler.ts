@@ -9,7 +9,7 @@ import { domainOf, matchVendorByDomain } from '../lib/mail/match'
 import { toParsedMail } from '../lib/mail/parse'
 import { classifyRoute } from '../lib/mail/route'
 import { MAX_INPUT_LENGTH } from '../lib/news/text'
-import { importMailAsNews, insertInboundMail } from './repository/mails'
+import { importMailAsNews, insertInboundMail, reviveRejectedInboundMail } from './repository/mails'
 
 /** ForwardableEmailMessage のうち使う部分（テストは素のオブジェクトで渡す） */
 export type InboundMessage = {
@@ -30,6 +30,17 @@ export type HandleResult = {
  * news@ に届いた 1 通を処理する（設計 2026-09-19 §3）。
  * 読む → 経路判定 → inbound_mails に記録 → 業者が決まれば vendor_news へ。
  * 例外は呼び出し側（server.ts）でログにする。ctx.waitUntil は使わない。
+ *
+ * auto/manual 経路は常に status: 'unassigned' で記録し、業者が決まったときだけ
+ * importMailAsNews に imported へ上げさせる（お知らせ化に失敗しても行は unassigned の
+ * ままなので、設定ページから再取込できる。imported かつ newsId が無い、という
+ * 中途半端な状態を作らない）。
+ *
+ * Gmail の自動転送は元メールの Message-ID をそのまま使うため、本人以外から news@ に
+ * 直接届いて reject された行と、後日正しく転送されてきた同じメールは message_id が
+ * 衝突する。素直に重複扱いすると reject された内容（本文なし）のまま取り戻せなくなる
+ * ので、reject 済みの行だけは reviveRejectedInboundMail で新しい内容に上書きしてから
+ * 続ける（それ以外の既存 status は普通に duplicate）。
  */
 export async function handleInboundMail(
   message: InboundMessage,
@@ -48,8 +59,10 @@ export async function handleInboundMail(
   const receivedOn = toJstDateKey(nowIso)
 
   if (route.kind === 'rejected') {
+    // setReject は常に呼ぶ（配信自体が許可されていないため）。記録が重複していても
+    // 拒否の通知そのものは毎回返す。
     message.setReject(route.reason)
-    await insertInboundMail(db, {
+    const { created } = await insertInboundMail(db, {
       messageId: parsed.messageId,
       receivedAt: nowIso,
       fromAddress: parsed.from,
@@ -63,7 +76,11 @@ export async function handleInboundMail(
       vendorId: null,
       newsId: null,
     })
-    return { status: 'rejected', fromDomain: domainOf(parsed.from), subject: parsed.subject }
+    return {
+      status: created ? 'rejected' : 'duplicate',
+      fromDomain: domainOf(parsed.from),
+      subject: parsed.subject,
+    }
   }
 
   if (route.kind === 'system') {
@@ -109,7 +126,9 @@ export async function handleInboundMail(
     .where(isNotNull(vendors.newsEmailDomain))
   const vendor = matchVendorByDomain(fromAddress, candidates)
 
-  const { id, created } = await insertInboundMail(db, {
+  // 常に unassigned で入れる。imported へ上げる・newsId を付けるのは importMailAsNews だけ
+  // （途中で失敗しても行は unassigned のまま残り、設定ページから再取込できる）。
+  const row = {
     messageId: parsed.messageId,
     receivedAt: nowIso,
     fromAddress,
@@ -118,13 +137,23 @@ export async function handleInboundMail(
     sentOn,
     bodyText,
     bodyTruncated: parsed.truncated,
-    status: vendor ? 'imported' : 'unassigned',
+    status: 'unassigned' as const,
     rejectReason: null,
     vendorId: vendor?.id ?? null,
     newsId: null,
-  })
+  }
+  const { id, created, existingStatus } = await insertInboundMail(db, row)
   const fromDomain = domainOf(fromAddress)
-  if (!created) return { status: 'duplicate', fromDomain, subject }
+
+  if (!created) {
+    if (existingStatus === 'rejected') {
+      // 本人以外から直接届いて reject された行を、後から届いた正しい転送で生き返らせる
+      await reviveRejectedInboundMail(db, id, row)
+    } else {
+      return { status: 'duplicate', fromDomain, subject }
+    }
+  }
+
   if (!vendor) return { status: 'unassigned', fromDomain, subject }
   await importMailAsNews(db, id, vendor.id, receivedOn)
   return { status: 'imported', fromDomain, subject }
