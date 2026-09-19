@@ -23,8 +23,8 @@
  * 検証して自動転送を厳密に認証する（実メールでヘッダを確認してから）。
  *
  * Gmail の自動転送はエンベロープ送信者を書き換える（plus-addressing）:
- *   owner@example.com が news@sumai-log.app 宛のフィルタで自動転送すると、エンベロープは
- *   `owner+caf_=news=sumai-log.app@gmail.com` になる（`From:` ヘッダは業者のまま）。
+ *   owner@example.com が転送先アドレス宛のフィルタで自動転送すると、エンベロープは
+ *   `owner+caf_=news-xxxxxxxx=sumai-log.app@gmail.com` になる（`From:` ヘッダは業者のまま）。
  *   `normalizeEnvelopeAddress` で `+タグ` を落として `owner@example.com` に戻してから
  *   許可リストと比較する。
  * 手動転送（「転送」機能）はエンベロープ送信者が本人のアドレスそのもの（`From:` ヘッダも
