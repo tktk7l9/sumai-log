@@ -77,17 +77,14 @@ export function termIdForMetric(metric: GlossaryMetric): string {
 }
 
 /**
- * 「今日の用語」。日付キー（'YYYY-MM-DD'）から決定的に 1 語を選ぶ。同じ日は何度開いても
- * 同じ語、日が変わると別の語になる（サーバーとクライアントで結果が揺れない）。
- * 空配列なら null。
+ * 用語集から 1 語をランダムに選ぶ（ホームの「用語集から」。開くたび・引っ張って更新のたびに
+ * 別の語が出る）。`random` は [0, 1) を返す関数（テストから差し替える）。空配列なら null。
  */
-export function termOfDay(terms: readonly GlossaryTerm[], dayKey: string): GlossaryTerm | null {
+export function pickRandomTerm(
+  terms: readonly GlossaryTerm[],
+  random: () => number = Math.random,
+): GlossaryTerm | null {
   if (terms.length === 0) return null
-  // FNV-1a（32bit）。短い文字列でも日付の末尾 1 桁の違いが上位ビットまで散る
-  let hash = 0x811c9dc5
-  for (let i = 0; i < dayKey.length; i++) {
-    hash ^= dayKey.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193) >>> 0
-  }
-  return terms[hash % terms.length]
+  const index = Math.min(terms.length - 1, Math.floor(random() * terms.length))
+  return terms[index]
 }

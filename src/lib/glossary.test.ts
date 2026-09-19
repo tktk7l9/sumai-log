@@ -12,8 +12,8 @@ import {
   groupByCategory,
   relatedTerms,
   searchGlossary,
+  pickRandomTerm,
   termIdForMetric,
-  termOfDay,
 } from './glossary'
 
 /** 純粋関数の検証はこの架空の用語だけで行う（本物のデータに依存させない） */
@@ -225,18 +225,15 @@ describe('GLOSSARY（データの体裁）', () => {
   })
 })
 
-describe('termOfDay', () => {
-  it('同じ日は同じ語、空なら null', () => {
-    expect(termOfDay(fixtures, '2026-09-19')).toBe(termOfDay(fixtures, '2026-09-19'))
-    expect(termOfDay([], '2026-09-19')).toBeNull()
+describe('pickRandomTerm', () => {
+  it('乱数で添字を決める。0 なら先頭、1 に近ければ末尾、空なら null', () => {
+    expect(pickRandomTerm(fixtures, () => 0)).toBe(fixtures[0])
+    expect(pickRandomTerm(fixtures, () => 0.999999)).toBe(fixtures[fixtures.length - 1])
+    // 丸め誤差で 1 が来ても範囲外にならない
+    expect(pickRandomTerm(fixtures, () => 1)).toBe(fixtures[fixtures.length - 1])
+    expect(pickRandomTerm([], () => 0)).toBeNull()
   })
-  it('本物のデータで 1 か月ぶん回すと複数の語に散る', () => {
-    const ids = new Set(
-      Array.from(
-        { length: 30 },
-        (_, i) => termOfDay(GLOSSARY, `2026-10-${String(i + 1).padStart(2, '0')}`)?.id,
-      ),
-    )
-    expect(ids.size).toBeGreaterThan(10)
+  it('既定の乱数でも本物のデータから 1 語返る', () => {
+    expect(GLOSSARY).toContain(pickRandomTerm(GLOSSARY))
   })
 })

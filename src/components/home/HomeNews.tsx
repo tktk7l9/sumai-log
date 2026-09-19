@@ -14,7 +14,7 @@ export function HomeNews({ items }: { items: NewsEventRow[] }) {
   return (
     <Stack gap="sm">
       <Title order={2}>お知らせ</Title>
-      <NewsAgenda items={items} />
+      <NewsAgenda items={items} hideHeader />
       {items.length > 0 ? (
         <Anchor component={Link} to="/news" size="sm" fw={600} style={{ alignSelf: 'flex-start' }}>
           すべて見る

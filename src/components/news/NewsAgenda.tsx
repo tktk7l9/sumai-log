@@ -54,11 +54,14 @@ export function NewsAgenda({
   rangeStart,
   rangeEnd,
   emptyLabel = 'お知らせはありません',
+  hideHeader = false,
 }: {
   items: NewsEventRow[]
   rangeStart?: string
   rangeEnd?: string
   emptyLabel?: string
+  /** true なら「9/18 – 9/18」のようなレンジ見出しを出さない（ホーム用） */
+  hideHeader?: boolean
 }) {
   const router = useRouter()
   const navigate = useNavigate()
@@ -156,6 +159,7 @@ export function NewsAgenda({
         labels={labels}
         dateHeaderFormat={(date) => formatDateWithWeekday(dateKey(date))}
         headerFormat="M/D"
+        styles={hideHeader ? { agendaViewHeader: { display: 'none' } } : undefined}
         renderEvent={renderEvent}
         onEventClick={handleEventClick}
       />
