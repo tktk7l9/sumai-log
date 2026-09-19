@@ -25,7 +25,8 @@
     "db:migrate:local": "wrangler d1 migrations apply sumai-log --local",
     "db:migrate:remote": "wrangler d1 migrations apply sumai-log --remote",
     "db:export": "wrangler d1 export sumai-log --remote --output backups/sumai-log-$(date +%Y%m%d).sql",
-    "import:seed": "node scripts/import-seed.mjs"
+    "import:seed": "node scripts/import-seed.mjs",
+    "import:mbox": "tsx scripts/import-mbox.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.54.5",

@@ -249,6 +249,30 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
 `src/routes/api.photos.$.tsx` の TanStack Start server route（＝ミドルウェアを通る経路）
 として実装済み。
 
+### メール取込（news@sumai-log.app）
+
+設計: `docs/superpowers/specs/2026-09-19-mail-import-design.md`。
+
+**初回設定（所有者）**
+
+1. 候補 → 業者の編集で「メールの差出人ドメイン」を入れる（メルマガの差出人の `@` の右）
+2. Gmail →「設定」→「メール転送と POP/IMAP」→ 転送先アドレスに `news@sumai-log.app` を追加
+3. 設定ページ「メール取込」→ 直近の受信の「システム」行を開き、確認コードを Gmail に入力
+4. Gmail のフィルタ `from:(<業者Aのドメイン> OR <業者Bのドメイン>)` に「転送先: news@sumai-log.app」を設定
+
+**過去分の一括取込（一回きり）**
+
+1. Gmail（PC）で `from:<ドメインA> OR from:<ドメインB>` を検索 → 全選択 → ラベル `sumai-import`
+2. Google Takeout → 「メール」だけ → ラベル `sumai-import` だけ → mbox をダウンロード →
+   `seed.local/mail.mbox` に置く（gitignore 済み）
+3. 業者一覧を書き出す:
+   `npx wrangler d1 execute sumai-log --remote --json --command "SELECT id, name, news_email_domain FROM vendors" > seed.local/out/vendors.json`
+4. `npm run import:mbox -- seed.local/mail.mbox --vendors seed.local/out/vendors.json`
+5. `npx wrangler d1 execute sumai-log --remote --file seed.local/out/mails.sql`
+6. 設定ページで未割当を確認し、業者を選んで取り込む
+
+拒否・システムの受信ログは 30 日で自動的に消える。取込済み・未割当は残る。
+
 ### 6. 所有者の作業
 
 自動化しない、人がやる一回きり／随時の作業。
