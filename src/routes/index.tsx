@@ -7,6 +7,7 @@ import { HomeAgenda } from '../components/home/HomeAgenda'
 import { HomeNews } from '../components/home/HomeNews'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
+import { dateKey } from '../lib/calendar'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
@@ -36,7 +37,7 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
-  const { pending, feed, members, agenda, agendaFrom, agendaTo, news, glossaryPick } =
+  const { pending, feed, members, agenda, agendaFrom, agendaTo, news, glossaryPick, nowIso } =
     Route.useLoaderData()
   return (
     // 節と節の間は PageShell の Stack（24px）が引き受ける。ここで入れ子にしない
@@ -48,8 +49,10 @@ function Home() {
         <Title order={1}>住まいログ</Title>
       </VisuallyHidden>
       <GlossaryPick term={glossaryPick} />
-      <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} />
-      <HomeNews items={news} />
+      {/* 「今」はサーバー（listHomeEvents）が決めた値を使う。終わった予定・終わった
+          日程のお知らせは色を落とす（所有者の要望、2026-09-21） */}
+      <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} nowIso={nowIso} />
+      <HomeNews items={news} todayKey={dateKey(nowIso)} />
       <PendingVisits events={pending} />
       <RecentFeed items={feed} members={members} />
     </PageShell>

@@ -60,6 +60,8 @@ export const Route = createFileRoute('/calendar')({
       newsEventsBetween({ data: { from, to } }),
       deps.plan ? getVendorNews({ data: { id: deps.plan } }).then((r) => r.news) : null,
     ])
+    // range には listEventsBetween が返す nowIso / todayKey（サーバーが決めた「今」）も
+    // 入っている。終わった予定・終わった日程のお知らせの色を落とす基準に使う
     return { ...range, targets, places, date, newsEvents: news.news, planNews }
   },
 })
@@ -91,7 +93,8 @@ function visibleRange(date: string, view: 'day' | 'week' | 'month'): { from: str
 }
 
 function Page() {
-  const { events, targets, places, date, newsEvents, planNews } = Route.useLoaderData()
+  const { events, targets, places, date, newsEvents, planNews, nowIso, todayKey } =
+    Route.useLoaderData()
   const { d, v } = Route.useSearch()
   const navigate = useNavigate({ from: '/calendar' })
   const router = useRouter()
@@ -118,9 +121,12 @@ function Page() {
     setView(v ?? 'month')
   }, [v])
 
+  // 終わった予定は種別の色を捨ててグレーにし（toScheduleEvents）、終わった日程の
+  // お知らせは payload.past を立てて文字色を落とす（下の renderEventBody）。
+  // 所有者の要望（2026-09-21）
   const scheduleEvents = useMemo<ScheduleEventData<CalendarPayload>[]>(
-    () => [...toScheduleEvents(events), ...newsToScheduleEvents(newsEvents)],
-    [events, newsEvents],
+    () => [...toScheduleEvents(events, nowIso), ...newsToScheduleEvents(newsEvents, todayKey)],
+    [events, newsEvents, nowIso, todayKey],
   )
   const selected = d ?? date
   const newsDrawerNews = newsDrawerNewsId
@@ -193,6 +199,16 @@ function Page() {
     else if (news.eventStart) navigateToDay(news.eventStart)
   }
 
+  /** 予定の中身。終わったものは文字色を落とす（背景の色は color が決める） */
+  function renderEventBody(event: ScheduleEventData) {
+    const payload = event.payload as CalendarPayload | undefined
+    return (
+      <Text span inherit c={payload?.past ? 'dimmed' : undefined}>
+        {event.title}
+      </Text>
+    )
+  }
+
   function dayProps(key: string) {
     const name = holidayName(key)
     return name ? { style: { color: 'var(--mantine-color-red-6)' }, title: name } : {}
@@ -219,6 +235,7 @@ function Page() {
           mode="default"
           onDayClick={(next) => navigateToDay(next)}
           onEventClick={handleEventClick}
+          renderEventBody={renderEventBody}
           monthViewProps={{
             firstDayOfWeek: 1,
             weekendDays: [0, 6],
@@ -243,6 +260,21 @@ function Page() {
             />
             <Text size="xs" c="dimmed">
               自分たちの予定
+            </Text>
+          </Group>
+          <Group gap={6} wrap="nowrap">
+            <span
+              aria-hidden
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                display: 'inline-block',
+                backgroundColor: 'var(--mantine-color-gray-5)',
+              }}
+            />
+            <Text size="xs" c="dimmed">
+              終わった予定
             </Text>
           </Group>
           <Group gap={6} wrap="nowrap">
