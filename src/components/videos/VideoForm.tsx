@@ -35,12 +35,14 @@ type OEmbedResponse = {
   canonicalUrl: string
 }
 
-const empty: Values = {
+// watchedOn（観た日）の既定は「今日」なので、モジュール読み込み時ではなく
+// コンポーネントの中で計算する（VisitForm と同じ理由: Worker は長寿命で isolate を
+// またいで再利用されるため、モジュール直下で固定すると日付が古くなる）
+const empty: Omit<Values, 'watchedOn'> = {
   url: '',
   title: '',
   channel: null,
   thumbnailUrl: null,
-  watchedOn: null,
   tags: [],
   takeaways: null,
   vendorId: null,
@@ -79,8 +81,11 @@ export function VideoForm({
     }
   }, [])
 
+  // 新規作成は「今日観た」ことがほとんどなので、観た日は今日を選んだ状態で開く
+  // （所有者の要望、2026-09-21）。clearable なので要らなければ消せる
+  const today = dayjs().format('YYYY-MM-DD')
   const form = useForm<Values>({
-    initialValues: initial ? { ...empty, ...initial } : empty,
+    initialValues: initial ? { ...empty, ...initial } : { ...empty, watchedOn: today },
     validate: {
       url: (v) => {
         if (!v.trim()) return 'URL は必須です'

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 import {
+  isPastNews,
   newsToAgendaEvents,
   newsToScheduleEvents,
   nextDay,
   toScheduleEvents,
+  toScheduleStamp,
 } from './scheduleEvents'
 
 const base: EventWithLinks = {
@@ -48,7 +50,7 @@ describe('toScheduleEvents', () => {
       start: '2030-01-05 00:00:00',
       end: '2030-01-06 00:00:00',
       color: 'clay',
-      payload: { kind: 'own', eventId: 'a' },
+      payload: { kind: 'own', eventId: 'a', past: false },
     })
   })
 
@@ -108,9 +110,9 @@ describe('toScheduleEvents', () => {
     expect(result.end).toBe('2030-01-10 00:30:00')
   })
 
-  it('payload は自分たちの予定の id を持つ', () => {
+  it('payload は自分たちの予定の id を持つ。now を渡さなければ past は立たない', () => {
     const [result] = toScheduleEvents([ev({ id: 'f' })])
-    expect(result.payload).toEqual({ kind: 'own', eventId: 'f' })
+    expect(result.payload).toEqual({ kind: 'own', eventId: 'f', past: false })
   })
 })
 
@@ -143,7 +145,7 @@ describe('newsToScheduleEvents', () => {
       start: '2030-01-05 00:00:00',
       end: '2030-01-06 00:00:00',
       color: 'gray',
-      payload: { kind: 'news', newsId: 'n1' },
+      payload: { kind: 'news', newsId: 'n1', past: false },
     })
   })
 
@@ -167,7 +169,16 @@ describe('newsToScheduleEvents', () => {
 
   it('planned_event_id が付いていても情報レイヤーからは消さない', () => {
     const [result] = newsToScheduleEvents([news({ plannedEventId: 'e1' })])
-    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1' })
+    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
+  })
+
+  it('todayKey を渡すと終わった日程のお知らせに past が立つ', () => {
+    const [done] = newsToScheduleEvents([news({ eventEnd: '2030-01-05' })], '2030-01-06')
+    const [today] = newsToScheduleEvents([news({ eventEnd: '2030-01-05' })], '2030-01-05')
+    expect(done.payload).toEqual({ kind: 'news', newsId: 'n1', past: true })
+    expect(today.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
+    // 色は元からグレーなので変えない（描画側が文字色を落とす）
+    expect(done.color).toBe('gray')
   })
 })
 
@@ -182,7 +193,7 @@ describe('newsToAgendaEvents', () => {
       start: '2030-02-01 00:00:00',
       end: '2030-02-02 00:00:00',
       color: 'gray',
-      payload: { kind: 'news', newsId: 'n1' },
+      payload: { kind: 'news', newsId: 'n1', past: false },
     })
   })
 
@@ -203,5 +214,92 @@ describe('newsToAgendaEvents', () => {
       news({ id: 'b', publishedOn: '2030-01-02' }),
     ])
     expect(results.map((r) => r.id)).toEqual(['news-a', 'news-b'])
+  })
+})
+
+describe('toScheduleStamp', () => {
+  it('JST の ISO を Schedule と同じ形に揃える', () => {
+    expect(toScheduleStamp('2030-01-05T09:30:00+09:00')).toBe('2030-01-05 09:30:00')
+  })
+
+  it('日付だけなら 00:00:00 を補う', () => {
+    expect(toScheduleStamp('2030-01-05')).toBe('2030-01-05 00:00:00')
+  })
+})
+
+describe('isPastNews', () => {
+  it('日程を持たないお知らせは過去扱いしない（公開日は常に過去のため）', () => {
+    expect(isPastNews({ eventStart: null, eventEnd: null }, '2030-01-05')).toBe(false)
+  })
+
+  it('終了日の当日はまだ過去ではない', () => {
+    expect(isPastNews({ eventStart: '2030-01-05', eventEnd: null }, '2030-01-05')).toBe(false)
+    expect(isPastNews({ eventStart: '2030-01-04', eventEnd: '2030-01-05' }, '2030-01-05')).toBe(
+      false,
+    )
+  })
+
+  it('終了日を過ぎたら過去', () => {
+    expect(isPastNews({ eventStart: '2030-01-05', eventEnd: null }, '2030-01-06')).toBe(true)
+    expect(isPastNews({ eventStart: '2030-01-04', eventEnd: '2030-01-05' }, '2030-01-06')).toBe(
+      true,
+    )
+  })
+})
+
+describe('toScheduleEvents（終わった予定の色）', () => {
+  it('終了時刻を過ぎた予定はグレーになり payload.past が立つ', () => {
+    const [result] = toScheduleEvents(
+      [
+        ev({
+          id: 'p1',
+          kind: 'visit',
+          startsAt: '2030-01-05T10:00:00+09:00',
+          endsAt: '2030-01-05T11:00:00+09:00',
+          allDay: false,
+        }),
+      ],
+      '2030-01-05T12:00:00+09:00',
+    )
+    expect(result.color).toBe('gray')
+    expect(result.payload).toEqual({ kind: 'own', eventId: 'p1', past: true })
+  })
+
+  it('まだ終わっていない予定は種別の色のまま', () => {
+    const [result] = toScheduleEvents(
+      [
+        ev({
+          id: 'p2',
+          kind: 'visit',
+          startsAt: '2030-01-05T10:00:00+09:00',
+          endsAt: '2030-01-05T11:00:00+09:00',
+          allDay: false,
+        }),
+      ],
+      '2030-01-05T10:30:00+09:00',
+    )
+    expect(result.color).toBe('clay')
+    expect(result.payload).toEqual({ kind: 'own', eventId: 'p2', past: false })
+  })
+
+  it('終日の予定はその日のうちは過去にならず、翌日から過去になる', () => {
+    const allDay = ev({ id: 'p3', kind: 'meeting', startsAt: '2030-01-05', allDay: true })
+    expect(toScheduleEvents([allDay], '2030-01-05T23:59:00+09:00')[0].color).toBe('blue')
+    expect(toScheduleEvents([allDay], '2030-01-06T00:00:00+09:00')[0].color).toBe('gray')
+  })
+})
+
+describe('newsToAgendaEvents（終わった日程）', () => {
+  it('todayKey を渡すと終わった日程のお知らせに past が立つ', () => {
+    const [result] = newsToAgendaEvents([news({ eventEnd: '2030-01-05' })], '2030-01-06')
+    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: true })
+  })
+
+  it('日程の無いお知らせは past にならない', () => {
+    const [result] = newsToAgendaEvents(
+      [news({ eventStart: null, eventEnd: null, eventKind: null })],
+      '2030-12-31',
+    )
+    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
   })
 })

@@ -22,14 +22,20 @@ const newsSearchSchema = z.object({
 })
 
 /**
- * JST の 'YYYY-MM'（今月）。calendar.tsx の todayKeyJst と同じ理由でローカルに計算する
+ * JST の今日 / 今月。calendar.tsx の todayKeyJst と同じ理由でローカルに計算する
  * （server/events.ts の nowJstIso をここで import すると、そちらが import する getDb 等が
  * クライアントバンドルに含まれてしまう懸念があるため。settings.tsx が members 絡みで
  * 同じ理由から回避しているのと同じパターン）。
  */
-function currentMonthJst(): string {
+function todayKeyJst(): string {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000)
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    d.getUTCDate(),
+  ).padStart(2, '0')}`
+}
+
+function currentMonthJst(): string {
+  return todayKeyJst().slice(0, 7)
 }
 
 /** 'YYYY-MM' の初日〜末日（どちらも 'YYYY-MM-DD'） */
@@ -60,12 +66,14 @@ export const Route = createFileRoute('/news')({
       listVendorNews({ data: { vendorId: deps.v, from, to, limit: MONTH_LIMIT, offset: 0 } }),
       newsSources(),
     ])
-    return { news, sources, month }
+    // 「今日」はサーバー側で決める（終わった日程のお知らせの色を落とす基準。
+    // クライアントの時計に依らせない）
+    return { news, sources, month, todayKey: todayKeyJst() }
   },
 })
 
 function Page() {
-  const { news, sources, month } = Route.useLoaderData()
+  const { news, sources, month, todayKey } = Route.useLoaderData()
   const { v } = Route.useSearch()
   const navigate = useNavigate({ from: '/news' })
   const range = monthRange(month)
@@ -126,6 +134,7 @@ function Page() {
           rangeStart={range.from}
           rangeEnd={range.to}
           emptyLabel="この月のお知らせはありません"
+          todayKey={todayKey}
         />
       </Stack>
     </PageShell>
