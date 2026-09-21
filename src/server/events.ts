@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 import { getDb } from '../db/client'
 import { events } from '../db/schema'
-import { addDays, dateKey, monthKeys } from '../lib/calendar'
+import { dateKey, monthKeys } from '../lib/calendar'
 import { pendingVisitEvents } from '../lib/pending'
 import { eventInput } from './events.schema'
 import { currentActorEmail } from './members'
@@ -20,6 +20,12 @@ import { dateField, idInput } from './zod'
 // 公開する import パス（'./events' から eventInput/EventInput を取れる）は変えない。
 export { eventInput }
 export type { EventInput } from './events.schema'
+
+/**
+ * 日付キーの事実上の最大値。予定の日付は TEXT の 'YYYY-MM-DD' なので、
+ * between の上限にこれを渡せば「上限なし」と同じ意味になる。
+ */
+const MAX_DATE_KEY = '9999-12-31'
 
 /** 「今」。JST の ISO 文字列（Worker は UTC なので +9h して整形） */
 export function nowJstIso(): string {
@@ -93,33 +99,46 @@ export const deleteEvent = createServerFn({ method: 'POST' })
   })
 
 /**
- * ホーム用: 「記録を書きませんか」と、これからの予定（アジェンダ）4 週間ぶん
- * （「次の予定」はアジェンダと重複するため 2026-09-19 に廃止）。
- * アジェンダの窓（今日〜+27 日）は下の 90 日/365 日レンジに完全に含まれるので、
- * 同じ range を二度 DB に問い合わせず、取得済みの rows を絞り込むだけで済ませる。
+ * ホーム用: 「記録を書きませんか」と、これからの予定（アジェンダ）。
+ * アジェンダは今日以降の予定を**期間で切らずに全部**返す（所有者の要望、2026-09-21。
+ * それまでは今日〜+27 日の 4 週間ぶんだけだった）。「次の予定」はアジェンダと重複する
+ * ため 2026-09-19 に廃止。
+ *
+ * 未来側に上限を置かないので、クエリの範囲も上限なし（MAX_DATE_KEY）で引く。
+ * 日付キーは 'YYYY-MM-DD' の文字列比較なので、事実上の最大値を上限に渡せば無制限に
+ * なる。二人ぶんの予定なので件数は高々数十件で、絞り込みは取得済みの rows を
+ * フィルタするだけで済ませる（同じ range を二度 DB に問い合わせない）。
  */
 export const listHomeEvents = createServerFn().handler(async () => {
   const db = getDb()
   const now = nowJstIso()
   const today = dateKey(now)
-  // 過去 90 日〜未来 365 日を見れば十分
+  // 「記録を書きませんか」は過去 90 日ぶんを見れば十分。未来側は上限なし
   const from = dateKey(new Date(Date.parse(today) - 90 * 86400000).toISOString())
-  const to = dateKey(new Date(Date.parse(today) + 365 * 86400000).toISOString())
   const [rows, recorded] = await Promise.all([
-    listEventsWithLinks(db, from, to),
+    listEventsWithLinks(db, from, MAX_DATE_KEY),
     listRecordedEventIds(db),
   ])
   const agendaFrom = today
-  const agendaTo = addDays(agendaFrom, 27)
-  const agenda = rows.filter((e) => {
-    const key = dateKey(e.startsAt)
-    return key >= agendaFrom && key <= agendaTo
-  })
+  const agenda = rows.filter((e) => dateKey(e.startsAt) >= agendaFrom)
   return {
     pending: pendingVisitEvents(rows, recorded, now).slice(0, 5),
     agenda,
     agendaFrom,
-    agendaTo,
+    // AgendaView は rangeStart〜rangeEnd の外に出たイベントを描かないので、
+    // 終わりは「最後の予定の日」に合わせる（終了日が開始日より後の予定も欠けないよう
+    // endsAt も見る）。1 件も無ければ今日だけの空レンジ
+    agendaTo: agendaEnd(agenda, agendaFrom),
     nowIso: now,
   }
 })
+
+/** アジェンダの rangeEnd。予定が無ければ from（= 今日）そのもの */
+function agendaEnd(agenda: readonly { startsAt: string; endsAt: string | null }[], from: string) {
+  let end = from
+  for (const e of agenda) {
+    const last = dateKey(e.endsAt ?? e.startsAt)
+    if (last > end) end = last
+  }
+  return end
+}
