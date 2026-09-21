@@ -9,12 +9,14 @@ import { NewsAgenda } from '../news/NewsAgenda'
  * 済み）を `NewsAgenda`（AgendaView）で表示する（所有者の要望、2026-09-16）。0 件のときも
  * NewsAgenda 自身が「お知らせはありません」を出すので、ここでは「すべて見る」リンクの
  * 出し分けだけ持つ（0 件のときは `/news` に行っても何も無いので出さない）。
+ * `todayKey`（サーバーが決めた JST の今日）は、終わった日程のお知らせの色を落とす
+ * ために NewsAgenda へ渡す。
  */
-export function HomeNews({ items }: { items: NewsEventRow[] }) {
+export function HomeNews({ items, todayKey }: { items: NewsEventRow[]; todayKey: string }) {
   return (
     <Stack gap="sm">
       <Title order={2}>お知らせ</Title>
-      <NewsAgenda items={items} hideHeader />
+      <NewsAgenda items={items} hideHeader todayKey={todayKey} />
       {items.length > 0 ? (
         <Anchor component={Link} to="/news" size="sm" fw={600} style={{ alignSelf: 'flex-start' }}>
           すべて見る

@@ -45,6 +45,10 @@ function agendaRange(items: readonly NewsEventRow[]): { start: string; end: stri
  * なる。`/news`（月ごとのアジェンダ、fix round 1）はその月の初日/末日を明示で渡し、
  * 0 件の月でも月の範囲がヘッダーに出るようにする。`emptyLabel` も同様に省略時は
  * ホームと同じ「お知らせはありません」、`/news` は「この月のお知らせはありません」を渡す。
+ *
+ * `todayKey` を渡すと、日程が終わったお知らせ（見学会が済んだ等）の行の文字色を落とす
+ * （所有者の要望、2026-09-21）。日程を持たないお知らせは公開日しか無く、公開日は常に
+ * 過去なので落とさない。
  */
 export function NewsAgenda({
   items,
@@ -52,6 +56,7 @@ export function NewsAgenda({
   rangeEnd,
   emptyLabel = 'お知らせはありません',
   hideHeader = false,
+  todayKey,
 }: {
   items: NewsEventRow[]
   rangeStart?: string
@@ -59,11 +64,13 @@ export function NewsAgenda({
   emptyLabel?: string
   /** true なら「9/18 – 9/18」のようなレンジ見出しを出さない（ホーム用） */
   hideHeader?: boolean
+  /** 今日（JST の 'YYYY-MM-DD'）。終わった日程のお知らせの色を落とす基準 */
+  todayKey?: string
 }) {
   const navigate = useNavigate()
   const [drawerNewsId, setDrawerNewsId] = useState<string | null>(null)
 
-  const agendaEvents = newsToAgendaEvents(items)
+  const agendaEvents = newsToAgendaEvents(items, todayKey)
   const range = rangeStart && rangeEnd ? { start: rangeStart, end: rangeEnd } : agendaRange(items)
   const labels: AgendaViewProps['labels'] = { ...SCHEDULE_LABELS_JA, noEvents: emptyLabel }
   const drawerNews = drawerNewsId ? (items.find((n) => n.id === drawerNewsId) ?? null) : null
@@ -109,13 +116,16 @@ export function NewsAgenda({
     const payload = event.payload as NewsEventPayload | undefined
     const item = payload ? items.find((n) => n.id === payload.newsId) : undefined
     if (!item) return <UnstyledButton {...rootProps} />
+    // 終わった日程のお知らせは題名も補助色に落とす（バッジの色は変えない。
+    // 「見学会 9/12(土)」の日付を読めば終わったことは分かる）
+    const past = payload?.past ?? false
     return (
-      <UnstyledButton {...rootProps}>
+      <UnstyledButton {...rootProps} data-past={past ? true : undefined}>
         <Stack gap={4} py={8} px="sm">
           <Text size="sm" c="dimmed">
             {item.vendorName}
           </Text>
-          <Text size="sm" fw={600}>
+          <Text size="sm" fw={600} c={past ? 'dimmed' : undefined}>
             {item.title}
           </Text>
           {item.eventKind || item.plannedEventId || isMailNews(item.url) ? (

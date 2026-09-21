@@ -233,6 +233,21 @@ a:focus-visible {
 }
 
 /*
+ * 終わったもの（ホームの「これからの予定」で今日のうちに過ぎた予定、終わった日程の
+ * お知らせ）の行。色を落として「これから」と見分けられるようにする（所有者の要望、
+ * 2026-09-21）。`data-past` は HomeAgenda / NewsAgenda の renderEvent が行のルートに
+ * 付ける。ドット（agendaViewEventColor）の色は ScheduleEventData の color 側で
+ * グレーに落としているので、ここでは文字だけを扱う。
+ *
+ * 落とす先は `--mantine-color-dimmed`（light: gray-7 / dark: dark-2）。opacity で
+ * 薄めると本文の 4.5:1 を割るため、色そのものを差し替える。
+ */
+.mantine-AgendaView-agendaViewEvent[data-past] .mantine-AgendaView-agendaViewEventTitle,
+.mantine-AgendaView-agendaViewEvent[data-past] .mantine-AgendaView-agendaViewEventTime {
+  color: var(--mantine-color-dimmed);
+}
+
+/*
  * 上に引っ張って更新（src/components/PullToRefresh.tsx）。iOS 標準の見せ方に合わせ、
  * 本文の先頭に引いたぶんの空き（.ptr-space）を作り、その中央に放射状 12 本のスピナーを置く。
  * 引いている間（data-pulling）は指に追従させるので height の transition を切り、離した後は
