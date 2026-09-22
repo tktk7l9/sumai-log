@@ -21,6 +21,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as ApiOembedRouteImport } from './routes/api.oembed'
+import { Route as CandidatesCompareRouteImport } from './routes/candidates_.compare'
 import { Route as GlossaryTermIdRouteImport } from './routes/glossary_.$termId'
 import { Route as PlacesIdRouteImport } from './routes/places.$id'
 import { Route as ApiPhotosSplatRouteImport } from './routes/api.photos.$'
@@ -91,6 +92,11 @@ const ApiOembedRoute = ApiOembedRouteImport.update({
   path: '/api/oembed',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CandidatesCompareRoute = CandidatesCompareRouteImport.update({
+  id: '/candidates_/compare',
+  path: '/candidates/compare',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const GlossaryTermIdRoute = GlossaryTermIdRouteImport.update({
   id: '/glossary_/$termId',
   path: '/glossary/$termId',
@@ -151,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
+  '/candidates/compare': typeof CandidatesCompareRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
+  '/candidates/compare': typeof CandidatesCompareRoute
   '/glossary/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
@@ -198,6 +206,7 @@ export interface FileRoutesById {
   '/sources': typeof SourcesRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
+  '/candidates_/compare': typeof CandidatesCompareRoute
   '/glossary_/$termId': typeof GlossaryTermIdRoute
   '/places/$id': typeof PlacesIdRoute
   '/api/photos/$': typeof ApiPhotosSplatRoute
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/sources'
     | '/api/geocode'
     | '/api/oembed'
+    | '/candidates/compare'
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
@@ -246,6 +256,7 @@ export interface FileRouteTypes {
     | '/sources'
     | '/api/geocode'
     | '/api/oembed'
+    | '/candidates/compare'
     | '/glossary/$termId'
     | '/places/$id'
     | '/api/photos/$'
@@ -269,6 +280,7 @@ export interface FileRouteTypes {
     | '/sources'
     | '/api/geocode'
     | '/api/oembed'
+    | '/candidates_/compare'
     | '/glossary_/$termId'
     | '/places/$id'
     | '/api/photos/$'
@@ -293,6 +305,7 @@ export interface RootRouteChildren {
   SourcesRoute: typeof SourcesRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiOembedRoute: typeof ApiOembedRoute
+  CandidatesCompareRoute: typeof CandidatesCompareRoute
   GlossaryTermIdRoute: typeof GlossaryTermIdRoute
   PlacesIdRoute: typeof PlacesIdRoute
   ApiPhotosSplatRoute: typeof ApiPhotosSplatRoute
@@ -390,6 +403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiOembedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/candidates_/compare': {
+      id: '/candidates_/compare'
+      path: '/candidates/compare'
+      fullPath: '/candidates/compare'
+      preLoaderRoute: typeof CandidatesCompareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/glossary_/$termId': {
       id: '/glossary_/$termId'
       path: '/glossary/$termId'
@@ -469,6 +489,7 @@ const rootRouteChildren: RootRouteChildren = {
   SourcesRoute: SourcesRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiOembedRoute: ApiOembedRoute,
+  CandidatesCompareRoute: CandidatesCompareRoute,
   GlossaryTermIdRoute: GlossaryTermIdRoute,
   PlacesIdRoute: PlacesIdRoute,
   ApiPhotosSplatRoute: ApiPhotosSplatRoute,

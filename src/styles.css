@@ -248,6 +248,22 @@ a:focus-visible {
 }
 
 /*
+ * 候補の比較表（/candidates/compare）。列＝業者なので、スマホでは横にスクロールする。
+ * 項目名の列（各行の th）だけ左に固定して、どの行を見ているか分かるようにする。
+ * 固定した th は下のセルが透けないよう面の色で塗る（見出し行の th は Mantine の
+ * stickyHeader が上に固定するので、左上の 1 マスは両方に効く）。
+ */
+.compare-table th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background-color: var(--mantine-color-body);
+}
+.compare-table thead th:first-child {
+  z-index: 3;
+}
+
+/*
  * 上に引っ張って更新（src/components/PullToRefresh.tsx）。iOS 標準の見せ方に合わせ、
  * 本文の先頭に引いたぶんの空き（.ptr-space）を作り、その中央に放射状 12 本のスピナーを置く。
  * 引いている間（data-pulling）は指に追従させるので height の transition を切り、離した後は

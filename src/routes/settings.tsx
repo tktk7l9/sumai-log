@@ -21,6 +21,7 @@ import { ColorSchemeSetting } from '../components/ColorSchemeSetting'
 import { MemberChip } from '../components/MemberChip'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
+import { BuildPlanCard } from '../components/settings/BuildPlanCard'
 import { MailImportCard } from '../components/settings/MailImportCard'
 import { NEWS_SOURCE_LABEL } from '../db/schema'
 import { extractErrorMessage } from '../lib/formError'
@@ -31,6 +32,7 @@ import { photoUrl } from '../lib/photos'
 import { listMailImport } from '../server/mails'
 import { fetchNewsNow, newsSources as loadNewsSources, reparseNewsEvents } from '../server/news'
 import { listLinkTargets } from '../server/places'
+import { getBuildPlan } from '../server/research'
 import { getSettings, saveHomeAreas } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
@@ -44,13 +46,14 @@ function truncateForDisplay(url: string): string {
 export const Route = createFileRoute('/settings')({
   component: Page,
   loader: async () => {
-    const [settings, tags, news, favicons, mail, targets] = await Promise.all([
+    const [settings, tags, news, favicons, mail, targets, buildPlan] = await Promise.all([
       getSettings(),
       listTagNames(),
       loadNewsSources(),
       loadFaviconSources(),
       listMailImport(),
       listLinkTargets(),
+      getBuildPlan(),
     ])
     return {
       ...settings,
@@ -59,6 +62,7 @@ export const Route = createFileRoute('/settings')({
       faviconVendors: favicons.vendors,
       mail,
       vendorOptions: targets.vendors,
+      buildPlan: buildPlan.plan,
     }
   },
 })
@@ -75,6 +79,7 @@ function Page() {
     faviconVendors,
     mail,
     vendorOptions,
+    buildPlan,
   } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveHomeAreas)
@@ -235,6 +240,8 @@ function Page() {
           </form>
         </Stack>
       </Card>
+
+      <BuildPlanCard plan={buildPlan} />
 
       <Card withBorder padding="md">
         <Stack gap="sm">
