@@ -11,7 +11,9 @@ import {
   formatTsuboRange,
   judgeBudget,
   parseBuildPlan,
+  parseHiddenIds,
   presentFacts,
+  serializeHiddenIds,
 } from './research'
 
 describe('parseBuildPlan', () => {
@@ -121,5 +123,23 @@ describe('emptyResearch', () => {
       sections: [],
       sources: [],
     })
+  })
+})
+
+describe('parseHiddenIds / serializeHiddenIds', () => {
+  const a = '11111111-1111-4111-8111-111111111111'
+  const b = '22222222-2222-4222-8222-222222222222'
+
+  it('カンマ区切りの UUID を読み、空白・重複・UUID でないものは捨てる', () => {
+    expect(parseHiddenIds(`${a}, ${b},${a},not-a-uuid,`)).toEqual([a, b])
+    expect(parseHiddenIds('')).toEqual([])
+    expect(parseHiddenIds(null)).toEqual([])
+    expect(parseHiddenIds(undefined)).toEqual([])
+  })
+
+  it('往復できる。空なら undefined', () => {
+    expect(serializeHiddenIds([a, b])).toBe(`${a},${b}`)
+    expect(parseHiddenIds(serializeHiddenIds([a, b]))).toEqual([a, b])
+    expect(serializeHiddenIds([])).toBeUndefined()
   })
 })

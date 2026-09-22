@@ -9,6 +9,8 @@
  * 土地の所在や資金の内訳など一次情報はアプリの外に置く（design.md §1）ので持たない。
  */
 
+import { UUID_SHAPE } from './ids'
+
 /** 比較表に並べる事実のキー。並びは比較表の行順 */
 export const RESEARCH_FACT_KEYS = [
   'founded',
@@ -169,4 +171,23 @@ export function presentFacts(
 /** 空の調査メモ（フォームの初期値）。日付は呼び出し側が「今日」を渡す */
 export function emptyResearch(researchedOn: string): VendorResearch {
   return { version: 1, researchedOn, summary: '', facts: {}, sections: [], sources: [] }
+}
+
+/**
+ * 比較表で個別に隠した業者の id（URL の `h`、カンマ区切り）を読む。壊れた値・UUID で
+ * ない値・重複は黙って捨てる（古いブックマークや手打ちで落ちないように）。
+ */
+export function parseHiddenIds(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  const seen = new Set<string>()
+  for (const part of raw.split(',')) {
+    const id = part.trim()
+    if (id && UUID_SHAPE.test(id)) seen.add(id)
+  }
+  return [...seen]
+}
+
+/** `parseHiddenIds` の逆。空なら undefined（URL からパラメータごと消す） */
+export function serializeHiddenIds(ids: readonly string[]): string | undefined {
+  return ids.length > 0 ? ids.join(',') : undefined
 }
