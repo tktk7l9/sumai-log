@@ -13,7 +13,7 @@ import {
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
@@ -24,6 +24,9 @@ import { StatusBadge } from '../components/candidates/StatusBadge'
 import { VendorForm } from '../components/candidates/VendorForm'
 import { VendorLinks } from '../components/candidates/VendorLinks'
 import { PlaceForm } from '../components/places/PlaceForm'
+import { CostEstimate } from '../components/research/CostEstimate'
+import { ResearchForm } from '../components/research/ResearchForm'
+import { ResearchSection } from '../components/research/ResearchSection'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
@@ -32,6 +35,7 @@ import { photoUrl, representativeThumbKeyFromDisplayKey } from '../lib/photos'
 import { deleteVendor, getVendor } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
+import { getBuildPlan } from '../server/research'
 import { getHomeAreas } from '../server/settings'
 
 /** DetailRow のラベルに添える「用語集で見る」リンク。見出し語自体をリンクにする */
@@ -57,23 +61,25 @@ function MetricLabel({
 export const Route = createFileRoute('/candidates_/vendors/$id')({
   component: Page,
   loader: async ({ params }) => {
-    const [detail, homeAreas, targets, commentData] = await Promise.all([
+    const [detail, homeAreas, targets, commentData, buildPlan] = await Promise.all([
       getVendor({ data: { id: params.id } }),
       getHomeAreas(),
       listLinkTargets(),
       listCommentsFor({ data: { targetType: 'vendor', targetId: params.id } }),
+      getBuildPlan(),
     ])
-    return { ...detail, homeAreas, targets, ...commentData }
+    return { ...detail, homeAreas, targets, ...commentData, buildPlan: buildPlan.plan }
   },
 })
 
 function Page() {
-  const { vendor, places, coversHome, homeAreas, targets, comments, me, members } =
+  const { vendor, places, coversHome, homeAreas, targets, comments, me, members, buildPlan } =
     Route.useLoaderData()
   const navigate = useNavigate()
   const remove = useServerFn(deleteVendor)
   const [editing, setEditing] = useState(false)
   const [addingPlace, setAddingPlace] = useState(false)
+  const [editingResearch, setEditingResearch] = useState(false)
 
   async function handleDelete() {
     if (!window.confirm(`「${vendor.name}」を削除します。場所・予定・記録は残ります。`)) return
@@ -206,6 +212,38 @@ function Page() {
       </Card>
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
 
+      {/* 建築計画（設定）があれば、この業者の坪単価で本体・総額の目安を出す */}
+      {buildPlan ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            <Title order={2}>計画に対する目安</Title>
+            <CostEstimate vendor={vendor} plan={buildPlan} />
+          </Stack>
+        </Card>
+      ) : null}
+
+      {/* 調査メモ。無ければ「書く」ボタンだけ出す（比較表 /candidates/compare の元にもなる） */}
+      <Stack gap="xs">
+        <Group justify="space-between" align="center">
+          <Title order={2}>調査メモ</Title>
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={<NotebookPen size={14} aria-hidden />}
+            onClick={() => setEditingResearch(true)}
+          >
+            {vendor.research ? '編集' : '書く'}
+          </Button>
+        </Group>
+        {vendor.research ? (
+          <ResearchSection research={vendor.research} />
+        ) : (
+          <Text size="sm" c="dimmed">
+            まだ調べたことを書いていません。特徴・性能・価格・保証・平屋の実績などをまとめると、比較表に並びます。
+          </Text>
+        )}
+      </Stack>
+
       {vendor.affiliations.length > 0 ? (
         <Stack gap="xs">
           <Title order={2}>加盟団体</Title>
@@ -300,6 +338,19 @@ function Page() {
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="業者を編集">
         <VendorForm vendor={vendor} homeAreas={homeAreas} onSaved={() => setEditing(false)} />
+      </FormDrawer>
+      <FormDrawer
+        opened={editingResearch}
+        onClose={() => setEditingResearch(false)}
+        title="調査メモ"
+      >
+        {editingResearch ? (
+          <ResearchForm
+            vendorId={vendor.id}
+            research={vendor.research ?? null}
+            onSaved={() => setEditingResearch(false)}
+          />
+        ) : null}
       </FormDrawer>
       <FormDrawer opened={addingPlace} onClose={() => setAddingPlace(false)} title="場所を追加">
         <PlaceForm
