@@ -1,6 +1,19 @@
-import { Avatar, Badge, Group, Stack, Switch, Table, Text } from '@mantine/core'
-import { Link, createFileRoute } from '@tanstack/react-router'
+import {
+  ActionIcon,
+  Avatar,
+  Badge,
+  Button,
+  Chip,
+  Group,
+  Stack,
+  Switch,
+  Table,
+  Text,
+} from '@mantine/core'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { EyeOff } from 'lucide-react'
 import { useState } from 'react'
+import { z } from 'zod'
 
 import { PageShell } from '../components/PageShell'
 import { StatusBadge } from '../components/candidates/StatusBadge'
@@ -15,6 +28,8 @@ import {
   RESEARCH_FACT_LABEL,
   formatManYen,
   formatTsuboRange,
+  parseHiddenIds,
+  serializeHiddenIds,
 } from '../lib/research'
 import { listCandidates } from '../server/candidates'
 import { getBuildPlan } from '../server/research'
@@ -24,9 +39,19 @@ import { getBuildPlan } from '../server/research'
  * を改める）。列＝業者、行＝項目。スマホでは横スクロールし、項目名の列だけ左に固定する
  * （styles.css の .compare-table）。行は「登録済みの数値（UA 値・耐震等級・坪単価…）」→
  * 「調査メモの事実（RESEARCH_FACT_KEYS の順）」→「建築計画に対する目安」の順。
+ *
+ * 列の見出しの「非表示」で業者を個別に隠せる（所有者の要望、2026-09-22）。隠した id は URL の
+ * `h`（カンマ区切り）に持つ: リロード・戻る・共有で同じ見え方になり、隠した業者は表の上の
+ * チップから 1 社ずつ戻せる。「見送り」の一括非表示（スイッチ）とは独立
  */
+const search = z.object({
+  // 壊れた値は「何も隠さない」に倒す（UUID でない要素は parseHiddenIds が捨てる）
+  h: z.string().max(2000).optional().catch(undefined),
+})
+
 export const Route = createFileRoute('/candidates_/compare')({
   component: Page,
+  validateSearch: (s) => search.parse(s),
   loader: async () => {
     const [{ vendors }, { plan }] = await Promise.all([listCandidates(), getBuildPlan()])
     return { vendors, plan }
@@ -38,10 +63,27 @@ const LABEL_WIDTH = 112
 
 function Page() {
   const { vendors, plan } = Route.useLoaderData()
+  const { h } = Route.useSearch()
+  const navigate = useNavigate({ from: '/candidates/compare' })
   // 「見送り」は既定で隠す（比べたい相手ではないため）。スイッチで出せる
   const [showDropped, setShowDropped] = useState(false)
-  const shown = vendors.filter((v) => showDropped || v.status !== 'dropped')
+  // 個別に隠した業者。存在しない id（削除済み等）はチップに出せないので落とす
+  const hiddenIds = parseHiddenIds(h).filter((id) => vendors.some((v) => v.id === id))
+  const hiddenVendors = hiddenIds.map((id) => vendors.find((v) => v.id === id)!)
+  const shown = vendors.filter(
+    (v) => (showDropped || v.status !== 'dropped') && !hiddenIds.includes(v.id),
+  )
   const droppedCount = vendors.length - vendors.filter((v) => v.status !== 'dropped').length
+
+  function setHidden(ids: string[]) {
+    navigate({ search: (s) => ({ ...s, h: serializeHiddenIds(ids) }), replace: true })
+  }
+  function hide(id: string) {
+    setHidden([...hiddenIds, id])
+  }
+  function unhide(id: string) {
+    setHidden(hiddenIds.filter((x) => x !== id))
+  }
 
   const rows: { label: string; cell: (v: (typeof shown)[number]) => React.ReactNode }[] = [
     { label: '状態', cell: (v) => <StatusBadge status={v.status} /> },
@@ -105,9 +147,34 @@ function Page() {
             onChange={(e) => setShowDropped(e.currentTarget.checked)}
           />
         ) : null}
+        {hiddenVendors.length > 0 ? (
+          // 隠した業者はチップで並べ、押すと戻る（Chip の checked=false を「隠れている」の
+          // 印にする）。全部戻すボタンも添える
+          <Group gap="xs" align="center">
+            <Text size="sm" c="dimmed">
+              非表示:
+            </Text>
+            {hiddenVendors.map((v) => (
+              <Chip
+                key={v.id}
+                size="xs"
+                checked={false}
+                onChange={() => unhide(v.id)}
+                aria-label={`${v.name} を表示する`}
+              >
+                {v.name}
+              </Chip>
+            ))}
+            <Button variant="subtle" size="compact-xs" onClick={() => setHidden([])}>
+              すべて表示
+            </Button>
+          </Group>
+        ) : null}
         {shown.length === 0 ? (
           <Text size="sm" c="dimmed">
-            比べる業者がありません。候補から業者を登録してください。
+            {vendors.length === 0
+              ? '比べる業者がありません。候補から業者を登録してください。'
+              : '表示中の業者がありません。上のチップやスイッチから戻せます。'}
           </Text>
         ) : (
           <Table.ScrollContainer minWidth={LABEL_WIDTH + COLUMN_WIDTH * shown.length} type="native">
@@ -124,26 +191,38 @@ function Page() {
                   {shown.map((v) => (
                     <Table.Th key={v.id} style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}>
                       <Stack gap={4}>
-                        <Link
-                          to="/candidates/vendors/$id"
-                          params={{ id: v.id }}
-                          style={{ textDecoration: 'none', color: 'inherit' }}
-                        >
-                          <Group gap={6} wrap="nowrap" align="center">
-                            <Avatar
-                              src={v.faviconKey ? photoUrl(v.faviconKey) : null}
-                              size={20}
-                              radius="xs"
-                              color="gray"
-                              alt=""
-                            >
-                              {v.name.charAt(0)}
-                            </Avatar>
-                            <Text component="span" fw={700} lineClamp={2} lh={1.4}>
-                              {v.name}
-                            </Text>
-                          </Group>
-                        </Link>
+                        <Group gap={4} wrap="nowrap" align="flex-start" justify="space-between">
+                          <Link
+                            to="/candidates/vendors/$id"
+                            params={{ id: v.id }}
+                            style={{ textDecoration: 'none', color: 'inherit' }}
+                          >
+                            <Group gap={6} wrap="nowrap" align="center">
+                              <Avatar
+                                src={v.faviconKey ? photoUrl(v.faviconKey) : null}
+                                size={20}
+                                radius="xs"
+                                color="gray"
+                                alt=""
+                              >
+                                {v.name.charAt(0)}
+                              </Avatar>
+                              <Text component="span" fw={700} lineClamp={2} lh={1.4}>
+                                {v.name}
+                              </Text>
+                            </Group>
+                          </Link>
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            size="sm"
+                            aria-label={`${v.name} を非表示にする`}
+                            title="非表示"
+                            onClick={() => hide(v.id)}
+                          >
+                            <EyeOff size={14} aria-hidden />
+                          </ActionIcon>
+                        </Group>
                         {v.research?.summary ? (
                           <Text size="xs" c="dimmed" fw={400} lineClamp={3}>
                             {v.research.summary}
