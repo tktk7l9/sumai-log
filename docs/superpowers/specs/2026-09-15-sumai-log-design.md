@@ -9,7 +9,7 @@
 決まっていること:
 - 利用者は二人だけ。公開サイトにしない
 - カレンダーはアプリ内で完結（外部カレンダー連携なし）
-- **記録だけ**。採点・比較表・意思決定支援は持たない
+- **記録だけ**。採点・意思決定支援は持たない。比較表だけは 2026-09-22 に例外として追加した（候補の業者を横に並べる `/candidates/compare`。順位付け・採点はしない。「調査メモ」（`vendors.research`）と「建築計画」（`settings.buildPlan`: 階数・坪数・土地以外の予算の 3 点）を元にする）
 - 写真はスマホからアプリへ直接アップロード
 - モバイルファースト。UI/UX にこだわる
 
@@ -41,6 +41,7 @@
 | 予定 | `/calendar` | 月カレンダー（`@mantine/dates` の `renderDay` で予定ドット）＋選択日のリスト。種別=見学/打合せ/内覧/その他 |
 | 記録 | `/records`（`?tab=visits\|videos`） | 見学記録と YouTube メモを SegmentedControl で切替。サムネ付きカード一覧。FAB は 2 択メニューではなく、アクティブなタブに応じてラベルが変わる（見学記録タブ→「記録を書く」／YouTube タブ→「YouTube」） |
 | 候補 | `/candidates` | 戸建て業者とマンション物件を切替。業者は「施工エリアに建築予定地の市区町村（設定値）を含む」フィルタと状態フィルタ |
+| 候補の比較 | `/candidates/compare` | 業者を列、項目（登録済みの数値・調査メモの事実・建築計画に対する目安）を行にした比較表。見送りは既定で隠す。2026-09-22 追加 |
 | 地図 | `/map` | Leaflet + 地理院タイル。行った場所は塗りピン、予定だけの場所は枠ピン。タップで下からカード→詳細へ。現在地ボタン |
 
 詳細: `/candidates/vendors/$id` `/candidates/properties/$id` `/places/$id` `/records/visits/$id` `/records/videos/$id`。設定 `/settings`（建築予定地の市区町村・タグ一覧・自分の表示名）。
@@ -57,7 +58,7 @@
 
 | テーブル | 主な列 | 備考 |
 |---|---|---|
-| `vendors` 業者 | name, kind(hm/koumuten/sekkei/developer), hq, serviceAreas(JSON: 市区町村名の配列), uaValue, cValuePublished, seismicGrade, longTermCertified, pricePerTsuboMin/Max(万円), structure, features, status, sourceUrl, websiteUrl | `serviceAreas` に設定値の市区町村を含むかで一覧フィルタ |
+| `vendors` 業者 | name, kind(hm/koumuten/sekkei/developer), hq, serviceAreas(JSON: 市区町村名の配列), uaValue, cValuePublished, seismicGrade, longTermCertified, pricePerTsuboMin/Max(万円), structure, features, status, sourceUrl, websiteUrl, research(JSON: 調査メモ。`src/lib/research.ts` の VendorResearch) | `serviceAreas` に設定値の市区町村を含むかで一覧フィルタ。`research` は業者フォームとは別の「調査メモ」フォームだけが書く |
 | `properties` マンション物件 | name, address, station, walkMinutes, price, areaSqm, layout, builtYear/completionDate, managementFee, repairReserve, listingUrl, status | |
 | `places` 場所 | name, kind(showroom/model_house/open_house/gallery/site/other), address, lat, lng, geocodeSource(gsi/manual/null), vendorId?, propertyId?, note | 地図の単位。同じ展示場に何度も行ける |
 | `events` 予定 | title, kind(visit/meeting/viewing/other), startsAt, endsAt, allDay, placeId?, vendorId?, propertyId?, note | 終日は日付のみ |
@@ -66,7 +67,7 @@
 | `videos` YouTube | url, videoId, title, channel, thumbnailUrl, watchedOn, watchedBy, tags(JSON), takeaways, vendorId? | title/channel/thumbnail は保存時に oEmbed で自動取得（編集可） |
 | `comments` | targetType(vendor/property/place/visit/video), targetId, body | 二人がどの記録にも一言足せる汎用の場 |
 | `tags` | name, sortOrder | 初期値: 断熱・気密・耐震・間取り・資金・ローン・土地・マンション・管理・設備・外構 |
-| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）など。画面から編集 |
+| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）、`buildPlan`（建築計画: floors/tsuboMin/tsuboMax/budgetManYen、JSON）など。画面から編集 |
 | `geocode_cache` | query, lat, lng, fetchedAt | 同じ住所を二度引かない |
 
 `status` は業者・物件で共通: `interested` / `visited` / `consulting` / `shortlisted` / `dropped`。
@@ -75,7 +76,7 @@
 
 住所→座標: 場所の保存時に国土地理院 住所検索 API（キー不要・同一 IP 10 秒 10 回・継続保証なし）を Worker から 1 回だけ呼び `geocode_cache` に入れる。取れなければ座標の手貼り（度分秒/十進を受ける）。地図に出せない場所は「出せない理由」を画面に書く。
 
-持たないもの: 採点・比較表・通知・外部カレンダー連携・オフライン編集・写真原本の保存・リアルタイム同期・全文検索。
+持たないもの: 採点・通知・外部カレンダー連携・オフライン編集・写真原本の保存・リアルタイム同期・全文検索（比較表は §1 のとおり 2026-09-22 に例外として追加）。
 
 ## 5. 認証・環境変数
 

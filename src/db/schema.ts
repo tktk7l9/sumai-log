@@ -8,6 +8,7 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 
+import type { VendorResearch } from '../lib/research'
 import { CANDIDATE_STATUSES } from '../lib/status'
 
 /**
@@ -111,6 +112,10 @@ export const vendors = sqliteTable(
     faviconKey: text('favicon_key'),
     /** favicon_key の由来（'auto' | 'manual'）。null は 'auto' 扱い（上の FAVICON_SOURCES 参照） */
     faviconSource: text('favicon_source', { enum: FAVICON_SOURCES }),
+    /** 調査メモ（比較表の事実・読み物・出典）。形は src/lib/research.ts の VendorResearch。
+     * 未調査なら null。保存は saveVendorResearch（src/server/research.ts）だけが行い、
+     * 業者フォーム（vendorInput）はこの列に触らない */
+    research: text('research', { mode: 'json' }).$type<VendorResearch>(),
     createdBy: createdBy(),
     ...timestamps,
   },
