@@ -1,5 +1,6 @@
-import { Chip, Group, SegmentedControl, SimpleGrid, Stack, Title } from '@mantine/core'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Button, Chip, Group, SegmentedControl, SimpleGrid, Stack, Title } from '@mantine/core'
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Columns3 } from 'lucide-react'
 import { useState } from 'react'
 import { z } from 'zod'
 
@@ -80,7 +81,7 @@ function Page() {
             ]}
           />
         ) : null}
-        <Group gap="xs">
+        <Group gap="xs" justify="space-between" align="center">
           <Chip.Group
             value={status ?? null}
             onChange={(v) =>
@@ -95,6 +96,18 @@ function Page() {
               ))}
             </Group>
           </Chip.Group>
+          {/* 業者が 2 社以上あるときだけ比較表へ（1 社では比べるものが無い） */}
+          {tab === 'vendors' && vendors.length >= 2 ? (
+            <Button
+              component={Link}
+              to="/candidates/compare"
+              variant="default"
+              size="xs"
+              leftSection={<Columns3 size={14} aria-hidden />}
+            >
+              比較表
+            </Button>
+          ) : null}
         </Group>
 
         {tab === 'vendors' ? (

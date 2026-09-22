@@ -67,6 +67,14 @@
   import して使う）の両方に同じ実装がある。片方だけ変えない（seed 側は plain `.mjs` で
   TS を import できないため、あえて重複させている）。一致は `src/lib/normalize-parity.test.ts`
   が両実装に同じケースを流して固定している。直すときは両方直してこのテストを green に保つ
+- 業者の調査メモ（`vendors.research`、JSON。形は `src/lib/research.ts` の `VendorResearch`）は
+  `saveVendorResearch`（`src/server/research.ts`）だけが書く。業者フォーム（`vendorInput`）は
+  この列を持たないので、業者の他の項目を保存しても調査メモは消えない（`upsertVendor` は
+  渡されないキーを触らない）。比較表 `/candidates/compare` と業者詳細の「計画に対する目安」は
+  設定 `buildPlan`（`src/lib/research.ts` の `BuildPlan`: 階数・坪数レンジ・土地以外の予算）を
+  使う。土地の所在や資金の内訳は持たない（design.md §1）。調査内容そのものは実データなので
+  リポジトリに書かず、SQL を `seed.local/out/` に用意して所有者が流す（下の「本番 D1 への
+  一回きりの書き込み」と同じ）
 - 見た目のトークンは `src/theme.ts`（Mantine テーマ・配色）と `src/styles.css`（`--sumai-*` の
   CSS 変数）に集約。コントラストは本文 4.5:1・UI 部品（ボーダー等）3:1 を満たすこと
 - 業者のお知らせ取得（`src/lib/news/`）は純粋関数のみ: `rss.ts`（RSS 2.0 の `<item>` 抽出）・
