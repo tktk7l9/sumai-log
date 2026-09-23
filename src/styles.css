@@ -299,6 +299,13 @@ a:focus-visible {
   stroke-width: 1;
   stroke-dasharray: 4 3;
 }
+.site-access {
+  fill: var(--mantine-color-gray-6);
+  fill-opacity: 0.18;
+  stroke: var(--mantine-color-gray-6);
+  stroke-width: 1;
+  stroke-dasharray: 6 3;
+}
 .site-section {
   fill: var(--mantine-color-clay-6);
   fill-opacity: 0.16;

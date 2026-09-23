@@ -42,6 +42,15 @@ export type SitePlan = {
   /** 区画が道路に接しないとき、道路から区画までの通路（路地状部分）の幅と、区画のどちらの辺に付けるか */
   flagWidth: number
   flagSide: 'left' | 'right'
+  /**
+   * 残りの土地（月極駐車場など）へ道路から入るための通路。区画の奥に土地が残るとき、
+   * 土地の左右どちらかの端に道路から奥まで幅 accessWidth の帯を空け、区画はそこに
+   * かからないようにする（道路に面する辺が 1 つしかない土地で、手前に区画を取っても
+   * 奥を使い続けるため）。通路は残りの土地の一部（自分たちの敷地ではない）
+   */
+  parkingAccess: boolean
+  accessWidth: number
+  accessSide: 'left' | 'right'
   /** 建物（平屋の外形）。奥行は buildingTsubo と幅から決まる。位置は区画の左手前からの距離 */
   buildingTsubo: number
   buildingWidth: number
@@ -64,6 +73,9 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   sectionY: 0,
   flagWidth: 2.5,
   flagSide: 'left',
+  parkingAccess: true,
+  accessWidth: 4,
+  accessSide: 'right',
   buildingTsubo: 35,
   buildingWidth: 14,
   buildingX: 3,
@@ -85,6 +97,7 @@ const NUMBER_KEYS = [
   'sectionX',
   'sectionY',
   'flagWidth',
+  'accessWidth',
   'buildingTsubo',
   'buildingWidth',
   'buildingX',
@@ -104,13 +117,22 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     return null
   }
   if (!isRecord(parsed) || parsed.version !== 1) return null
+  // 駐車場への通路（parkingAccess 以下）は後から足した項目。保存済みの古い値に無ければ既定値で補う
+  const data: Record<string, unknown> = {
+    parkingAccess: DEFAULT_SITE_PLAN.parkingAccess,
+    accessWidth: DEFAULT_SITE_PLAN.accessWidth,
+    accessSide: DEFAULT_SITE_PLAN.accessSide,
+    ...parsed,
+  }
   for (const key of NUMBER_KEYS) {
-    const v = parsed[key]
+    const v = data[key]
     if (typeof v !== 'number' || !Number.isFinite(v)) return null
   }
-  if (!ROAD_SIDES.includes(parsed.roadSide as RoadSide)) return null
-  if (parsed.flagSide !== 'left' && parsed.flagSide !== 'right') return null
-  return normalizePlan(parsed as unknown as SitePlan)
+  if (!ROAD_SIDES.includes(data.roadSide as RoadSide)) return null
+  if (data.flagSide !== 'left' && data.flagSide !== 'right') return null
+  if (typeof data.parkingAccess !== 'boolean') return null
+  if (data.accessSide !== 'left' && data.accessSide !== 'right') return null
+  return normalizePlan(data as unknown as SitePlan)
 }
 
 /** 0.1 m 単位に丸める（ドラッグで出る細かい端数を持たない） */
@@ -135,15 +157,31 @@ export function buildingDepth(plan: SitePlan): number {
 /**
  * 値を土地・区画の中に収める。区画の幅は土地の間口まで、区画は土地の中、建物は区画の中
  * （外壁後退は「収める」対象にせず、判定で知らせる）。路地状部分の幅は区画の幅まで。
+ *
+ * 駐車場への通路（parkingAccess）が有効で区画の奥に土地が残るときは、土地の端の通路の帯を
+ * 避けるよう区画の幅と左右の位置を詰める。幅を詰めると奥行が伸びるので、奥行を求め直して
+ * から道路からの距離を収め直す（詰めた幅はそのまま残し、勝手に広げ直さない）。
  */
 export function normalizePlan(plan: SitePlan): SitePlan {
   const landWidth = Math.max(plan.landWidth, 1)
   const landDepth = Math.max(plan.landDepth, 1)
-  const sectionWidth = clamp(plan.sectionWidth, 1, landWidth)
-  const next: SitePlan = { ...plan, landWidth, landDepth, sectionWidth }
-  const sDepth = sectionDepth(next)
-  next.sectionX = round1(clamp(plan.sectionX, 0, landWidth - sectionWidth))
-  next.sectionY = round1(clamp(plan.sectionY, 0, landDepth - sDepth))
+  const accessWidth = clamp(plan.accessWidth, 0, landWidth - 1)
+  let sectionWidth = clamp(plan.sectionWidth, 1, landWidth)
+  const next: SitePlan = { ...plan, landWidth, landDepth, accessWidth, sectionWidth }
+  let sDepth = sectionDepth(next)
+  let sectionY = clamp(plan.sectionY, 0, landDepth - sDepth)
+  const leavesBack = landDepth - sectionY - sDepth > 0.01
+  const lane = plan.parkingAccess && accessWidth > 0 && leavesBack
+  if (lane) {
+    sectionWidth = clamp(sectionWidth, 1, landWidth - accessWidth)
+    next.sectionWidth = sectionWidth
+    sDepth = sectionDepth(next)
+    sectionY = clamp(sectionY, 0, landDepth - sDepth)
+  }
+  const minX = lane && plan.accessSide === 'left' ? accessWidth : 0
+  const maxX = lane && plan.accessSide === 'right' ? landWidth - accessWidth : landWidth
+  next.sectionX = round1(clamp(plan.sectionX, minX, maxX - sectionWidth))
+  next.sectionY = round1(sectionY)
   next.flagWidth = clamp(plan.flagWidth, 0, sectionWidth)
   next.buildingWidth = clamp(plan.buildingWidth, 1, sectionWidth)
   const bDepth = buildingDepth(next)
@@ -165,6 +203,21 @@ export function flagRect(plan: SitePlan): Rect | null {
     plan.flagSide === 'left' ? plan.sectionX : plan.sectionX + plan.sectionWidth - plan.flagWidth
   return { x, y: 0, width: plan.flagWidth, depth: plan.sectionY }
 }
+
+/**
+ * 残りの土地（駐車場）への通路。道路から区画の奥の端まで、土地の左右どちらかの端に取る。
+ * 通路が無効、または区画の奥に土地が残らない（区画が土地の奥まで届く）なら null
+ */
+export function accessRect(plan: SitePlan): Rect | null {
+  if (!plan.parkingAccess || plan.accessWidth <= 0) return null
+  const reach = plan.sectionY + sectionDepth(plan)
+  if (plan.landDepth - reach <= 0.01) return null
+  const x = plan.accessSide === 'left' ? 0 : plan.landWidth - plan.accessWidth
+  return { x, y: 0, width: plan.accessWidth, depth: reach }
+}
+
+/** 駐車台数の概算に使う 1 台あたりの面積（㎡。区画 2.5×5m に通路の取り分を足した目安） */
+export const PARKING_M2_PER_CAR = 30
 
 /** 建物の外形（土地の座標系） */
 export function buildingRect(plan: SitePlan): Rect {
@@ -218,6 +271,8 @@ export type SiteEvaluation = {
   coverageUsed: number
   floorAreaUsed: number
   southGap: number
+  /** 駐車場への通路の面積（残りの土地に含む）。通路が無ければ 0 */
+  accessArea: number
   checks: SiteCheck[]
 }
 
@@ -307,6 +362,29 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
           },
   )
 
+  // 3b. 残りの土地（駐車場）への通路
+  const access = accessRect(plan)
+  const accessArea = access ? access.width * access.depth : 0
+  if (plan.parkingAccess) {
+    const cars = Math.floor(Math.max(remainingArea, 0) / PARKING_M2_PER_CAR)
+    const capacity = `残りの土地で駐車 ${cars} 台前後（1 台あたり通路込み ${PARKING_M2_PER_CAR}㎡ の概算）`
+    checks.push(
+      access
+        ? {
+            id: 'parking',
+            status: access.width >= 4 ? 'ok' : 'warn',
+            label: '駐車場への通路',
+            detail: `幅 ${fmt(access.width)}m・長さ ${fmt(access.depth)}m（${fmt(m2ToTsubo(accessArea))}坪、残りの土地に含む）。車 1 台なら 3m、すれ違うなら 5m 程度が目安。${capacity}`,
+          }
+        : {
+            id: 'parking',
+            status: 'ok',
+            label: '駐車場への通路',
+            detail: `区画の奥に土地が残らないので通路は不要（駐車場は道路側の残りの土地）。${capacity}`,
+          },
+    )
+  }
+
   // 4. 建ぺい率・容積率
   checks.push({
     id: 'coverage',
@@ -354,6 +432,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     coverageUsed,
     floorAreaUsed,
     southGap: gap,
+    accessArea,
     checks,
   }
 }

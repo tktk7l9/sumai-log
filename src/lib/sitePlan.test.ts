@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_SITE_PLAN,
   M2_PER_TSUBO,
+  PARKING_M2_PER_CAR,
+  accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
   buildingRect,
@@ -24,8 +26,9 @@ import {
   type SitePlan,
 } from './sitePlan'
 
+// 既存の幾何・判定のテストは駐車場への通路を切った状態で見る（通路は下の describe で）
 const plan = (overrides: Partial<SitePlan> = {}): SitePlan =>
-  normalizePlan({ ...DEFAULT_SITE_PLAN, ...overrides })
+  normalizePlan({ ...DEFAULT_SITE_PLAN, parkingAccess: false, ...overrides })
 const check = (p: SitePlan, id: string) => evaluateSite(p).checks.find((c) => c.id === id)!
 
 describe('坪と㎡', () => {
@@ -62,6 +65,16 @@ describe('parseSitePlan', () => {
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, landWidth: null }))).toBeNull()
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, roadSide: 'X' }))).toBeNull()
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, flagSide: 'top' }))).toBeNull()
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, parkingAccess: 'yes' }))).toBeNull()
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, accessSide: 'top' }))).toBeNull()
+  })
+
+  it('駐車場への通路が無い古い保存値は既定値で補う', () => {
+    const { parkingAccess: _p, accessWidth: _w, accessSide: _s, ...old } = DEFAULT_SITE_PLAN
+    const parsed = parseSitePlan(JSON.stringify(old))
+    expect(parsed?.parkingAccess).toBe(true)
+    expect(parsed?.accessWidth).toBe(4)
+    expect(parsed?.accessSide).toBe('right')
   })
 })
 
@@ -215,5 +228,57 @@ describe('寄せる', () => {
     expect(moveSectionToFront(plan({ sectionY: 10 })).sectionY).toBe(0)
     const back = moveSectionToBack(plan())
     expect(back.sectionY + sectionDepth(back)).toBeCloseTo(50, 0)
+  })
+})
+
+describe('駐車場への通路', () => {
+  const withAccess = (overrides: Partial<SitePlan> = {}) =>
+    normalizePlan({ ...DEFAULT_SITE_PLAN, ...overrides })
+
+  it('手前の区画は通路の帯を避けて幅と位置が詰まり、奥行が伸びる', () => {
+    const right = withAccess({ sectionWidth: 20, sectionY: 0, accessSide: 'right', accessWidth: 4 })
+    expect(right.sectionWidth).toBe(16)
+    expect(right.sectionX).toBe(0)
+    expect(sectionDepth(right)).toBeCloseTo(tsuboToM2(100) / 16)
+    expect(accessRect(right)).toEqual({ x: 16, y: 0, width: 4, depth: sectionDepth(right) })
+
+    const left = withAccess({ sectionWidth: 20, sectionX: 0, accessSide: 'left', accessWidth: 4 })
+    expect(left.sectionX).toBe(4)
+    expect(accessRect(left)?.x).toBe(0)
+  })
+
+  it('区画が土地の奥まで届くなら通路は無く、区画も詰めない', () => {
+    const back = withAccess({ sectionWidth: 20, sectionY: 999 })
+    expect(back.sectionWidth).toBe(20)
+    expect(accessRect(back)).toBeNull()
+    const e = evaluateSite(back)
+    expect(e.accessArea).toBe(0)
+    const c = e.checks.find((x) => x.id === 'parking')!
+    expect(c.status).toBe('ok')
+    expect(c.detail).toContain('不要')
+  })
+
+  it('通路を切る・幅 0 なら通路は無い', () => {
+    expect(accessRect(withAccess({ parkingAccess: false }))).toBeNull()
+    expect(accessRect(withAccess({ accessWidth: 0 }))).toBeNull()
+    expect(
+      evaluateSite(withAccess({ parkingAccess: false })).checks.some((c) => c.id === 'parking'),
+    ).toBe(false)
+  })
+
+  it('判定: 幅 4m 以上で OK、狭いと注意。面積は残りの土地に含み、台数を概算する', () => {
+    const p = withAccess({ accessWidth: 4 })
+    const e = evaluateSite(p)
+    const c = e.checks.find((x) => x.id === 'parking')!
+    expect(c.status).toBe('ok')
+    expect(e.accessArea).toBeCloseTo(4 * sectionDepth(p))
+    expect(c.detail).toContain(`${Math.floor(e.remainingArea / PARKING_M2_PER_CAR)} 台`)
+    expect(check(withAccess({ accessWidth: 3 }), 'parking').status).toBe('warn')
+    // 通路があれば残りの土地も道路に接したまま
+    expect(check(p, 'remain').status).toBe('ok')
+  })
+
+  it('通路の幅は土地の間口より 1m 以上狭く収める', () => {
+    expect(withAccess({ accessWidth: 99 }).accessWidth).toBe(19)
   })
 })
