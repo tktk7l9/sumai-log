@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 
 import {
+  accessRect,
   buildingRect,
   flagRect,
   m2ToTsubo,
@@ -113,6 +114,10 @@ export function SiteCanvas({
   const flag = flagRect(plan)
   const flagSvg = flag ? toSvg(flag) : null
   const building = toSvg(buildingRect(plan))
+  const access = accessRect(plan)
+  const accessSvg = access ? toSvg(access) : null
+  // 区画の奥（画面の上）に残る土地の奥行
+  const backDepth = plan.landDepth - plan.sectionY - sectionRect(plan).depth
   const sectionTsubo = m2ToTsubo(sectionRect(plan).width * sectionRect(plan).depth)
   const angle = northAngle(plan.roadSide)
   const gapAbove = building.y - section.y
@@ -177,6 +182,38 @@ export function SiteCanvas({
       {/* 土地 */}
       <rect {...land} className="site-land" />
       {grid}
+
+      {/* 残りの土地（駐車場）への通路と、区画の奥に残る土地 */}
+      {accessSvg ? (
+        <>
+          <rect {...accessSvg} className="site-access" />
+          <text
+            x={accessSvg.x + accessSvg.width / 2}
+            y={accessSvg.y + accessSvg.height / 2}
+            fontSize={Math.min(font * 0.8, accessSvg.width * 0.55)}
+            className="site-label site-label-muted"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            pointerEvents="none"
+            transform={`rotate(-90 ${accessSvg.x + accessSvg.width / 2} ${accessSvg.y + accessSvg.height / 2})`}
+          >
+            駐車場への通路 {plan.accessWidth}m
+          </text>
+        </>
+      ) : null}
+      {backDepth >= 3 ? (
+        <text
+          x={land.x + land.width / 2}
+          y={land.y + backDepth / 2}
+          fontSize={font}
+          className="site-label site-label-muted"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          pointerEvents="none"
+        >
+          残りの土地（駐車場など）
+        </text>
+      ) : null}
 
       {/* 路地状部分（区画が奥のとき） */}
       {flagSvg ? <rect {...flagSvg} className="site-flag" /> : null}
