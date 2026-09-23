@@ -27,7 +27,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { useState } from 'react'
+import { Suspense, lazy, useState } from 'react'
 
 import { PageShell } from '../components/PageShell'
 import { SiteCanvas } from '../components/site/SiteCanvas'
@@ -62,6 +62,12 @@ import {
 } from '../lib/sitePlan'
 import { SEASONS, SEASON_LABEL, solarPosition, SEASON_DECLINATION, type Season } from '../lib/sun'
 import { getSitePlan, saveSitePlan } from '../server/sitePlan'
+
+// 3D 表示（three.js）は切り替えたときだけ読み込む（平面の図だけ見る人に重さを載せない）。
+// サーバーでは描かない（初期表示は平面）ので、Worker のバンドルに three.js を入れない
+const SiteView3D = import.meta.env.SSR
+  ? () => null
+  : lazy(() => import('../components/site/SiteView3D').then((m) => ({ default: m.SiteView3D })))
 
 /**
  * 区画シミュレーター（所有者の要望、2026-09-23）。大きな土地のうち一部（例: 100 坪）を
@@ -106,6 +112,7 @@ function Page() {
   const [shadowOn, setShadowOn] = useState(true)
   const [season, setSeason] = useState<Season>('winter')
   const [hour, setHour] = useState(10)
+  const [view, setView] = useState<'2d' | '3d'>('2d')
   const sunNow = solarPosition(plan.latitude, SEASON_DECLINATION[season], hour)
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
@@ -190,8 +197,31 @@ function Page() {
           </Button>
         </Group>
 
+        <SegmentedControl
+          fullWidth
+          aria-label="表示"
+          value={view}
+          onChange={(v) => setView(v as '2d' | '3d')}
+          data={[
+            { value: '2d', label: '平面（動かせる）' },
+            { value: '3d', label: '3D' },
+          ]}
+        />
+
         <Card withBorder padding="xs">
-          <SiteCanvas plan={plan} onChange={setPlan} sun={shadowOn ? { season, hour } : null} />
+          {view === '2d' ? (
+            <SiteCanvas plan={plan} onChange={setPlan} sun={shadowOn ? { season, hour } : null} />
+          ) : (
+            <Suspense
+              fallback={
+                <Text size="sm" c="dimmed" p="md">
+                  3D を読み込んでいます…
+                </Text>
+              }
+            >
+              <SiteView3D plan={plan} sun={shadowOn ? { season, hour } : null} />
+            </Suspense>
+          )}
         </Card>
 
         <Card withBorder padding="sm">
