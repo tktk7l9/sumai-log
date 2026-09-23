@@ -8,6 +8,7 @@ import {
   formatDateSlash,
   formatDateWithWeekday,
   formatEventBadge,
+  formatMonthSlash,
   formatEventTime,
   formatShortDateWithWeekday,
   groupByDay,
@@ -127,16 +128,23 @@ describe('compareStartsAt', () => {
 })
 
 describe('formatShortDateWithWeekday', () => {
-  it('月日をゼロ埋めせず半角括弧で曜日を付ける（土）', () => {
-    expect(formatShortDateWithWeekday('2026-09-12')).toBe('9/12(土)')
+  it('YYYY/MM/DD に半角括弧で曜日を付ける（土）', () => {
+    expect(formatShortDateWithWeekday('2026-09-12')).toBe('2026/09/12(土)')
   })
 
   it('日曜も同じ形式（日）', () => {
-    expect(formatShortDateWithWeekday('2026-09-13')).toBe('9/13(日)')
+    expect(formatShortDateWithWeekday('2026-09-13')).toBe('2026/09/13(日)')
   })
 
   it('読めない文字列はそのまま返す', () => {
     expect(formatShortDateWithWeekday('invalid')).toBe('invalid')
+  })
+})
+
+describe('formatMonthSlash', () => {
+  it("'YYYY-MM' を 'YYYY/MM' に。形が違えばそのまま", () => {
+    expect(formatMonthSlash('2026-09')).toBe('2026/09')
+    expect(formatMonthSlash('2026-9')).toBe('2026-9')
   })
 })
 
@@ -150,15 +158,17 @@ describe('formatEventBadge', () => {
   })
 
   it('eventEnd が無ければ単日表記', () => {
-    expect(formatEventBadge('見学会', '2026-09-12', null)).toBe('見学会 9/12(土)')
+    expect(formatEventBadge('見学会', '2026-09-12', null)).toBe('見学会 2026/09/12(土)')
   })
 
   it('eventEnd が eventStart と同じなら単日表記', () => {
-    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-12')).toBe('見学会 9/12(土)')
+    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-12')).toBe('見学会 2026/09/12(土)')
   })
 
   it('eventEnd が違えば範囲表記', () => {
-    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-13')).toBe('見学会 9/12(土)〜9/13(日)')
+    expect(formatEventBadge('見学会', '2026-09-12', '2026-09-13')).toBe(
+      '見学会 2026/09/12(土)〜2026/09/13(日)',
+    )
   })
 })
 
