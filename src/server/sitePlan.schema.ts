@@ -23,6 +23,7 @@ export const sitePlanInput = z.object({
   parkingAccess: z.boolean(),
   accessWidth: meters(50),
   accessSide: z.enum(['left', 'right']),
+  floors: z.union([z.literal(1), z.literal(2)]),
   buildingTsubo: z.number().min(5).max(300),
   buildingWidth: z.number().min(1).max(500),
   buildingX: meters(500),
