@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { PageShell } from '../components/PageShell'
 import { NewsAgenda } from '../components/news/NewsAgenda'
+import { formatMonthSlash } from '../lib/calendar'
 import { UUID_SHAPE } from '../lib/ids'
 import { listVendorNews, newsSources } from '../server/news'
 
@@ -47,12 +48,6 @@ function monthRange(month: string): { from: string; to: string } {
 /** 'YYYY-MM' を n か月ずらす（負数で過去へ） */
 function shiftMonth(month: string, delta: number): string {
   return dayjs(`${month}-01T00:00:00`).add(delta, 'month').format('YYYY-MM')
-}
-
-/** 'YYYY-MM' を '2026年9月' に直す */
-function formatMonthLabel(month: string): string {
-  const [year, m] = month.split('-')
-  return `${year}年${Number(m)}月`
 }
 
 export const Route = createFileRoute('/news')({
@@ -117,7 +112,7 @@ function Page() {
           >
             前の月
           </Button>
-          <Text fw={700}>{formatMonthLabel(month)}</Text>
+          <Text fw={700}>{formatMonthSlash(month)}</Text>
           <Button
             variant="subtle"
             size="compact-sm"

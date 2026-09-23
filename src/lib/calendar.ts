@@ -32,20 +32,25 @@ export function formatDateWithWeekday(key: string): string {
 }
 
 /**
- * 'YYYY-MM-DD' を 'M/D(土)' に直す（EventBadge 用の短い表記）。formatDateWithWeekday と
- * 違い月日をゼロ埋めせず、括弧も半角にする（design.md §4 のバッジ表記に合わせる）。
- * 読めない文字列はそのまま返す。
+ * 'YYYY-MM-DD' を '2026/09/12(土)' に直す（EventBadge・「行く」ボタン用）。日付は全て
+ * YYYY/MM/DD にそろえる（所有者の要望、2026-09-23）。formatDateWithWeekday と違い、バッジに
+ * 収まるよう曜日の括弧を半角にする。読めない文字列はそのまま返す。
  */
 export function formatShortDateWithWeekday(key: string): string {
   const day = dayOfWeek(key)
   if (day === null) return key
-  const [, month, date] = key.split('-')
-  return `${Number(month)}/${Number(date)}(${WEEKDAY_LABELS[day]})`
+  return `${formatDateSlash(key)}(${WEEKDAY_LABELS[day]})`
+}
+
+/** 'YYYY-MM' を '2026/09' に直す（月の見出し用）。形が合わなければそのまま返す */
+export function formatMonthSlash(month: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(month)
+  return m ? `${m[1]}/${m[2]}` : month
 }
 
 /**
- * 業者のお知らせのイベントバッジ文言。「見学会 9/12(土)」（単日）／
- * 「見学会 9/12(土)〜9/13(日)」（複数日）。eventKind か eventStart が無ければ
+ * 業者のお知らせのイベントバッジ文言。「見学会 2026/09/12(土)」（単日）／
+ * 「見学会 2026/09/12(土)〜2026/09/13(日)」（複数日）。eventKind か eventStart が無ければ
  * イベントとして扱わない（null）。
  */
 export function formatEventBadge(

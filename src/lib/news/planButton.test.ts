@@ -34,15 +34,15 @@ describe('planButtonState', () => {
         { plannedEventId: null, eventStart: '2026-09-27', eventEnd: '2026-09-28' },
         today,
       ),
-    ).toEqual({ kind: 'plan', label: '9/27(日)に行く' })
+    ).toEqual({ kind: 'plan', label: '2026/09/27(日)に行く' })
     expect(
       planButtonState(
         { plannedEventId: null, eventStart: '2026-09-19', eventEnd: '2026-09-20' },
         today,
       ),
-    ).toEqual({ kind: 'plan', label: '9/19(土)に行く' })
+    ).toEqual({ kind: 'plan', label: '2026/09/19(土)に行く' })
     expect(
       planButtonState({ plannedEventId: null, eventStart: '2026-09-20', eventEnd: null }, today),
-    ).toEqual({ kind: 'plan', label: '9/20(日)に行く' })
+    ).toEqual({ kind: 'plan', label: '2026/09/20(日)に行く' })
   })
 })
