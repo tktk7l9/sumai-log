@@ -1,5 +1,6 @@
 import {
   Accordion,
+  ActionIcon,
   Badge,
   Button,
   Card,
@@ -11,6 +12,7 @@ import {
   Stack,
   Switch,
   Text,
+  TextInput,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
@@ -22,6 +24,8 @@ import {
   CircleCheck,
   CircleX,
   House,
+  Plus,
+  Trash2,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -30,21 +34,33 @@ import { SiteCanvas } from '../components/site/SiteCanvas'
 import { extractErrorMessage } from '../lib/formError'
 import {
   DEFAULT_SITE_PLAN,
+  NEIGHBOR_KINDS,
+  NEIGHBOR_KIND_LABEL,
+  NEIGHBOR_LABEL_MAX,
+  NEIGHBORS_MAX,
   ROAD_SIDES,
+  SUN_END,
+  SUN_START,
   accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
+  effectiveFloorAreaRatio,
   evaluateSite,
+  formatLotLines,
   m2ToTsubo,
   moveSectionToBack,
   moveSectionToFront,
   normalizePlan,
+  parseLotLines,
   placeBuildingNorth,
   sectionDepth,
   type CheckStatus,
+  type Neighbor,
+  type NeighborKind,
   type RoadSide,
   type SitePlan,
 } from '../lib/sitePlan'
+import { SEASONS, SEASON_LABEL, solarPosition, SEASON_DECLINATION, type Season } from '../lib/sun'
 import { getSitePlan, saveSitePlan } from '../server/sitePlan'
 
 /**
@@ -84,6 +100,13 @@ function Page() {
   const save = useServerFn(saveSitePlan)
   const [plan, setPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
   const [saving, setSaving] = useState(false)
+  // 筆界は「10.5, 20」のような文字で入れる。打ちかけの値を消さないよう文字のまま持つ
+  const [lotText, setLotText] = useState(() => formatLotLines(plan.lotLines))
+  // 影の表示（保存しない。見るための状態）
+  const [shadowOn, setShadowOn] = useState(true)
+  const [season, setSeason] = useState<Season>('winter')
+  const [hour, setHour] = useState(10)
+  const sunNow = solarPosition(plan.latitude, SEASON_DECLINATION[season], hour)
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
@@ -100,11 +123,31 @@ function Page() {
     setPlan((p) => normalizePlan({ ...p, ...patch }))
   }
 
+  function updateNeighbor(index: number, patch: Partial<Neighbor>) {
+    setPlan((p) =>
+      normalizePlan({
+        ...p,
+        neighbors: p.neighbors.map((n, i) => (i === index ? { ...n, ...patch } : n)),
+      }),
+    )
+  }
+
+  function addNeighbor() {
+    // 既定は土地の左（西など）に接する 2 階建てくらいの建物
+    update({
+      neighbors: [
+        ...plan.neighbors,
+        { label: '隣の建物', kind: 'building', x: -10, y: 5, width: 8, depth: 10, height: 7 },
+      ],
+    })
+  }
+
   async function handleSave() {
     setSaving(true)
     try {
       const { plan: stored } = await save({ data: plan })
       setPlan(stored)
+      setLotText(formatLotLines(stored.lotLines))
       await router.invalidate()
       notifications.show({ message: '区画を保存しました' })
     } catch (error) {
@@ -148,7 +191,48 @@ function Page() {
         </Group>
 
         <Card withBorder padding="xs">
-          <SiteCanvas plan={plan} onChange={setPlan} />
+          <SiteCanvas plan={plan} onChange={setPlan} sun={shadowOn ? { season, hour } : null} />
+        </Card>
+
+        <Card withBorder padding="sm">
+          <Stack gap="xs">
+            <Group justify="space-between" wrap="nowrap">
+              <Switch
+                label="影を表示"
+                checked={shadowOn}
+                onChange={(ev) => setShadowOn(ev.currentTarget.checked)}
+              />
+              <Text size="xs" c="dimmed">
+                {sunNow.altitude > 0
+                  ? `太陽 高さ ${sunNow.altitude.toFixed(0)}°・方位 ${sunNow.azimuth.toFixed(0)}°`
+                  : '日の出前・日の入り後'}
+              </Text>
+            </Group>
+            <SegmentedControl
+              fullWidth
+              size="xs"
+              aria-label="季節"
+              disabled={!shadowOn}
+              value={season}
+              onChange={(v) => setSeason(v as Season)}
+              data={SEASONS.map((v) => ({ value: v, label: SEASON_LABEL[v] }))}
+            />
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                時刻 {formatHour(hour)}（真太陽時）
+              </Text>
+              <Slider
+                min={SUN_START - 1}
+                max={SUN_END + 1}
+                step={0.25}
+                value={hour}
+                onChange={setHour}
+                label={formatHour}
+                disabled={!shadowOn}
+                aria-label="時刻"
+              />
+            </Stack>
+          </Stack>
         </Card>
 
         <SimpleGrid cols={3} spacing="xs">
@@ -225,6 +309,52 @@ function Page() {
                   全体 {(plan.landWidth * plan.landDepth).toFixed(0)}㎡（
                   {m2ToTsubo(plan.landWidth * plan.landDepth).toFixed(1)}坪）
                 </Text>
+                <TextInput
+                  label="筆界（左端からの距離 m）"
+                  description="2 筆以上をまとめて 1 つの土地にしているとき。複数あれば「10.5, 20」のように区切る"
+                  placeholder="なし"
+                  value={lotText}
+                  onChange={(ev) => {
+                    setLotText(ev.currentTarget.value)
+                    update({ lotLines: parseLotLines(ev.currentTarget.value) })
+                  }}
+                />
+                <Text size="xs" c="dimmed">
+                  公図・登記所備付地図は図上の概略で、寸法も面積も登記地積と数％〜1
+                  割ずれることがあります。区画を決める前に現況測量で確かめてください。
+                </Text>
+                <Group grow>
+                  <NumberInput
+                    label="向きのずれ（度）"
+                    description="道路側が真南から東へ 10° 振れていれば -10"
+                    min={-45}
+                    max={45}
+                    step={1}
+                    decimalScale={1}
+                    value={plan.facingOffset}
+                    onChange={(v) => update({ facingOffset: num(v, plan.facingOffset) })}
+                  />
+                  <NumberInput
+                    label="緯度（度）"
+                    description="日当たりの計算に使う"
+                    min={20}
+                    max={46}
+                    step={0.1}
+                    decimalScale={2}
+                    value={plan.latitude}
+                    onChange={(v) => update({ latitude: num(v, plan.latitude) })}
+                  />
+                </Group>
+                <NumberInput
+                  label="前面道路の幅員（m）"
+                  description="容積率の上限（幅員×0.4）・延焼ライン・南の空きに使います"
+                  min={0}
+                  max={50}
+                  step={0.5}
+                  decimalScale={1}
+                  value={plan.roadWidth}
+                  onChange={(v) => update({ roadWidth: num(v, plan.roadWidth) })}
+                />
                 <Stack gap={4}>
                   <Text size="sm" fw={500}>
                     道路の方角
@@ -305,7 +435,9 @@ function Page() {
               <Stack gap="sm">
                 <Text size="xs" c="dimmed">
                   区画が道路に接しないとき、道路から区画までの通路（路地状部分）を敷地に含めます。建築基準法で敷地は道路に
-                  2m 以上接する必要があり、通路が長いと県条例でさらに広い幅が求められます。
+                  2m
+                  以上接する必要があります（神奈川県の条例に、通路の長さで幅を広げる規定はありません）。車で出入りするなら
+                  3m 程度は欲しいところです。
                 </Text>
                 <Group grow align="flex-end">
                   <NumberInput
@@ -396,9 +528,102 @@ function Page() {
                     onChange={(v) => update({ buildingWidth: num(v, plan.buildingWidth) })}
                   />
                 </Group>
+                <NumberInput
+                  label="高さ（m）"
+                  description="影を描くため。平屋は 4〜5m 程度"
+                  min={2}
+                  max={15}
+                  step={0.5}
+                  decimalScale={1}
+                  value={plan.buildingHeight}
+                  onChange={(v) => update({ buildingHeight: num(v, plan.buildingHeight) })}
+                />
                 <Text size="xs" c="dimmed">
                   平屋なので建築面積＝延床面積として見ています（軒・ポーチ・ウッドデッキは含みません）。
                 </Text>
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+
+          <Accordion.Item value="neighbors">
+            <Accordion.Control>隣地・周りの建物（{plan.neighbors.length}）</Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="sm">
+                <Text size="xs" c="dimmed">
+                  位置は土地の左手前（道路側の左端）からの距離（m）。左や道路の向こうはマイナスで入れます。建物は高さを入れると冬至の日当たりの判定と影に入ります（0
+                  は不明として計算に入れません）。
+                </Text>
+                {plan.neighbors.map((n, i) => (
+                  <Card key={i} withBorder padding="xs">
+                    <Stack gap={6}>
+                      <Group gap="xs" wrap="nowrap" align="flex-end">
+                        <TextInput
+                          style={{ flex: 1 }}
+                          label="名前"
+                          maxLength={NEIGHBOR_LABEL_MAX}
+                          value={n.label}
+                          onChange={(ev) => updateNeighbor(i, { label: ev.currentTarget.value })}
+                        />
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          size="lg"
+                          aria-label={`${n.label}を削除`}
+                          onClick={() =>
+                            update({ neighbors: plan.neighbors.filter((_, j) => j !== i) })
+                          }
+                        >
+                          <Trash2 size={16} aria-hidden />
+                        </ActionIcon>
+                      </Group>
+                      <SegmentedControl
+                        size="xs"
+                        fullWidth
+                        aria-label="種類"
+                        value={n.kind}
+                        onChange={(v) => updateNeighbor(i, { kind: v as NeighborKind })}
+                        data={NEIGHBOR_KINDS.map((k) => ({
+                          value: k,
+                          label: NEIGHBOR_KIND_LABEL[k],
+                        }))}
+                      />
+                      <SimpleGrid cols={3} spacing={6}>
+                        {(
+                          [
+                            ['x', '左から'],
+                            ['y', '道路から'],
+                            ['height', '高さ'],
+                            ['width', '幅'],
+                            ['depth', '奥行'],
+                          ] as const
+                        ).map(([key, label]) =>
+                          key === 'height' && n.kind === 'open' ? (
+                            <div key={key} />
+                          ) : (
+                            <NumberInput
+                              key={key}
+                              size="xs"
+                              label={`${label}（m）`}
+                              step={0.5}
+                              decimalScale={1}
+                              value={n[key]}
+                              onChange={(v) => updateNeighbor(i, { [key]: num(v, n[key]) })}
+                            />
+                          ),
+                        )}
+                      </SimpleGrid>
+                    </Stack>
+                  </Card>
+                ))}
+                <Button
+                  variant="default"
+                  size="xs"
+                  leftSection={<Plus size={14} aria-hidden />}
+                  disabled={plan.neighbors.length >= NEIGHBORS_MAX}
+                  onClick={addNeighbor}
+                >
+                  隣地・建物を足す
+                </Button>
               </Stack>
             </Accordion.Panel>
           </Accordion.Item>
@@ -425,9 +650,13 @@ function Page() {
                     onChange={(v) => update({ floorAreaRatio: num(v, plan.floorAreaRatio) })}
                   />
                 </Group>
+                <Text size="xs" c="dimmed">
+                  容積率の上限は、前面道路の幅員が 12m 未満なら「幅員×0.4」と指定の小さい方（いまは{' '}
+                  {effectiveFloorAreaRatio(plan)}%）。
+                </Text>
                 <NumberInput
-                  label="外壁後退（m）"
-                  description="建物と区画の境界の距離の目安。地域の都市計画で決まっていることがあります"
+                  label="境界からの離れ（m）"
+                  description="外壁の後退距離の指定が無ければ、民法 234 条の 0.5m が目安"
                   min={0}
                   max={10}
                   step={0.5}
@@ -435,8 +664,14 @@ function Page() {
                   value={plan.setback}
                   onChange={(v) => update({ setback: num(v, plan.setback) })}
                 />
+                <Switch
+                  label="準防火地域"
+                  description="隣地境界線・道路中心線から 3m 以内（図の橙の点線の外側）にかかる窓は防火設備になります"
+                  checked={plan.quasiFireZone}
+                  onChange={(ev) => update({ quasiFireZone: ev.currentTarget.checked })}
+                />
                 <Text size="xs" c="dimmed">
-                  用途地域ごとの建ぺい率・容積率・外壁後退・最低敷地面積は、市の都市計画図や窓口で確認して入力してください。
+                  用途地域ごとの建ぺい率・容積率・外壁の後退距離・最低敷地面積・防火の指定は、市の都市計画図や窓口で確認して入力してください（防火の指定は都市計画図に描かれていないことがあるので、市の都市計画の告示で確かめる）。
                 </Text>
               </Stack>
             </Accordion.Panel>
@@ -455,7 +690,14 @@ function Page() {
           )}
           <Group gap="xs">
             {saved ? (
-              <Button variant="default" disabled={!dirty} onClick={() => setPlan(saved)}>
+              <Button
+                variant="default"
+                disabled={!dirty}
+                onClick={() => {
+                  setPlan(saved)
+                  setLotText(formatLotLines(saved.lotLines))
+                }}
+              >
                 元に戻す
               </Button>
             ) : null}
@@ -483,4 +725,10 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
       </Stack>
     </Card>
   )
+}
+
+/** 8.25 → 「8:15」 */
+function formatHour(h: number): string {
+  const m = Math.round(h * 60)
+  return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`
 }

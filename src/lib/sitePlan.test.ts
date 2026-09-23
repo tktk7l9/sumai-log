@@ -8,16 +8,25 @@ import {
   ROAD_SIDE_LABEL,
   buildingDepth,
   buildingRect,
+  effectiveFloorAreaRatio,
   evaluateSite,
+  fireSafeRect,
+  formatLotLines,
+  landAxes,
+  lotsTouched,
+  shadingBoxes,
+  sunOnSouthWall,
+  NEIGHBORS_MAX,
   flagRect,
   m2ToTsubo,
   moveSectionToBack,
   moveSectionToFront,
   normalizePlan,
   northAngle,
+  parseLotLines,
   parseSitePlan,
   placeBuildingNorth,
-  requiredFlagWidth,
+  sideDirections,
   round1,
   sectionDepth,
   sectionRect,
@@ -76,6 +85,17 @@ describe('parseSitePlan', () => {
     expect(parsed?.accessWidth).toBe(4)
     expect(parsed?.accessSide).toBe('right')
   })
+
+  it('道路の幅員・準防火・筆界が無い古い保存値も既定値で補い、形が違えば null', () => {
+    const { roadWidth: _r, quasiFireZone: _q, lotLines: _l, ...old } = DEFAULT_SITE_PLAN
+    const parsed = parseSitePlan(JSON.stringify(old))
+    expect(parsed?.roadWidth).toBe(4)
+    expect(parsed?.quasiFireZone).toBe(false)
+    expect(parsed?.lotLines).toEqual([])
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, quasiFireZone: 1 }))).toBeNull()
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, lotLines: 10.5 }))).toBeNull()
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, lotLines: ['10.5'] }))).toBeNull()
+  })
 })
 
 describe('幾何', () => {
@@ -117,11 +137,6 @@ describe('幾何', () => {
     expect(sectionRect(p)).toMatchObject({ x: 0, y: 5, width: 20 })
     expect(buildingRect(p)).toMatchObject({ x: 2, y: 8, width: 14 })
   })
-
-  it('路地状部分の幅の目安は長さ 20m を境に 2m / 3m', () => {
-    expect(requiredFlagWidth(20)).toBe(2)
-    expect(requiredFlagWidth(20.1)).toBe(3)
-  })
 })
 
 describe('方角', () => {
@@ -150,8 +165,10 @@ describe('方角', () => {
         p.sectionWidth - p.buildingX - p.buildingWidth,
         sectionDepth(p) - p.buildingY - buildingDepth(p),
       ]
-      // 南の反対側（北）の余白が外壁後退と同じ＝北に寄っている
-      expect(Math.min(...others)).toBeCloseTo(1, 0)
+      // 南の反対側（北）の余白が境界からの離れと同じ＝北に寄っている
+      expect(Math.min(...others)).toBeGreaterThanOrEqual(p.setback)
+      expect(Math.min(...others)).toBeLessThan(p.setback + 0.1)
+      expect(check(p, 'setback').status).toBe('ok')
       expect(southGap(p)).toBeGreaterThan(3.5)
     }
   })
@@ -179,7 +196,9 @@ describe('evaluateSite', () => {
     expect(e.flagArea).toBeCloseTo(75)
     expect(e.siteArea).toBeCloseTo(e.sectionArea + 75)
     expect(check(p, 'road').status).toBe('ok')
-    expect(check({ ...p, flagWidth: 2.5 }, 'road').status).toBe('ng')
+    // 神奈川県の条例は通路の長さで幅を上乗せしない: 長さ 25m でも法の 2m で足りる（車は入らない）
+    expect(check({ ...p, flagWidth: 2.5 }, 'road').status).toBe('warn')
+    expect(check({ ...p, flagWidth: 1.5 }, 'road').status).toBe('ng')
     expect(check(p, 'remain').status).toBe('ok')
   })
 
@@ -219,7 +238,99 @@ describe('evaluateSite', () => {
     expect(check(p, 'setback').status).toBe('ok')
     expect(check({ ...p, buildingX: 0 }, 'setback').status).toBe('warn')
     expect(check({ ...p, buildingY: 5 }, 'south').status).toBe('ok')
-    expect(check({ ...p, buildingY: 1 }, 'south').status).toBe('warn')
+    expect(check({ ...p, buildingY: 1, roadWidth: 0 }, 'south').status).toBe('warn')
+  })
+
+  it('区画の南が道路なら、道路の幅員も南の空きに数える', () => {
+    const p = plan({ roadSide: 'S', sectionY: 0, buildingY: 1, roadWidth: 5 })
+    expect(check(p, 'south').status).toBe('ok')
+    expect(check(p, 'south').detail).toContain('道路 5m')
+    // 奥の区画なら道路は数えない
+    const back = plan({ roadSide: 'S', sectionY: 20, buildingY: 1, roadWidth: 5 })
+    expect(check(back, 'south').status).toBe('warn')
+  })
+
+  it('容積率は前面道路の幅員×0.4 と指定の小さい方', () => {
+    expect(effectiveFloorAreaRatio(plan({ floorAreaRatio: 200, roadWidth: 4 }))).toBe(160)
+    expect(effectiveFloorAreaRatio(plan({ floorAreaRatio: 200, roadWidth: 5 }))).toBe(200)
+    expect(effectiveFloorAreaRatio(plan({ floorAreaRatio: 200, roadWidth: 12 }))).toBe(200)
+    const narrow = plan({ floorAreaRatio: 200, roadWidth: 4 })
+    expect(evaluateSite(narrow).floorAreaLimit).toBe(160)
+    expect(check(narrow, 'floorArea').detail).toContain('×0.4')
+    expect(check(plan({ roadWidth: 5 }), 'floorArea').detail).not.toContain('×0.4')
+  })
+})
+
+describe('準防火地域（延焼のおそれのある部分）', () => {
+  const fire = (o: Partial<SitePlan> = {}) =>
+    plan({ quasiFireZone: true, sectionWidth: 20, roadWidth: 5, ...o })
+
+  it('延焼ラインは隣地から 3m・道路側は道路中心線から 3m', () => {
+    const p = fire({ sectionY: 0 })
+    expect(fireSafeRect(p)).toEqual({
+      x: 3,
+      y: 0.5,
+      width: 14,
+      depth: sectionDepth(p) - 0.5 - 3,
+    })
+    // 奥の区画は手前も隣地
+    expect(fireSafeRect(fire({ sectionY: 10 })).y).toBe(3)
+    // 幅員 6m 以上なら道路側は延焼ラインが境界より外
+    expect(fireSafeRect(fire({ sectionY: 0, roadWidth: 8 })).y).toBe(0)
+    // 狭い区画では内側が無くなる
+    expect(fireSafeRect(fire({ sectionWidth: 5 })).width).toBe(0)
+  })
+
+  it('建物が延焼ラインにかかる辺を方角で知らせる', () => {
+    const p = fire({ buildingWidth: 10, buildingX: 1, buildingY: 3 })
+    const c = check(p, 'fire')
+    expect(c.status).toBe('warn')
+    expect(c.detail).toContain('西')
+    expect(c.detail).not.toContain('東')
+    // 奥・右にかかる
+    const q = fire({ buildingWidth: 14, buildingX: 5, buildingY: 99 })
+    expect(check(q, 'fire').detail).toContain('北・東')
+    // 手前にかかる（奥の区画）
+    const r = fire({ sectionY: 10, buildingWidth: 10, buildingX: 5, buildingY: 1 })
+    expect(check(r, 'fire').detail).toContain('南')
+  })
+
+  it('延焼ラインの内側に収まれば OK、準防火でなければ判定しない', () => {
+    const p = fire({ buildingTsubo: 20, buildingWidth: 10, buildingX: 5, buildingY: 5 })
+    expect(check(p, 'fire').status).toBe('ok')
+    expect(evaluateSite(plan()).checks.find((c) => c.id === 'fire')).toBeUndefined()
+  })
+
+  it('方角の対応', () => {
+    expect(sideDirections('S')).toEqual({ front: '南', back: '北', left: '西', right: '東' })
+    expect(sideDirections('N').front).toBe('北')
+    expect(sideDirections('E').right).toBe('北')
+    expect(sideDirections('W').left).toBe('北')
+  })
+})
+
+describe('筆界', () => {
+  it('入力の文字を読み書きする', () => {
+    expect(parseLotLines('10.5, 20')).toEqual([10.5, 20])
+    expect(parseLotLines('10.5、20 abc')).toEqual([10.5, 20])
+    expect(parseLotLines('')).toEqual([])
+    expect(formatLotLines([10.5, 20])).toBe('10.5, 20')
+  })
+
+  it('土地の内側だけを昇順・重複なしで持つ', () => {
+    expect(plan({ lotLines: [15, 10.54, 10.5, 0, 20, -1, 30] }).lotLines).toEqual([10.5, 15])
+  })
+
+  it('区画がまたぐ筆を数える', () => {
+    const base = { lotLines: [10.5], sectionWidth: 9, targetTsubo: 60 }
+    const one = plan({ ...base, sectionX: 0 })
+    expect(lotsTouched(one)).toEqual([0])
+    expect(check(one, 'lots').status).toBe('ok')
+    expect(check(one, 'lots').detail).toContain('左から 1 筆目')
+    const two = plan({ ...base, sectionX: 5 })
+    expect(lotsTouched(two)).toEqual([0, 1])
+    expect(check(two, 'lots').status).toBe('warn')
+    expect(evaluateSite(plan()).checks.find((c) => c.id === 'lots')).toBeUndefined()
   })
 })
 
@@ -280,5 +391,119 @@ describe('駐車場への通路', () => {
 
   it('通路の幅は土地の間口より 1m 以上狭く収める', () => {
     expect(withAccess({ accessWidth: 99 }).accessWidth).toBe(19)
+  })
+})
+
+describe('隣地・向き・日当たり', () => {
+  const tall = {
+    label: '南の建物',
+    kind: 'building' as const,
+    x: 0,
+    y: -12,
+    width: 20,
+    depth: 6,
+    height: 15,
+  }
+  const base = (o: Partial<SitePlan> = {}) =>
+    plan({ roadSide: 'S', sectionWidth: 20, buildingWidth: 10, buildingX: 5, buildingY: 3, ...o })
+
+  it('古い保存値は既定値で補い、形の違う隣地は null', () => {
+    const {
+      facingOffset: _f,
+      latitude: _l,
+      buildingHeight: _b,
+      neighbors: _n,
+      ...old
+    } = DEFAULT_SITE_PLAN
+    const parsed = parseSitePlan(JSON.stringify(old))!
+    expect(parsed.neighbors).toEqual([])
+    expect(parsed.latitude).toBe(35.5)
+    const bad = (neighbors: unknown) =>
+      parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, neighbors }))
+    expect(bad([tall])?.neighbors).toHaveLength(1)
+    expect(bad('x')).toBeNull()
+    expect(bad([1])).toBeNull()
+    expect(bad([{ ...tall, label: 1 }])).toBeNull()
+    expect(bad([{ ...tall, kind: 'tower' }])).toBeNull()
+    expect(bad([{ ...tall, height: '9' }])).toBeNull()
+  })
+
+  it('隣地の値を収める', () => {
+    const p = plan({
+      facingOffset: 90,
+      latitude: 0,
+      buildingHeight: 50,
+      neighbors: [
+        { ...tall, label: 'あ'.repeat(60), width: 0, depth: -1, height: 999 },
+        ...Array.from({ length: NEIGHBORS_MAX + 5 }, () => tall),
+      ],
+    })
+    expect(p.facingOffset).toBe(45)
+    expect(p.latitude).toBe(20)
+    expect(p.buildingHeight).toBe(15)
+    expect(p.neighbors).toHaveLength(NEIGHBORS_MAX)
+    expect(p.neighbors[0]).toMatchObject({ width: 0.5, depth: 0.5, height: 100 })
+    expect(p.neighbors[0]!.label).toHaveLength(40)
+  })
+
+  it('土地の軸の方位は道路の方角と向きのずれで決まる', () => {
+    expect(landAxes(base())).toEqual({ rightAz: 90, backAz: 0 })
+    expect(landAxes(base({ facingOffset: -10 }))).toEqual({ rightAz: 80, backAz: 350 })
+    expect(landAxes(base({ roadSide: 'N' }))).toEqual({ rightAz: 270, backAz: 180 })
+    expect(landAxes(base({ roadSide: 'E' }))).toEqual({ rightAz: 0, backAz: 270 })
+  })
+
+  it('日当たりに入れるのは高さの分かっている建物だけ', () => {
+    const p = base({
+      neighbors: [
+        tall,
+        { ...tall, label: '不明', height: 0 },
+        { ...tall, label: '駐車場', kind: 'open' },
+        { ...tall, label: '建設中', kind: 'construction' },
+      ],
+    })
+    expect(shadingBoxes(p).map((b) => b.label)).toEqual(['南の建物', '建設中'])
+  })
+
+  it('周りに建物が無ければ冬至の 8〜16 時はずっと日が当たる', () => {
+    const r = sunOnSouthWall(base())
+    expect(r.wall).toBe('南')
+    expect(r.min).toBeCloseTo(8, 5)
+    expect(r.blockers).toEqual([])
+    expect(check(base(), 'sun').status).toBe('ok')
+    expect(check(base(), 'sun').detail).toContain('かからない')
+  })
+
+  it('南の高い建物は冬の日を遮り、名前と時間を出す', () => {
+    const p = base({ neighbors: [tall] })
+    const r = sunOnSouthWall(p)
+    expect(r.min).toBeLessThan(4)
+    expect(r.blockers[0]!.label).toBe('南の建物')
+    const c = check(p, 'sun')
+    expect(c.status).toBe('warn')
+    expect(c.detail).toContain('南の建物')
+    // 2 棟あれば長く遮る方が先
+    const two = sunOnSouthWall(
+      base({ neighbors: [{ ...tall, label: '低い', height: 6, x: -30, width: 28 }, tall] }),
+    )
+    expect(two.blockers.map((b) => b.label)).toEqual(['南の建物', '低い'])
+    // 夏は太陽が高く、影は届かない
+    expect(sunOnSouthWall(p, 'summer').blockers).toEqual([])
+  })
+
+  it('夏至の朝夕は太陽が北寄りで、南の窓には当たらない', () => {
+    expect(sunOnSouthWall(base(), 'summer').min).toBeLessThan(8)
+  })
+
+  it('南を向く外壁は道路の方角で変わる', () => {
+    expect(sunOnSouthWall(base({ roadSide: 'N' })).wall).toBe('南')
+    expect(sunOnSouthWall(base({ roadSide: 'E' })).wall).toBe('南')
+    expect(sunOnSouthWall(base({ roadSide: 'W' })).wall).toBe('南')
+    // 道路が東で大きく振れていれば、南に近いのは手前の外壁
+    expect(sunOnSouthWall(base({ roadSide: 'E', facingOffset: 45 })).wall).toBe('東')
+  })
+
+  it('極夜のように日が出ない時間は数えない', () => {
+    expect(sunOnSouthWall({ ...base(), latitude: 80 }).min).toBe(0)
   })
 })
