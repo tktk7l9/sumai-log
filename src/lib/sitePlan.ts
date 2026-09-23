@@ -20,6 +20,7 @@
  *   - 境界からの離れ: 外壁の後退距離の指定が無い地域では、民法 234 条の 50cm が目安
  */
 
+import { FLOORS_LABEL, type BuildPlan } from './research'
 import {
   SEASON_DECLINATION,
   rayHitsBox,
@@ -70,6 +71,11 @@ export type Neighbor = {
 export const NEIGHBOR_LABEL_MAX = 40
 export const NEIGHBORS_MAX = 20
 
+export const FLOORS = [1, 2] as const satisfies readonly BuildPlan['floors'][]
+export type Floors = BuildPlan['floors']
+/** 階数ごとの建物の高さの目安（m）。切り替えたときの初期値 */
+export const DEFAULT_BUILDING_HEIGHT: Record<Floors, number> = { 1: 4.5, 2: 7.5 }
+
 export type SitePlan = {
   version: 1
   /** 土地全体（長方形で近似）の間口・奥行（m） */
@@ -93,7 +99,12 @@ export type SitePlan = {
   parkingAccess: boolean
   accessWidth: number
   accessSide: 'left' | 'right'
-  /** 建物（平屋の外形）。奥行は buildingTsubo と幅から決まる。位置は区画の左手前からの距離 */
+  /** 建物の階数（1 = 平屋、2 = 2 階建て。2 階建ては 1 階と 2 階が同じ広さの総 2 階として見る） */
+  floors: Floors
+  /**
+   * 建物。buildingTsubo は延床面積の坪数で、外形（建築面積）は延床÷階数。奥行は外形と幅から
+   * 決まる。位置は区画の左手前からの距離
+   */
   buildingTsubo: number
   buildingWidth: number
   buildingX: number
@@ -136,6 +147,7 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   parkingAccess: true,
   accessWidth: 4,
   accessSide: 'right',
+  floors: 1,
   buildingTsubo: 35,
   buildingWidth: 14,
   buildingX: 3,
@@ -207,6 +219,7 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     latitude: DEFAULT_SITE_PLAN.latitude,
     buildingHeight: DEFAULT_SITE_PLAN.buildingHeight,
     neighbors: DEFAULT_SITE_PLAN.neighbors,
+    floors: DEFAULT_SITE_PLAN.floors,
     ...parsed,
   }
   for (const key of NUMBER_KEYS) {
@@ -223,6 +236,7 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     return null
   }
   if (!Array.isArray(data.neighbors) || !data.neighbors.every(isNeighbor)) return null
+  if (!FLOORS.includes(data.floors as Floors)) return null
   return normalizePlan(data as unknown as SitePlan)
 }
 
@@ -240,9 +254,19 @@ export function sectionDepth(plan: SitePlan): number {
   return Math.min(tsuboToM2(plan.targetTsubo) / plan.sectionWidth, plan.landDepth)
 }
 
-/** 建物の奥行（m）。建物面積÷幅 */
+/** 建物の外形の面積（建築面積、㎡）。延床÷階数（総 2 階として見る） */
+export function buildingFootprint(plan: SitePlan): number {
+  return tsuboToM2(plan.buildingTsubo) / plan.floors
+}
+
+/** 建物の奥行（m）。外形の面積÷幅 */
 export function buildingDepth(plan: SitePlan): number {
-  return tsuboToM2(plan.buildingTsubo) / plan.buildingWidth
+  return buildingFootprint(plan) / plan.buildingWidth
+}
+
+/** 図やラベルに出す建物の呼び名（「平屋 35坪」「2 階建て 35坪」） */
+export function buildingLabel(plan: SitePlan): string {
+  return `${FLOORS_LABEL[plan.floors]} ${plan.buildingTsubo}坪`
 }
 
 /**
@@ -352,6 +376,8 @@ export const CAR_LANE_WIDTH = 3
 
 /** 延焼のおそれのある部分の距離（m、1 階）。隣地境界線・道路中心線から（建築基準法 2 条 6 号） */
 export const FIRE_SPREAD_DISTANCE = 3
+/** 同じく 2 階以上（m） */
+export const FIRE_SPREAD_DISTANCE_UPPER = 5
 
 /**
  * 前面道路の幅員による容積率の上限（%）。幅員 12m 未満なら 幅員×0.4（住居系の用途地域）で、
@@ -382,17 +408,14 @@ export function sideDirections(roadSide: RoadSide): {
  * 区画が道路に接していれば手前は道路中心線から 3m（＝境界から 3m−幅員/2）、接していなければ
  * 手前も隣地境界線として 3m。左右・奥は隣地（残りの土地も分けたあとは別の敷地）として 3m
  */
-export function fireSafeRect(plan: SitePlan): Rect {
+export function fireSafeRect(plan: SitePlan, distance: number = FIRE_SPREAD_DISTANCE): Rect {
   const sDepth = sectionDepth(plan)
-  const front =
-    plan.sectionY <= 0
-      ? Math.max(FIRE_SPREAD_DISTANCE - plan.roadWidth / 2, 0)
-      : FIRE_SPREAD_DISTANCE
+  const front = plan.sectionY <= 0 ? Math.max(distance - plan.roadWidth / 2, 0) : distance
   return {
-    x: FIRE_SPREAD_DISTANCE,
+    x: distance,
     y: front,
-    width: Math.max(plan.sectionWidth - FIRE_SPREAD_DISTANCE * 2, 0),
-    depth: Math.max(sDepth - front - FIRE_SPREAD_DISTANCE, 0),
+    width: Math.max(plan.sectionWidth - distance * 2, 0),
+    depth: Math.max(sDepth - front - distance, 0),
   }
 }
 
@@ -562,10 +585,9 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const siteArea = sectionArea + flagArea
   const landArea = plan.landWidth * plan.landDepth
   const remainingArea = landArea - siteArea
-  const buildingArea = tsuboToM2(plan.buildingTsubo)
+  const buildingArea = buildingFootprint(plan)
   const coverageUsed = (buildingArea / siteArea) * 100
-  // 平屋なので延床＝建築面積として見る
-  const floorAreaUsed = coverageUsed
+  const floorAreaUsed = (tsuboToM2(plan.buildingTsubo) / siteArea) * 100
   const gap = southGap(plan)
   const checks: SiteCheck[] = []
 
@@ -709,21 +731,33 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
 
   // 5b. 準防火地域: 延焼のおそれのある部分にかかる外壁
   if (plan.quasiFireZone) {
-    const safe = fireSafeRect(plan)
     const dir = sideDirections(plan.roadSide)
-    const hit = [
-      plan.buildingY + 0.01 < safe.y ? dir.front : null,
-      plan.buildingY + bDepth > safe.y + safe.depth + 0.01 ? dir.back : null,
-      plan.buildingX + 0.01 < safe.x ? dir.left : null,
-      plan.buildingX + plan.buildingWidth > safe.x + safe.width + 0.01 ? dir.right : null,
+    const sidesWithin = (distance: number) => {
+      const safe = fireSafeRect(plan, distance)
+      return [
+        plan.buildingY + 0.01 < safe.y ? dir.front : null,
+        plan.buildingY + bDepth > safe.y + safe.depth + 0.01 ? dir.back : null,
+        plan.buildingX + 0.01 < safe.x ? dir.left : null,
+        plan.buildingX + plan.buildingWidth > safe.x + safe.width + 0.01 ? dir.right : null,
+      ].filter((v): v is string => v !== null)
+    }
+    const lower = sidesWithin(FIRE_SPREAD_DISTANCE)
+    const upper = plan.floors >= 2 ? sidesWithin(FIRE_SPREAD_DISTANCE_UPPER) : []
+    const parts = [
+      lower.length > 0
+        ? `${plan.floors >= 2 ? '1 階は' : ''}${lower.join('・')}側の外壁が ${FIRE_SPREAD_DISTANCE}m 以内`
+        : null,
+      upper.length > 0
+        ? `2 階は${upper.join('・')}側の外壁が ${FIRE_SPREAD_DISTANCE_UPPER}m 以内`
+        : null,
     ].filter((v): v is string => v !== null)
     checks.push(
-      hit.length > 0
+      parts.length > 0
         ? {
             id: 'fire',
             status: 'warn',
             label: '延焼のおそれのある部分（準防火地域）',
-            detail: `${hit.join('・')}側の外壁が隣地境界線・道路中心線から ${FIRE_SPREAD_DISTANCE}m 以内にかかる。その範囲の窓・玄関ドアは防火設備（網入り・防火サッシ）になる。外壁・軒裏の防火構造はどこでも要る`,
+            detail: `隣地境界線・道路中心線から、${parts.join('、')}にかかる。その範囲の窓・玄関ドアは防火設備（網入り・防火サッシ）になる。外壁・軒裏の防火構造はどこでも要る`,
           }
         : {
             id: 'fire',
