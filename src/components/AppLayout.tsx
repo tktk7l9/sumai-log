@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   House,
+  LandPlot,
   Map,
   Newspaper,
   NotebookPen,
@@ -20,6 +21,7 @@ const HEADER_LINKS = [
   { to: '/news', label: 'お知らせ', Icon: Newspaper },
   { to: '/glossary', label: '用語集', Icon: BookOpen },
   { to: '/sources', label: '情報収集', Icon: Radio },
+  { to: '/site', label: '区画', Icon: LandPlot },
   { to: '/settings', label: '設定', Icon: Settings },
 ] as const
 
