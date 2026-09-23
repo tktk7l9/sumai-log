@@ -38,6 +38,9 @@ body {
   --sumai-ring: var(--mantine-color-clay-6);
   --sumai-sunken: var(--mantine-color-gray-2);
   --sumai-lift: 0 6px 18px -6px rgba(69, 45, 30, 0.35);
+  /* 分析のグラフの 2 系列（見学・動画）。dataviz の検証で色覚多様性の差・コントラストを確認済み */
+  --sumai-series-visit: #a3542f;
+  --sumai-series-video: #2f6fb3;
 }
 
 :root[data-mantine-color-scheme='dark'],
@@ -46,6 +49,8 @@ body {
   --sumai-ring: var(--mantine-color-clay-4);
   --sumai-sunken: var(--mantine-color-dark-4);
   --sumai-lift: 0 6px 18px -6px rgba(0, 0, 0, 0.7);
+  --sumai-series-visit: #bd7148;
+  --sumai-series-video: #4f8fd8;
 }
 
 /*
@@ -507,4 +512,91 @@ a:focus-visible {
     animation: none;
     opacity: 0.6;
   }
+}
+
+/*
+ * 記録の分析（/analysis）。横棒は 1 系列なのでアクセント色 1 色、数値は文字色で添える。
+ * 月ごとの縦棒は 2 系列（--sumai-series-*）で凡例と数値ラベルを必ず出す
+ */
+.analysis-bars,
+.analysis-plain-list,
+.analysis-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.analysis-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9em) 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+.analysis-bar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.analysis-bar-track {
+  display: block;
+  height: 8px;
+}
+.analysis-bar-fill {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--sumai-series-visit);
+}
+.analysis-bar-value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.analysis-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.analysis-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.analysis-series-visit {
+  fill: var(--sumai-series-visit);
+  background: var(--sumai-series-visit);
+}
+.analysis-series-video {
+  fill: var(--sumai-series-video);
+  background: var(--sumai-series-video);
+}
+.analysis-chart-scroll {
+  overflow-x: auto;
+}
+.analysis-axis {
+  stroke: var(--mantine-color-gray-5);
+  stroke-width: 1;
+}
+.analysis-value-label {
+  font-size: 10px;
+  fill: var(--mantine-color-text);
+  font-variant-numeric: tabular-nums;
+}
+.analysis-tick-label {
+  font-size: 10px;
+  fill: var(--mantine-color-dimmed);
+}
+.analysis-link {
+  color: var(--mantine-color-anchor);
+  text-decoration: none;
+}
+.analysis-link:hover {
+  text-decoration: underline;
+}
+.analysis-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
 }
