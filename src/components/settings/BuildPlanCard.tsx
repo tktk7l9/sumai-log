@@ -10,7 +10,7 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { useRouter } from '@tanstack/react-router'
+import { Link, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
@@ -114,7 +114,10 @@ export function BuildPlanCard({ plan }: { plan: BuildPlan | null }) {
               thousandSeparator=","
               {...form.getInputProps('budgetManYen')}
             />
-            <Group justify="flex-end">
+            <Group justify="space-between">
+              <Button component={Link} to="/site" variant="subtle" size="compact-sm">
+                区画シミュレーターで配置を試す
+              </Button>
               <Button type="submit" loading={saving}>
                 保存
               </Button>

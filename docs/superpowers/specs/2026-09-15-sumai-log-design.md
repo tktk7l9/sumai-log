@@ -42,6 +42,7 @@
 | 記録 | `/records`（`?tab=visits\|videos`） | 見学記録と YouTube メモを SegmentedControl で切替。サムネ付きカード一覧。FAB は 2 択メニューではなく、アクティブなタブに応じてラベルが変わる（見学記録タブ→「記録を書く」／YouTube タブ→「YouTube」） |
 | 候補 | `/candidates` | 戸建て業者とマンション物件を切替。業者は「施工エリアに建築予定地の市区町村（設定値）を含む」フィルタと状態フィルタ |
 | 候補の比較 | `/candidates/compare` | 業者を列、項目（登録済みの数値・調査メモの事実・建築計画に対する目安）を行にした比較表。見送りは既定で隠す。2026-09-22 追加 |
+| 区画シミュレーター | `/site` | 大きな土地（長方形で近似）の一部を敷地として切り出し、区画と平屋を図の上で動かして面積・接道（路地状部分）・残りの土地の接道・建ぺい率/容積率・外壁後退・南側の空きを確かめる。ヘッダから開く。2026-09-23 追加 |
 | 地図 | `/map` | Leaflet + 地理院タイル。行った場所は塗りピン、予定だけの場所は枠ピン。タップで下からカード→詳細へ。現在地ボタン |
 
 詳細: `/candidates/vendors/$id` `/candidates/properties/$id` `/places/$id` `/records/visits/$id` `/records/videos/$id`。設定 `/settings`（建築予定地の市区町村・タグ一覧・自分の表示名）。
@@ -67,7 +68,7 @@
 | `videos` YouTube | url, videoId, title, channel, thumbnailUrl, watchedOn, watchedBy, tags(JSON), takeaways, vendorId? | title/channel/thumbnail は保存時に oEmbed で自動取得（編集可） |
 | `comments` | targetType(vendor/property/place/visit/video), targetId, body | 二人がどの記録にも一言足せる汎用の場 |
 | `tags` | name, sortOrder | 初期値: 断熱・気密・耐震・間取り・資金・ローン・土地・マンション・管理・設備・外構 |
-| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）、`buildPlan`（建築計画: floors/tsuboMin/tsuboMax/budgetManYen、JSON）など。画面から編集 |
+| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）、`buildPlan`（建築計画: floors/tsuboMin/tsuboMax/budgetManYen、JSON）、`sitePlan`（区画シミュレーターの寸法。`src/lib/sitePlan.ts` の SitePlan。長方形の寸法・区画・建物・法規の目安の数値だけで、所在地・地番・座標は持たない）など。画面から編集 |
 | `geocode_cache` | query, lat, lng, fetchedAt | 同じ住所を二度引かない |
 
 `status` は業者・物件で共通: `interested` / `visited` / `consulting` / `shortlisted` / `dropped`。
