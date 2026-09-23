@@ -12,7 +12,11 @@ import {
   evaluateSite,
   fireSafeRect,
   formatLotLines,
+  landAxes,
   lotsTouched,
+  shadingBoxes,
+  sunOnSouthWall,
+  NEIGHBORS_MAX,
   flagRect,
   m2ToTsubo,
   moveSectionToBack,
@@ -387,5 +391,119 @@ describe('駐車場への通路', () => {
 
   it('通路の幅は土地の間口より 1m 以上狭く収める', () => {
     expect(withAccess({ accessWidth: 99 }).accessWidth).toBe(19)
+  })
+})
+
+describe('隣地・向き・日当たり', () => {
+  const tall = {
+    label: '南の建物',
+    kind: 'building' as const,
+    x: 0,
+    y: -12,
+    width: 20,
+    depth: 6,
+    height: 15,
+  }
+  const base = (o: Partial<SitePlan> = {}) =>
+    plan({ roadSide: 'S', sectionWidth: 20, buildingWidth: 10, buildingX: 5, buildingY: 3, ...o })
+
+  it('古い保存値は既定値で補い、形の違う隣地は null', () => {
+    const {
+      facingOffset: _f,
+      latitude: _l,
+      buildingHeight: _b,
+      neighbors: _n,
+      ...old
+    } = DEFAULT_SITE_PLAN
+    const parsed = parseSitePlan(JSON.stringify(old))!
+    expect(parsed.neighbors).toEqual([])
+    expect(parsed.latitude).toBe(35.5)
+    const bad = (neighbors: unknown) =>
+      parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, neighbors }))
+    expect(bad([tall])?.neighbors).toHaveLength(1)
+    expect(bad('x')).toBeNull()
+    expect(bad([1])).toBeNull()
+    expect(bad([{ ...tall, label: 1 }])).toBeNull()
+    expect(bad([{ ...tall, kind: 'tower' }])).toBeNull()
+    expect(bad([{ ...tall, height: '9' }])).toBeNull()
+  })
+
+  it('隣地の値を収める', () => {
+    const p = plan({
+      facingOffset: 90,
+      latitude: 0,
+      buildingHeight: 50,
+      neighbors: [
+        { ...tall, label: 'あ'.repeat(60), width: 0, depth: -1, height: 999 },
+        ...Array.from({ length: NEIGHBORS_MAX + 5 }, () => tall),
+      ],
+    })
+    expect(p.facingOffset).toBe(45)
+    expect(p.latitude).toBe(20)
+    expect(p.buildingHeight).toBe(15)
+    expect(p.neighbors).toHaveLength(NEIGHBORS_MAX)
+    expect(p.neighbors[0]).toMatchObject({ width: 0.5, depth: 0.5, height: 100 })
+    expect(p.neighbors[0]!.label).toHaveLength(40)
+  })
+
+  it('土地の軸の方位は道路の方角と向きのずれで決まる', () => {
+    expect(landAxes(base())).toEqual({ rightAz: 90, backAz: 0 })
+    expect(landAxes(base({ facingOffset: -10 }))).toEqual({ rightAz: 80, backAz: 350 })
+    expect(landAxes(base({ roadSide: 'N' }))).toEqual({ rightAz: 270, backAz: 180 })
+    expect(landAxes(base({ roadSide: 'E' }))).toEqual({ rightAz: 0, backAz: 270 })
+  })
+
+  it('日当たりに入れるのは高さの分かっている建物だけ', () => {
+    const p = base({
+      neighbors: [
+        tall,
+        { ...tall, label: '不明', height: 0 },
+        { ...tall, label: '駐車場', kind: 'open' },
+        { ...tall, label: '建設中', kind: 'construction' },
+      ],
+    })
+    expect(shadingBoxes(p).map((b) => b.label)).toEqual(['南の建物', '建設中'])
+  })
+
+  it('周りに建物が無ければ冬至の 8〜16 時はずっと日が当たる', () => {
+    const r = sunOnSouthWall(base())
+    expect(r.wall).toBe('南')
+    expect(r.min).toBeCloseTo(8, 5)
+    expect(r.blockers).toEqual([])
+    expect(check(base(), 'sun').status).toBe('ok')
+    expect(check(base(), 'sun').detail).toContain('かからない')
+  })
+
+  it('南の高い建物は冬の日を遮り、名前と時間を出す', () => {
+    const p = base({ neighbors: [tall] })
+    const r = sunOnSouthWall(p)
+    expect(r.min).toBeLessThan(4)
+    expect(r.blockers[0]!.label).toBe('南の建物')
+    const c = check(p, 'sun')
+    expect(c.status).toBe('warn')
+    expect(c.detail).toContain('南の建物')
+    // 2 棟あれば長く遮る方が先
+    const two = sunOnSouthWall(
+      base({ neighbors: [{ ...tall, label: '低い', height: 6, x: -30, width: 28 }, tall] }),
+    )
+    expect(two.blockers.map((b) => b.label)).toEqual(['南の建物', '低い'])
+    // 夏は太陽が高く、影は届かない
+    expect(sunOnSouthWall(p, 'summer').blockers).toEqual([])
+  })
+
+  it('夏至の朝夕は太陽が北寄りで、南の窓には当たらない', () => {
+    expect(sunOnSouthWall(base(), 'summer').min).toBeLessThan(8)
+  })
+
+  it('南を向く外壁は道路の方角で変わる', () => {
+    expect(sunOnSouthWall(base({ roadSide: 'N' })).wall).toBe('南')
+    expect(sunOnSouthWall(base({ roadSide: 'E' })).wall).toBe('南')
+    expect(sunOnSouthWall(base({ roadSide: 'W' })).wall).toBe('南')
+    // 道路が東で大きく振れていれば、南に近いのは手前の外壁
+    expect(sunOnSouthWall(base({ roadSide: 'E', facingOffset: 45 })).wall).toBe('東')
+  })
+
+  it('極夜のように日が出ない時間は数えない', () => {
+    expect(sunOnSouthWall({ ...base(), latitude: 80 }).min).toBe(0)
   })
 })
