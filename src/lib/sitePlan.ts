@@ -8,8 +8,16 @@
  * 画面では道路を下に描く（y が大きいほど上＝奥）。
  *
  * 保存するのは寸法の数値だけで、所在地・地番・座標は持たない（design.md §1。土地の一次情報は
- * アプリの外に置く）。法規の数値（建ぺい率・容積率・外壁後退・路地状部分の幅）はどれも
+ * アプリの外に置く）。法規の数値（建ぺい率・容積率・境界からの離れ・道路の幅員）はどれも
  * 画面で変えられる「目安」で、実際の値は役所の窓口で確かめる前提。
+ *
+ * 判定が前提にしている法令（神奈川県の県所管区域の住宅＝平屋・延べ 1,000㎡ 以下）:
+ *   - 接道: 建築基準法 43 条の 2m。神奈川県建築基準条例には、東京都安全条例のような
+ *     「路地状部分の長さに応じて幅を広げる」規定は無い（延べ 1,000㎡ 超の 6m は住宅では効かない）
+ *   - 容積率: 前面道路の幅員が 12m 未満なら 幅員×0.4（住居系）と指定容積率の小さい方（法 52 条 2 項）
+ *   - 準防火地域: 隣地境界線から 3m・道路中心線から 3m 以内（1 階）が延焼のおそれのある部分
+ *     （法 2 条 6 号）。そこにかかる外壁の開口部は防火設備にする（法 61 条）
+ *   - 境界からの離れ: 外壁の後退距離の指定が無い地域では、民法 234 条の 50cm が目安
  */
 
 /** 1 坪 = 400/121 ㎡（約 3.3058） */
@@ -59,7 +67,14 @@ export type SitePlan = {
   /** 法規の目安 */
   coverageRatio: number
   floorAreaRatio: number
+  /** 建物と区画の境界の距離の目安（外壁後退の指定が無ければ民法 234 条の 0.5m） */
   setback: number
+  /** 前面道路の幅員（m）。容積率の道路幅員制限・道路中心線からの延焼ライン・南の空きに使う */
+  roadWidth: number
+  /** 準防火地域か（延焼のおそれのある部分を図と判定に出す） */
+  quasiFireZone: boolean
+  /** 土地の中の筆界（左端からの距離 m）。2 筆以上を 1 つの土地として扱うとき */
+  lotLines: number[]
 }
 
 export const DEFAULT_SITE_PLAN: SitePlan = {
@@ -80,9 +95,12 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   buildingWidth: 14,
   buildingX: 3,
   buildingY: 3,
-  coverageRatio: 50,
-  floorAreaRatio: 100,
-  setback: 1,
+  coverageRatio: 60,
+  floorAreaRatio: 200,
+  setback: 0.5,
+  roadWidth: 4,
+  quasiFireZone: false,
+  lotLines: [],
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -105,6 +123,7 @@ const NUMBER_KEYS = [
   'coverageRatio',
   'floorAreaRatio',
   'setback',
+  'roadWidth',
 ] as const
 
 /** 設定 `sitePlan` の JSON を読む。形が違えば null（画面は既定値で始める） */
@@ -117,11 +136,15 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     return null
   }
   if (!isRecord(parsed) || parsed.version !== 1) return null
-  // 駐車場への通路（parkingAccess 以下）は後から足した項目。保存済みの古い値に無ければ既定値で補う
+  // 駐車場への通路（parkingAccess 以下）と道路の幅員・準防火・筆界は後から足した項目。
+  // 保存済みの古い値に無ければ既定値で補う
   const data: Record<string, unknown> = {
     parkingAccess: DEFAULT_SITE_PLAN.parkingAccess,
     accessWidth: DEFAULT_SITE_PLAN.accessWidth,
     accessSide: DEFAULT_SITE_PLAN.accessSide,
+    roadWidth: DEFAULT_SITE_PLAN.roadWidth,
+    quasiFireZone: DEFAULT_SITE_PLAN.quasiFireZone,
+    lotLines: DEFAULT_SITE_PLAN.lotLines,
     ...parsed,
   }
   for (const key of NUMBER_KEYS) {
@@ -132,6 +155,11 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
   if (data.flagSide !== 'left' && data.flagSide !== 'right') return null
   if (typeof data.parkingAccess !== 'boolean') return null
   if (data.accessSide !== 'left' && data.accessSide !== 'right') return null
+  if (typeof data.quasiFireZone !== 'boolean') return null
+  const lines = data.lotLines
+  if (!Array.isArray(lines) || !lines.every((v) => Number.isFinite(v))) {
+    return null
+  }
   return normalizePlan(data as unknown as SitePlan)
 }
 
@@ -167,7 +195,20 @@ export function normalizePlan(plan: SitePlan): SitePlan {
   const landDepth = Math.max(plan.landDepth, 1)
   const accessWidth = clamp(plan.accessWidth, 0, landWidth - 1)
   let sectionWidth = clamp(plan.sectionWidth, 1, landWidth)
-  const next: SitePlan = { ...plan, landWidth, landDepth, accessWidth, sectionWidth }
+  const roadWidth = clamp(plan.roadWidth, 0, 50)
+  // 筆界は土地の内側だけを、左から順に重複なく持つ
+  const lotLines = [...new Set(plan.lotLines.map(round1))]
+    .filter((v) => v > 0 && v < landWidth)
+    .sort((a, b) => a - b)
+  const next: SitePlan = {
+    ...plan,
+    landWidth,
+    landDepth,
+    accessWidth,
+    sectionWidth,
+    roadWidth,
+    lotLines,
+  }
   let sDepth = sectionDepth(next)
   let sectionY = clamp(plan.sectionY, 0, landDepth - sDepth)
   const leavesBack = landDepth - sectionY - sDepth > 0.01
@@ -229,12 +270,83 @@ export function buildingRect(plan: SitePlan): Rect {
   }
 }
 
+/** 敷地が道路に接する長さの下限（m）。建築基準法 43 条 */
+export const MIN_FRONTAGE = 2
+
+/** 車 1 台が通れる通路の幅の目安（m）。法の下限（2m）では車が入らない */
+export const CAR_LANE_WIDTH = 3
+
+/** 延焼のおそれのある部分の距離（m、1 階）。隣地境界線・道路中心線から（建築基準法 2 条 6 号） */
+export const FIRE_SPREAD_DISTANCE = 3
+
 /**
- * 路地状部分に必要な幅の目安（m）。神奈川県建築基準条例の考え方（路地状部分の長さ 20m 以下は
- * 2m、超えると 3m）に合わせた目安。市の条例・運用で変わりうるので、画面では「要確認」と添える。
+ * 前面道路の幅員による容積率の上限（%）。幅員 12m 未満なら 幅員×0.4（住居系の用途地域）で、
+ * 指定容積率との小さい方が効く（建築基準法 52 条 2 項）
  */
-export function requiredFlagWidth(length: number): number {
-  return length > 20 ? 3 : 2
+export function effectiveFloorAreaRatio(plan: SitePlan): number {
+  if (plan.roadWidth >= 12) return plan.floorAreaRatio
+  return Math.min(plan.floorAreaRatio, Math.round(plan.roadWidth * 40))
+}
+
+/** 区画の手前・奥・左・右が、それぞれどの方角か（道路の方角から決まる。画面の北の向きと揃える） */
+export function sideDirections(roadSide: RoadSide): {
+  front: string
+  back: string
+  left: string
+  right: string
+} {
+  return {
+    S: { front: '南', back: '北', left: '西', right: '東' },
+    N: { front: '北', back: '南', left: '東', right: '西' },
+    E: { front: '東', back: '西', left: '南', right: '北' },
+    W: { front: '西', back: '東', left: '北', right: '南' },
+  }[roadSide]
+}
+
+/**
+ * 延焼ライン（区画の座標、区画の左手前が原点）。この長方形の外側が延焼のおそれのある部分。
+ * 区画が道路に接していれば手前は道路中心線から 3m（＝境界から 3m−幅員/2）、接していなければ
+ * 手前も隣地境界線として 3m。左右・奥は隣地（残りの土地も分けたあとは別の敷地）として 3m
+ */
+export function fireSafeRect(plan: SitePlan): Rect {
+  const sDepth = sectionDepth(plan)
+  const front =
+    plan.sectionY <= 0
+      ? Math.max(FIRE_SPREAD_DISTANCE - plan.roadWidth / 2, 0)
+      : FIRE_SPREAD_DISTANCE
+  return {
+    x: FIRE_SPREAD_DISTANCE,
+    y: front,
+    width: Math.max(plan.sectionWidth - FIRE_SPREAD_DISTANCE * 2, 0),
+    depth: Math.max(sDepth - front - FIRE_SPREAD_DISTANCE, 0),
+  }
+}
+
+/** 筆界の入力（「10.5, 20」「10.5、20」など）を数値の並びに。読めない片は捨てる */
+export function parseLotLines(text: string): number[] {
+  return text
+    .split(/[,、，\s]+/)
+    .filter((t) => t !== '')
+    .map(Number)
+    .filter((v) => Number.isFinite(v))
+}
+
+export function formatLotLines(lines: number[]): string {
+  return lines.join(', ')
+}
+
+/**
+ * 区画がどの筆にかかるか。筆は左から 0 始まりの番号。筆界は道路から奥へまっすぐ通る前提で、
+ * 路地状部分は区画の幅の中にあるので区画の左右の範囲だけを見ればよい
+ */
+export function lotsTouched(plan: SitePlan): number[] {
+  const edges = [0, ...plan.lotLines, plan.landWidth]
+  const [l, r] = [plan.sectionX, plan.sectionX + plan.sectionWidth]
+  const touched: number[] = []
+  for (let i = 0; i < edges.length - 1; i++) {
+    if (Math.min(r, edges[i + 1]!) - Math.max(l, edges[i]!) > 0.01) touched.push(i)
+  }
+  return touched
 }
 
 /** 区画内で、建物の南側に取れる空き（m）。道路の方角で「南」が画面のどちらかが変わる */
@@ -271,6 +383,8 @@ export type SiteEvaluation = {
   coverageUsed: number
   floorAreaUsed: number
   southGap: number
+  /** 前面道路の幅員を効かせた容積率の上限（%） */
+  floorAreaLimit: number
   /** 駐車場への通路の面積（残りの土地に含む）。通路が無ければ 0 */
   accessArea: number
   checks: SiteCheck[]
@@ -332,13 +446,29 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
       })
     }
   } else {
-    const need = requiredFlagWidth(flag.depth)
-    checks.push({
-      id: 'road',
-      status: flag.width >= need ? 'ok' : 'ng',
-      label: '接道（路地状部分）',
-      detail: `通路の長さ ${fmt(flag.depth)}m・幅 ${fmt(flag.width)}m。幅 ${need}m 以上が目安（県条例の考え方。市に要確認）`,
-    })
+    const base = `通路の長さ ${fmt(flag.depth)}m・幅 ${fmt(flag.width)}m。`
+    checks.push(
+      flag.width < MIN_FRONTAGE
+        ? {
+            id: 'road',
+            status: 'ng',
+            label: '接道（路地状部分）',
+            detail: `${base}道路に ${MIN_FRONTAGE}m 以上接する必要がある（建築基準法 43 条）`,
+          }
+        : flag.width < CAR_LANE_WIDTH
+          ? {
+              id: 'road',
+              status: 'warn',
+              label: '接道（路地状部分）',
+              detail: `${base}法の ${MIN_FRONTAGE}m は満たすが、車で出入りするなら ${CAR_LANE_WIDTH}m 程度は欲しい`,
+            }
+          : {
+              id: 'road',
+              status: 'ok',
+              label: '接道（路地状部分）',
+              detail: `${base}法の ${MIN_FRONTAGE}m 以上（神奈川県の条例に通路の長さによる上乗せは無い）`,
+            },
+    )
   }
 
   // 3. 残りの土地が道路に接し続けるか（手前を全部使うと奥の土地が無接道になる）
@@ -392,11 +522,15 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     label: '建ぺい率',
     detail: `${fmt(coverageUsed)}%（上限 ${plan.coverageRatio}%）`,
   })
+  const floorAreaLimit = effectiveFloorAreaRatio(plan)
   checks.push({
     id: 'floorArea',
-    status: floorAreaUsed <= plan.floorAreaRatio ? 'ok' : 'ng',
+    status: floorAreaUsed <= floorAreaLimit ? 'ok' : 'ng',
     label: '容積率',
-    detail: `${fmt(floorAreaUsed)}%（上限 ${plan.floorAreaRatio}%）`,
+    detail:
+      floorAreaLimit < plan.floorAreaRatio
+        ? `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%＝道路の幅員 ${fmt(plan.roadWidth)}m×0.4。指定は ${plan.floorAreaRatio}%）`
+        : `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%）`,
   })
 
   // 5. 外壁後退（建物と区画の境界の距離）
@@ -410,16 +544,68 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   checks.push({
     id: 'setback',
     status: minEdge + 0.01 >= plan.setback ? 'ok' : 'warn',
-    label: '外壁後退',
+    label: '境界からの離れ',
     detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上）`,
   })
 
-  // 6. 南側の空き（平屋の日当たりの目安）
+  // 5b. 準防火地域: 延焼のおそれのある部分にかかる外壁
+  if (plan.quasiFireZone) {
+    const safe = fireSafeRect(plan)
+    const dir = sideDirections(plan.roadSide)
+    const hit = [
+      plan.buildingY + 0.01 < safe.y ? dir.front : null,
+      plan.buildingY + bDepth > safe.y + safe.depth + 0.01 ? dir.back : null,
+      plan.buildingX + 0.01 < safe.x ? dir.left : null,
+      plan.buildingX + plan.buildingWidth > safe.x + safe.width + 0.01 ? dir.right : null,
+    ].filter((v): v is string => v !== null)
+    checks.push(
+      hit.length > 0
+        ? {
+            id: 'fire',
+            status: 'warn',
+            label: '延焼のおそれのある部分（準防火地域）',
+            detail: `${hit.join('・')}側の外壁が隣地境界線・道路中心線から ${FIRE_SPREAD_DISTANCE}m 以内にかかる。その範囲の窓・玄関ドアは防火設備（網入り・防火サッシ）になる。外壁・軒裏の防火構造はどこでも要る`,
+          }
+        : {
+            id: 'fire',
+            status: 'ok',
+            label: '延焼のおそれのある部分（準防火地域）',
+            detail: `建物は延焼ラインの内側で、窓を防火設備にしなくてよい。外壁・軒裏の防火構造は要る`,
+          },
+    )
+  }
+
+  // 5c. 筆界（2 筆以上の土地から区画を取るとき）
+  if (plan.lotLines.length > 0) {
+    const lots = lotsTouched(plan)
+    const names = lots.map((i) => `左から ${i + 1} 筆目`).join('・')
+    checks.push(
+      lots.length > 1
+        ? {
+            id: 'lots',
+            status: 'warn',
+            label: '筆界',
+            detail: `区画が ${lots.length} 筆（${names}）にまたがる。分筆して敷地にするなら、それぞれの筆から切り出して合筆する手間が増える`,
+          }
+        : {
+            id: 'lots',
+            status: 'ok',
+            label: '筆界',
+            detail: `区画は ${names}の中に収まる。分筆はその 1 筆だけで済む`,
+          },
+    )
+  }
+
+  // 6. 南側の空き（平屋の日当たりの目安）。区画の南が道路なら、道路の幅員も空きとして数える
+  const southIsRoad = plan.roadSide === 'S' && plan.sectionY <= 0
+  const openSouth = southIsRoad ? gap + plan.roadWidth : gap
   checks.push({
     id: 'south',
-    status: gap >= 4 ? 'ok' : 'warn',
+    status: openSouth >= 4 ? 'ok' : 'warn',
     label: '南側の空き',
-    detail: `建物の南に ${fmt(gap)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
+    detail: southIsRoad
+      ? `建物の南に ${fmt(gap)}m（区画内）＋道路 ${fmt(plan.roadWidth)}m＝${fmt(openSouth)}m。平屋は 4m 以上あると冬も日が入りやすい（道路の向こうの建物は別に確かめる）`
+      : `建物の南に ${fmt(gap)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
   })
 
   return {
@@ -432,6 +618,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     coverageUsed,
     floorAreaUsed,
     southGap: gap,
+    floorAreaLimit,
     accessArea,
     checks,
   }
@@ -456,8 +643,10 @@ export function placeBuildingNorth(plan: SitePlan): SitePlan {
   const bDepth = buildingDepth(plan)
   const centerX = (plan.sectionWidth - plan.buildingWidth) / 2
   const centerY = (sDepth - bDepth) / 2
-  const farX = plan.sectionWidth - plan.buildingWidth - plan.setback
-  const farY = sDepth - bDepth - plan.setback
+  // 奥側の位置は 0.1m 単位へ切り捨てる（四捨五入だと境界からの離れを割り込むことがある）
+  const floor1 = (v: number) => Math.floor(v * 10 + 1e-9) / 10
+  const farX = floor1(plan.sectionWidth - plan.buildingWidth - plan.setback)
+  const farY = floor1(sDepth - bDepth - plan.setback)
   const pos = {
     S: { x: centerX, y: farY },
     N: { x: centerX, y: plan.setback },

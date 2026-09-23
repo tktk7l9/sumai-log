@@ -11,6 +11,7 @@ import {
   Stack,
   Switch,
   Text,
+  TextInput,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useRouter } from '@tanstack/react-router'
@@ -34,11 +35,14 @@ import {
   accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
+  effectiveFloorAreaRatio,
   evaluateSite,
+  formatLotLines,
   m2ToTsubo,
   moveSectionToBack,
   moveSectionToFront,
   normalizePlan,
+  parseLotLines,
   placeBuildingNorth,
   sectionDepth,
   type CheckStatus,
@@ -84,6 +88,8 @@ function Page() {
   const save = useServerFn(saveSitePlan)
   const [plan, setPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
   const [saving, setSaving] = useState(false)
+  // 筆界は「10.5, 20」のような文字で入れる。打ちかけの値を消さないよう文字のまま持つ
+  const [lotText, setLotText] = useState(() => formatLotLines(plan.lotLines))
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
@@ -105,6 +111,7 @@ function Page() {
     try {
       const { plan: stored } = await save({ data: plan })
       setPlan(stored)
+      setLotText(formatLotLines(stored.lotLines))
       await router.invalidate()
       notifications.show({ message: '区画を保存しました' })
     } catch (error) {
@@ -225,6 +232,30 @@ function Page() {
                   全体 {(plan.landWidth * plan.landDepth).toFixed(0)}㎡（
                   {m2ToTsubo(plan.landWidth * plan.landDepth).toFixed(1)}坪）
                 </Text>
+                <TextInput
+                  label="筆界（左端からの距離 m）"
+                  description="2 筆以上をまとめて 1 つの土地にしているとき。複数あれば「10.5, 20」のように区切る"
+                  placeholder="なし"
+                  value={lotText}
+                  onChange={(ev) => {
+                    setLotText(ev.currentTarget.value)
+                    update({ lotLines: parseLotLines(ev.currentTarget.value) })
+                  }}
+                />
+                <Text size="xs" c="dimmed">
+                  公図・登記所備付地図は図上の概略で、寸法も面積も登記地積と数％〜1
+                  割ずれることがあります。区画を決める前に現況測量で確かめてください。
+                </Text>
+                <NumberInput
+                  label="前面道路の幅員（m）"
+                  description="容積率の上限（幅員×0.4）・延焼ライン・南の空きに使います"
+                  min={0}
+                  max={50}
+                  step={0.5}
+                  decimalScale={1}
+                  value={plan.roadWidth}
+                  onChange={(v) => update({ roadWidth: num(v, plan.roadWidth) })}
+                />
                 <Stack gap={4}>
                   <Text size="sm" fw={500}>
                     道路の方角
@@ -305,7 +336,9 @@ function Page() {
               <Stack gap="sm">
                 <Text size="xs" c="dimmed">
                   区画が道路に接しないとき、道路から区画までの通路（路地状部分）を敷地に含めます。建築基準法で敷地は道路に
-                  2m 以上接する必要があり、通路が長いと県条例でさらに広い幅が求められます。
+                  2m
+                  以上接する必要があります（神奈川県の条例に、通路の長さで幅を広げる規定はありません）。車で出入りするなら
+                  3m 程度は欲しいところです。
                 </Text>
                 <Group grow align="flex-end">
                   <NumberInput
@@ -425,9 +458,13 @@ function Page() {
                     onChange={(v) => update({ floorAreaRatio: num(v, plan.floorAreaRatio) })}
                   />
                 </Group>
+                <Text size="xs" c="dimmed">
+                  容積率の上限は、前面道路の幅員が 12m 未満なら「幅員×0.4」と指定の小さい方（いまは{' '}
+                  {effectiveFloorAreaRatio(plan)}%）。
+                </Text>
                 <NumberInput
-                  label="外壁後退（m）"
-                  description="建物と区画の境界の距離の目安。地域の都市計画で決まっていることがあります"
+                  label="境界からの離れ（m）"
+                  description="外壁の後退距離の指定が無ければ、民法 234 条の 0.5m が目安"
                   min={0}
                   max={10}
                   step={0.5}
@@ -435,8 +472,14 @@ function Page() {
                   value={plan.setback}
                   onChange={(v) => update({ setback: num(v, plan.setback) })}
                 />
+                <Switch
+                  label="準防火地域"
+                  description="隣地境界線・道路中心線から 3m 以内（図の橙の点線の外側）にかかる窓は防火設備になります"
+                  checked={plan.quasiFireZone}
+                  onChange={(ev) => update({ quasiFireZone: ev.currentTarget.checked })}
+                />
                 <Text size="xs" c="dimmed">
-                  用途地域ごとの建ぺい率・容積率・外壁後退・最低敷地面積は、市の都市計画図や窓口で確認して入力してください。
+                  用途地域ごとの建ぺい率・容積率・外壁の後退距離・最低敷地面積・防火の指定は、市の都市計画図や窓口で確認して入力してください（防火の指定は都市計画図に描かれていないことがあるので、市の都市計画の告示で確かめる）。
                 </Text>
               </Stack>
             </Accordion.Panel>
@@ -455,7 +498,14 @@ function Page() {
           )}
           <Group gap="xs">
             {saved ? (
-              <Button variant="default" disabled={!dirty} onClick={() => setPlan(saved)}>
+              <Button
+                variant="default"
+                disabled={!dirty}
+                onClick={() => {
+                  setPlan(saved)
+                  setLotText(formatLotLines(saved.lotLines))
+                }}
+              >
                 元に戻す
               </Button>
             ) : null}
