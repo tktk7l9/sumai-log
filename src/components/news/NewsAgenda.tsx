@@ -15,7 +15,7 @@ import { NewsEventDrawer } from './NewsEventDrawer'
 
 /**
  * 0 件のときも AgendaView には有効な日付レンジが要る（rangeStart/rangeEnd は必須 prop）。
- * ヘッダーの日付表示（M/D – M/D）は「お知らせはありません」の上に出るだけで意味を持たない
+ * ヘッダーの日付表示（YYYY/MM/DD – YYYY/MM/DD）は「お知らせはありません」の上に出るだけで意味を持たない
  * ため、呼び出し時点の日付を使う（items が空でも今日を指す、以外の期待値は無い）。
  * 呼び出し側が明示の rangeStart/rangeEnd を渡すとき（/news の月ごとのアジェンダ。
  * 月初〜月末を渡したい＝件数に依らない固定レンジ）はこちらを使わない。
@@ -117,7 +117,7 @@ export function NewsAgenda({
     const item = payload ? items.find((n) => n.id === payload.newsId) : undefined
     if (!item) return <UnstyledButton {...rootProps} />
     // 終わった日程のお知らせは題名も補助色に落とす（バッジの色は変えない。
-    // 「見学会 9/12(土)」の日付を読めば終わったことは分かる）
+    // 「見学会 2026/09/12(土)」の日付を読めば終わったことは分かる）
     const past = payload?.past ?? false
     return (
       <UnstyledButton {...rootProps} data-past={past ? true : undefined}>
@@ -162,7 +162,7 @@ export function NewsAgenda({
         locale="ja"
         labels={labels}
         dateHeaderFormat={(date) => formatDateWithWeekday(dateKey(date))}
-        headerFormat="M/D"
+        headerFormat="YYYY/MM/DD"
         styles={hideHeader ? { agendaViewHeader: { display: 'none' } } : undefined}
         renderEvent={renderEvent}
         onEventClick={handleEventClick}
