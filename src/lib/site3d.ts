@@ -8,6 +8,7 @@
 
 import {
   accessRect,
+  buildingLabel,
   buildingRect,
   flagRect,
   landAxes,
@@ -90,7 +91,7 @@ export function buildScene(plan: SitePlan): Scene {
 
   boxes.push({
     kind: 'house',
-    label: `平屋 ${plan.buildingTsubo}坪`,
+    label: buildingLabel(plan),
     ...buildingRect(plan),
     height: plan.buildingHeight,
   })

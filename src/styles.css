@@ -308,6 +308,11 @@ a:focus-visible {
   stroke-width: 1.5;
   stroke-dasharray: 3 3;
 }
+/* 2 階の延焼ライン（5m）は細い一点鎖線で 1 階（3m）と見分ける */
+.site-fireline-upper {
+  stroke-width: 1;
+  stroke-dasharray: 8 3 2 3;
+}
 .site-neighbor {
   stroke: var(--mantine-color-gray-6);
   stroke-width: 1;
