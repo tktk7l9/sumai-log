@@ -331,6 +331,33 @@ a:focus-visible {
   fill-opacity: 0.22;
   pointer-events: none;
 }
+/* 3D 表示。指の操作は three.js（OrbitControls）が受けるのでページのスクロールと取り合わない */
+.site3d {
+  position: relative;
+  width: 100%;
+  height: min(68vh, 560px);
+  touch-action: none;
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  background: var(--sumai-sunken);
+}
+.site3d canvas {
+  display: block;
+}
+.site3d-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.site3d-label {
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--mantine-color-text);
+  background: color-mix(in srgb, var(--mantine-color-body) 82%, transparent);
+  white-space: nowrap;
+}
 .site-flag {
   fill: var(--mantine-color-clay-6);
   fill-opacity: 0.12;
