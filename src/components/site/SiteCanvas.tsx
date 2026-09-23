@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import {
   accessRect,
   buildingRect,
+  fireSafeRect,
   flagRect,
   m2ToTsubo,
   normalizePlan,
@@ -13,9 +14,10 @@ import {
   type SitePlan,
 } from '../../lib/sitePlan'
 
-/** 余白と道路の帯の奥行（m） */
+/** 余白（m） */
 const PAD = 1.5
-const ROAD = 4
+/** 道路の帯は実際の幅員で描くが、文字が入るよう最低この奥行は取る（m） */
+const MIN_ROAD = 3
 
 type DragKind = 'section' | 'building'
 type Drag = { kind: DragKind; startX: number; startY: number; origX: number; origY: number }
@@ -50,6 +52,7 @@ export function SiteCanvas({
     return () => svg.removeEventListener('touchmove', stop)
   }, [])
 
+  const ROAD = Math.max(plan.roadWidth, MIN_ROAD)
   const width = plan.landWidth + PAD * 2
   const height = plan.landDepth + ROAD + PAD * 2
   const unit = Math.max(plan.landWidth, plan.landDepth) / 40
@@ -114,6 +117,13 @@ export function SiteCanvas({
   const flag = flagRect(plan)
   const flagSvg = flag ? toSvg(flag) : null
   const building = toSvg(buildingRect(plan))
+  const sec = sectionRect(plan)
+  // 延焼ライン（準防火地域のとき）。区画の座標から土地の座標へ
+  const safe = plan.quasiFireZone ? fireSafeRect(plan) : null
+  const safeSvg =
+    safe && safe.width > 0 && safe.depth > 0
+      ? toSvg({ x: sec.x + safe.x, y: sec.y + safe.y, width: safe.width, depth: safe.depth })
+      : null
   const access = accessRect(plan)
   const accessSvg = access ? toSvg(access) : null
   // 区画の奥（画面の上）に残る土地の奥行
@@ -176,12 +186,42 @@ export function SiteCanvas({
         dominantBaseline="middle"
         textAnchor="middle"
       >
-        道路
+        道路 {plan.roadWidth}m
       </text>
+      {plan.roadWidth > 0 ? (
+        <line
+          x1={0}
+          x2={width}
+          y1={PAD + plan.landDepth + plan.roadWidth / 2}
+          y2={PAD + plan.landDepth + plan.roadWidth / 2}
+          className="site-centerline"
+        />
+      ) : null}
 
       {/* 土地 */}
       <rect {...land} className="site-land" />
       {grid}
+
+      {/* 筆界 */}
+      {plan.lotLines.map((lx) => (
+        <g key={`lot${lx}`} pointerEvents="none">
+          <line
+            x1={PAD + lx}
+            x2={PAD + lx}
+            y1={land.y}
+            y2={land.y + land.height}
+            className="site-lotline"
+          />
+          <text
+            x={PAD + lx + font * 0.3}
+            y={land.y + font}
+            fontSize={font * 0.75}
+            className="site-label site-label-muted"
+          >
+            筆界
+          </text>
+        </g>
+      ))}
 
       {/* 残りの土地（駐車場）への通路と、区画の奥に残る土地 */}
       {accessSvg ? (
@@ -220,6 +260,9 @@ export function SiteCanvas({
 
       {/* 区画（ドラッグで移動） */}
       <rect {...section} className="site-section" onPointerDown={(e) => startDrag('section', e)} />
+
+      {/* 延焼ライン（この外側が延焼のおそれのある部分） */}
+      {safeSvg ? <rect {...safeSvg} className="site-fireline" pointerEvents="none" /> : null}
 
       {/* 建物（ドラッグで区画の中を移動） */}
       <rect

@@ -30,4 +30,7 @@ export const sitePlanInput = z.object({
   coverageRatio: z.number().min(10).max(100),
   floorAreaRatio: z.number().min(10).max(1000),
   setback: meters(10),
+  roadWidth: meters(50),
+  quasiFireZone: z.boolean(),
+  lotLines: z.array(meters(500)).max(20),
 })
