@@ -32,8 +32,11 @@ import { Suspense, lazy, useState } from 'react'
 import { PageShell } from '../components/PageShell'
 import { SiteCanvas } from '../components/site/SiteCanvas'
 import { extractErrorMessage } from '../lib/formError'
+import { FLOORS_LABEL } from '../lib/research'
 import {
+  DEFAULT_BUILDING_HEIGHT,
   DEFAULT_SITE_PLAN,
+  FLOORS,
   NEIGHBOR_KINDS,
   NEIGHBOR_KIND_LABEL,
   NEIGHBOR_LABEL_MAX,
@@ -44,6 +47,7 @@ import {
   accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
+  buildingFootprint,
   effectiveFloorAreaRatio,
   evaluateSite,
   formatLotLines,
@@ -55,6 +59,7 @@ import {
   placeBuildingNorth,
   sectionDepth,
   type CheckStatus,
+  type Floors,
   type Neighbor,
   type NeighborKind,
   type RoadSide,
@@ -87,12 +92,21 @@ const STATUS_ICON: Record<CheckStatus, { Icon: typeof CircleCheck; color: string
     ng: { Icon: CircleX, color: 'var(--mantine-color-red-7)', label: 'NG' },
   }
 
-function initialPlan(saved: SitePlan | null, buildPlan: { tsuboMax: number } | null): SitePlan {
+function initialPlan(
+  saved: SitePlan | null,
+  buildPlan: { tsuboMax: number; floors: Floors } | null,
+): SitePlan {
   if (saved) return saved
-  // 保存が無ければ既定値から。建物の坪数は建築計画（設定）の上限を使い、南側に庭が
-  // 取れるよう北へ寄せて置く
+  // 保存が無ければ既定値から。建物の坪数と階数は建築計画（設定）を使い（無ければ平屋）、
+  // 南側に庭が取れるよう北へ寄せて置く
+  const floors = buildPlan?.floors ?? DEFAULT_SITE_PLAN.floors
   return placeBuildingNorth(
-    normalizePlan({ ...DEFAULT_SITE_PLAN, buildingTsubo: buildPlan?.tsuboMax ?? 35 }),
+    normalizePlan({
+      ...DEFAULT_SITE_PLAN,
+      floors,
+      buildingHeight: DEFAULT_BUILDING_HEIGHT[floors],
+      buildingTsubo: buildPlan?.tsuboMax ?? 35,
+    }),
   )
 }
 
@@ -535,12 +549,28 @@ function Page() {
           </Accordion.Item>
 
           <Accordion.Item value="building">
-            <Accordion.Control>建物（平屋）</Accordion.Control>
+            <Accordion.Control>建物（{FLOORS_LABEL[plan.floors]}）</Accordion.Control>
             <Accordion.Panel>
               <Stack gap="sm">
+                <SegmentedControl
+                  fullWidth
+                  aria-label="階数"
+                  value={String(plan.floors)}
+                  onChange={(v) => {
+                    const floors = Number(v) as Floors
+                    // 高さは階数の目安に合わせ直す（あとで数値を変えられる）
+                    update({ floors, buildingHeight: DEFAULT_BUILDING_HEIGHT[floors] })
+                  }}
+                  data={FLOORS.map((f) => ({ value: String(f), label: FLOORS_LABEL[f] }))}
+                />
                 <Group grow>
                   <NumberInput
-                    label="広さ（坪）"
+                    label="延床（坪）"
+                    description={
+                      plan.floors >= 2
+                        ? `1 階の広さは ${m2ToTsubo(buildingFootprint(plan)).toFixed(1)}坪`
+                        : undefined
+                    }
                     min={5}
                     max={300}
                     step={1}
@@ -560,7 +590,7 @@ function Page() {
                 </Group>
                 <NumberInput
                   label="高さ（m）"
-                  description="影を描くため。平屋は 4〜5m 程度"
+                  description="影を描くため。平屋は 4〜5m、2 階建ては 7〜8m 程度"
                   min={2}
                   max={15}
                   step={0.5}
@@ -569,7 +599,10 @@ function Page() {
                   onChange={(v) => update({ buildingHeight: num(v, plan.buildingHeight) })}
                 />
                 <Text size="xs" c="dimmed">
-                  平屋なので建築面積＝延床面積として見ています（軒・ポーチ・ウッドデッキは含みません）。
+                  {plan.floors >= 2
+                    ? '2 階建ては 1 階と 2 階が同じ広さの総 2 階として、建築面積＝延床÷2 で見ています'
+                    : '平屋なので建築面積＝延床面積として見ています'}
+                  （軒・ポーチ・ウッドデッキは含みません）。
                 </Text>
               </Stack>
             </Accordion.Panel>

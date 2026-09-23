@@ -7,6 +7,8 @@ import {
   accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
+  buildingFootprint,
+  buildingLabel,
   buildingRect,
   effectiveFloorAreaRatio,
   evaluateSite,
@@ -505,5 +507,47 @@ describe('隣地・向き・日当たり', () => {
 
   it('極夜のように日が出ない時間は数えない', () => {
     expect(sunOnSouthWall({ ...base(), latitude: 80 }).min).toBe(0)
+  })
+})
+
+describe('階数（平屋・2 階建て）', () => {
+  it('既定は平屋。古い保存値は平屋で補い、1・2 以外は null', () => {
+    expect(DEFAULT_SITE_PLAN.floors).toBe(1)
+    const { floors: _f, ...old } = DEFAULT_SITE_PLAN
+    expect(parseSitePlan(JSON.stringify(old))?.floors).toBe(1)
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, floors: 2 }))?.floors).toBe(2)
+    expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, floors: 3 }))).toBeNull()
+  })
+
+  it('2 階建ては外形が延床の半分（総 2 階）。建ぺい率は外形、容積率は延床で見る', () => {
+    const one = plan({ buildingTsubo: 40, buildingWidth: 10 })
+    const two = plan({ buildingTsubo: 40, buildingWidth: 10, floors: 2 })
+    expect(buildingFootprint(two)).toBeCloseTo(buildingFootprint(one) / 2)
+    expect(buildingDepth(two)).toBeCloseTo(buildingDepth(one) / 2)
+    const e = evaluateSite(two)
+    expect(e.floorAreaUsed).toBeCloseTo(e.coverageUsed * 2)
+    expect(buildingLabel(one)).toBe('平屋 40坪')
+    expect(buildingLabel(two)).toBe('2 階建て 40坪')
+  })
+
+  it('2 階建ての延焼ラインは 1 階 3m・2 階 5m を分けて知らせる', () => {
+    const p = plan({
+      quasiFireZone: true,
+      floors: 2,
+      sectionWidth: 20,
+      roadWidth: 5,
+      buildingTsubo: 30,
+      buildingWidth: 10,
+      buildingX: 4,
+      buildingY: 6,
+    })
+    const c = check(p, 'fire')
+    expect(c.status).toBe('warn')
+    expect(c.detail).toContain('2 階は西側の外壁が 5m 以内')
+    expect(c.detail).not.toContain('1 階は')
+    const q = { ...p, buildingX: 1 }
+    expect(check(q, 'fire').detail).toContain('1 階は西側の外壁が 3m 以内')
+    // 同じ外形の平屋なら 5m の線は見ない
+    expect(check({ ...p, floors: 1, buildingTsubo: 15 }, 'fire').status).toBe('ok')
   })
 })

@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 
 import {
   accessRect,
+  FIRE_SPREAD_DISTANCE_UPPER,
+  buildingDepth,
+  buildingLabel,
   buildingRect,
   fireSafeRect,
   flagRect,
@@ -9,7 +12,6 @@ import {
   m2ToTsubo,
   normalizePlan,
   sectionRect,
-  tsuboToM2,
   type Rect,
   type SitePlan,
 } from '../../lib/sitePlan'
@@ -158,12 +160,16 @@ export function SiteCanvas({
   const flagSvg = flag ? toSvg(flag) : null
   const building = toSvg(buildingRect(plan))
   const sec = sectionRect(plan)
-  // 延焼ライン（準防火地域のとき）。区画の座標から土地の座標へ
-  const safe = plan.quasiFireZone ? fireSafeRect(plan) : null
-  const safeSvg =
-    safe && safe.width > 0 && safe.depth > 0
-      ? toSvg({ x: sec.x + safe.x, y: sec.y + safe.y, width: safe.width, depth: safe.depth })
-      : null
+  // 延焼ライン（準防火地域のとき。2 階建てなら 2 階の 5m の線も）。区画の座標から土地の座標へ
+  const fireLines = (
+    plan.quasiFireZone
+      ? plan.floors >= 2
+        ? [fireSafeRect(plan), fireSafeRect(plan, FIRE_SPREAD_DISTANCE_UPPER)]
+        : [fireSafeRect(plan)]
+      : []
+  )
+    .filter((r) => r.width > 0 && r.depth > 0)
+    .map((r) => toSvg({ x: sec.x + r.x, y: sec.y + r.y, width: r.width, depth: r.depth }))
   const access = accessRect(plan)
   const accessSvg = access ? toSvg(access) : null
   // 区画の奥（画面の上）に残る土地の奥行
@@ -258,7 +264,7 @@ export function SiteCanvas({
       className="site-canvas"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label={`土地 間口${plan.landWidth}m×奥行${plan.landDepth}m のうち、区画 ${sectionTsubo.toFixed(1)}坪と建物 ${plan.buildingTsubo}坪の配置図`}
+      aria-label={`土地 間口${plan.landWidth}m×奥行${plan.landDepth}m のうち、区画 ${sectionTsubo.toFixed(1)}坪と建物（${buildingLabel(plan)}）の配置図`}
       onPointerMove={moveDrag}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
@@ -357,7 +363,14 @@ export function SiteCanvas({
       ))}
 
       {/* 延焼ライン（この外側が延焼のおそれのある部分） */}
-      {safeSvg ? <rect {...safeSvg} className="site-fireline" pointerEvents="none" /> : null}
+      {fireLines.map((r, i) => (
+        <rect
+          key={`fire${i}`}
+          {...r}
+          className={i === 0 ? 'site-fireline' : 'site-fireline site-fireline-upper'}
+          pointerEvents="none"
+        />
+      ))}
 
       {/* 建物（ドラッグで区画の中を移動） */}
       <rect
@@ -374,7 +387,7 @@ export function SiteCanvas({
         textAnchor="middle"
         pointerEvents="none"
       >
-        平屋 {plan.buildingTsubo}坪
+        {buildingLabel(plan)}
       </text>
       <text
         x={building.x + building.width / 2}
@@ -385,8 +398,7 @@ export function SiteCanvas({
         textAnchor="middle"
         pointerEvents="none"
       >
-        {plan.buildingWidth.toFixed(1)}×
-        {(tsuboToM2(plan.buildingTsubo) / plan.buildingWidth).toFixed(1)}m
+        {plan.buildingWidth.toFixed(1)}×{buildingDepth(plan).toFixed(1)}m
       </text>
 
       {/* 区画の面積は、区画の中で建物の上下のうち広く空いている側に置く（建物に隠れないように） */}

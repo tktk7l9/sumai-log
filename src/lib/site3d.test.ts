@@ -23,6 +23,7 @@ describe('buildScene', () => {
     expect(s.planes.map((p) => p.kind)).toEqual(['road', 'land', 'section'])
     expect(s.boxes).toHaveLength(1)
     expect(s.boxes[0]).toMatchObject({ kind: 'house', height: 4.5, label: '平屋 35坪' })
+    expect(buildScene(plan({ floors: 2 })).boxes[0]!.label).toBe('2 階建て 35坪')
     expect(s.bounds).toEqual({ minX: 0, maxX: 20, minY: -4, maxY: 50 })
   })
 
