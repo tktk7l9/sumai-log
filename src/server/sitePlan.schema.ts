@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { ROAD_SIDES } from '../lib/sitePlan'
+import { NEIGHBOR_KINDS, NEIGHBOR_LABEL_MAX, NEIGHBORS_MAX, ROAD_SIDES } from '../lib/sitePlan'
 
 /**
  * 区画シミュレーターの保存値（設定 `sitePlan`）。sitePlan.ts から分離しているのは
@@ -30,4 +30,24 @@ export const sitePlanInput = z.object({
   coverageRatio: z.number().min(10).max(100),
   floorAreaRatio: z.number().min(10).max(1000),
   setback: meters(10),
+  roadWidth: meters(50),
+  quasiFireZone: z.boolean(),
+  lotLines: z.array(meters(500)).max(20),
+  facingOffset: z.number().min(-45).max(45),
+  latitude: z.number().min(20).max(46),
+  buildingHeight: z.number().min(2).max(15),
+  // 隣地は土地の外（負の座標）にも置く
+  neighbors: z
+    .array(
+      z.object({
+        label: z.string().max(NEIGHBOR_LABEL_MAX),
+        kind: z.enum(NEIGHBOR_KINDS),
+        x: z.number().min(-500).max(1000),
+        y: z.number().min(-500).max(1000),
+        width: z.number().min(0.5).max(500),
+        depth: z.number().min(0.5).max(500),
+        height: z.number().min(0).max(100),
+      }),
+    )
+    .max(NEIGHBORS_MAX),
 })
