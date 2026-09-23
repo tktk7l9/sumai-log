@@ -41,8 +41,8 @@ function Page() {
           <Stat label="業者" value={`${s.vendors}社`} sub="候補に登録" />
           <Stat
             label="期間"
-            value={s.firstDate ? formatDateSlash(s.firstDate).slice(0, 7) : '—'}
-            sub={s.lastDate ? `〜 ${formatDateSlash(s.lastDate).slice(0, 7)}` : '記録なし'}
+            value={s.firstDate ? formatDateSlash(s.firstDate) : '—'}
+            sub={s.lastDate ? `〜 ${formatDateSlash(s.lastDate)}` : '記録なし'}
           />
         </SimpleGrid>
 

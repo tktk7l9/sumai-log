@@ -75,7 +75,7 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
           <Table.Tbody>
             {rows.map((r) => (
               <Table.Tr key={r.month}>
-                <Table.Td>{r.month}</Table.Td>
+                <Table.Td>{monthLabel(r.month)}</Table.Td>
                 <Table.Td ta="right">{r.visits}</Table.Td>
                 <Table.Td ta="right">{r.videos}</Table.Td>
               </Table.Tr>
@@ -89,7 +89,7 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
               width={Math.max(width, 200)}
               height={height + top + 20}
               role="img"
-              aria-label={`月ごとの見学と動画の件数。${rows.map((r) => `${r.month} 見学${r.visits}件・動画${r.videos}件`).join('、')}`}
+              aria-label={`月ごとの見学と動画の件数。${rows.map((r) => `${monthLabel(r.month)} 見学${r.visits}件・動画${r.videos}件`).join('、')}`}
               onPointerLeave={() => setActive(null)}
             >
               <line
@@ -146,7 +146,7 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
                       textAnchor="middle"
                       className="analysis-tick-label"
                     >
-                      {Number(r.month.slice(5))}月
+                      {r.month.slice(5)}
                     </text>
                   </g>
                 )
@@ -155,11 +155,16 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
           </div>
           <Text size="xs" c="dimmed" mt={4} aria-live="polite">
             {hovered
-              ? `${hovered.month}：見学 ${hovered.visits} 件・動画 ${hovered.videos} 件`
+              ? `${monthLabel(hovered.month)}：見学 ${hovered.visits} 件・動画 ${hovered.videos} 件`
               : '棒に触れるとその月の内訳を出します'}
           </Text>
         </>
       )}
     </div>
   )
+}
+
+/** 'YYYY-MM' を 'YYYY/MM' に（日付の表示は / 区切りにそろえる） */
+function monthLabel(month: string): string {
+  return month.replace('-', '/')
 }
