@@ -2,6 +2,7 @@ import { ActionIcon, AppShell, Group, NavLink, Stack, Text, UnstyledButton } fro
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   BookOpen,
+  ChartColumn,
   Building2,
   CalendarDays,
   House,
@@ -22,6 +23,7 @@ const HEADER_LINKS = [
   { to: '/glossary', label: '用語集', Icon: BookOpen },
   { to: '/sources', label: '情報収集', Icon: Radio },
   { to: '/site', label: '区画', Icon: LandPlot },
+  { to: '/analysis', label: '分析', Icon: ChartColumn },
   { to: '/settings', label: '設定', Icon: Settings },
 ] as const
 
