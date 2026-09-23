@@ -15,7 +15,7 @@ import { FormDrawer } from '../components/FormDrawer'
 import { NewsEventDrawer } from '../components/news/NewsEventDrawer'
 import { PageShell } from '../components/PageShell'
 import { extractErrorMessage } from '../lib/formError'
-import { dateKey } from '../lib/calendar'
+import { dateKey, formatDateSlash, formatDateWithWeekday } from '../lib/calendar'
 import { holidayName } from '../lib/holidays'
 import { planEventDefaults } from '../lib/news/planDefaults'
 import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
@@ -242,9 +242,24 @@ function Page() {
             highlightToday: true,
             getDayProps: dayProps,
             maxEventsPerDay: isMobile ? 1 : 2,
+            // 見出しの日付は全て YYYY/MM/DD にそろえる（所有者の要望、2026-09-23）。月は YYYY/MM
+            monthYearSelectProps: { labelFormat: 'YYYY/MM' },
           }}
-          weekViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
-          dayViewProps={{ startTime: '07:00:00', endTime: '22:00:00', intervalMinutes: 30 }}
+          weekViewProps={{
+            startTime: '07:00:00',
+            endTime: '22:00:00',
+            intervalMinutes: 30,
+            // 既定は「9月 21 – 9月 27, 2026」
+            renderWeekLabel: ({ weekStart, weekEnd }) =>
+              `${formatDateSlash(weekStart)} – ${formatDateSlash(weekEnd)}`,
+          }}
+          dayViewProps={{
+            startTime: '07:00:00',
+            endTime: '22:00:00',
+            intervalMinutes: 30,
+            // 既定は「9月 23, 2026」
+            headerFormat: (d) => formatDateWithWeekday(dateKey(d)),
+          }}
         />
         <Group gap="sm" wrap="wrap">
           <Group gap={6} wrap="nowrap">
