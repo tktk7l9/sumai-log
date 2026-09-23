@@ -5,19 +5,33 @@ import {
   buildingRect,
   fireSafeRect,
   flagRect,
+  landAxes,
   m2ToTsubo,
   normalizePlan,
-  northAngle,
   sectionRect,
   tsuboToM2,
   type Rect,
   type SitePlan,
 } from '../../lib/sitePlan'
+import {
+  SEASON_DECLINATION,
+  shadowPolygon,
+  solarPosition,
+  sunInLand,
+  type Point,
+  type Season,
+} from '../../lib/sun'
 
 /** 余白（m） */
 const PAD = 1.5
 /** 道路の帯は実際の幅員で描くが、文字が入るよう最低この奥行は取る（m） */
 const MIN_ROAD = 3
+/** 隣地を描くのは土地の外この距離まで（m）。スマホで土地が小さくなりすぎないように */
+const MAX_AROUND = 16
+
+function clampBetween(v: number, min: number, max: number): number {
+  return Math.min(Math.max(v, min), max)
+}
 
 type DragKind = 'section' | 'building'
 type Drag = { kind: DragKind; startX: number; startY: number; origX: number; origY: number }
@@ -35,9 +49,12 @@ function snap(v: number): number {
 export function SiteCanvas({
   plan,
   onChange,
+  sun,
 }: {
   plan: SitePlan
   onChange: (next: SitePlan) => void
+  /** 影を描く季節と時刻（真太陽時）。null なら描かない */
+  sun: { season: Season; hour: number } | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
@@ -53,19 +70,42 @@ export function SiteCanvas({
   }, [])
 
   const ROAD = Math.max(plan.roadWidth, MIN_ROAD)
-  const width = plan.landWidth + PAD * 2
-  const height = plan.landDepth + ROAD + PAD * 2
+  // 隣地の広がりに合わせて周りの余白を取る（MAX_AROUND まで）
+  const around = { left: 0, right: 0, back: 0, front: 0 }
+  for (const n of plan.neighbors) {
+    around.left = Math.max(around.left, -n.x)
+    around.right = Math.max(around.right, n.x + n.width - plan.landWidth)
+    around.back = Math.max(around.back, n.y + n.depth - plan.landDepth)
+    around.front = Math.max(around.front, -(n.y + ROAD))
+  }
+  const mL = PAD + clampBetween(around.left, 0, MAX_AROUND)
+  const mR = PAD + clampBetween(around.right, 0, MAX_AROUND)
+  const mT = PAD + clampBetween(around.back, 0, MAX_AROUND)
+  const mB = PAD + clampBetween(around.front, 0, MAX_AROUND)
+  const width = plan.landWidth + mL + mR
+  const height = plan.landDepth + ROAD + mT + mB
   const unit = Math.max(plan.landWidth, plan.landDepth) / 40
   const font = Math.max(unit * 1.1, 0.5)
 
   /** 土地の座標（道路側が y=0）を SVG の座標（上が y=0）に直す */
   function toSvg(r: Rect) {
     return {
-      x: PAD + r.x,
-      y: PAD + plan.landDepth - r.y - r.depth,
+      x: mL + r.x,
+      y: mT + plan.landDepth - r.y - r.depth,
       width: r.width,
       height: r.depth,
     }
+  }
+  function pointsToSvg(pts: Point[]): string {
+    return pts.map((p) => `${mL + p.x},${mT + plan.landDepth - p.y}`).join(' ')
+  }
+  /** 描く範囲（viewBox）からはみ出す分を切る。何も残らなければ null */
+  function clipToView(r: ReturnType<typeof toSvg>) {
+    const x0 = Math.max(r.x, 0)
+    const y0 = Math.max(r.y, 0)
+    const x1 = Math.min(r.x + r.width, width)
+    const y1 = Math.min(r.y + r.height, height)
+    return x1 - x0 > 0.2 && y1 - y0 > 0.2 ? { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } : null
   }
 
   function svgPoint(e: React.PointerEvent): { x: number; y: number } {
@@ -129,14 +169,61 @@ export function SiteCanvas({
   // 区画の奥（画面の上）に残る土地の奥行
   const backDepth = plan.landDepth - plan.sectionY - sectionRect(plan).depth
   const sectionTsubo = m2ToTsubo(sectionRect(plan).width * sectionRect(plan).depth)
-  const angle = northAngle(plan.roadSide)
+  const angle = (360 - landAxes(plan).backAz) % 360
   const gapAbove = building.y - section.y
   const gapBelow = section.y + section.height - (building.y + building.height)
   const sectionLabelY =
     gapAbove >= gapBelow ? section.y + gapAbove / 2 : building.y + building.height + gapBelow / 2
   // 方位は道路の帯の右端に置く（土地の上に重ねると区画・建物を隠すため）
-  const compass = { x: width - PAD - unit * 1.2, y: PAD + plan.landDepth + ROAD / 2 }
+  const compass = { x: width - PAD - unit * 1.2, y: mT + plan.landDepth + ROAD / 2 }
   const compassR = Math.min(unit * 1.1, ROAD * 0.4)
+
+  const neighborsSvg = plan.neighbors.map((n, i) => {
+    const r = clipToView(toSvg(n))
+    if (!r) return null
+    const tall = n.kind !== 'open'
+    const text = tall ? `${n.label}（${n.height > 0 ? `${n.height}m` : '高さ不明'}）` : n.label
+    // 縦長の区画は文字を縦に回す。文字は区画に収まる大きさまで縮める
+    const vertical = r.height > r.width * 1.5
+    const room = (vertical ? r.height : r.width) * 0.9
+    const size = Math.min(font * 0.75, room / Math.max(text.length, 4))
+    const cx = r.x + r.width / 2
+    const cy = r.y + r.height / 2
+    return (
+      <g key={`nb${i}`} pointerEvents="none">
+        <rect {...r} className={`site-neighbor site-neighbor-${n.kind}`} />
+        {size >= font * 0.35 ? (
+          <text
+            x={cx}
+            y={cy}
+            fontSize={size}
+            className="site-label site-label-muted"
+            textAnchor="middle"
+            dominantBaseline="middle"
+            transform={vertical ? `rotate(-90 ${cx} ${cy})` : undefined}
+          >
+            {text}
+          </text>
+        ) : null}
+      </g>
+    )
+  })
+
+  // 影: 周りの建物（高さが分かっているもの）と自分たちの平屋
+  const shadows: Point[][] = []
+  if (sun) {
+    const { rightAz, backAz } = landAxes(plan)
+    const pos = solarPosition(plan.latitude, SEASON_DECLINATION[sun.season], sun.hour)
+    const v = sunInLand(pos.altitude, pos.azimuth, rightAz, backAz)
+    const boxes = [
+      ...plan.neighbors.filter((n) => n.kind !== 'open' && n.height > 0),
+      { ...buildingRect(plan), height: plan.buildingHeight },
+    ]
+    for (const box of boxes) {
+      const poly = shadowPolygon(box, v)
+      if (poly) shadows.push(poly)
+    }
+  }
 
   // 5 m ごとの目盛り線（土地の中だけ）
   const grid: React.ReactNode[] = []
@@ -144,8 +231,8 @@ export function SiteCanvas({
     grid.push(
       <line
         key={`gx${gx}`}
-        x1={PAD + gx}
-        x2={PAD + gx}
+        x1={mL + gx}
+        x2={mL + gx}
         y1={land.y}
         y2={land.y + land.height}
         className="site-grid"
@@ -158,8 +245,8 @@ export function SiteCanvas({
         key={`gy${gy}`}
         x1={land.x}
         x2={land.x + land.width}
-        y1={PAD + plan.landDepth - gy}
-        y2={PAD + plan.landDepth - gy}
+        y1={mT + plan.landDepth - gy}
+        y2={mT + plan.landDepth - gy}
         className="site-grid"
       />,
     )
@@ -177,10 +264,10 @@ export function SiteCanvas({
       onPointerCancel={endDrag}
     >
       {/* 道路 */}
-      <rect x={0} y={PAD + plan.landDepth} width={width} height={ROAD} className="site-road" />
+      <rect x={0} y={mT + plan.landDepth} width={width} height={ROAD} className="site-road" />
       <text
-        x={width / 2}
-        y={PAD + plan.landDepth + ROAD / 2}
+        x={mL + plan.landWidth / 2}
+        y={mT + plan.landDepth + ROAD / 2}
         fontSize={font}
         className="site-label site-label-muted"
         dominantBaseline="middle"
@@ -192,11 +279,14 @@ export function SiteCanvas({
         <line
           x1={0}
           x2={width}
-          y1={PAD + plan.landDepth + plan.roadWidth / 2}
-          y2={PAD + plan.landDepth + plan.roadWidth / 2}
+          y1={mT + plan.landDepth + plan.roadWidth / 2}
+          y2={mT + plan.landDepth + plan.roadWidth / 2}
           className="site-centerline"
         />
       ) : null}
+
+      {/* 隣地・周りの建物 */}
+      {neighborsSvg}
 
       {/* 土地 */}
       <rect {...land} className="site-land" />
@@ -206,14 +296,14 @@ export function SiteCanvas({
       {plan.lotLines.map((lx) => (
         <g key={`lot${lx}`} pointerEvents="none">
           <line
-            x1={PAD + lx}
-            x2={PAD + lx}
+            x1={mL + lx}
+            x2={mL + lx}
             y1={land.y}
             y2={land.y + land.height}
             className="site-lotline"
           />
           <text
-            x={PAD + lx + font * 0.3}
+            x={mL + lx + font * 0.3}
             y={land.y + font}
             fontSize={font * 0.75}
             className="site-label site-label-muted"
@@ -260,6 +350,11 @@ export function SiteCanvas({
 
       {/* 区画（ドラッグで移動） */}
       <rect {...section} className="site-section" onPointerDown={(e) => startDrag('section', e)} />
+
+      {/* 影（指定の季節・時刻） */}
+      {shadows.map((pts, i) => (
+        <polygon key={`sh${i}`} points={pointsToSvg(pts)} className="site-shadow" />
+      ))}
 
       {/* 延焼ライン（この外側が延焼のおそれのある部分） */}
       {safeSvg ? <rect {...safeSvg} className="site-fireline" pointerEvents="none" /> : null}
@@ -310,7 +405,7 @@ export function SiteCanvas({
       {/* 寸法（間口・奥行） */}
       <text
         x={land.x + land.width / 2}
-        y={PAD * 0.7}
+        y={land.y - PAD * 0.3}
         fontSize={font * 0.9}
         className="site-label site-label-muted"
         textAnchor="middle"
@@ -318,12 +413,12 @@ export function SiteCanvas({
         間口 {plan.landWidth}m
       </text>
       <text
-        x={PAD * 0.55}
+        x={land.x - PAD * 0.45}
         y={land.y + land.height / 2}
         fontSize={font * 0.9}
         className="site-label site-label-muted"
         textAnchor="middle"
-        transform={`rotate(-90 ${PAD * 0.55} ${land.y + land.height / 2})`}
+        transform={`rotate(-90 ${land.x - PAD * 0.45} ${land.y + land.height / 2})`}
       >
         奥行 {plan.landDepth}m
       </text>

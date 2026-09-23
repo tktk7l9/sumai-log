@@ -20,6 +20,15 @@
  *   - 境界からの離れ: 外壁の後退距離の指定が無い地域では、民法 234 条の 50cm が目安
  */
 
+import {
+  SEASON_DECLINATION,
+  rayHitsBox,
+  solarPosition,
+  sunInLand,
+  type Box,
+  type Season,
+} from './sun'
+
 /** 1 坪 = 400/121 ㎡（約 3.3058） */
 export const M2_PER_TSUBO = 400 / 121
 
@@ -35,6 +44,31 @@ export function m2ToTsubo(m2: number): number {
 export const ROAD_SIDES = ['S', 'N', 'E', 'W'] as const
 export type RoadSide = (typeof ROAD_SIDES)[number]
 export const ROAD_SIDE_LABEL: Record<RoadSide, string> = { S: '南', N: '北', E: '東', W: '西' }
+
+/**
+ * 隣地・周りの建物（土地の座標の長方形。土地の外に置く）。building は高さを持ち、日当たりの
+ * 計算で影を落とす（高さ 0 は「不明」で、図には描くが計算には入れない）。open は駐車場・校庭・
+ * 畑など建物の無い土地、construction は建設中（高さは建ったあとの見込み）
+ */
+export const NEIGHBOR_KINDS = ['building', 'construction', 'open'] as const
+export type NeighborKind = (typeof NEIGHBOR_KINDS)[number]
+export const NEIGHBOR_KIND_LABEL: Record<NeighborKind, string> = {
+  building: '建物',
+  construction: '建設中',
+  open: '空地・駐車場など',
+}
+export type Neighbor = {
+  label: string
+  kind: NeighborKind
+  x: number
+  y: number
+  width: number
+  depth: number
+  /** 高さ（m）。0 は不明 */
+  height: number
+}
+export const NEIGHBOR_LABEL_MAX = 40
+export const NEIGHBORS_MAX = 20
 
 export type SitePlan = {
   version: 1
@@ -75,6 +109,17 @@ export type SitePlan = {
   quasiFireZone: boolean
   /** 土地の中の筆界（左端からの距離 m）。2 筆以上を 1 つの土地として扱うとき */
   lotLines: number[]
+  /**
+   * 道路側の実際の向きの、方角（roadSide）からのずれ（度、時計回りが +）。街区が斜めの土地で、
+   * 例えば道路側が真南より東へ 10° 振れていれば -10（南 180° → 170°）
+   */
+  facingOffset: number
+  /** 緯度（度）。日当たりの計算に使う */
+  latitude: number
+  /** 自分たちの平屋の高さ（m、影を描くため） */
+  buildingHeight: number
+  /** 隣地・周りの建物 */
+  neighbors: Neighbor[]
 }
 
 export const DEFAULT_SITE_PLAN: SitePlan = {
@@ -101,6 +146,10 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   roadWidth: 4,
   quasiFireZone: false,
   lotLines: [],
+  facingOffset: 0,
+  latitude: 35.5,
+  buildingHeight: 4.5,
+  neighbors: [],
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -124,7 +173,16 @@ const NUMBER_KEYS = [
   'floorAreaRatio',
   'setback',
   'roadWidth',
+  'facingOffset',
+  'latitude',
+  'buildingHeight',
 ] as const
+
+function isNeighbor(v: unknown): v is Neighbor {
+  if (!isRecord(v)) return false
+  if (typeof v.label !== 'string' || !NEIGHBOR_KINDS.includes(v.kind as NeighborKind)) return false
+  return (['x', 'y', 'width', 'depth', 'height'] as const).every((k) => Number.isFinite(v[k]))
+}
 
 /** 設定 `sitePlan` の JSON を読む。形が違えば null（画面は既定値で始める） */
 export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
@@ -145,6 +203,10 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     roadWidth: DEFAULT_SITE_PLAN.roadWidth,
     quasiFireZone: DEFAULT_SITE_PLAN.quasiFireZone,
     lotLines: DEFAULT_SITE_PLAN.lotLines,
+    facingOffset: DEFAULT_SITE_PLAN.facingOffset,
+    latitude: DEFAULT_SITE_PLAN.latitude,
+    buildingHeight: DEFAULT_SITE_PLAN.buildingHeight,
+    neighbors: DEFAULT_SITE_PLAN.neighbors,
     ...parsed,
   }
   for (const key of NUMBER_KEYS) {
@@ -160,6 +222,7 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
   if (!Array.isArray(lines) || !lines.every((v) => Number.isFinite(v))) {
     return null
   }
+  if (!Array.isArray(data.neighbors) || !data.neighbors.every(isNeighbor)) return null
   return normalizePlan(data as unknown as SitePlan)
 }
 
@@ -200,6 +263,13 @@ export function normalizePlan(plan: SitePlan): SitePlan {
   const lotLines = [...new Set(plan.lotLines.map(round1))]
     .filter((v) => v > 0 && v < landWidth)
     .sort((a, b) => a - b)
+  const neighbors = plan.neighbors.slice(0, NEIGHBORS_MAX).map((n) => ({
+    ...n,
+    label: n.label.slice(0, NEIGHBOR_LABEL_MAX),
+    width: Math.max(n.width, 0.5),
+    depth: Math.max(n.depth, 0.5),
+    height: clamp(n.height, 0, 100),
+  }))
   const next: SitePlan = {
     ...plan,
     landWidth,
@@ -208,6 +278,10 @@ export function normalizePlan(plan: SitePlan): SitePlan {
     sectionWidth,
     roadWidth,
     lotLines,
+    facingOffset: clamp(plan.facingOffset, -45, 45),
+    latitude: clamp(plan.latitude, 20, 46),
+    buildingHeight: clamp(plan.buildingHeight, 2, 15),
+    neighbors,
   }
   let sDepth = sectionDepth(next)
   let sectionY = clamp(plan.sectionY, 0, landDepth - sDepth)
@@ -370,6 +444,89 @@ export function northAngle(roadSide: RoadSide): number {
   return { S: 0, N: 180, E: 90, W: 270 }[roadSide]
 }
 
+/** 土地の +x（右）と +y（奥）の方位（度、北 0・時計回り）。道路の方角と実際の向きのずれから */
+export function landAxes(plan: SitePlan): { rightAz: number; backAz: number } {
+  const front = { S: 180, N: 0, E: 90, W: 270 }[plan.roadSide] + plan.facingOffset
+  const backAz = (front + 180 + 360) % 360
+  return { rightAz: (backAz + 90) % 360, backAz }
+}
+
+/** 日当たりの計算に入れる周りの建物（高さが分かっているもの） */
+export function shadingBoxes(plan: SitePlan): (Box & { label: string })[] {
+  return plan.neighbors
+    .filter((n) => n.kind !== 'open' && n.height > 0)
+    .map(({ label, x, y, width, depth, height }) => ({ label, x, y, width, depth, height }))
+}
+
+/** 日照を見る時間帯（真太陽時）と刻み（時間） */
+export const SUN_START = 8
+export const SUN_END = 16
+const SUN_STEP = 1 / 6
+/** 窓の高さの目安（m、掃き出し窓の中ほど） */
+const WINDOW_Z = 1
+
+export type SunReport = {
+  /** 南を向く外壁の方角（'南' 以外になるのは土地が大きく振れているとき） */
+  wall: string
+  /** 外壁の上の 5 点の日照時間（時間） */
+  hours: number[]
+  average: number
+  min: number
+  /** 影を落とした建物ごとの、5 点平均で遮った時間（時間）。長い順 */
+  blockers: { label: string; hours: number }[]
+}
+
+/**
+ * 平屋の外壁のうち最も南を向く面に、指定の季節の 8〜16 時（真太陽時）に日が当たる時間。
+ * 外壁の 5 点（両端を少し内側に）を窓の高さで見て、周りの建物に遮られるか・太陽が外壁の
+ * 裏に回っているかを 10 分刻みで数える
+ */
+export function sunOnSouthWall(plan: SitePlan, season: Season = 'winter'): SunReport {
+  const { rightAz, backAz } = landAxes(plan)
+  const walls = [
+    { side: 'front', az: backAz + 180, nx: 0, ny: -1 },
+    { side: 'back', az: backAz, nx: 0, ny: 1 },
+    { side: 'left', az: rightAz + 180, nx: -1, ny: 0 },
+    { side: 'right', az: rightAz, nx: 1, ny: 0 },
+  ] as const
+  const offSouth = (az: number) => Math.abs(((((az - 180) % 360) + 540) % 360) - 180)
+  const wall = walls.reduce((a, b) => (offSouth(b.az) < offSouth(a.az) ? b : a))
+  const b = buildingRect(plan)
+  const along = wall.nx === 0
+  const samples = [0.1, 0.3, 0.5, 0.7, 0.9].map((f) => ({
+    x: along ? b.x + b.width * f : wall.nx < 0 ? b.x : b.x + b.width,
+    y: along ? (wall.ny < 0 ? b.y : b.y + b.depth) : b.y + b.depth * f,
+    z: WINDOW_Z,
+  }))
+  const boxes = shadingBoxes(plan)
+  const blocked = new Map<string, number>()
+  const hours = samples.map(() => 0)
+  const decl = SEASON_DECLINATION[season]
+  for (let t = SUN_START + SUN_STEP / 2; t < SUN_END; t += SUN_STEP) {
+    const { altitude, azimuth } = solarPosition(plan.latitude, decl, t)
+    if (altitude <= 0) continue
+    const sun = sunInLand(altitude, azimuth, rightAz, backAz)
+    if (sun.x * wall.nx + sun.y * wall.ny <= 0) continue
+    samples.forEach((p, i) => {
+      const hit = boxes.find((box) => rayHitsBox(p, sun, box))
+      if (hit) blocked.set(hit.label, (blocked.get(hit.label) ?? 0) + SUN_STEP / samples.length)
+      else hours[i]! += SUN_STEP
+    })
+  }
+  return {
+    wall: sideDirections(plan.roadSide)[wall.side],
+    hours,
+    average: hours.reduce((a, v) => a + v, 0) / hours.length,
+    min: Math.min(...hours),
+    blockers: [...blocked]
+      .map(([label, h]) => ({ label, hours: h }))
+      .sort((a, c) => c.hours - a.hours),
+  }
+}
+
+/** 冬至に南の外壁へ日が当たってほしい時間の目安（時間） */
+export const WINTER_SUN_TARGET = 4
+
 export type CheckStatus = 'ok' | 'warn' | 'ng'
 export type SiteCheck = { id: string; status: CheckStatus; label: string; detail: string }
 
@@ -385,6 +542,8 @@ export type SiteEvaluation = {
   southGap: number
   /** 前面道路の幅員を効かせた容積率の上限（%） */
   floorAreaLimit: number
+  /** 冬至の南の外壁の日照 */
+  winterSun: SunReport
   /** 駐車場への通路の面積（残りの土地に含む）。通路が無ければ 0 */
   accessArea: number
   checks: SiteCheck[]
@@ -596,6 +755,24 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
+  // 5d. 冬至の日照（周りの建物の影を入れて）
+  const winterSun = sunOnSouthWall(plan, 'winter')
+  const fmtH = (h: number) => `${fmt(h)}時間`
+  const blockers = winterSun.blockers
+    .filter((b) => b.hours >= 0.05)
+    .map((b) => `${b.label} ${fmtH(b.hours)}`)
+  checks.push({
+    id: 'sun',
+    status: winterSun.min >= WINTER_SUN_TARGET ? 'ok' : 'warn',
+    label: '冬至の日当たり',
+    detail:
+      `${winterSun.wall}側の窓に ${SUN_START}〜${SUN_END} 時で平均 ${fmtH(winterSun.average)}（短い所で ${fmtH(winterSun.min)}）。` +
+      (blockers.length > 0
+        ? `影を落とすのは ${blockers.join('・')}。`
+        : '周りの建物の影はかからない。') +
+      `${WINTER_SUN_TARGET}時間以上が目安`,
+  })
+
   // 6. 南側の空き（平屋の日当たりの目安）。区画の南が道路なら、道路の幅員も空きとして数える
   const southIsRoad = plan.roadSide === 'S' && plan.sectionY <= 0
   const openSouth = southIsRoad ? gap + plan.roadWidth : gap
@@ -619,6 +796,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     floorAreaUsed,
     southGap: gap,
     floorAreaLimit,
+    winterSun,
     accessArea,
     checks,
   }
