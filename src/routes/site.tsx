@@ -9,6 +9,7 @@ import {
   SimpleGrid,
   Slider,
   Stack,
+  Switch,
   Text,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
@@ -30,6 +31,7 @@ import { extractErrorMessage } from '../lib/formError'
 import {
   DEFAULT_SITE_PLAN,
   ROAD_SIDES,
+  accessRect,
   ROAD_SIDE_LABEL,
   buildingDepth,
   evaluateSite,
@@ -85,6 +87,14 @@ function Page() {
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
+  // 区画を左右に動かせる範囲（駐車場への通路があれば、その帯を避ける）
+  const lane = accessRect(plan)
+  const xRange = {
+    min: lane && plan.accessSide === 'left' ? plan.accessWidth : 0,
+    max:
+      (lane && plan.accessSide === 'right' ? plan.landWidth - plan.accessWidth : plan.landWidth) -
+      plan.sectionWidth,
+  }
 
   function update(patch: Partial<SitePlan>) {
     setPlan((p) => normalizePlan({ ...p, ...patch }))
@@ -148,7 +158,7 @@ function Page() {
             sub={`${e.siteArea.toFixed(0)}㎡`}
           />
           <Stat
-            label="うち通路"
+            label="敷地内の通路"
             value={e.flagArea > 0 ? `${m2ToTsubo(e.flagArea).toFixed(1)}坪` : 'なし'}
             sub={e.flagArea > 0 ? `${e.flagArea.toFixed(0)}㎡` : '道路に接する'}
           />
@@ -185,7 +195,7 @@ function Page() {
           </Stack>
         </Card>
 
-        <Accordion variant="separated" multiple defaultValue={['section']}>
+        <Accordion variant="separated" multiple defaultValue={['section', 'parking']}>
           <Accordion.Item value="land">
             <Accordion.Control>土地（長方形で近似）</Accordion.Control>
             <Accordion.Panel>
@@ -275,13 +285,13 @@ function Page() {
                     左端からの距離 {plan.sectionX.toFixed(1)}m
                   </Text>
                   <Slider
-                    min={0}
-                    max={Math.max(plan.landWidth - plan.sectionWidth, 0)}
+                    min={xRange.min}
+                    max={Math.max(xRange.max, xRange.min)}
                     step={0.5}
                     value={plan.sectionX}
                     onChange={(v) => update({ sectionX: v })}
                     label={(v) => `${v}m`}
-                    disabled={plan.landWidth - plan.sectionWidth <= 0}
+                    disabled={xRange.max - xRange.min <= 0}
                     aria-label="左端からの距離"
                   />
                 </Stack>
@@ -290,7 +300,7 @@ function Page() {
           </Accordion.Item>
 
           <Accordion.Item value="flag">
-            <Accordion.Control>通路（区画が奥のとき）</Accordion.Control>
+            <Accordion.Control>自分たちの通路（区画が奥のとき）</Accordion.Control>
             <Accordion.Panel>
               <Stack gap="sm">
                 <Text size="xs" c="dimmed">
@@ -314,6 +324,47 @@ function Page() {
                     data={[
                       { value: 'left', label: '左' },
                       { value: 'right', label: '右' },
+                    ]}
+                  />
+                </Group>
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+
+          <Accordion.Item value="parking">
+            <Accordion.Control>駐車場への通路（残りの土地）</Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="sm">
+                <Text size="xs" c="dimmed">
+                  道路に面する辺が 1
+                  つしかない土地で、区画を道路側に取っても奥の残りの土地（月極駐車場など）へ
+                  車で出入りできるよう、土地の端に道路から奥までの通路を空けます。通路は残りの土地の一部で、区画はここにかかりません。
+                </Text>
+                <Switch
+                  label="残りの土地への通路を確保する"
+                  checked={plan.parkingAccess}
+                  onChange={(ev) => update({ parkingAccess: ev.currentTarget.checked })}
+                />
+                <Group grow align="flex-end">
+                  <NumberInput
+                    label="通路の幅（m）"
+                    description="車 1 台なら 3m、すれ違うなら 5m 程度"
+                    min={0}
+                    max={plan.landWidth - 1}
+                    step={0.5}
+                    decimalScale={1}
+                    disabled={!plan.parkingAccess}
+                    value={plan.accessWidth}
+                    onChange={(v) => update({ accessWidth: num(v, plan.accessWidth) })}
+                  />
+                  <SegmentedControl
+                    aria-label="通路の位置"
+                    disabled={!plan.parkingAccess}
+                    value={plan.accessSide}
+                    onChange={(v) => update({ accessSide: v as 'left' | 'right' })}
+                    data={[
+                      { value: 'left', label: '左端' },
+                      { value: 'right', label: '右端' },
                     ]}
                   />
                 </Group>
