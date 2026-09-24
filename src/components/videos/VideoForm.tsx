@@ -295,8 +295,10 @@ export function VideoForm({
           value={form.values.takeaways ?? ''}
           onChange={(e) => form.setFieldValue('takeaways', e.currentTarget.value || null)}
         />
-        <Group grow className="form-actions">
-          {onCancel ? (
+        {/* 新規は「続けて追加」と「保存」の 2 つ（キャンセルは右上の × で閉じれば下書きが残る）。
+            3 つ並べるとスマホ幅で文字が見切れた（所有者の報告、2026-09-24） */}
+        <Group grow className="form-actions" gap="sm" wrap="nowrap">
+          {initial && onCancel ? (
             <Button type="button" variant="default" onClick={onCancel}>
               キャンセル
             </Button>
@@ -306,11 +308,13 @@ export function VideoForm({
               type="submit"
               variant="default"
               loading={saving}
+              aria-label="保存して続けて追加"
+              title="保存して、続けて次の動画を追加する"
               onClick={() => {
                 continueRef.current = true
               }}
             >
-              保存して続けて追加
+              続けて追加
             </Button>
           ) : null}
           <Button
