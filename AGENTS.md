@@ -86,6 +86,14 @@
   D1 から読んで集計まで済ませ、画面には結果だけを返す。外部 API（LLM など）には送らない（所有者の
   選択、2026-09-23）。言葉の区切りは `Intl.Segmenter('ja')`。月ごとのグラフの 2 色は styles.css の
   `--sumai-series-*`（dataviz の検証済み。明暗で別の値）
+- 設定ページの「利用者」の「最後に使った日時」は settings テーブルの `lastSeen:<メール>`（ISO 8601。
+  キーは `src/lib/usage.ts` の `lastSeenKey`）。`src/start.ts` の認証ミドルウェアが `recordSeen`
+  （`src/server/activity.ts`）を呼び、`cloudflare:workers` の `waitUntil` で応答を待たせずに書く。
+  同じ人は `SEEN_INTERVAL_MS`（10 分）に 1 回だけ（isolate ごとのメモリで間引く）。Access のログイン
+  時刻ではない（セッションは約 1 ヶ月で、ログインの瞬間はアプリから見えない）。「環境」の使用量は
+  `src/server/repository/usage.ts`: D1 の大きさはクエリ結果の `meta.size_after`（`PRAGMA page_count`
+  は D1 で使えない）、R2 は `list` を最大 10 ページ。建築予定地（`homeAreas`）は画面から変えない
+  （読み取り専用。変えるなら `seed.local/out/` の SQL）
 - 区画シミュレーター（`/site`）の保存値は設定 `sitePlan`（`src/lib/sitePlan.ts` の `SitePlan`）。
   土地を長方形で近似した寸法・区画・建物・法規の目安の数値だけを持ち、所在地・地番・座標は
   持たない（コード・テスト・コミットメッセージにも書かない）。法規の数値（建ぺい率・容積率・
