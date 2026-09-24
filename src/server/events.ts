@@ -13,6 +13,7 @@ import {
   listEventsWithLinks,
   listRecordedEventIds,
   upsertEvent,
+  saveOrConflict,
 } from './repository'
 import { dateField, idInput } from './zod'
 
@@ -87,9 +88,9 @@ export const getEvent = createServerFn()
 
 export const saveEvent = createServerFn({ method: 'POST' })
   .validator(eventInput)
-  .handler(async ({ data }) => ({
-    id: await upsertEvent(getDb(), data, await currentActorEmail()),
-  }))
+  .handler(async ({ data }) =>
+    saveOrConflict(async () => upsertEvent(getDb(), data, await currentActorEmail())),
+  )
 
 export const deleteEvent = createServerFn({ method: 'POST' })
   .validator(idInput)

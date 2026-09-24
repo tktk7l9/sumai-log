@@ -9,6 +9,7 @@ import {
   getVideoDetail,
   listVideosWithLinks,
   upsertVideo,
+  saveOrConflict,
 } from './repository'
 import { listTagNames } from './tags'
 import { videoInput } from './videos.schema'
@@ -34,7 +35,7 @@ export const saveVideo = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const db = getDb()
     await ensureTags(db, data.tags)
-    return { id: await upsertVideo(db, data, await currentActorEmail()) }
+    return saveOrConflict(async () => upsertVideo(db, data, await currentActorEmail()))
   })
 
 export const deleteVideo = createServerFn({ method: 'POST' })

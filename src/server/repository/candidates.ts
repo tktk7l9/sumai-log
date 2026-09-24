@@ -10,8 +10,12 @@ import {
   type NewVendor,
   type Vendor,
 } from '../../db/schema'
+import { assertUpdated } from './stale'
 
-type VendorInput = Omit<NewVendor, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string }
+type VendorInput = Omit<NewVendor, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+  id?: string
+  expectedUpdatedAt?: string | null
+}
 
 /** id が無ければ作成、あれば更新。作成者は最初の保存時だけ記録する */
 export async function upsertVendor(
@@ -19,16 +23,22 @@ export async function upsertVendor(
   input: VendorInput,
   actorEmail: string,
 ): Promise<string> {
-  const { id, ...values } = input
+  const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
     const newId = crypto.randomUUID()
     await db.insert(vendors).values({ ...values, id: newId, createdBy: actorEmail })
     return newId
   }
-  await db
+  const rows = await db
     .update(vendors)
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
-    .where(eq(vendors.id, id))
+    .where(
+      expectedUpdatedAt
+        ? and(eq(vendors.id, id), eq(vendors.updatedAt, expectedUpdatedAt))
+        : eq(vendors.id, id),
+    )
+    .returning({ id: vendors.id })
+  assertUpdated(rows, expectedUpdatedAt)
   return id
 }
 

@@ -20,6 +20,8 @@ import { dateField, idField, optionalText, timeField } from './zod'
 export const eventInput = z
   .object({
     id: idField.optional(),
+    // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+    expectedUpdatedAt: z.string().max(40).nullish(),
     title: z.string().trim().min(1, 'タイトルは必須です').max(200),
     kind: z.enum(EVENT_KINDS),
     date: dateField,

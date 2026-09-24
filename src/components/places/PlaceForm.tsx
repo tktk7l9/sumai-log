@@ -9,6 +9,9 @@ import { useState } from 'react'
 import { PLACE_KINDS, PLACE_KIND_LABEL, type Place } from '../../db/schema'
 import { formatLatLng, parseCoordinate } from '../../lib/coords'
 import { savePlace, type PlaceInput } from '../../server/places'
+import { draftKey } from '../../lib/drafts'
+import { DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 type Values = Omit<PlaceInput, 'id'>
 type Targets = {
@@ -47,14 +50,27 @@ export function PlaceForm({
     state: 'idle' | 'busy' | 'hit' | 'miss'
     title?: string | null
   }>({ state: 'idle' })
+  const initialValues: Values = place ? { ...empty, ...place } : { ...empty, ...defaults }
   const form = useForm<Values>({
-    initialValues: place ? { ...empty, ...place } : { ...empty, ...defaults },
+    initialValues,
     validate: {
       name: (v) => (v.trim() ? null : '名前は必須です'),
       coordsText: (v) =>
         v && !parseCoordinate(v) ? '座標の形式が読めません（例: 35.123456, 139.123456）' : null,
     },
   })
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(
+    form,
+    draftKey(
+      'place',
+      place?.id,
+      place
+        ? place.updatedAt
+        : [defaults?.vendorId, defaults?.propertyId].filter(Boolean).join('|'),
+    ),
+    initialValues,
+  )
 
   async function geocode() {
     const address = form.values.address?.trim()
@@ -76,6 +92,7 @@ export function PlaceForm({
       const { id } = await save({ data: { ...(place ? { id: place.id } : {}), ...values } })
       await router.invalidate()
       notifications.show({ message: place ? '場所を更新しました' : '場所を追加しました' })
+      draft.clear()
       onSaved(id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
@@ -93,6 +110,7 @@ export function PlaceForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <TextInput label="名前" required {...form.getInputProps('name')} />
         <Select
           label="種別"
@@ -171,9 +189,11 @@ export function PlaceForm({
           {...form.getInputProps('note')}
           value={form.values.note ?? ''}
         />
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
       </Stack>
     </form>
   )

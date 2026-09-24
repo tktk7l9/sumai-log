@@ -75,6 +75,13 @@
   使う。土地の所在や資金の内訳は持たない（design.md §1）。調査内容そのものは実データなので
   リポジトリに書かず、SQL を `seed.local/out/` に用意して所有者が流す（下の「本番 D1 への
   一回きりの書き込み」と同じ）
+- 入力の快適さの約束（2026-09-24）: フォームの書きかけは `src/components/useFormDraft.ts` で端末の
+  localStorage に残す（鍵は `src/lib/drafts.ts` の `draftKey`。既存の行は開いた時点の updatedAt を
+  文脈に入れ、相手の保存後に古い下書きで上書きしない）。閉じるときに確認ダイアログは出さない。
+  同時編集は `src/server/repository/stale.ts`: 見学・動画・予定・業者の保存は `expectedUpdatedAt`
+  を受け、`WHERE updated_at = ?` で 0 行なら `{ conflict: true }` を返す（上書きしない）。保存
+  ボタンは `.form-actions`（Drawer の下端に固定）で包む。Enter で確定する欄は
+  `e.nativeEvent.isComposing` を見て、日本語入力の変換確定では動かさない
 - 記録の分析（`/analysis`）の集計は `src/lib/analysis.ts`（純粋関数）。`src/server/analysis.ts` が
   D1 から読んで集計まで済ませ、画面には結果だけを返す。外部 API（LLM など）には送らない（所有者の
   選択、2026-09-23）。言葉の区切りは `Intl.Segmenter('ja')`。月ごとのグラフの 2 色は styles.css の
