@@ -2,6 +2,7 @@ import { createMiddleware, createStart } from '@tanstack/react-start'
 
 import { isTrustedMutation } from './lib/csrf'
 import { applySecurityHeaders, securityHeadersInit } from './lib/securityHeaders'
+import { recordSeen } from './server/activity'
 import { requireUser } from './server/auth'
 
 /**
@@ -26,6 +27,8 @@ const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   }
 
   const user = await requireUser(request)
+  // 認証を通った人の「最後に使った日時」を残す（応答は待たせない・間引きあり）
+  recordSeen(user.email)
   try {
     const result = await next({ context: { user } })
     applySecurityHeaders(result.response.headers)
