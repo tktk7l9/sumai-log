@@ -4,6 +4,8 @@
  * 外部には何も送らない（アプリの中で数えるだけ）。
  */
 
+import { parseActions } from './nextActions'
+
 export type Who = 'both' | 'husband' | 'wife'
 
 export type AnalysisVisit = {
@@ -235,21 +237,17 @@ function visitWhere(v: AnalysisVisit): string {
  * 「済」「✓」「[x]」で始まる行は終わったものとして数えない。新しい見学から順に並べる
  */
 export function openNextActions(visits: AnalysisVisit[]): NextAction[] {
-  const done = /^(済|完了|✓|✔|\[x\])/iu
   return [...visits]
     .sort((a, b) => b.visitedOn.localeCompare(a.visitedOn))
     .flatMap((v) =>
-      (v.nextActions ?? '')
-        .split(/\r?\n/u)
-        .map((line) => line.trim())
-        .filter((line) => line !== '' && !done.test(line))
-        .map((line) => ({
+      parseActions(v.nextActions)
+        .filter((a) => !a.done)
+        .map((a) => ({
           visitId: v.id,
           visitedOn: v.visitedOn,
           where: visitWhere(v),
-          text: line.replace(/^([・\-*□☐]|\d+[.)．])\s*/u, ''),
-        }))
-        .filter((a) => a.text !== ''),
+          text: a.text,
+        })),
     )
 }
 

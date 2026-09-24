@@ -9,8 +9,11 @@ import { useState } from 'react'
 
 import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/schema'
 import { splitStartsAt } from '../../lib/calendar'
+import { draftKey } from '../../lib/drafts'
 import { saveEvent, type EventInput } from '../../server/events'
 import type { EventWithLinks, PlaceWithLinks } from '../../server/repository'
+import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 type Targets = {
   vendors: { id: string; name: string }[]
@@ -68,6 +71,18 @@ export function EventForm({
       startTime: (v, values) => (!values.allDay && !v ? '開始時刻を入れてください' : null),
     },
   })
+  // 書きかけを端末に残す。新規は「どこから開いたか」（日付・業者・場所）ごとに分ける
+  const draft = useFormDraft(
+    form,
+    draftKey(
+      'event',
+      event?.id,
+      event
+        ? event.updatedAt
+        : [defaults?.date, defaults?.vendorId, defaults?.placeId].filter(Boolean).join('|'),
+    ),
+    initial,
+  )
 
   async function submit(values: Values) {
     setSaving(true)
@@ -78,10 +93,22 @@ export function EventForm({
         endTime: values.endTime || null,
         note: values.note || null,
       }
-      const { id } = await save({ data: { ...(event ? { id: event.id } : {}), ...normalized } })
+      const res = await save({
+        data: {
+          ...(event ? { id: event.id, expectedUpdatedAt: event.updatedAt } : {}),
+          ...normalized,
+        },
+      })
+      if (res.conflict) {
+        notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        await router.invalidate()
+        return
+      }
+      draft.clear()
       await router.invalidate()
       notifications.show({ message: event ? '予定を更新しました' : '予定を追加しました' })
-      onSaved(id)
+      onSaved(res.id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
@@ -102,6 +129,7 @@ export function EventForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <TextInput label="タイトル" required {...form.getInputProps('title')} />
         <Select
           label="種別"
@@ -160,9 +188,11 @@ export function EventForm({
           {...form.getInputProps('note')}
           value={form.values.note ?? ''}
         />
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
       </Stack>
     </form>
   )

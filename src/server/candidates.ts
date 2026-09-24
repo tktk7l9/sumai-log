@@ -16,6 +16,7 @@ import {
   readHomeAreas,
   upsertProperty,
   upsertVendor,
+  saveOrConflict,
 } from './repository'
 import { SAVE_FAVICON_BUDGET, fetchFaviconForVendor } from './vendorImagesFetcher'
 import { idInput } from './zod'
@@ -77,7 +78,11 @@ export const saveVendor = createServerFn({ method: 'POST' })
     // 設定画面の「アイコンを取得」（フルの予算）で拾える。
     const previousWebsiteUrl = data.id ? await getVendorWebsiteUrl(db, data.id) : null
     const previousFaviconSource = data.id ? await getVendorFaviconSource(db, data.id) : null
-    const id = await upsertVendor(db, data, await currentActorEmail())
+    const saved = await saveOrConflict(async () =>
+      upsertVendor(db, data, await currentActorEmail()),
+    )
+    if (saved.conflict) return saved
+    const id = saved.id
     if (
       data.websiteUrl &&
       data.websiteUrl !== previousWebsiteUrl &&
@@ -92,7 +97,7 @@ export const saveVendor = createServerFn({ method: 'POST' })
         SAVE_FAVICON_BUDGET,
       ).catch(() => {})
     }
-    return { id }
+    return saved
   })
 
 export const deleteVendor = createServerFn({ method: 'POST' })

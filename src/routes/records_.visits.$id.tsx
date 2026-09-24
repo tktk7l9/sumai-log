@@ -6,6 +6,7 @@ import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { NextActionsChecklist } from '../components/visits/NextActionsChecklist'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -35,11 +36,11 @@ export const Route = createFileRoute('/records_/visits/$id')({
   },
 })
 
-const BLOCKS: { key: 'good' | 'concerns' | 'qa' | 'nextActions'; label: string }[] = [
+// 「次にやること」は下のチェックリスト（NextActionsChecklist）で出す
+const BLOCKS: { key: 'good' | 'concerns' | 'qa'; label: string }[] = [
   { key: 'good', label: '良かった点' },
   { key: 'concerns', label: '気になった点' },
   { key: 'qa', label: '聞いたことと答え' },
-  { key: 'nextActions', label: '次にやること' },
 ]
 
 function Page() {
@@ -143,6 +144,12 @@ function Page() {
           </Text>
         </Stack>
       ))}
+
+      <NextActionsChecklist
+        visitId={visit.id}
+        nextActions={visit.nextActions}
+        updatedAt={visit.updatedAt}
+      />
 
       <Stack gap="xs">
         <Title order={2}>写真</Title>

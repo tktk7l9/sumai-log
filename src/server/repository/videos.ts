@@ -2,21 +2,31 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { comments, vendors, videos, type NewVideo, type Video } from '../../db/schema'
+import { assertUpdated } from './stale'
 
-type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string }
+type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+  id?: string
+  expectedUpdatedAt?: string | null
+}
 
 /** id が無ければ作成、あれば更新。作成者は最初の保存時だけ記録する */
 export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string): Promise<string> {
-  const { id, ...values } = input
+  const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
     const newId = crypto.randomUUID()
     await db.insert(videos).values({ ...values, id: newId, createdBy: actorEmail })
     return newId
   }
-  await db
+  const rows = await db
     .update(videos)
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
-    .where(eq(videos.id, id))
+    .where(
+      expectedUpdatedAt
+        ? and(eq(videos.id, id), eq(videos.updatedAt, expectedUpdatedAt))
+        : eq(videos.id, id),
+    )
+    .returning({ id: videos.id })
+  assertUpdated(rows, expectedUpdatedAt)
   return id
 }
 
