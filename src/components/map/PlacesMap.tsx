@@ -1,5 +1,5 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
-import { Text } from '@mantine/core'
+import { Text, useComputedColorScheme } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 
 import { boundsOf, type MapMarker } from '../../lib/mapMarkers'
@@ -80,6 +80,12 @@ export function PlacesMap({
     focusIdRef.current = focusId
   })
 
+  // 地図の配色はアプリで選んだ配色（設定のライト／ダーク）に合わせる。端末の設定に
+  // 従わせる（FOLLOW_SYSTEM）と、アプリをライトにしていても端末がダークなら地図だけ
+  // ダークになっていた（所有者の報告、2026-09-24）。colorScheme は地図を作るときにしか
+  // 渡せないので、切り替えたら作り直す
+  const scheme = useComputedColorScheme('light')
+
   useEffect(() => {
     if (!apiKey || !elRef.current || gmRef.current) return
     let cancelled = false
@@ -104,7 +110,7 @@ export function PlacesMap({
         zoomControlOptions: { position: core.ControlPosition.INLINE_END_BLOCK_START },
         gestureHandling: gesture,
         clickableIcons: false,
-        colorScheme: core.ColorScheme.FOLLOW_SYSTEM,
+        colorScheme: scheme === 'dark' ? core.ColorScheme.DARK : core.ColorScheme.LIGHT,
       })
       gmRef.current = { map, Marker: marker.AdvancedMarkerElement, LatLngBounds: core.LatLngBounds }
       setReady(true)
@@ -118,7 +124,7 @@ export function PlacesMap({
       gmRef.current = null
       setReady(false)
     }
-  }, [apiKey, mapId, gesture])
+  }, [apiKey, mapId, gesture, scheme])
 
   // マーカーを描き直し、表示範囲を合わせる。focusId はここでは見ない
   // （ピンをタップしただけで視点が戻ってしまうのを防ぐため、アクティブ表示は

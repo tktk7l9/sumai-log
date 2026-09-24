@@ -227,14 +227,28 @@ a:focus-visible {
 }
 
 /*
- * `NewsAgenda`（お知らせ。ホームの「お知らせ」ブロックと `/news` の両方で共有）の
- * AgendaView。日付見出しは行との境界線だけだと区切りが弱いので、少し上に余白を
- * 足す（所有者の報告、2026-09-16）。`.news-agenda`（NewsAgenda.tsx が渡す
- * className）でスコープし、ホームの「これからの予定」（HomeAgenda、別の
- * AgendaView インスタンス）には影響させない。
+ * `NewsAgenda`（お知らせ。ホームの「お知らせ」ブロックと `/news` の両方で共有）。
+ * 新しい日が上の自前の一覧（2026-09-24 に AgendaView から置き換え）。日付見出しは行との
+ * 境界線だけだと区切りが弱いので、少し上に余白を足す（所有者の報告、2026-09-16）。
  */
-.news-agenda .mantine-AgendaView-agendaViewDateHeader {
+.news-agenda-range {
+  padding-bottom: 4px;
+}
+.news-agenda-date {
+  margin-top: 12px;
+  padding: 4px var(--mantine-spacing-sm);
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.news-agenda-group:first-of-type .news-agenda-date {
   margin-top: 4px;
+}
+.news-agenda-row {
+  display: block;
+  width: 100%;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.news-agenda-row:hover {
+  background: var(--mantine-color-default-hover);
 }
 
 /*
@@ -614,6 +628,17 @@ a:focus-visible {
     calc(var(--mantine-spacing-sm) + env(safe-area-inset-bottom));
   background: var(--mantine-color-body);
   border-top: 1px solid var(--mantine-color-default-border);
+}
+/* 狭い端末でもボタンの文字を切らない（Mantine の Button は既定で 1 行・はみ出しは隠す） */
+.form-actions .mantine-Button-label {
+  white-space: normal;
+  text-align: center;
+  line-height: 1.2;
+}
+.form-actions .mantine-Button-root {
+  height: auto;
+  min-height: var(--button-height);
+  padding-block: 6px;
 }
 .draft-notice {
   padding: 6px 10px;
