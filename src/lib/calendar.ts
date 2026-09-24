@@ -69,7 +69,7 @@ export function formatEventBadge(
  * （groupByDay と違って開始順には並べ替えない）。呼び出し側が既に望む順で渡す前提
  * （例: ホームのフィードの新しい順）。日内の順序も items の並びをそのまま保つ。
  * feed.ts の groupFeedByDay（フィード）が使う実装（お知らせは AgendaView 化に伴い
- * NewsAgenda / newsToAgendaEvents に移った。日付見出しは AgendaView 側が持つ）。
+ * NewsAgenda / groupNewsByDate に移った。日付見出しは NewsAgenda が持つ）。
  */
 export function groupByDayKeepOrder<T>(
   items: readonly T[],

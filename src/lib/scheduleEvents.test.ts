@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 import {
   isPastNews,
-  newsToAgendaEvents,
+  groupNewsByDate,
   newsToScheduleEvents,
   nextDay,
   toScheduleEvents,
@@ -182,38 +182,25 @@ describe('newsToScheduleEvents', () => {
   })
 })
 
-describe('newsToAgendaEvents', () => {
-  it('公開日（publishedOn）の終日イベントにする。event_start は見ない', () => {
-    const [result] = newsToAgendaEvents([
-      news({ publishedOn: '2030-02-01', eventStart: null, eventEnd: null, eventKind: null }),
-    ])
-    expect(result).toEqual({
-      id: 'news-n1',
-      title: 'テスト工務店 完成見学会のお知らせ',
-      start: '2030-02-01 00:00:00',
-      end: '2030-02-02 00:00:00',
-      color: 'gray',
-      payload: { kind: 'news', newsId: 'n1', past: false },
-    })
-  })
-
-  it('イベント未判定（event_kind/event_start が無い）お知らせも除外せず含める', () => {
-    expect(
-      newsToAgendaEvents([news({ eventStart: null, eventEnd: null, eventKind: null })]),
-    ).toHaveLength(1)
-  })
-
-  it('月末・年末をまたぐ公開日も翌日が end になる', () => {
-    const [result] = newsToAgendaEvents([news({ publishedOn: '2030-12-31' })])
-    expect(result.end).toBe('2031-01-01 00:00:00')
-  })
-
-  it('複数件は渡した順のまま変換する', () => {
-    const results = newsToAgendaEvents([
+describe('groupNewsByDate', () => {
+  it('公開日ごとにまとめ、新しい日を上にする（同じ日の中は渡した順）', () => {
+    const groups = groupNewsByDate([
       news({ id: 'a', publishedOn: '2030-01-01' }),
-      news({ id: 'b', publishedOn: '2030-01-02' }),
+      news({ id: 'b', publishedOn: '2030-01-03' }),
+      news({ id: 'c', publishedOn: '2030-01-01' }),
     ])
-    expect(results.map((r) => r.id)).toEqual(['news-a', 'news-b'])
+    expect(groups.map((g) => [g.date, g.items.map((i) => i.news.id)])).toEqual([
+      ['2030-01-03', ['b']],
+      ['2030-01-01', ['a', 'c']],
+    ])
+  })
+
+  it('イベント未判定のお知らせも含め、日付はイベント日ではなく公開日', () => {
+    const [g] = groupNewsByDate([
+      news({ publishedOn: '2030-02-01', eventStart: '2030-03-01', eventKind: null }),
+    ])
+    expect(g!.date).toBe('2030-02-01')
+    expect(groupNewsByDate([])).toEqual([])
   })
 })
 
@@ -289,17 +276,19 @@ describe('toScheduleEvents（終わった予定の色）', () => {
   })
 })
 
-describe('newsToAgendaEvents（終わった日程）', () => {
-  it('todayKey を渡すと終わった日程のお知らせに past が立つ', () => {
-    const [result] = newsToAgendaEvents([news({ eventEnd: '2030-01-05' })], '2030-01-06')
-    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: true })
-  })
-
-  it('日程の無いお知らせは past にならない', () => {
-    const [result] = newsToAgendaEvents(
-      [news({ eventStart: null, eventEnd: null, eventKind: null })],
-      '2030-12-31',
+describe('groupNewsByDate（終わった日程）', () => {
+  it('todayKey を渡すと終わった日程のお知らせに past が立つ。日程の無いものは立たない', () => {
+    const [g] = groupNewsByDate(
+      [
+        news({ id: 'done', eventEnd: '2030-01-05' }),
+        news({ id: 'none', eventStart: null, eventEnd: null, eventKind: null }),
+      ],
+      '2030-01-06',
     )
-    expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
+    expect(g!.items.map((i) => [i.news.id, i.past])).toEqual([
+      ['done', true],
+      ['none', false],
+    ])
+    expect(groupNewsByDate([news({ eventEnd: '2030-01-05' })])[0]!.items[0]!.past).toBe(false)
   })
 })
