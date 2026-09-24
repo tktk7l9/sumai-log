@@ -22,6 +22,9 @@ import type { Source } from '../../db/schema'
 import { extractErrorMessage, extractFormError } from '../../lib/formError'
 import { DUPLICATE_URL_ERROR } from '../../lib/sources'
 import { resolveSource, saveSource, type SourceInput } from '../../server/sources'
+import { draftKey } from '../../lib/drafts'
+import { DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 const RESOLVE_EMPTY_MESSAGE = 'このページからは情報を取得できませんでした。手で入力してください'
 
@@ -58,24 +61,31 @@ export function SourceForm({
   const [saving, setSaving] = useState(false)
   const [resolving, setResolving] = useState(false)
 
+  const initialValues: Values = initial
+    ? {
+        ...empty,
+        ...initial,
+        // sources.genre/affiliation は db/schema.ts では drizzle の enum 制約を付けていない
+        // プレーンな text 列（ジャンルはデータファイル駆動のため）。SourceGenreId/
+        // AffiliationId への絞り込みは zod（sources.schema.ts）が保存時に検証済みなので、
+        // ここでは型を合わせるためだけの cast
+        genre: initial.genre as SourceGenreId,
+        affiliation: initial.affiliation as AffiliationId | null,
+      }
+    : empty
   const form = useForm<Values>({
-    initialValues: initial
-      ? {
-          ...empty,
-          ...initial,
-          // sources.genre/affiliation は db/schema.ts では drizzle の enum 制約を付けていない
-          // プレーンな text 列（ジャンルはデータファイル駆動のため）。SourceGenreId/
-          // AffiliationId への絞り込みは zod（sources.schema.ts）が保存時に検証済みなので、
-          // ここでは型を合わせるためだけの cast
-          genre: initial.genre as SourceGenreId,
-          affiliation: initial.affiliation as AffiliationId | null,
-        }
-      : empty,
+    initialValues,
     validate: {
       url: (v) => (v.trim() ? null : 'URL は必須です'),
       name: (v) => (v.trim() ? null : '名前は必須です'),
     },
   })
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(
+    form,
+    draftKey('source', initial?.id, initial?.updatedAt),
+    initialValues,
+  )
 
   async function handleResolve() {
     const url = form.values.url.trim()
@@ -120,6 +130,7 @@ export function SourceForm({
       const { id } = await save({ data: { ...(initial ? { id: initial.id } : {}), ...values } })
       await router.invalidate()
       notifications.show({ message: initial ? '情報源を更新しました' : '情報源を追加しました' })
+      draft.clear()
       onSaved(id)
     } catch (error) {
       const { message, path } = extractFormError(error)
@@ -136,6 +147,7 @@ export function SourceForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <Group gap="xs" align="flex-end" wrap="nowrap">
           <TextInput
             label="URL"
@@ -204,7 +216,7 @@ export function SourceForm({
           value={form.values.sortOrder}
           onChange={(v) => form.setFieldValue('sortOrder', typeof v === 'number' ? v : 0)}
         />
-        <Group grow>
+        <Group grow className="form-actions">
           {onCancel ? (
             <Button type="button" variant="default" onClick={onCancel}>
               キャンセル

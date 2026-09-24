@@ -20,9 +20,12 @@ import dayjs from 'dayjs'
 import { useEffect, useRef, useState } from 'react'
 
 import type { Video } from '../../db/schema'
+import { draftKey } from '../../lib/drafts'
 import { extractFormError } from '../../lib/formError'
 import { parseYouTubeId } from '../../lib/youtube'
 import { saveVideo, type VideoInput } from '../../server/videos'
+import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 type Options = { tags: string[]; vendors: { id: string; name: string }[] }
 type Values = Omit<VideoInput, 'id'>
@@ -84,8 +87,21 @@ export function VideoForm({
   // 新規作成は「今日観た」ことがほとんどなので、観た日は今日を選んだ状態で開く
   // （所有者の要望、2026-09-21）。clearable なので要らなければ消せる
   const today = dayjs().format('YYYY-MM-DD')
+  const initialValues: Values = initial
+    ? {
+        url: initial.url,
+        title: initial.title,
+        channel: initial.channel,
+        thumbnailUrl: initial.thumbnailUrl,
+        watchedOn: initial.watchedOn,
+        watchedBy: initial.watchedBy,
+        tags: initial.tags,
+        takeaways: initial.takeaways,
+        vendorId: initial.vendorId,
+      }
+    : { ...empty, watchedOn: today }
   const form = useForm<Values>({
-    initialValues: initial ? { ...empty, ...initial } : { ...empty, watchedOn: today },
+    initialValues,
     validate: {
       url: (v) => {
         if (!v.trim()) return 'URL は必須です'
@@ -94,6 +110,16 @@ export function VideoForm({
       title: (v) => (v.trim() ? null : '題名は必須です'),
     },
   })
+
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(
+    form,
+    draftKey('video', initial?.id, initial?.updatedAt),
+    initialValues,
+  )
+  // 「保存して続けて追加」で押されたか（新規のときだけ出す）
+  const continueRef = useRef(false)
+  const urlInputRef = useRef<HTMLInputElement>(null)
 
   async function runOEmbed(rawUrl: string) {
     const url = rawUrl.trim()
@@ -145,10 +171,44 @@ export function VideoForm({
   async function submit(values: Values) {
     setSaving(true)
     try {
-      const { id } = await save({ data: { ...(initial ? { id: initial.id } : {}), ...values } })
+      const res = await save({
+        data: {
+          ...(initial ? { id: initial.id, expectedUpdatedAt: initial.updatedAt } : {}),
+          ...values,
+        },
+      })
+      if (res.conflict) {
+        notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        await router.invalidate()
+        return
+      }
       await router.invalidate()
+      if (!initial && continueRef.current) {
+        // 続けて入れる: 観た日・観た人・業者・タグは残し、URL から入れ直せるようにする
+        const next: Values = {
+          ...empty,
+          watchedOn: values.watchedOn,
+          watchedBy: values.watchedBy,
+          vendorId: values.vendorId,
+          tags: values.tags,
+        }
+        // 保存前に始まった題名の自動取得が遅れて返り、空にした欄を埋め戻さないよう打ち切る
+        abortRef.current?.abort()
+        requestSeq.current += 1
+        draft.restart(next)
+        form.setValues(next)
+        form.resetDirty(next)
+        setTitleTouched(false)
+        lastFetchedUrl.current = null
+        setFetchState('idle')
+        notifications.show({ message: `保存しました：${values.title}` })
+        urlInputRef.current?.focus()
+        return
+      }
+      draft.clear()
       notifications.show({ message: initial ? '更新しました' : '保存しました' })
-      onSaved(id)
+      onSaved(res.id)
     } catch (error) {
       const { message, path } = extractFormError(error)
       notifications.show({ message, color: 'red' })
@@ -161,7 +221,9 @@ export function VideoForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <TextInput
+          ref={urlInputRef}
           label="URL"
           required
           placeholder="https://www.youtube.com/watch?v=..."
@@ -233,13 +295,31 @@ export function VideoForm({
           value={form.values.takeaways ?? ''}
           onChange={(e) => form.setFieldValue('takeaways', e.currentTarget.value || null)}
         />
-        <Group grow>
+        <Group grow className="form-actions">
           {onCancel ? (
             <Button type="button" variant="default" onClick={onCancel}>
               キャンセル
             </Button>
           ) : null}
-          <Button type="submit" loading={saving}>
+          {!initial ? (
+            <Button
+              type="submit"
+              variant="default"
+              loading={saving}
+              onClick={() => {
+                continueRef.current = true
+              }}
+            >
+              保存して続けて追加
+            </Button>
+          ) : null}
+          <Button
+            type="submit"
+            loading={saving}
+            onClick={() => {
+              continueRef.current = false
+            }}
+          >
             保存
           </Button>
         </Group>

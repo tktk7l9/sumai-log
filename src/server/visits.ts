@@ -15,6 +15,9 @@ import {
   listVisitsWithLinks,
   reorderPhotoRows,
   upsertVisit,
+  saveOrConflict,
+  StaleWriteError,
+  setVisitNextActions,
 } from './repository'
 import { deletePhotoObjects } from './storage'
 import { reorderPhotosInput } from './visits.schema'
@@ -28,6 +31,8 @@ export type { ReorderPhotosInput } from './visits.schema'
 
 export const visitInput = z.object({
   id: idField.optional(),
+  // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+  expectedUpdatedAt: z.string().max(40).nullish(),
   eventId: idField.nullable(),
   placeId: idField.nullable(),
   vendorId: idField.nullable(),
@@ -54,9 +59,33 @@ export const getVisit = createServerFn()
 
 export const saveVisit = createServerFn({ method: 'POST' })
   .validator(visitInput)
-  .handler(async ({ data }) => ({
-    id: await upsertVisit(getDb(), data, await currentActorEmail()),
-  }))
+  .handler(async ({ data }) =>
+    saveOrConflict(async () => upsertVisit(getDb(), data, await currentActorEmail())),
+  )
+
+/** 「次にやること」のチェックリストの保存。競合なら { conflict: true } */
+export const saveVisitNextActions = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      id: idField,
+      nextActions: optionalText,
+      expectedUpdatedAt: z.string().min(1).max(40),
+    }),
+  )
+  .handler(async ({ data }) => {
+    try {
+      const updatedAt = await setVisitNextActions(
+        getDb(),
+        data.id,
+        data.nextActions,
+        data.expectedUpdatedAt,
+      )
+      return { conflict: false as const, updatedAt }
+    } catch (e) {
+      if (e instanceof StaleWriteError) return { conflict: true as const, updatedAt: null }
+      throw e
+    }
+  })
 
 export const deleteVisit = createServerFn({ method: 'POST' })
   .validator(idInput)

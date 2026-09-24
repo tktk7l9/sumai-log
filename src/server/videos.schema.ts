@@ -16,6 +16,8 @@ import { dateField, idField, optionalUrl } from './zod'
 export const videoInput = z
   .object({
     id: idField.optional(),
+    // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+    expectedUpdatedAt: z.string().max(40).nullish(),
     url: z.string().trim().max(500),
     title: z.string().trim().min(1, '題名は必須です').max(300),
     // optionalText はヘルパの形固定（max 2000）のためここでは使えない（G3-R2）。

@@ -9,6 +9,9 @@ import { useState } from 'react'
 
 import type { Event, Visit } from '../../db/schema'
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
+import { draftKey } from '../../lib/drafts'
+import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 import { saveVisit, type VisitInput } from '../../server/visits'
 import type { PlaceWithLinks } from '../../server/repository'
 
@@ -32,6 +35,22 @@ const empty: Omit<Values, 'visitedOn'> = {
   nextActions: null,
 }
 
+/** 保存済みの行からフォームの値だけを取り出す（id・作成者・日時は持たない） */
+function pickValues(visit: Visit): Values {
+  return {
+    eventId: visit.eventId,
+    placeId: visit.placeId,
+    vendorId: visit.vendorId,
+    propertyId: visit.propertyId,
+    visitedOn: visit.visitedOn,
+    attendees: visit.attendees,
+    good: visit.good,
+    concerns: visit.concerns,
+    qa: visit.qa,
+    nextActions: visit.nextActions,
+  }
+}
+
 export function VisitForm({
   visit,
   options,
@@ -53,21 +72,28 @@ export function VisitForm({
   const save = useServerFn(saveVisit)
   const [saving, setSaving] = useState(false)
   const today = dayjs().format('YYYY-MM-DD')
+  const initialValues: Values = visit
+    ? pickValues(visit)
+    : {
+        ...empty,
+        eventId: defaults?.eventId ?? null,
+        placeId: defaults?.placeId ?? null,
+        vendorId: defaults?.vendorId ?? null,
+        propertyId: defaults?.propertyId ?? null,
+        visitedOn: defaults?.visitedOn ?? today,
+      }
   const form = useForm<Values>({
-    initialValues: visit
-      ? { ...empty, ...visit }
-      : {
-          ...empty,
-          eventId: defaults?.eventId ?? null,
-          placeId: defaults?.placeId ?? null,
-          vendorId: defaults?.vendorId ?? null,
-          propertyId: defaults?.propertyId ?? null,
-          visitedOn: defaults?.visitedOn ?? today,
-        },
+    initialValues,
     validate: {
       visitedOn: (v) => (v ? null : '日付は必須です'),
     },
   })
+  // 書きかけを端末に残す（新規は予定ごとに分ける）
+  const draft = useFormDraft(
+    form,
+    draftKey('visit', visit?.id, visit ? visit.updatedAt : (defaults?.eventId ?? undefined)),
+    initialValues,
+  )
 
   // 予定を選んだら、その予定の日付・場所・業者・物件を合わせる（手で変えてもよい）
   function onEventChange(eventId: string | null) {
@@ -95,10 +121,22 @@ export function VisitForm({
         qa: values.qa || null,
         nextActions: values.nextActions || null,
       }
-      const { id } = await save({ data: { ...(visit ? { id: visit.id } : {}), ...normalized } })
+      const res = await save({
+        data: {
+          ...(visit ? { id: visit.id, expectedUpdatedAt: visit.updatedAt } : {}),
+          ...normalized,
+        },
+      })
+      if (res.conflict) {
+        notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        await router.invalidate()
+        return
+      }
+      draft.clear()
       await router.invalidate()
       notifications.show({ message: visit ? '記録を更新しました' : '記録を保存しました' })
-      onSaved(id)
+      onSaved(res.id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {
@@ -109,6 +147,7 @@ export function VisitForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <DateInput
           label="日付"
           required
@@ -178,9 +217,11 @@ export function VisitForm({
           {...form.getInputProps('nextActions')}
           value={form.values.nextActions ?? ''}
         />
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
       </Stack>
     </form>
   )

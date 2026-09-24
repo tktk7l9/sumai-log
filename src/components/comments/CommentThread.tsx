@@ -3,9 +3,10 @@ import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import type { COMMENT_TARGETS, Comment } from '../../db/schema'
+import { draftKey, parseDraft, serializeDraft } from '../../lib/drafts'
 import { formatJst } from '../../lib/jst'
 import type { Member } from '../../lib/members'
 import { addComment, deleteComment } from '../../server/comments'
@@ -29,13 +30,31 @@ export function CommentThread({
   const remove = useServerFn(deleteComment)
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
+  // 書きかけのコメントは記録ごとに端末へ残す（ページを離れても消えない）
+  const key = draftKey('comment', targetId, targetType)
+  useEffect(() => {
+    try {
+      setBody(parseDraft<string>(window.localStorage.getItem(key), Date.now()) ?? '')
+    } catch {
+      // 読めなくても入力はできる
+    }
+  }, [key])
+  function changeBody(next: string) {
+    setBody(next)
+    try {
+      if (next.trim() === '') window.localStorage.removeItem(key)
+      else window.localStorage.setItem(key, serializeDraft(next, Date.now()))
+    } catch {
+      // 書けなくても入力はできる
+    }
+  }
 
   async function submit() {
     if (!body.trim()) return
     setSaving(true)
     try {
       await add({ data: { targetType, targetId, body } })
-      setBody('')
+      changeBody('')
       await router.invalidate()
     } catch {
       notifications.show({ message: '送信できませんでした', color: 'red' })
@@ -106,7 +125,14 @@ export function CommentThread({
         autosize
         minRows={2}
         value={body}
-        onChange={(e) => setBody(e.currentTarget.value)}
+        onChange={(e) => changeBody(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl + Enter で送信（日本語入力の変換中は送らない）。Enter だけなら改行
+          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+            e.preventDefault()
+            void submit()
+          }
+        }}
         maxLength={2000}
       />
       <Button onClick={submit} loading={saving} disabled={!body.trim()} fullWidth>
