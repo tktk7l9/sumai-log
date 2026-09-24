@@ -8,10 +8,8 @@ import {
   Stack,
   TagsInput,
   Text,
-  TextInput,
   Title,
 } from '@mantine/core'
-import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -29,11 +27,12 @@ import { formatJst } from '../lib/jst'
 import { describeFetchError } from '../lib/news/errors'
 import { sameHost } from '../lib/news/url'
 import { photoUrl } from '../lib/photos'
+import { D1_FREE_BYTES, R2_FREE_BYTES, formatBytes, formatRowCounts, percentOf } from '../lib/usage'
 import { listMailImport } from '../server/mails'
 import { fetchNewsNow, newsSources as loadNewsSources, reparseNewsEvents } from '../server/news'
 import { listLinkTargets } from '../server/places'
 import { getBuildPlan } from '../server/research'
-import { getSettings, saveHomeAreas } from '../server/settings'
+import { getSettings } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
 
@@ -72,8 +71,10 @@ function Page() {
     homeAreas,
     actorEmail,
     members,
+    lastSeen,
     environment,
     photosReady,
+    usage,
     tags,
     newsSources,
     faviconVendors,
@@ -82,31 +83,15 @@ function Page() {
     buildPlan,
   } = Route.useLoaderData()
   const router = useRouter()
-  const save = useServerFn(saveHomeAreas)
   const saveTagsFn = useServerFn(saveTags)
   const fetchNewsNowFn = useServerFn(fetchNewsNow)
   const reparseNewsEventsFn = useServerFn(reparseNewsEvents)
   const refreshFaviconsFn = useServerFn(refreshVendorFavicons)
-  const [saving, setSaving] = useState(false)
   const [tagValues, setTagValues] = useState<string[]>(tags)
   const [savingTags, setSavingTags] = useState(false)
   const [fetchingNews, setFetchingNews] = useState(false)
   const [reparsingNews, setReparsingNews] = useState(false)
   const [fetchingFavicons, setFetchingFavicons] = useState(false)
-  const form = useForm({ initialValues: { areas: homeAreas.join('、') } })
-
-  async function submit(values: { areas: string }) {
-    setSaving(true)
-    try {
-      const { areas } = await save({ data: { areas: values.areas } })
-      await router.invalidate()
-      notifications.show({ message: `照合に使う市区町村: ${areas.join('、') || 'なし'}` })
-    } catch {
-      notifications.show({ message: '保存できませんでした', color: 'red' })
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function submitTags() {
     // 0 件保存はサーバーも拒否するが、往復させずにここで止める
@@ -215,29 +200,6 @@ function Page() {
         <Stack gap="sm">
           <Title order={2}>表示</Title>
           <ColorSchemeSetting />
-        </Stack>
-      </Card>
-
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <Title order={2}>建築予定地</Title>
-          <Text size="sm" c="dimmed">
-            候補の業者の施工エリアと照合する市区町村。読点かカンマで区切って複数入れられます。
-          </Text>
-          <form onSubmit={form.onSubmit(submit)}>
-            <Stack gap="sm">
-              <TextInput
-                label="市区町村"
-                placeholder="例: テスト市、架空町"
-                {...form.getInputProps('areas')}
-              />
-              <Group justify="flex-end">
-                <Button type="submit" loading={saving}>
-                  保存
-                </Button>
-              </Group>
-            </Stack>
-          </form>
         </Stack>
       </Card>
 
@@ -417,11 +379,22 @@ function Page() {
           ) : (
             <Stack gap="xs">
               {members.map((m) => (
-                <Group key={m.email} justify="space-between">
-                  <MemberChip email={m.email} members={members} />
-                  {m.email === actorEmail ? <Badge variant="light">あなた</Badge> : null}
+                <Group key={m.email} justify="space-between" wrap="nowrap" align="flex-start">
+                  <Group gap="xs" wrap="nowrap">
+                    <MemberChip email={m.email} members={members} />
+                    {m.email === actorEmail ? <Badge variant="light">あなた</Badge> : null}
+                  </Group>
+                  <Text size="xs" c="dimmed" ta="right">
+                    {lastSeen[m.email]
+                      ? `最後に使った: ${formatJst(lastSeen[m.email]!)}`
+                      : '最後に使った: まだ記録なし'}
+                  </Text>
                 </Group>
               ))}
+              <Text size="xs" c="dimmed">
+                「最後に使った」はそのメールで最後にアプリを開いた（操作した）日時。ログイン自体は
+                Cloudflare Access が行い、セッションは約 1 ヶ月続く
+              </Text>
             </Stack>
           )}
         </Stack>
@@ -432,8 +405,38 @@ function Page() {
           <Title order={2}>環境</Title>
           <Stack gap="xs">
             <Row label="環境" value={environment} />
+            <Row label="建築予定地の市区町村" value={homeAreas.join('、') || '未設定'} />
             <Row label="写真の保管 (R2)" value={photosReady ? '有効' : '未設定'} />
+            <Row
+              label="データベース (D1)"
+              value={
+                usage.d1
+                  ? usage.d1.bytes === null
+                    ? '大きさは取れません'
+                    : `${formatBytes(usage.d1.bytes)}（無料枠 ${formatBytes(D1_FREE_BYTES)} の ${percentOf(usage.d1.bytes, D1_FREE_BYTES)}%）`
+                  : '取れません'
+              }
+            />
+            <Row
+              label="データの件数"
+              value={usage.d1 ? formatRowCounts(usage.d1.rows) : '取れません'}
+            />
+            <Row
+              label="写真などのファイル (R2)"
+              value={
+                usage.r2
+                  ? `${usage.r2.count.toLocaleString('ja-JP')}${usage.r2.truncated ? '+' : ''} 個・${formatBytes(usage.r2.bytes)}（無料枠 ${formatBytes(R2_FREE_BYTES)} の ${percentOf(usage.r2.bytes, R2_FREE_BYTES)}%）`
+                  : photosReady
+                    ? '取れません'
+                    : '未設定'
+              }
+            />
           </Stack>
+          <Text size="xs" c="dimmed">
+            建築予定地は候補の業者の施工エリアと照合する市区町村で、変わらないためここでは変えられません。
+            使用量はこのページを開いたときに数えます。1 日あたりの読み書き回数やリクエスト数は
+            Cloudflare のダッシュボードで確認できます
+          </Text>
         </Stack>
       </Card>
 
