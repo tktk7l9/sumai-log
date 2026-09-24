@@ -24,6 +24,9 @@ import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveVendor, type VendorInput } from '../../server/candidates'
 import { FaviconField } from './FaviconField'
 import { RepresentativePhotoField } from './RepresentativePhotoField'
+import { draftKey } from '../../lib/drafts'
+import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 /**
  * socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ。
@@ -76,10 +79,11 @@ export function VendorForm({
   const router = useRouter()
   const save = useServerFn(saveVendor)
   const [saving, setSaving] = useState(false)
+  const initialValues: Values = vendor
+    ? { ...empty, ...vendor, socialUrls: vendor.socialUrls.join('\n') }
+    : empty
   const form = useForm<Values>({
-    initialValues: vendor
-      ? { ...empty, ...vendor, socialUrls: vendor.socialUrls.join('\n') }
-      : empty,
+    initialValues,
     validate: {
       name: (v) => (v.trim() ? null : '名前は必須です'),
       // サーバー側（optionalHttpsUrl）と同じ判定を先に見せる。送信してから
@@ -91,6 +95,9 @@ export function VendorForm({
       },
     },
   })
+
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(form, draftKey('vendor', vendor?.id, vendor?.updatedAt), initialValues)
 
   // 候補ページの「追加」ドロワーが切替確認に使うだけの軽い通知。form.isDirty() は
   // 呼ぶたびに initialValues と比較するだけなので、依存は values の変化だけで十分
@@ -111,18 +118,25 @@ export function VendorForm({
             { url: link.url.trim(), ...(link.note?.trim() ? { note: link.note.trim() } : {}) },
           ]),
       )
-      const { id } = await save({
+      const res = await save({
         data: {
-          ...(vendor ? { id: vendor.id } : {}),
+          ...(vendor ? { id: vendor.id, expectedUpdatedAt: vendor.updatedAt } : {}),
           ...values,
           socialUrls: values.socialUrls.split('\n'),
           affiliations: values.affiliations as AffiliationId[],
           affiliationLinks,
         },
       })
+      if (res.conflict) {
+        notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        await router.invalidate()
+        return
+      }
+      draft.clear()
       await router.invalidate()
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
-      onSaved(id)
+      onSaved(res.id)
     } catch (error) {
       // サーバー側の zod（optionalHttpsUrl 等）で拒否された場合、汎用の
       // 「保存できませんでした」ではなく実際の理由を出す（src/components/videos/VideoForm.tsx
@@ -138,6 +152,7 @@ export function VendorForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <TextInput label="名前" required {...form.getInputProps('name')} />
         <Select
           label="種別"
@@ -307,9 +322,11 @@ export function VendorForm({
           minRows={2}
           {...form.getInputProps('socialUrls')}
         />
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
       </Stack>
     </form>
   )

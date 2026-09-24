@@ -8,6 +8,9 @@ import { useEffect, useState } from 'react'
 import type { Property } from '../../db/schema'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../../lib/status'
 import { saveProperty, type PropertyInput } from '../../server/candidates'
+import { draftKey } from '../../lib/drafts'
+import { DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 type Values = Omit<PropertyInput, 'id'>
 
@@ -42,10 +45,17 @@ export function PropertyForm({
   const router = useRouter()
   const save = useServerFn(saveProperty)
   const [saving, setSaving] = useState(false)
+  const initialValues: Values = property ? { ...empty, ...property } : empty
   const form = useForm<Values>({
-    initialValues: property ? { ...empty, ...property } : empty,
+    initialValues,
     validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
   })
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(
+    form,
+    draftKey('property', property?.id, property?.updatedAt),
+    initialValues,
+  )
 
   useEffect(() => {
     onDirtyChange?.(form.isDirty())
@@ -57,6 +67,7 @@ export function PropertyForm({
       const { id } = await save({ data: { ...(property ? { id: property.id } : {}), ...values } })
       await router.invalidate()
       notifications.show({ message: property ? '物件を更新しました' : '物件を追加しました' })
+      draft.clear()
       onSaved(id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
@@ -68,6 +79,7 @@ export function PropertyForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <TextInput label="名前" required {...form.getInputProps('name')} />
         <Select
           label="状態"
@@ -142,9 +154,11 @@ export function PropertyForm({
           {...form.getInputProps('note')}
           value={form.values.note ?? ''}
         />
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
       </Stack>
     </form>
   )

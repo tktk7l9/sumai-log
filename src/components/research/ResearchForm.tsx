@@ -16,6 +16,9 @@ import {
   type VendorResearch,
 } from '../../lib/research'
 import { saveVendorResearch } from '../../server/research'
+import { draftKey } from '../../lib/drafts'
+import { DraftNotice } from '../DraftNotice'
+import { useFormDraft } from '../useFormDraft'
 
 /**
  * 調査メモの編集フォーム。日付・一言・事実（キーごとの短文）・節（見出し＋本文）・出典。
@@ -36,8 +39,9 @@ export function ResearchForm({
   const [saving, setSaving] = useState(false)
   // 新規作成時の調査日は「今日」。VisitForm と同じ理由でコンポーネント内で計算する
   const today = dayjs().format('YYYY-MM-DD')
+  const initialValues: VendorResearch = research ?? emptyResearch(today)
   const form = useForm<VendorResearch>({
-    initialValues: research ?? emptyResearch(today),
+    initialValues,
     validate: {
       researchedOn: (v) => (v ? null : '調査日は必須です'),
       sections: {
@@ -50,6 +54,8 @@ export function ResearchForm({
       },
     },
   })
+  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  const draft = useFormDraft(form, draftKey('research', vendorId), initialValues)
 
   async function submit(values: VendorResearch) {
     setSaving(true)
@@ -57,6 +63,7 @@ export function ResearchForm({
       await save({ data: { id: vendorId, research: values } })
       await router.invalidate()
       notifications.show({ message: '調査メモを保存しました' })
+      draft.clear()
       onSaved()
     } catch (error) {
       const { message, path } = extractFormError(error)
@@ -74,6 +81,7 @@ export function ResearchForm({
       await save({ data: { id: vendorId, research: null } })
       await router.invalidate()
       notifications.show({ message: '調査メモを削除しました' })
+      draft.clear()
       onSaved()
     } catch {
       notifications.show({ message: '削除できませんでした', color: 'red' })
@@ -85,6 +93,7 @@ export function ResearchForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
+        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
         <DateInput
           label="調査日"
           required
@@ -209,9 +218,11 @@ export function ResearchForm({
           ))}
         </Stack>
 
-        <Button type="submit" loading={saving} fullWidth>
-          保存
-        </Button>
+        <div className="form-actions">
+          <Button type="submit" loading={saving} fullWidth>
+            保存
+          </Button>
+        </div>
         {research ? (
           <Button color="red" variant="light" fullWidth onClick={remove} loading={saving}>
             調査メモを削除

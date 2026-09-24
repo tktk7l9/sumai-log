@@ -11,6 +11,7 @@ import {
   type NewVisit,
 } from '../../db/schema'
 import { listPhotos, photoKeysOfVisit } from './photos'
+import { assertUpdated } from './stale'
 
 /** その場所に見学記録が1件でもあるか。詳細ページのピンを塗る/塗らないの判定に使う */
 export async function hasVisits(db: Db, placeId: string): Promise<boolean> {
@@ -29,20 +30,48 @@ export async function listRecordedEventIds(db: Db): Promise<Set<string>> {
   return new Set(rows.map((r) => r.eventId as string))
 }
 
-type VisitInput = Omit<NewVisit, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string }
+type VisitInput = Omit<NewVisit, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+  id?: string
+  expectedUpdatedAt?: string | null
+}
 
 export async function upsertVisit(db: Db, input: VisitInput, actorEmail: string): Promise<string> {
-  const { id, ...values } = input
+  const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
     const newId = crypto.randomUUID()
     await db.insert(visits).values({ ...values, id: newId, createdBy: actorEmail })
     return newId
   }
-  await db
+  const rows = await db
     .update(visits)
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
-    .where(eq(visits.id, id))
+    .where(
+      expectedUpdatedAt
+        ? and(eq(visits.id, id), eq(visits.updatedAt, expectedUpdatedAt))
+        : eq(visits.id, id),
+    )
+    .returning({ id: visits.id })
+  assertUpdated(rows, expectedUpdatedAt)
   return id
+}
+
+/**
+ * 見学記録の「次にやること」だけを書き換える（詳細ページのチェックリストから）。開いた時点の
+ * 更新日時と違えば StaleWriteError。書き換えたあとの更新日時を返す（続けて押したときの基準にする）
+ */
+export async function setVisitNextActions(
+  db: Db,
+  id: string,
+  nextActions: string | null,
+  expectedUpdatedAt: string,
+): Promise<string> {
+  const rows = await db
+    .update(visits)
+    .set({ nextActions, updatedAt: sql`(datetime('now'))` })
+    .where(and(eq(visits.id, id), eq(visits.updatedAt, expectedUpdatedAt)))
+    .returning({ updatedAt: visits.updatedAt })
+  assertUpdated(rows, expectedUpdatedAt)
+  return rows[0]!.updatedAt
 }
 
 /** 見学記録を消す。写真行は FK cascade。コメントは消す。R2 のキーを返すので呼び側で消す */

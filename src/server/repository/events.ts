@@ -1,21 +1,31 @@
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { events, places, properties, vendors, type NewEvent } from '../../db/schema'
+import { assertUpdated } from './stale'
 
-type EventInput = Omit<NewEvent, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & { id?: string }
+type EventInput = Omit<NewEvent, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
+  id?: string
+  expectedUpdatedAt?: string | null
+}
 
 export async function upsertEvent(db: Db, input: EventInput, actorEmail: string): Promise<string> {
-  const { id, ...values } = input
+  const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
     const newId = crypto.randomUUID()
     await db.insert(events).values({ ...values, id: newId, createdBy: actorEmail })
     return newId
   }
-  await db
+  const rows = await db
     .update(events)
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
-    .where(eq(events.id, id))
+    .where(
+      expectedUpdatedAt
+        ? and(eq(events.id, id), eq(events.updatedAt, expectedUpdatedAt))
+        : eq(events.id, id),
+    )
+    .returning({ id: events.id })
+  assertUpdated(rows, expectedUpdatedAt)
   return id
 }
 
