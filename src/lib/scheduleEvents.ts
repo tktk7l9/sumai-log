@@ -165,33 +165,26 @@ export function newsToScheduleEvents(
 }
 
 /**
- * お知らせを `NewsAgenda`（src/components/news/NewsAgenda.tsx）の AgendaView 用
- * ScheduleEventData に変換する（純粋関数）。`newsToScheduleEvents` と違い、イベント
- * 判定の有無に関わらず全件を対象にし、日付は eventStart ではなく**公開日
- * （publishedOn）**の終日イベントにする（design: 「お知らせ」はまず公開されたことを
- * 見せる一覧であり、イベント判定はバッジで添えるだけ）。id は自分の予定の id と
- * 衝突しないよう `news-` を前置する（newsToScheduleEvents と同じ命名）。
+ * お知らせを公開日（publishedOn）ごとにまとめ、**新しい日を上**にして返す（純粋関数。
+ * `NewsAgenda` の一覧用。所有者の要望、2026-09-24）。日付はイベント日（eventStart）ではなく
+ * 公開日（「お知らせ」はまず公開されたことを見せる一覧で、イベント判定はバッジで添えるだけ）。
+ * 同じ日の中は渡した順のまま。
  *
  * `todayKey`（'YYYY-MM-DD'）を渡すと、終わった日程のお知らせに `past: true` を立てる
  * （NewsAgenda が文字色を落とす。公開日そのものは常に過去なので基準にしない）。
  */
-export function newsToAgendaEvents(
-  items: readonly NewsEventRow[],
+export function groupNewsByDate<T extends NewsEventRow>(
+  items: readonly T[],
   todayKey?: string,
-): ScheduleEventData<NewsEventPayload>[] {
-  return items.map((n) => {
-    const payload: NewsEventPayload = {
-      kind: 'news',
-      newsId: n.id,
-      past: todayKey !== undefined && isPastNews(n, todayKey),
-    }
-    return {
-      id: `news-${n.id}`,
-      title: `${n.vendorName} ${n.title}`,
-      start: `${n.publishedOn} 00:00:00`,
-      end: `${nextDay(n.publishedOn)} 00:00:00`,
-      color: 'gray',
-      payload,
-    }
-  })
+): { date: string; items: { news: T; past: boolean }[] }[] {
+  const groups = new Map<string, { news: T; past: boolean }[]>()
+  for (const news of items) {
+    const past = todayKey !== undefined && isPastNews(news, todayKey)
+    const list = groups.get(news.publishedOn)
+    if (list) list.push({ news, past })
+    else groups.set(news.publishedOn, [{ news, past }])
+  }
+  return [...groups]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, list]) => ({ date, items: list }))
 }
