@@ -7,7 +7,7 @@ import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PropertyForm } from '../components/candidates/PropertyForm'
 import { StatusBadge } from '../components/candidates/StatusBadge'
@@ -61,6 +61,12 @@ function Page() {
 
   return (
     <PageShell
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to="/candidates" search={{ tab: 'properties' }} />}
+        />
+      }
       title={property.name}
       actions={
         <Group gap="xs">

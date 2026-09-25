@@ -15,7 +15,7 @@ import { EyeOff } from 'lucide-react'
 import { useState } from 'react'
 import { z } from 'zod'
 
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { StatusBadge } from '../components/candidates/StatusBadge'
 import { CostEstimate } from '../components/research/CostEstimate'
 import { VENDOR_KIND_LABEL } from '../db/schema'
@@ -104,7 +104,11 @@ function Page() {
               建築予定地が施工エリア内
             </Badge>
           ) : null}
-          <Text size="sm">{v.serviceAreas.length ? v.serviceAreas.join('、') : '未登録'}</Text>
+          {/* 全国対応の会社は市区町村が何十個も並んで行が 300px 近くになる。4 行で畳み、
+              全文は title と業者詳細で読める */}
+          <Text size="sm" lineClamp={4} title={v.serviceAreas.join('、')}>
+            {v.serviceAreas.length ? v.serviceAreas.join('、') : '未登録'}
+          </Text>
         </Stack>
       ),
     },
@@ -126,8 +130,18 @@ function Page() {
     },
   ]
 
+  // どの業者にも値が無い（全部「—」）行は出さない。未調査の項目が 10 行以上「—」で並んで
+  // 表が読みにくかった。書き込めば自然に行が増える
+  const visibleRows = rows.filter((r) => shown.some((v) => r.cell(v) !== '—'))
+
   return (
     <PageShell
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to="/candidates" search={{ tab: 'vendors' }} />}
+        />
+      }
       title="候補の比較"
       description={
         plan
@@ -234,7 +248,7 @@ function Page() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {rows.map((row) => (
+                {visibleRows.map((row) => (
                   <Table.Tr key={row.label}>
                     <Table.Th scope="row">
                       <Text size="sm" c="dimmed" fw={600}>

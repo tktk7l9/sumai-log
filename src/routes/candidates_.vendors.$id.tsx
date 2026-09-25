@@ -18,7 +18,7 @@ import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { StatusBadge } from '../components/candidates/StatusBadge'
 import { VendorForm } from '../components/candidates/VendorForm'
@@ -94,6 +94,12 @@ function Page() {
 
   return (
     <PageShell
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to="/candidates" search={{ tab: 'vendors' }} />}
+        />
+      }
       title={
         <Group gap={8} wrap="nowrap" align="center" component="span">
           <Avatar
@@ -180,11 +186,13 @@ function Page() {
             }
             value={`${vendor.seismicGrade ?? '—'} / ${vendor.longTermCertified ? '対応' : '—'}`}
           />
-          <Row
-            label="坪単価"
-            value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
-          />
-          <Row label="構造" value={vendor.structure} />
+          {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
+            <Row
+              label="坪単価"
+              value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
+            />
+          ) : null}
+          {vendor.structure ? <Row label="構造" value={vendor.structure} /> : null}
           {vendor.websiteUrl ? (
             <Row
               label="公式"
