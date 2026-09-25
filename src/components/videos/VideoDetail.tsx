@@ -25,7 +25,7 @@ import { deleteVideo } from '../../server/videos'
 import { Row } from '../candidates/DetailRow'
 import { CommentThread } from '../comments/CommentThread'
 import { FormDrawer } from '../FormDrawer'
-import { PageShell } from '../PageShell'
+import { BackButton, PageShell } from '../PageShell'
 import { VideoForm } from './VideoForm'
 
 export function VideoDetail({
@@ -63,6 +63,12 @@ export function VideoDetail({
 
   return (
     <PageShell
+      back={
+        <BackButton
+          label="記録"
+          renderLink={(p) => <Link {...p} to="/records" search={{ tab: 'videos' }} />}
+        />
+      }
       title={video.title}
       actions={
         <Group gap="xs">

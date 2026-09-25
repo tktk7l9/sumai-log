@@ -156,25 +156,30 @@ export function VisitForm({
           onChange={(d) => form.setFieldValue('visitedOn', d ? dayjs(d).format('YYYY-MM-DD') : '')}
           error={form.errors.visitedOn}
         />
-        <Select
-          label="予定"
-          clearable
-          searchable
-          placeholder="関連する予定を選ぶと日付・場所を補完します"
-          data={options.events.map((e) => ({
-            value: e.id,
-            label: `${formatDateWithWeekday(dateKey(e.startsAt))} ${e.title}`,
-          }))}
-          value={form.values.eventId}
-          onChange={onEventChange}
-        />
-        <Select
-          label="場所"
-          clearable
-          searchable
-          data={options.places.map((p) => ({ value: p.id, label: p.name }))}
-          {...form.getInputProps('placeId')}
-        />
+        {/* 選べるものが無い欄は出さない（空のセレクトは意味を持たない） */}
+        {options.events.length > 0 ? (
+          <Select
+            label="予定"
+            clearable
+            searchable
+            placeholder="関連する予定を選ぶと日付・場所を補完します"
+            data={options.events.map((e) => ({
+              value: e.id,
+              label: `${formatDateWithWeekday(dateKey(e.startsAt))} ${e.title}`,
+            }))}
+            value={form.values.eventId}
+            onChange={onEventChange}
+          />
+        ) : null}
+        {options.places.length > 0 ? (
+          <Select
+            label="場所"
+            clearable
+            searchable
+            data={options.places.map((p) => ({ value: p.id, label: p.name }))}
+            {...form.getInputProps('placeId')}
+          />
+        ) : null}
         <Select
           label="業者"
           clearable
@@ -182,13 +187,15 @@ export function VisitForm({
           data={options.targets.vendors.map((v) => ({ value: v.id, label: v.name }))}
           {...form.getInputProps('vendorId')}
         />
-        <Select
-          label="マンション物件"
-          clearable
-          searchable
-          data={options.targets.properties.map((p) => ({ value: p.id, label: p.name }))}
-          {...form.getInputProps('propertyId')}
-        />
+        {options.targets.properties.length > 0 ? (
+          <Select
+            label="マンション物件"
+            clearable
+            searchable
+            data={options.targets.properties.map((p) => ({ value: p.id, label: p.name }))}
+            {...form.getInputProps('propertyId')}
+          />
+        ) : null}
         <Textarea
           label="良かった点"
           autosize
