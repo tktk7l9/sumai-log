@@ -48,12 +48,14 @@ function Home() {
       <VisuallyHidden>
         <Title order={1}>住まいログ</Title>
       </VisuallyHidden>
-      <GlossaryPick term={glossaryPick} />
       {/* 「今」はサーバー（listHomeEvents）が決めた値を使う。終わった予定・終わった
           日程のお知らせは色を落とす（所有者の要望、2026-09-21） */}
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} nowIso={nowIso} />
       <HomeNews items={news} todayKey={dateKey(nowIso)} />
       <PendingVisits events={pending} />
+      {/* 日替わりの用語は読み物なので、予定・お知らせ・書きかけの後に置く（先頭に置くと
+          主目的の予定が下に押される） */}
+      <GlossaryPick term={glossaryPick} />
       <RecentFeed items={feed} members={members} />
     </PageShell>
   )

@@ -1,10 +1,20 @@
-import { ActionIcon, AppShell, Group, NavLink, Stack, Text, UnstyledButton } from '@mantine/core'
+import {
+  ActionIcon,
+  AppShell,
+  Group,
+  Menu,
+  NavLink,
+  Stack,
+  Text,
+  UnstyledButton,
+} from '@mantine/core'
 import { Link, useLocation } from '@tanstack/react-router'
 import {
   BookOpen,
   ChartColumn,
   Building2,
   CalendarDays,
+  Ellipsis,
   House,
   LandPlot,
   Map,
@@ -62,10 +72,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             住まいログ
           </Text>
-          {/* スマホ幅（sm 未満）は 3 つ並ぶと題名が折り返すので、アイコンだけにする。
-              ラベルは aria-label と title で残す */}
+          {/* スマホ幅（sm 未満）: 無ラベルのアイコンを 6 つ並べると意味が取れず入口も多すぎる
+              （SHIG 17・31）。よく使う「お知らせ」だけアイコンで残し、残りはラベル付きの
+              メニューにまとめる */}
           <Group gap={4} wrap="nowrap" hiddenFrom="sm">
-            {HEADER_LINKS.map(({ to, label, Icon }) => {
+            {HEADER_LINKS.filter(({ to }) => to === '/news').map(({ to, label, Icon }) => {
               const active = isNavItemActive(pathname, to)
               return (
                 <ActionIcon
@@ -83,6 +94,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </ActionIcon>
               )
             })}
+            <MoreMenu pathname={pathname} />
           </Group>
           <Group gap="xs" wrap="nowrap" visibleFrom="sm">
             {HEADER_LINKS.map(({ to, label, Icon }) => {
@@ -156,5 +168,43 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </Group>
       </AppShell.Footer>
     </AppShell>
+  )
+}
+
+/** スマホのヘッダ右端「その他」。下タブにもヘッダにも無いページを、名前付きで並べる */
+function MoreMenu({ pathname }: { pathname: string }) {
+  const items = HEADER_LINKS.filter(({ to }) => to !== '/news')
+  const active = items.some(({ to }) => isNavItemActive(pathname, to))
+  return (
+    <Menu position="bottom-end" shadow="md" width={200} withinPortal>
+      <Menu.Target>
+        <ActionIcon
+          variant={active ? 'light' : 'subtle'}
+          color={active ? 'clay' : 'gray'}
+          size="lg"
+          aria-label="その他のページ"
+          title="その他"
+        >
+          <Ellipsis size={20} aria-hidden />
+        </ActionIcon>
+      </Menu.Target>
+      <Menu.Dropdown>
+        {items.map(({ to, label, Icon }) => {
+          const current = isNavItemActive(pathname, to)
+          return (
+            <Menu.Item
+              key={to}
+              component={Link}
+              to={to}
+              leftSection={<Icon size={18} aria-hidden />}
+              aria-current={current ? 'page' : undefined}
+              fw={current ? 700 : undefined}
+            >
+              {label}
+            </Menu.Item>
+          )
+        })}
+      </Menu.Dropdown>
+    </Menu>
   )
 }

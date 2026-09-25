@@ -82,13 +82,20 @@ function Page() {
           />
         ) : null}
         <Group gap="xs" justify="space-between" align="center">
+          {/* 常にどれか 1 つが選ばれた状態にする（未選択＝全件、が見て分からないため）。
+              「すべて」は状態の値ではないので search には持たない */}
           <Chip.Group
-            value={status ?? null}
+            value={status ?? 'all'}
             onChange={(v) =>
-              navigate({ search: (s) => ({ ...s, status: (v as typeof status) || undefined }) })
+              navigate({
+                search: (s) => ({ ...s, status: v === 'all' ? undefined : (v as typeof status) }),
+              })
             }
           >
             <Group gap={6}>
+              <Chip value="all" size="xs">
+                すべて
+              </Chip>
               {CANDIDATE_STATUSES.map((s) => (
                 <Chip key={s} value={s} size="xs">
                   {STATUS_LABEL[s]}
@@ -140,7 +147,10 @@ function Page() {
         )}
       </Stack>
 
-      <Fab label="追加" onClick={() => setOpened(true)} />
+      <Fab
+        label={tab === 'vendors' ? '業者を追加' : '物件を追加'}
+        onClick={() => setOpened(true)}
+      />
       <FormDrawer opened={opened} onClose={() => setOpened(false)} title="追加">
         <CandidateAddForm
           initialKind={tab}

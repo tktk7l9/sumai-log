@@ -1,8 +1,8 @@
-import { Badge, Button, Stack } from '@mantine/core'
+import { Badge, Stack } from '@mantine/core'
 import { Link, createFileRoute, notFound } from '@tanstack/react-router'
 
 import { EmptyState } from '../components/EmptyState'
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { TermCard } from '../components/glossary/TermCard'
 import { glossarySearchSchema } from '../components/glossary/glossarySearch'
 import { GLOSSARY, GLOSSARY_CATEGORIES } from '../content/glossary'
@@ -28,14 +28,10 @@ export const Route = createFileRoute('/glossary_/$termId')({
 function BackLink() {
   const { q, c } = Route.useSearch()
   return (
-    <Button
-      renderRoot={(rootProps) => <Link {...rootProps} to="/glossary" search={{ q, c }} />}
-      variant="subtle"
-      size="sm"
-      px={0}
-    >
-      ← 用語集
-    </Button>
+    <BackButton
+      label="用語集"
+      renderLink={(rootProps) => <Link {...rootProps} to="/glossary" search={{ q, c }} />}
+    />
   )
 }
 

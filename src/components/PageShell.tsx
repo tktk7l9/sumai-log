@@ -1,9 +1,11 @@
-import { Container, Group, Stack, Text, Title, VisuallyHidden } from '@mantine/core'
+import { Button, Container, Group, Stack, Text, Title, VisuallyHidden } from '@mantine/core'
+import { ChevronLeft } from 'lucide-react'
 
 export function PageShell({
   title,
   description,
   actions,
+  back,
   fab = false,
   inlineDescription = false,
   titleHidden = false,
@@ -15,6 +17,9 @@ export function PageShell({
   description?: React.ReactNode
   /** 見出しの右に置く操作（デスクトップ用。スマホは FAB を使う） */
   actions?: React.ReactNode
+  /** 親ページへ戻るリンク（詳細ページ用。<BackButton> を渡す）。見出しの上に置き、スマホでも
+   * ブラウザの戻るに頼らず一覧へ戻れるようにする（SHIG 59 ウェイファインディング・60 エスケープハッチ） */
+  back?: React.ReactNode
   /** このページが <Fab> を出すか。true なら最後のカードが隠れないよう下に余白を足す */
   fab?: boolean
   /** true なら見出しと説明文を縦積みではなく 1 行（折り返しあり）で並べる */
@@ -38,6 +43,7 @@ export function PageShell({
           ) : null
         ) : (
           <Stack gap={4}>
+            {back}
             {inlineDescription && description ? (
               <Group gap="sm" align="baseline" wrap="wrap">
                 <Title order={1}>{title}</Title>
@@ -61,5 +67,30 @@ export function PageShell({
         {children}
       </Stack>
     </Container>
+  )
+}
+
+/**
+ * 詳細ページの「← 一覧」。renderLink で Link（to / search / params）を渡す。
+ * 文言は親ページの名前（名詞）で揃える: 候補・記録・地図・用語集
+ */
+export function BackButton({
+  label,
+  renderLink,
+}: {
+  label: string
+  renderLink: (rootProps: Record<string, unknown>) => React.ReactElement
+}) {
+  return (
+    <Button
+      renderRoot={renderLink}
+      variant="subtle"
+      size="compact-sm"
+      px={0}
+      leftSection={<ChevronLeft size={16} aria-hidden />}
+      style={{ alignSelf: 'flex-start' }}
+    >
+      {label}
+    </Button>
   )
 }

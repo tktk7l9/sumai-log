@@ -10,6 +10,9 @@ const DEFAULT_ZOOM = 9
 const SINGLE_ZOOM = 15
 
 let optionsApplied = false
+/** これだけ待っても地図が用意できなければ案内文に切り替える（ms） */
+const MAP_LOAD_TIMEOUT_MS = 15_000
+
 /** API キーなどは 1 度しか設定できない（2 回目以降は無視される）ので、最初の 1 回だけ渡す */
 function ensureOptions(apiKey: string) {
   if (optionsApplied) return
@@ -89,6 +92,10 @@ export function PlacesMap({
   useEffect(() => {
     if (!apiKey || !elRef.current || gmRef.current) return
     let cancelled = false
+    // 読み込みが返ってこない（通信不良・キーの制限で無言のまま）ときも空白のままにしない
+    const timer = setTimeout(() => {
+      if (!cancelled && !gmRef.current) setFailed(true)
+    }, MAP_LOAD_TIMEOUT_MS)
     ;(async () => {
       ensureOptions(apiKey)
       const [core, maps, marker] = await Promise.all([
@@ -119,6 +126,7 @@ export function PlacesMap({
     })
     return () => {
       cancelled = true
+      clearTimeout(timer)
       for (const { marker } of layerRef.current.values()) marker.map = null
       layerRef.current.clear()
       gmRef.current = null
@@ -184,7 +192,7 @@ export function PlacesMap({
       <div className="places-map sunken" role="region" aria-label="場所の地図">
         <Text size="sm" p="md">
           {failed
-            ? 'Google マップを読み込めませんでした。API キーの制限（リファラー）を確認してください。'
+            ? 'Google マップを読み込めませんでした。通信状況か API キーの制限（リファラー）を確認してください。場所は「一覧」からも見られます。'
             : 'Google マップの API キーが未設定です（README「Google マップ」の手順で設定）。'}
         </Text>
       </div>
