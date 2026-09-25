@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Card,
+  Divider,
   Group,
   Stack,
   TagsInput,
@@ -231,6 +232,93 @@ function Page() {
 
       <Card withBorder padding="md">
         <Stack gap="sm">
+          <Title order={2}>利用者</Title>
+          {members.length === 0 ? (
+            <Alert color="orange">
+              secret MEMBERS が未設定です（README 参照）。表示名と色を出すには設定してください。
+            </Alert>
+          ) : (
+            <Stack gap="xs">
+              {members.map((m) => (
+                <Group key={m.email} justify="space-between" wrap="nowrap" align="flex-start">
+                  <Group gap="xs" wrap="nowrap">
+                    <MemberChip email={m.email} members={members} />
+                    {m.email === actorEmail ? <Badge variant="light">あなた</Badge> : null}
+                  </Group>
+                  <Text size="xs" c="dimmed" ta="right">
+                    {lastSeen[m.email]
+                      ? `最後に使った: ${formatJst(lastSeen[m.email]!)}`
+                      : '最後に使った: まだ記録なし'}
+                  </Text>
+                </Group>
+              ))}
+              <Text size="xs" c="dimmed">
+                「最後に使った」はそのメールで最後にアプリを開いた（操作した）日時。ログイン自体は
+                Cloudflare Access が行い、セッションは約 1 ヶ月続く
+              </Text>
+            </Stack>
+          )}
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>環境</Title>
+          <Stack gap="xs">
+            <Row label="環境" value={environment} />
+            <Row label="建築予定地の市区町村" value={homeAreas.join('、') || '未設定'} />
+            <Row label="写真の保管 (R2)" value={photosReady ? '有効' : '未設定'} />
+            <Row
+              label="データベース (D1)"
+              value={
+                usage.d1
+                  ? usage.d1.bytes === null
+                    ? '大きさは取れません'
+                    : `${formatBytes(usage.d1.bytes)}（無料枠 ${formatBytes(D1_FREE_BYTES)} の ${percentOf(usage.d1.bytes, D1_FREE_BYTES)}%）`
+                  : '取れません'
+              }
+            />
+            <Row
+              label="データの件数"
+              value={usage.d1 ? formatRowCounts(usage.d1.rows) : '取れません'}
+            />
+            <Row
+              label="写真などのファイル (R2)"
+              value={
+                usage.r2
+                  ? `${usage.r2.count.toLocaleString('ja-JP')}${usage.r2.truncated ? '+' : ''} 個・${formatBytes(usage.r2.bytes)}（無料枠 ${formatBytes(R2_FREE_BYTES)} の ${percentOf(usage.r2.bytes, R2_FREE_BYTES)}%）`
+                  : photosReady
+                    ? '取れません'
+                    : '未設定'
+              }
+            />
+          </Stack>
+          <Text size="xs" c="dimmed">
+            建築予定地は候補の業者の施工エリアと照合する市区町村で、変わらないためここでは変えられません。
+            使用量はこのページを開いたときに数えます。1 日あたりの読み書き回数やリクエスト数は
+            Cloudflare のダッシュボードで確認できます
+          </Text>
+        </Stack>
+      </Card>
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
+          <Title order={2}>アプリについて</Title>
+          <Text size="sm" c="dimmed">
+            機能や見た目の変更は変更履歴にまとめています。
+          </Text>
+          <Button
+            renderRoot={(rootProps) => <Link {...rootProps} to="/changelog" />}
+            variant="default"
+          >
+            変更履歴を見る
+          </Button>
+        </Stack>
+      </Card>
+      <Divider label="管理（取得やメンテナンス。ふだんは触らない）" labelPosition="left" mt="sm" />
+
+      <Card withBorder padding="md">
+        <Stack gap="sm">
           <Title order={2}>お知らせ</Title>
           {newsSources.length === 0 ? (
             <Text size="sm" c="dimmed">
@@ -366,92 +454,6 @@ function Page() {
               アイコンを取得
             </Button>
           </Group>
-        </Stack>
-      </Card>
-
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <Title order={2}>利用者</Title>
-          {members.length === 0 ? (
-            <Alert color="orange">
-              secret MEMBERS が未設定です（README 参照）。表示名と色を出すには設定してください。
-            </Alert>
-          ) : (
-            <Stack gap="xs">
-              {members.map((m) => (
-                <Group key={m.email} justify="space-between" wrap="nowrap" align="flex-start">
-                  <Group gap="xs" wrap="nowrap">
-                    <MemberChip email={m.email} members={members} />
-                    {m.email === actorEmail ? <Badge variant="light">あなた</Badge> : null}
-                  </Group>
-                  <Text size="xs" c="dimmed" ta="right">
-                    {lastSeen[m.email]
-                      ? `最後に使った: ${formatJst(lastSeen[m.email]!)}`
-                      : '最後に使った: まだ記録なし'}
-                  </Text>
-                </Group>
-              ))}
-              <Text size="xs" c="dimmed">
-                「最後に使った」はそのメールで最後にアプリを開いた（操作した）日時。ログイン自体は
-                Cloudflare Access が行い、セッションは約 1 ヶ月続く
-              </Text>
-            </Stack>
-          )}
-        </Stack>
-      </Card>
-
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <Title order={2}>環境</Title>
-          <Stack gap="xs">
-            <Row label="環境" value={environment} />
-            <Row label="建築予定地の市区町村" value={homeAreas.join('、') || '未設定'} />
-            <Row label="写真の保管 (R2)" value={photosReady ? '有効' : '未設定'} />
-            <Row
-              label="データベース (D1)"
-              value={
-                usage.d1
-                  ? usage.d1.bytes === null
-                    ? '大きさは取れません'
-                    : `${formatBytes(usage.d1.bytes)}（無料枠 ${formatBytes(D1_FREE_BYTES)} の ${percentOf(usage.d1.bytes, D1_FREE_BYTES)}%）`
-                  : '取れません'
-              }
-            />
-            <Row
-              label="データの件数"
-              value={usage.d1 ? formatRowCounts(usage.d1.rows) : '取れません'}
-            />
-            <Row
-              label="写真などのファイル (R2)"
-              value={
-                usage.r2
-                  ? `${usage.r2.count.toLocaleString('ja-JP')}${usage.r2.truncated ? '+' : ''} 個・${formatBytes(usage.r2.bytes)}（無料枠 ${formatBytes(R2_FREE_BYTES)} の ${percentOf(usage.r2.bytes, R2_FREE_BYTES)}%）`
-                  : photosReady
-                    ? '取れません'
-                    : '未設定'
-              }
-            />
-          </Stack>
-          <Text size="xs" c="dimmed">
-            建築予定地は候補の業者の施工エリアと照合する市区町村で、変わらないためここでは変えられません。
-            使用量はこのページを開いたときに数えます。1 日あたりの読み書き回数やリクエスト数は
-            Cloudflare のダッシュボードで確認できます
-          </Text>
-        </Stack>
-      </Card>
-
-      <Card withBorder padding="md">
-        <Stack gap="sm">
-          <Title order={2}>アプリについて</Title>
-          <Text size="sm" c="dimmed">
-            機能や見た目の変更は変更履歴にまとめています。
-          </Text>
-          <Button
-            renderRoot={(rootProps) => <Link {...rootProps} to="/changelog" />}
-            variant="default"
-          >
-            変更履歴を見る
-          </Button>
         </Stack>
       </Card>
     </PageShell>

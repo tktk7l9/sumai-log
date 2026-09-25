@@ -152,7 +152,11 @@ export function VendorCard({
         vendor.socialUrls.length > 0 ? (
           <Group justify="space-between" align="center" wrap="nowrap">
             <Group gap="md" c="dimmed">
-              <Text size="sm">{formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}</Text>
+              {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
+                <Text size="sm">
+                  {formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
+                </Text>
+              ) : null}
               {vendor.placeCount > 0 ? (
                 <Group gap={4}>
                   <MapPin size={14} aria-hidden />

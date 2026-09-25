@@ -19,7 +19,7 @@ import { listVideos, videoFormOptions } from '../server/videos'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
-  tab: z.enum(['visits', 'videos']).default('videos'),
+  tab: z.enum(['visits', 'videos']).default('visits'),
   // 予定から「記録を書く」で来たとき: その予定を初期値にしてフォームを開く
   fromEvent: z.string().regex(UUID_SHAPE).optional(),
 })
@@ -86,8 +86,8 @@ function Page() {
             })
           }
           data={[
-            { value: 'videos', label: `動画 ${videos.length}` },
             { value: 'visits', label: `見学 ${visits.length}` },
+            { value: 'videos', label: `動画 ${videos.length}` },
           ]}
         />
         {tab === 'videos' ? (
@@ -119,7 +119,7 @@ function Page() {
       {tab === 'visits' ? (
         <Fab label="記録を書く" onClick={() => setOpened(true)} />
       ) : (
-        <Fab label="動画" onClick={() => setVideoFormOpened(true)} />
+        <Fab label="動画メモを追加" onClick={() => setVideoFormOpened(true)} />
       )}
       <FormDrawer opened={opened} onClose={close} title="見学記録を書く">
         <VisitForm

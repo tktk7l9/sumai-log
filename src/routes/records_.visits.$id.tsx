@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { CommentThread } from '../components/comments/CommentThread'
 import { NextActionsChecklist } from '../components/visits/NextActionsChecklist'
 import { FormDrawer } from '../components/FormDrawer'
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PhotoGrid } from '../components/visits/PhotoGrid'
 import { PhotoUploader } from '../components/visits/PhotoUploader'
@@ -86,6 +86,12 @@ function Page() {
 
   return (
     <PageShell
+      back={
+        <BackButton
+          label="記録"
+          renderLink={(p) => <Link {...p} to="/records" search={{ tab: 'visits' }} />}
+        />
+      }
       title={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">

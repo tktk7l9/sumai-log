@@ -7,7 +7,7 @@ import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { FormDrawer } from '../components/FormDrawer'
-import { PageShell } from '../components/PageShell'
+import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PlaceForm } from '../components/places/PlaceForm'
 import { PlaceLocation } from '../components/places/PlaceLocation'
@@ -49,6 +49,12 @@ function Page() {
 
   return (
     <PageShell
+      back={
+        <BackButton
+          label="地図"
+          renderLink={(p) => <Link {...p} to="/map" search={{ view: 'list' }} />}
+        />
+      }
       title={place.name}
       actions={
         <Group gap="xs">
