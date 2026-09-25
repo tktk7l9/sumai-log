@@ -158,7 +158,7 @@ export function MailImportCard({
                 </Group>
                 {m.status === 'system' && m.bodyText ? (
                   <Spoiler maxHeight={0} showLabel="本文を見る" hideLabel="閉じる">
-                    <Text size="xs" style={{ whiteSpace: 'pre-wrap' }}>
+                    <Text size="xs" className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
                       {m.bodyText}
                     </Text>
                   </Spoiler>
