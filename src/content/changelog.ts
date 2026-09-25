@@ -12,6 +12,13 @@ export type ChangelogEntry = {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2026-09-25',
+    title: 'お知らせのメール本文がスマホで読みやすく',
+    items: [
+      'メール由来のお知らせを開いたとき、本文が上下左右にスクロールする箱に入らず、画面の幅で折り返して普通に読めるように（長い URL も折り返す）',
+    ],
+  },
+  {
     date: '2026-09-24',
     title: '設定: 利用者の「最後に使った日時」と環境の使用量',
     items: [

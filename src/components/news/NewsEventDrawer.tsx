@@ -1,4 +1,4 @@
-import { Anchor, Badge, Button, Loader, ScrollArea, Stack, Text } from '@mantine/core'
+import { Anchor, Badge, Button, Loader, Stack, Text } from '@mantine/core'
 import { useServerFn } from '@tanstack/react-start'
 import { useEffect, useState } from 'react'
 
@@ -99,11 +99,12 @@ function MailBody({ mailId }: { mailId: string }) {
         本文を読み込めませんでした。
       </Text>
     )
+  // Drawer 自体が縦にスクロールするので、本文を別のスクロール箱に入れない（スマホで
+  // 入れ子スクロールになる）。長い URL などは breakable（overflow-wrap: anywhere）で
+  // 折り返し、横スクロールを出さない（所有者の報告、2026-09-25）
   return (
-    <ScrollArea.Autosize mah="50vh" type="auto">
-      <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {body}
-      </Text>
-    </ScrollArea.Autosize>
+    <Text size="sm" className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
+      {body}
+    </Text>
   )
 }
