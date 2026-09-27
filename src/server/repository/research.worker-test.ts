@@ -35,7 +35,7 @@ const vendorInput = {
 }
 
 describe('research', () => {
-  it('調査メモを JSON で往復し、null で消せる。業者フォームの保存では消えない', async () => {
+  it('the research memo round-trips as JSON and null clears it. Saving the vendor form does not erase it', async () => {
     const id = await upsertVendor(db, vendorInput, actor)
     const research = {
       version: 1 as const,
@@ -49,7 +49,7 @@ describe('research', () => {
     let [row] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(row.research).toEqual(research)
 
-    // 業者フォーム（upsertVendor）は research を持たないので、更新しても残る
+    // The vendor form (upsertVendor) does not carry research, so it remains after an update
     await upsertVendor(db, { ...vendorInput, id, hq: 'テスト市' }, actor)
     ;[row] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(row.research).toEqual(research)
@@ -60,7 +60,7 @@ describe('research', () => {
     expect(row.research).toBeNull()
   })
 
-  it('建築計画を設定に保存し、壊れた値は null にする', async () => {
+  it('saves the build plan to settings, and turns a broken value into null', async () => {
     expect(await readBuildPlan(db)).toBeNull()
     await writeBuildPlan(db, { floors: 1, tsuboMin: 30, tsuboMax: 35, budgetManYen: 6000 })
     expect(await readBuildPlan(db)).toEqual({

@@ -3,18 +3,18 @@ import { describe, expect, it } from 'vitest'
 import { describeFetchError } from './errors'
 
 describe('describeFetchError', () => {
-  it('null は空文字の label を返す（例外にしない）', () => {
+  it('null returns an empty-string label (does not throw)', () => {
     expect(describeFetchError(null)).toEqual({ label: '' })
   })
 
-  it('HTTP 403 は Cloudflare 拒否の文言に言い換える', () => {
+  it('rewords HTTP 403 into the blocked-by-site (Cloudflare refused) wording', () => {
     expect(describeFetchError('HTTP 403')).toEqual({
       label: 'サイト側が Cloudflare からのアクセスを拒否（HTTP 403）',
       hint: 'このサイトはお知らせを自動取得できません。メール取り込み（予定）か URL を空にしてください',
     })
   })
 
-  it('HTTP 401 / HTTP 451 も同じく Cloudflare 拒否として扱う', () => {
+  it('treats HTTP 401 / HTTP 451 as Cloudflare being refused in the same way', () => {
     expect(describeFetchError('HTTP 401').label).toBe(
       'サイト側が Cloudflare からのアクセスを拒否（HTTP 401）',
     )
@@ -23,12 +23,12 @@ describe('describeFetchError', () => {
     )
   })
 
-  it('403/401/451 以外の HTTP ステータスはそのまま label にする（hint は付けない）', () => {
+  it('uses HTTP statuses other than 403/401/451 as the label as is (no hint)', () => {
     expect(describeFetchError('HTTP 500')).toEqual({ label: 'HTTP 500' })
     expect(describeFetchError('HTTP 404')).toEqual({ label: 'HTTP 404' })
   })
 
-  it('HTTP ステータス形式ではないエラーはそのまま label にする', () => {
+  it('uses an error that is not in the HTTP status form as the label as is', () => {
     expect(describeFetchError('応答が上限（1MB）を超えました')).toEqual({
       label: '応答が上限（1MB）を超えました',
     })
@@ -37,7 +37,7 @@ describe('describeFetchError', () => {
     })
   })
 
-  it('"HTTP " の後が 3 桁の数字でなければ HTTP ステータスとして扱わない', () => {
+  it('does not treat it as an HTTP status unless "HTTP " is followed by a 3-digit number', () => {
     expect(describeFetchError('HTTP abc')).toEqual({ label: 'HTTP abc' })
     expect(describeFetchError('HTTP 40')).toEqual({ label: 'HTTP 40' })
   })

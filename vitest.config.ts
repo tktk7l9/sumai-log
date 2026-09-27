@@ -1,8 +1,8 @@
 import { defineConfig } from 'vitest/config'
 
 /**
- * vite.config.ts とは別に持つ。テストは Cloudflare プラグインを噛ませず
- * 素の Node で走らせたいため（純粋関数のみを対象にしている）。
+ * Kept separate from vite.config.ts, because the tests should run on plain Node
+ * without the Cloudflare plugin (they target pure functions only).
  */
 export default defineConfig({
   test: {
@@ -10,7 +10,7 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     coverage: {
       provider: 'v8',
-      // 副作用を持たない src/lib のみを 100% ゲートの対象にする。
+      // Only src/lib, which has no side effects, is subject to the 100% gate.
       include: ['src/lib/**/*.ts'],
       reporter: ['text', 'html'],
       thresholds: {

@@ -6,7 +6,10 @@ const WINDOWS: { label: string; x: number; panes: number; arrowWidth: number }[]
   { label: '樹脂トリプル', x: 260, panes: 3, arrowWidth: 1 },
 ]
 
-/** 3種の窓（アルミ単板／アルミ樹脂複合ペア／樹脂トリプル）を並べ、熱の矢印を太→細に */
+/**
+ * Lines up 3 kinds of windows (aluminum single pane / aluminum-resin composite double pane / resin
+ * triple pane), with heat arrows going thick -> thin
+ */
 export function WindowHeatDiagram() {
   return (
     <Figure label="窓の種類ごとの熱の逃げやすさ。アルミ単板が最も太い矢印、アルミ樹脂複合ペア、樹脂トリプルの順に矢印が細くなる">

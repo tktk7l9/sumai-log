@@ -12,8 +12,8 @@ import type { VendorResearch } from '../lib/research'
 import { CANDIDATE_STATUSES } from '../lib/status'
 
 /**
- * 方針: 日付は TEXT の ISO-8601（日付のみ 'YYYY-MM-DD'）、金額は円の整数、
- * 面積は小数。id は text（crypto.randomUUID()）。作成者はメール。
+ * Policy: dates are ISO-8601 in TEXT (date only is 'YYYY-MM-DD'), amounts are integers in
+ * yen, areas are decimals. id is text (crypto.randomUUID()). The author is an e-mail.
  */
 export const timestamps = {
   createdAt: text('created_at')
@@ -46,11 +46,14 @@ export const VENDOR_KIND_LABEL: Record<(typeof VENDOR_KINDS)[number], string> = 
   developer: 'デベロッパー',
 }
 
-/** 業者のお知らせ取得方式。rss = RSS 2.0 フィード、html-list = トップページの <ul><li> 一覧 */
+/** How vendor news is fetched. rss = RSS 2.0 feed, html-list = the <ul><li> list on the
+ * top page */
 export const NEWS_SOURCES = ['rss', 'html-list'] as const
-/** favicon_key の由来。'auto' = 自動取得（fetchFaviconForVendor）、'manual' = 業者フォームからの
- * 手動アップロード（design 背景: Cloudflare からのアクセスを拒否するサーバー向けの代替経路）。
- * 既存行との後方互換のため列は nullable にし、null は 'auto' として扱う（migration 0008 参照）。 */
+/** Origin of favicon_key. 'auto' = fetched automatically (fetchFaviconForVendor),
+ * 'manual' = uploaded by hand from the vendor form (design background: an alternative
+ * route for servers that refuse access from Cloudflare).
+ * For backward compatibility with existing rows the column is nullable, and null is
+ * treated as 'auto' (see migration 0008). */
 export const FAVICON_SOURCES = ['auto', 'manual'] as const
 export type FaviconSource = (typeof FAVICON_SOURCES)[number]
 export const NEWS_SOURCE_LABEL: Record<(typeof NEWS_SOURCES)[number], string> = {
@@ -58,7 +61,7 @@ export const NEWS_SOURCE_LABEL: Record<(typeof NEWS_SOURCES)[number], string> = 
   'html-list': 'HTML',
 }
 
-/** 戸建ての業者 */
+/** Vendors for detached houses */
 export const vendors = sqliteTable(
   'vendors',
   {
@@ -66,14 +69,16 @@ export const vendors = sqliteTable(
     name: text('name').notNull(),
     kind: text('kind', { enum: VENDOR_KINDS }).notNull().default('koumuten'),
     hq: text('hq'),
-    /** 代表者名。工務店の場合に一覧へ表示する */
+    /** Representative's name. Shown in the list when the vendor is a builder */
     representative: text('representative'),
-    /** 施工エリア（市区町村名の配列）。設定の homeAreas と照合する */
+    /** Service area (array of municipality names). Matched against homeAreas in settings */
     serviceAreas: jsonList('service_areas'),
-    /** 加盟団体の id の配列（`src/content/affiliations.ts` の Affiliation['id']） */
+    /** Array of member organization ids (Affiliation['id'] in `src/content/affiliations.ts`) */
     affiliations: jsonList('affiliations'),
-    /** 加盟団体ごとの、この業者向けの紹介ページ URL とメモ（星の意味等）。
-     * キーは affiliations と同じ Affiliation['id']。選ばなかった団体は入らない */
+    /** Per member organization, the URL of its introduction page for this vendor and a
+     * memo (meaning of the stars etc.).
+     * The key is the same Affiliation['id'] as affiliations. Organizations that were not
+     * chosen are not included */
     affiliationLinks: text('affiliation_links', { mode: 'json' })
       .$type<Record<string, { url: string; note?: string }>>()
       .notNull()
@@ -82,7 +87,7 @@ export const vendors = sqliteTable(
     cValuePublished: integer('c_value_published', { mode: 'boolean' }).notNull().default(false),
     seismicGrade: integer('seismic_grade'),
     longTermCertified: integer('long_term_certified', { mode: 'boolean' }).notNull().default(false),
-    /** 坪単価の目安（万円） */
+    /** Rough price per tsubo (10,000 yen) */
     pricePerTsuboMin: integer('price_per_tsubo_min'),
     pricePerTsuboMax: integer('price_per_tsubo_max'),
     structure: text('structure'),
@@ -90,31 +95,37 @@ export const vendors = sqliteTable(
     status: text('status', { enum: CANDIDATE_STATUSES }).notNull().default('interested'),
     sourceUrl: text('source_url'),
     websiteUrl: text('website_url'),
-    /** SNS のプロフィール URL（Instagram/X/YouTube/Facebook/TikTok/LINE/Threads/note など） */
+    /** SNS profile URLs (Instagram/X/YouTube/Facebook/TikTok/LINE/Threads/note etc.) */
     socialUrls: jsonList('social_urls'),
-    /** お知らせの取得元 URL（未設定なら取得対象外） */
+    /** Source URL of vendor news (when not set, the vendor is not fetched) */
     newsUrl: text('news_url'),
-    /** newsUrl があるときの取得方式 */
+    /** How to fetch when newsUrl exists */
     newsSource: text('news_source', { enum: NEWS_SOURCES }),
-    /** お知らせの最終取得日時（成功・失敗いずれも更新） */
+    /** Last time vendor news was fetched (updated on both success and failure) */
     newsFetchedAt: text('news_fetched_at'),
-    /** 直近の取得失敗理由。成功時は null */
+    /** Reason of the most recent fetch failure. null on success */
     newsFetchError: text('news_fetch_error'),
-    /** メール取込（design 2026-09-19）: メルマガの差出人ドメイン。カンマ区切り・小文字。
-     * 一致（完全一致またはサブドメイン）したメールをこの業者のお知らせにする */
+    /** Mail import (design 2026-09-19): sender domains of the newsletter. Comma-separated,
+     * lowercase.
+     * Mail that matches (exact match or subdomain) becomes vendor news of this vendor */
     newsEmailDomain: text('news_email_domain'),
-    /** 代表者の顔写真。R2 キーは vendors/{id}/representative-display.jpg（vendorImageKeys）。
-     * サムネ（-thumb.jpg）は同じ vendorId から決定的に決まるので別列は持たない */
+    /** Photo of the representative's face. The R2 key is
+     * vendors/{id}/representative-display.jpg (vendorImageKeys).
+     * The thumbnail (-thumb.jpg) is determined deterministically from the same vendorId,
+     * so there is no separate column */
     representativePhotoKey: text('representative_photo_key'),
-    /** サイトのファビコン。R2 キーは vendors/{id}/favicon.<ext>（vendorFaviconKey）。
-     * 拡張子がサイトごとに変わるため（png/ico/jpg/webp。SVG は扱わない理由は
-     * src/lib/favicon.ts の FaviconExt/FaviconMimeType のコメント参照）、鍵そのものを保持する */
+    /** Favicon of the site. The R2 key is vendors/{id}/favicon.<ext> (vendorFaviconKey).
+     * The extension differs per site (png/ico/jpg/webp. For why SVG is not handled, see
+     * the comment on FaviconExt/FaviconMimeType in src/lib/favicon.ts), so the key itself
+     * is stored */
     faviconKey: text('favicon_key'),
-    /** favicon_key の由来（'auto' | 'manual'）。null は 'auto' 扱い（上の FAVICON_SOURCES 参照） */
+    /** Origin of favicon_key ('auto' | 'manual'). null is treated as 'auto' (see
+     * FAVICON_SOURCES above) */
     faviconSource: text('favicon_source', { enum: FAVICON_SOURCES }),
-    /** 調査メモ（比較表の事実・読み物・出典）。形は src/lib/research.ts の VendorResearch。
-     * 未調査なら null。保存は saveVendorResearch（src/server/research.ts）だけが行い、
-     * 業者フォーム（vendorInput）はこの列に触らない */
+    /** Research memo (facts for the comparison table, reading material, sources). The
+     * shape is VendorResearch in src/lib/research.ts.
+     * null when not researched yet. Only saveVendorResearch (src/server/research.ts)
+     * saves it, and the vendor form (vendorInput) does not touch this column */
     research: text('research', { mode: 'json' }).$type<VendorResearch>(),
     createdBy: createdBy(),
     ...timestamps,
@@ -122,7 +133,7 @@ export const vendors = sqliteTable(
   (t) => [index('vendors_status_idx').on(t.status)],
 )
 
-/** マンション物件 */
+/** Condominium properties */
 export const properties = sqliteTable(
   'properties',
   {
@@ -131,13 +142,13 @@ export const properties = sqliteTable(
     address: text('address'),
     station: text('station'),
     walkMinutes: integer('walk_minutes'),
-    /** 価格（円） */
+    /** Price (yen) */
     price: integer('price'),
     areaSqm: real('area_sqm'),
     layout: text('layout'),
     builtYear: integer('built_year'),
     completionDate: text('completion_date'),
-    /** 月額（円） */
+    /** Monthly amount (yen) */
     managementFee: integer('management_fee'),
     repairReserve: integer('repair_reserve'),
     listingUrl: text('listing_url'),
@@ -167,7 +178,7 @@ export const PLACE_KIND_LABEL: Record<(typeof PLACE_KINDS)[number], string> = {
 }
 export const GEOCODE_SOURCES = ['gsi', 'manual'] as const
 
-/** 場所。地図の単位。業者か物件のどちらかに紐づく（どちらも無くてもよい） */
+/** Place. The unit of the map. Linked to either a vendor or a property (may have neither) */
 export const places = sqliteTable(
   'places',
   {
@@ -177,7 +188,7 @@ export const places = sqliteTable(
     address: text('address'),
     lat: real('lat'),
     lng: real('lng'),
-    /** 手貼りした座標の元の表記。変換後の値と突き合わせるために残す */
+    /** Original notation of hand-pasted coordinates. Kept to compare with the converted value */
     coordsText: text('coords_text'),
     geocodeSource: text('geocode_source', { enum: GEOCODE_SOURCES }),
     vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
@@ -197,7 +208,7 @@ export const EVENT_KIND_LABEL: Record<(typeof EVENT_KINDS)[number], string> = {
   other: 'その他',
 }
 
-/** 予定。終日なら startsAt は 'YYYY-MM-DD'、それ以外は ISO-8601（+09:00） */
+/** Event. When all-day, startsAt is 'YYYY-MM-DD'; otherwise ISO-8601 (+09:00) */
 export const events = sqliteTable(
   'events',
   {
@@ -218,10 +229,12 @@ export const events = sqliteTable(
 )
 
 /**
- * 業者のお知らせ（RSS/HTML から定期取得）。url が新着判定のキー
- * （既にあれば何もしない。タイトル等の更新は追わない）。
- * イベント判定（event_start/event_end/event_kind）は取得時に 1 回だけ行い結果を保存する。
- * 「行く」で自分の予定（events）に変換したら planned_event_id に紐づける。
+ * Vendor news (fetched periodically from RSS/HTML). url is the key for judging new items
+ * (when it already exists nothing is done. Updates to the title etc. are not tracked).
+ * Event judgment (event_start/event_end/event_kind) is done only once at fetch time and
+ * the result is stored.
+ * When "行く" (Go) converts it into the user's own event (events), it is linked through
+ * planned_event_id.
  */
 export const vendorNews = sqliteTable(
   'vendor_news',
@@ -232,23 +245,26 @@ export const vendorNews = sqliteTable(
       .references(() => vendors.id, { onDelete: 'cascade' }),
     url: text('url').notNull().unique(),
     title: text('title').notNull(),
-    /** 最大 300 字（呼び出し側で切り詰める） */
+    /** Up to 300 characters (truncated by the caller) */
     summary: text('summary'),
-    /** YYYY-MM-DD。RSS は pubDate、HTML は表記の日付 */
+    /** YYYY-MM-DD. pubDate for RSS, the written date for HTML */
     publishedOn: text('published_on').notNull(),
-    /** YYYY-MM-DD。イベントと判定したときのみ */
+    /** YYYY-MM-DD. Only when judged to be an event */
     eventStart: text('event_start'),
-    /** YYYY-MM-DD。複数日なら終端、単日なら eventStart と同じ */
+    /** YYYY-MM-DD. The last day for multiple days, same as eventStart for a single day */
     eventEnd: text('event_end'),
-    /** 見学会 / 完成見学会 / 構造見学会 / 相談会 / セミナー / イベント */
+    /** "見学会" (open house) / "完成見学会" (completed-house open house) / "構造見学会"
+     * (structure open house) / "相談会" (consultation) / "セミナー" (seminar) /
+     * "イベント" (event) */
     eventKind: text('event_kind'),
-    /** 「行く」で作った自分の予定。予定が消えたら null に戻す */
+    /** The user's own event created with "行く". Set back to null when the event is removed */
     plannedEventId: text('planned_event_id').references(() => events.id, { onDelete: 'set null' }),
-    /** メール由来のお知らせ。本文は inbound_mails.body_text にある（二重保存しない） */
+    /** Vendor news that comes from mail. The body is in inbound_mails.body_text (not
+     * stored twice) */
     mailId: text('mail_id').references((): AnySQLiteColumn => inboundMails.id, {
       onDelete: 'set null',
     }),
-    /** 初回取得の日時 */
+    /** Time of the first fetch */
     firstSeenAt: text('first_seen_at')
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -267,25 +283,27 @@ export const INBOUND_STATUS_LABEL: Record<InboundStatus, string> = {
 }
 
 /**
- * news@ に届いたメールの全記録（設計 2026-09-19 §4）。未割当の置き場と受信ログを兼ねる。
- * 人ではなく Worker が作るので created_by は持たない。
+ * Full record of the mail delivered to news@ (design 2026-09-19 §4). Serves as both the
+ * place for unassigned mail and the receive log.
+ * Created by the Worker, not by a person, so it has no created_by.
  */
 export const inboundMails = sqliteTable(
   'inbound_mails',
   {
     id: id(),
-    /** 元メールの Message-ID（<> 付き）。無ければ 'hash:<sha256>' */
+    /** Message-ID of the original mail (with <>). 'hash:<sha256>' when there is none */
     messageId: text('message_id').notNull().unique(),
-    /** 受信時刻 ISO-8601 */
+    /** Receive time, ISO-8601 */
     receivedAt: text('received_at').notNull(),
-    /** 元の差出人（手動転送なら転送ブロックの From） */
+    /** Original sender (for manual forwarding, the From of the forwarded block) */
     fromAddress: text('from_address').notNull(),
-    /** 正規化したエンベロープ送信者（自動転送・手動転送とも）。mbox 取込は 'mbox' */
+    /** Normalized envelope sender (for both automatic and manual forwarding). 'mbox' for
+     * mbox import */
     forwardedBy: text('forwarded_by'),
     subject: text('subject').notNull(),
-    /** 元メールの日付 YYYY-MM-DD（JST）。無ければ null */
+    /** Date of the original mail, YYYY-MM-DD (JST). null when there is none */
     sentOn: text('sent_on'),
-    /** rejected は null（本文を保存しない） */
+    /** null for rejected (the body is not stored) */
     bodyText: text('body_text'),
     bodyTruncated: integer('body_truncated', { mode: 'boolean' }).notNull().default(false),
     status: text('status', { enum: INBOUND_STATUSES }).notNull(),
@@ -306,7 +324,7 @@ export const ATTENDEES_LABEL: Record<(typeof ATTENDEES)[number], string> = {
   wife: '妻',
 }
 
-/** 見学記録 */
+/** Visit record */
 export const visits = sqliteTable(
   'visits',
   {
@@ -327,7 +345,7 @@ export const visits = sqliteTable(
   (t) => [index('visits_visited_idx').on(t.visitedOn), index('visits_event_idx').on(t.eventId)],
 )
 
-/** 写真。R2 のキーは photos/{visitId}/{photoId}-display.jpg / -thumb.jpg */
+/** Photo. The R2 key is photos/{visitId}/{photoId}-display.jpg / -thumb.jpg */
 export const photos = sqliteTable(
   'photos',
   {
@@ -347,7 +365,7 @@ export const photos = sqliteTable(
   (t) => [index('photos_visit_idx').on(t.visitId)],
 )
 
-/** YouTube メモ */
+/** YouTube memo */
 export const videos = sqliteTable(
   'videos',
   {
@@ -370,7 +388,8 @@ export const videos = sqliteTable(
 
 export const COMMENT_TARGETS = ['vendor', 'property', 'place', 'visit', 'video'] as const
 
-/** どの記録にも二人が一言足せる。targetId は外部キーではない（消すときは server 側で掃除する） */
+/** Both users can add a short comment to any record. targetId is not a foreign key (on
+ * delete, the server side cleans up) */
 export const comments = sqliteTable(
   'comments',
   {
@@ -405,7 +424,8 @@ export const DEFAULT_TAGS = [
   '外構',
 ] as const
 
-/** 国土地理院 住所検索 API の結果。同じ文字列を二度引かない */
+/** Results of the GSI (Geospatial Information Authority of Japan) address search API.
+ * The same string is never looked up twice */
 export const geocodeCache = sqliteTable('geocode_cache', {
   query: text('query').primaryKey(),
   lat: real('lat').notNull(),
@@ -437,15 +457,16 @@ export type NewVideo = typeof videos.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
 
-/** 情報収集（/sources）の情報源の種類。YouTube チャンネル URL から解析できたら
- * 'youtube'、それ以外は 'site'（src/lib/sources.ts の parseYoutubeChannelUrl 参照） */
+/** Kind of a source on the sources page (/sources). 'youtube' when it could be parsed
+ * from a YouTube channel URL, otherwise 'site' (see parseYoutubeChannelUrl in
+ * src/lib/sources.ts) */
 export const SOURCE_KINDS = ['youtube', 'site'] as const
 
 /**
- * 情報収集ページの情報源（主に YouTube チャンネル）。ジャンルは固定 enum ではなく
- * `src/content/sourceGenres.ts` のデータで表す（妥当性は src/server/sources.schema.ts の
- * zod 側で SOURCE_GENRE_IDS と照合する。vendors.status 等と違ってここでは drizzle の
- * enum 制約を付けない）。
+ * Sources of the sources page (mainly YouTube channels). The genre is not a fixed enum; it
+ * is expressed by the data in `src/content/sourceGenres.ts` (validity is checked against
+ * SOURCE_GENRE_IDS on the zod side in src/server/sources.schema.ts. Unlike vendors.status
+ * etc., no drizzle enum constraint is added here).
  */
 export const sources = sqliteTable(
   'sources',
@@ -454,19 +475,20 @@ export const sources = sqliteTable(
     kind: text('kind', { enum: SOURCE_KINDS }).notNull().default('youtube'),
     name: text('name').notNull(),
     url: text('url').notNull().unique(),
-    /** YouTube ハンドル（'@…'）。/channel/UC… だけの URL から登録した場合は無い */
+    /** YouTube handle ('@…'). Absent when registered from a URL with only /channel/UC… */
     handle: text('handle'),
-    /** YouTube チャンネル ID（'UC…'）。/@handle だけの URL では取得できないことがある */
+    /** YouTube channel ID ('UC…'). Sometimes cannot be obtained from a URL with only /@handle */
     channelId: text('channel_id'),
-    /** src/content/sourceGenres.ts の SourceGenre['id'] */
+    /** SourceGenre['id'] in src/content/sourceGenres.ts */
     genre: text('genre').notNull(),
-    /** 最大 200 字（呼び出し側で切り詰める） */
+    /** Up to 200 characters (truncated by the caller) */
     description: text('description'),
-    /** https のみ。ホストは src/lib/sources.ts の isAllowedAvatarUrl で絞る */
+    /** https only. The host is restricted by isAllowedAvatarUrl in src/lib/sources.ts */
     avatarUrl: text('avatar_url'),
-    /** 候補の会社（vendors）と紐づける場合 */
+    /** When linking to a candidate company (vendors) */
     vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
-    /** 加盟団体（src/content/affiliations.ts の Affiliation['id']）と紐づける場合 */
+    /** When linking to a member organization (Affiliation['id'] in
+     * src/content/affiliations.ts) */
     affiliation: text('affiliation'),
     sortOrder: integer('sort_order').notNull().default(0),
     createdBy: createdBy(),

@@ -35,17 +35,20 @@ import { listCandidates } from '../server/candidates'
 import { getBuildPlan } from '../server/research'
 
 /**
- * 候補（戸建て業者）の比較表（所有者の要望、2026-09-22。design.md §1 の「比較表は持たない」
- * を改める）。列＝業者、行＝項目。スマホでは横スクロールし、項目名の列だけ左に固定する
- * （styles.css の .compare-table）。行は「登録済みの数値（UA 値・耐震等級・坪単価…）」→
- * 「調査メモの事実（RESEARCH_FACT_KEYS の順）」→「建築計画に対する目安」の順。
+ * Comparison table of the candidates (detached house vendors) (owner's request, 2026-09-22.
+ * It revises "no comparison table" in design.md §1). Columns = vendors, rows = items. On a
+ * phone it scrolls horizontally and only the item name column is pinned to the left
+ * (.compare-table in styles.css). Rows go in the order "registered numbers (UA value, seismic
+ * grade, price per tsubo...)" -> "facts from the research notes (in RESEARCH_FACT_KEYS order)"
+ * -> "estimate against the building plan".
  *
- * 列の見出しの「非表示」で業者を個別に隠せる（所有者の要望、2026-09-22）。隠した id は URL の
- * `h`（カンマ区切り）に持つ: リロード・戻る・共有で同じ見え方になり、隠した業者は表の上の
- * チップから 1 社ずつ戻せる。「見送り」の一括非表示（スイッチ）とは独立
+ * "非表示" (Hide) in a column heading hides vendors one by one (owner's request, 2026-09-22).
+ * The hidden ids are kept in `h` in the URL (comma separated): reload, back and sharing give
+ * the same view, and hidden vendors can be brought back 1 at a time from the chips above the
+ * table. Independent of the bulk hiding of "見送り" (Dropped) (the switch)
  */
 const search = z.object({
-  // 壊れた値は「何も隠さない」に倒す（UUID でない要素は parseHiddenIds が捨てる）
+  // A broken value falls back to "hide nothing" (parseHiddenIds discards elements that are not UUIDs)
   h: z.string().max(2000).optional().catch(undefined),
 })
 
@@ -65,9 +68,9 @@ function Page() {
   const { vendors, plan } = Route.useLoaderData()
   const { h } = Route.useSearch()
   const navigate = useNavigate({ from: '/candidates/compare' })
-  // 「見送り」は既定で隠す（比べたい相手ではないため）。スイッチで出せる
+  // "見送り" is hidden by default (they are not the ones to compare against). The switch shows them
   const [showDropped, setShowDropped] = useState(false)
-  // 個別に隠した業者。存在しない id（削除済み等）はチップに出せないので落とす
+  // Vendors hidden one by one. Ids that do not exist (deleted, etc.) cannot be shown as chips, so drop them
   const hiddenIds = parseHiddenIds(h).filter((id) => vendors.some((v) => v.id === id))
   const hiddenVendors = hiddenIds.map((id) => vendors.find((v) => v.id === id)!)
   const shown = vendors.filter(
@@ -104,8 +107,8 @@ function Page() {
               建築予定地が施工エリア内
             </Badge>
           ) : null}
-          {/* 全国対応の会社は市区町村が何十個も並んで行が 300px 近くになる。4 行で畳み、
-              全文は title と業者詳細で読める */}
+          {/* A nationwide company lists dozens of municipalities and the row gets close to 300px.
+              Clamp at 4 lines; the full text can be read in title and on the vendor detail page */}
           <Text size="sm" lineClamp={4} title={v.serviceAreas.join('、')}>
             {v.serviceAreas.length ? v.serviceAreas.join('、') : '未登録'}
           </Text>
@@ -130,8 +133,8 @@ function Page() {
     },
   ]
 
-  // どの業者にも値が無い（全部「—」）行は出さない。未調査の項目が 10 行以上「—」で並んで
-  // 表が読みにくかった。書き込めば自然に行が増える
+  // Rows with no value for any vendor (all "—") are not shown. Unresearched items lined up as
+  // 10 or more rows of "—" and the table was hard to read. Rows appear naturally once filled in
   const visibleRows = rows.filter((r) => shown.some((v) => r.cell(v) !== '—'))
 
   return (
@@ -162,8 +165,8 @@ function Page() {
           />
         ) : null}
         {hiddenVendors.length > 0 ? (
-          // 隠した業者はチップで並べ、押すと戻る（Chip の checked=false を「隠れている」の
-          // 印にする）。全部戻すボタンも添える
+          // Hidden vendors are lined up as chips and come back when pressed (checked=false on the
+          // Chip serves as the mark for "hidden"). A button to bring all of them back is added too
           <Group gap="xs" align="center">
             <Text size="sm" c="dimmed">
               非表示:

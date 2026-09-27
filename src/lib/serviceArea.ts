@@ -1,6 +1,7 @@
 /**
- * 施工エリアの判定。値は人が自由に書く（「テスト市」「神奈川県」「関東」「全国」）ので、
- * 厳密な住所コードではなく文字列の包含で「含みそうか」を見る。
+ * Service area matching. People write the values freely ("Test City", "Kanagawa
+ * Prefecture", "Kanto", "nationwide"), so this looks at whether it "probably covers" by
+ * string containment, not by strict address codes.
  */
 
 export function parseAreaList(raw: string): string[] {

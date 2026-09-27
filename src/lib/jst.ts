@@ -1,12 +1,12 @@
 /**
- * 台帳に流れ込む時刻表現を JST で表示する。
+ * Displays the time representations that flow into the ledger in JST.
  *
- * D1 の datetime('now') は 'YYYY-MM-DD HH:MM:SS'（UTC、オフセット無し）。
- * それ以外の入力元は ISO 8601（'Z' や '+09:00' などのオフセット付き、
- * またはオフセット無し）で来ることがある。オフセットが無ければ UTC とみなす。
- * `new Date().toISOString()`（repository の upsert が updatedAt に使う）は
- * 常に小数点以下 3 桁の秒（'.333' 等）を含むため、秒の小数部も受ける。
- * Date.now() は使わない（呼び出し時刻に依存しない純粋関数にするため）。
+ * D1's datetime('now') is 'YYYY-MM-DD HH:MM:SS' (UTC, no offset).
+ * Other input sources may arrive as ISO 8601 (with an offset such as 'Z' or '+09:00',
+ * or without an offset). Without an offset it is treated as UTC.
+ * `new Date().toISOString()` (which the repository upsert uses for updatedAt) always
+ * contains seconds with 3 decimal places ('.333' etc.), so fractional seconds are accepted too.
+ * Date.now() is not used (to keep these pure functions independent of the call time).
  */
 
 import { formatDateSlash } from './calendar'
@@ -15,11 +15,11 @@ const DATE_TIME_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/
 
 /**
- * UTC ミリ秒に直す。D1 の 'YYYY-MM-DD HH:MM:SS'（オフセット無し=UTC）と
- * ISO 8601（'Z' / '+09:00' のようなオフセット付き、またはオフセット無し=UTC。
- * 秒の小数部があってもなくてもよい）を受ける。この正規表現の形に合わない文字列は
- * null（呼び出し側で「読めない＝元の文字列のまま」などのフォールバックに使う。
- * feed.ts はここでの null を「最も古い扱い」に読み替える）。
+ * Converts to UTC milliseconds. Accepts D1's 'YYYY-MM-DD HH:MM:SS' (no offset = UTC) and
+ * ISO 8601 (with an offset such as 'Z' / '+09:00', or no offset = UTC; fractional seconds
+ * may be present or absent). A string that does not match the shape of this regex gives
+ * null (the caller uses it for fallbacks such as "unreadable = keep the original string".
+ * feed.ts reads the null from here as "treat as the oldest").
  */
 export function parseToUtcMs(value: string): number | null {
   const match = DATE_TIME_PATTERN.exec(value)
@@ -36,9 +36,9 @@ export function parseToUtcMs(value: string): number | null {
         Number(second),
         fraction ? Math.round(Number(fraction) * 1000) : 0,
       )
-  // 正規表現の形は合っていても月日が実在しない（'2026-09-32' 等）と
-  // Date.parse は NaN を返す。null にして「読めない」扱いに合流させる
-  // （呼び出し側は既に utcMs === null を見ている）。
+  // Even when the regex shape matches, Date.parse returns NaN if the month or day does not
+  // exist ('2026-09-32' etc.). Turn it into null so it joins the "unreadable" handling
+  // (the callers already check utcMs === null).
   return Number.isNaN(ms) ? null : ms
 }
 
@@ -47,9 +47,9 @@ function pad(n: number): string {
 }
 
 /**
- * JST の 'YYYY/MM/DD HH:mm'（withTime: false なら 'YYYY/MM/DD'）に直す。日付の表示は
- * 全て `/` 区切りに統一する（所有者の要望。src/lib/calendar.ts の formatDateSlash）。
- * 解釈できない文字列はそのまま返す。
+ * Converts to JST 'YYYY/MM/DD HH:mm' ('YYYY/MM/DD' with withTime: false). Every displayed
+ * date is unified to the `/` separator (the owner's request. formatDateSlash in
+ * src/lib/calendar.ts). A string that cannot be interpreted is returned as is.
  */
 export function formatJst(value: string, opts?: { withTime?: boolean }): string {
   const utcMs = parseToUtcMs(value)
@@ -64,8 +64,9 @@ export function formatJst(value: string, opts?: { withTime?: boolean }): string 
 }
 
 /**
- * JST の 'YYYY-MM-DD' キー（ハイフン区切りのまま。表示用の formatJst とは別で、こちらは
- * 「キー」なので `/` 区切りにしない）。アプリ内の呼び出し元は今は無い。lib の公開 API として維持
+ * The JST 'YYYY-MM-DD' key (kept hyphen-separated. Unlike formatJst, which is for display, this
+ * is a key, so it is not `/`-separated). There is no caller inside the app right now. Kept as
+ * public API of lib
  */
 export function toJstDateKey(value: string): string {
   const utcMs = parseToUtcMs(value)
@@ -75,7 +76,10 @@ export function toJstDateKey(value: string): string {
   return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}`
 }
 
-/** JST の 'HH:mm' だけを返す。解釈できない文字列は空文字（見出しに時刻が要らない場面向け） */
+/**
+ * Returns only the JST 'HH:mm'. A string that cannot be interpreted gives an empty string
+ * (for places where a heading needs no time)
+ */
 export function formatJstTime(value: string): string {
   const utcMs = parseToUtcMs(value)
   if (utcMs === null) return ''

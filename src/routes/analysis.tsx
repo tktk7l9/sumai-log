@@ -13,15 +13,16 @@ import type { CandidateStatus } from '../lib/status'
 import { getAnalysis } from '../server/analysis'
 
 /**
- * 記録の分析（所有者の要望、2026-09-23）。記録の中身をアプリの中で数えるだけ（外部に送らない）。
- * 集計は src/lib/analysis.ts、ここは見せ方だけ。
+ * Analysis of the records (owner's request, 2026-09-23). It only counts the contents of the
+ * records inside the app (nothing is sent outside).
+ * Aggregation lives in src/lib/analysis.ts; this file is presentation only.
  */
 export const Route = createFileRoute('/analysis')({
   component: Page,
   loader: () => getAnalysis(),
 })
 
-/** 書きかけの記録は最初のこの件数だけ並べる */
+/** Unfinished records list only this many items from the start */
 const GAP_PREVIEW = 5
 
 function Page() {

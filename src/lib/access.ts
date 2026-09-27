@@ -1,19 +1,20 @@
 import { jwtVerify, type JWTVerifyGetKey } from 'jose'
 
 /**
- * Cloudflare Access の認証ロジック（純粋部分）。
+ * Authentication logic for Cloudflare Access (the pure part).
  *
- * バインディングやネットワークに依存しないため、鍵セットを差し替えれば
- * 署名検証まで含めてテストできる。env や JWKS 取得は src/server/auth.ts が担当する。
+ * It does not depend on bindings or the network, so by swapping the key set it can be
+ * tested including signature verification. env and fetching the JWKS are handled by
+ * src/server/auth.ts.
  *
- * 設計上の原則: 迷ったら必ず「拒否」に倒す（fail closed）。
+ * Design principle: when in doubt, always fall to "reject" (fail closed).
  */
 
 export const ACCESS_JWT_HEADER = 'cf-access-jwt-assertion'
 
 export type Identity = {
   email: string
-  /** access = Cloudflare Access 経由の本物 / dev = ローカル開発の代替 */
+  /** access = the real one via Cloudflare Access / dev = the fallback for local development */
   source: 'access' | 'dev'
 }
 
@@ -27,8 +28,8 @@ export function normalizeEmail(value: string): string {
 }
 
 /**
- * カンマ・改行区切りの許可メール一覧を正規化する。
- * 空文字しか無い場合は空配列＝「誰も許可しない」になる。
+ * Normalizes the comma- or newline-separated list of allowed e-mails.
+ * When there are only empty strings it becomes an empty array = "allow nobody".
  */
 export function parseAllowlist(raw: string | undefined | null): string[] {
   if (!raw) return []
@@ -40,21 +41,22 @@ export function parseAllowlist(raw: string | undefined | null): string[] {
   return [...seen]
 }
 
-/** allowlist が空のときは全員拒否する（空＝全員許可、にしない）。 */
+/** When the allowlist is empty, reject everyone (empty does not mean allow everyone). */
 export function isEmailAllowed(email: string, allowlist: readonly string[]): boolean {
   if (allowlist.length === 0) return false
   return allowlist.includes(normalizeEmail(email))
 }
 
 /**
- * ローカル開発用の代替 ID を使ってよいか。
- * 本番では絶対に有効化させない。ENVIRONMENT が未設定・不明な場合も本番扱いで拒否する。
+ * Whether the fallback ID for local development may be used.
+ * Never enabled in production. When ENVIRONMENT is not set or unknown, it is also treated
+ * as production and rejected.
  */
 export function devIdentityAllowed(environment: string | undefined | null): boolean {
   return environment === 'development' || environment === 'test'
 }
 
-/** リクエストヘッダから Access の JWT を取り出す。 */
+/** Takes the Access JWT out of the request headers. */
 export function extractAccessToken(headers: Headers): string | null {
   const token = headers.get(ACCESS_JWT_HEADER)
   return token && token.trim() !== '' ? token : null
@@ -62,18 +64,18 @@ export function extractAccessToken(headers: Headers): string | null {
 
 export type AuthenticateOptions = {
   token: string | null
-  /** jose の鍵セット解決関数（本番は createRemoteJWKSet、テストは createLocalJWKSet） */
+  /** jose key set resolver (createRemoteJWKSet in production, createLocalJWKSet in tests) */
   keySet: JWTVerifyGetKey
   /** https://<team>.cloudflareaccess.com */
   issuer: string
-  /** Access アプリケーションの AUD タグ */
+  /** AUD tag of the Access application */
   audience: string
   allowlist: readonly string[]
 }
 
 /**
- * Access の JWT を検証し、許可された利用者かどうかを判定する。
- * 署名・issuer・audience・有効期限は jose が検証する。
+ * Verifies the Access JWT and judges whether the user is allowed.
+ * jose verifies the signature, issuer, audience and expiry.
  */
 export async function authenticateAccessJwt({
   token,
@@ -107,8 +109,8 @@ export async function authenticateAccessJwt({
 }
 
 /**
- * ローカル開発用の代替 ID を解決する。
- * 本番環境、または代替メールが allowlist に無い場合は必ず失敗する。
+ * Resolves the fallback ID for local development.
+ * Always fails in production, or when the fallback e-mail is not in the allowlist.
  */
 export function resolveDevIdentity({
   environment,
@@ -128,7 +130,7 @@ export function resolveDevIdentity({
   return { ok: true, identity: { email, source: 'dev' } }
 }
 
-/** 失敗理由を利用者向けの文言に落とす。内部事情は漏らさない。 */
+/** Turns the failure reason into wording for the user. Does not leak internals. */
 export function describeFailure(reason: AuthFailureReason): string {
   switch (reason) {
     case 'not_allowed':

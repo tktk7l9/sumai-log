@@ -25,7 +25,8 @@ async function toJpeg(
   return { blob, width, height }
 }
 
-/** 1 枚を 1600px と 400px に縮小して送る。EXIF の向きは createImageBitmap が既定で反映する */
+/** Shrinks 1 photo to 1600px and 400px and sends them. createImageBitmap applies the EXIF
+ * orientation by default */
 async function uploadOne(visitId: string, file: File): Promise<void> {
   const bitmap = await createImageBitmap(file)
   try {

@@ -1,7 +1,10 @@
 import { Button, Group, Text } from '@mantine/core'
 import { History } from 'lucide-react'
 
-/** 「下書きを復元しました」と、捨てるためのボタン（useFormDraft の restored の間だけ出す） */
+/**
+ * The "draft restored" notice and a button to discard it (shown only while restored of useFormDraft
+ * is set)
+ */
 export function DraftNotice({ onDiscard }: { onDiscard: () => void }) {
   return (
     <Group gap="xs" wrap="nowrap" className="draft-notice" role="status">
@@ -17,8 +20,9 @@ export function DraftNotice({ onDiscard }: { onDiscard: () => void }) {
 }
 
 /**
- * 相手が先に保存していたときの知らせ（notifications で出す文面）。フォームは画面を読み直す
- * （router.invalidate）ので、閉じれば相手の内容が見え、開き直すと自分の下書きが戻る
+ * The notice for when the partner saved first (the text shown through notifications). The
+ * form reloads the screen (router.invalidate), so closing it shows the partner's content,
+ * and reopening it brings back your own draft
  */
 export const CONFLICT_MESSAGE =
   '相手が先にこの内容を保存していたので、上書きしませんでした。閉じると相手の内容を確かめられます（いまの入力は下書きに残り、開き直すと戻ります）。このまま保存し直すと、あなたの入力で上書きします。'

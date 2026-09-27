@@ -38,8 +38,9 @@ export function PropertyForm({
 }: {
   property: Property | null
   onSaved: (id: string) => void
-  /** 候補ページの「追加」ドロワー（戸建て/マンションの切替）が、切替前に確認を挟むかの
-   * 判定に使う。渡さなければ何もしない（既存の編集フォームは呼び出し元を増やさない） */
+  /** Used by the "追加" (Add) drawer of the candidates page (switching between detached
+   * house and condominium) to decide whether to confirm before switching. Does nothing
+   * when not passed (existing edit forms do not add callers) */
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const router = useRouter()
@@ -50,7 +51,7 @@ export function PropertyForm({
     initialValues,
     validate: { name: (v) => (v.trim() ? null : '名前は必須です') },
   })
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(
     form,
     draftKey('property', property?.id, property?.updatedAt),

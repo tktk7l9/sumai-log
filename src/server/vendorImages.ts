@@ -1,7 +1,8 @@
 /**
- * 業者のサイトのファビコン取得・代表者の顔写真（URL 取り込み・削除）の createServerFn
- * ラッパー。実処理は vendorImagesFetcher.ts（ファイルを分けている理由はそちらのコメント
- * 参照）。クライアント（RepresentativePhotoField.tsx・settings.tsx）はここから import する。
+ * createServerFn wrappers for fetching the favicon of a vendor's site and for the
+ * representative's face photo (import from URL, delete). The actual work is in
+ * vendorImagesFetcher.ts (see the comment there for why the files are split). The client
+ * (RepresentativePhotoField.tsx, settings.tsx) imports from here.
  */
 
 import { createServerFn } from '@tanstack/react-start'
@@ -20,32 +21,34 @@ import {
   vendorIdInput,
 } from './vendorImages.schema'
 
-/** 設定画面「候補のサイトアイコン」カード一覧。newsSources（src/server/news.ts）と同じ形 */
+/** Card list of "候補のサイトアイコン" (site icons of candidates) on the settings screen.
+ * Same shape as newsSources (src/server/news.ts) */
 export const faviconSources = createServerFn().handler(async () => {
   const vendors = await listVendorsWithWebsite(getDb())
   return { vendors }
 })
 
-/** 設定画面「候補のサイトアイコン」の「アイコンを取得」/「取り直す」ボタン。
- * 戻り値は { results, processed, remaining }（refreshAllVendorFavicons と同じ形）。 */
+/** The "アイコンを取得" (fetch icons) / "取り直す" (fetch again) buttons of
+ * "候補のサイトアイコン" on the settings screen.
+ * Returns { results, processed, remaining } (same shape as refreshAllVendorFavicons). */
 export const refreshVendorFavicons = createServerFn({ method: 'POST' })
   .validator(refreshVendorFaviconsInput)
   .handler(async ({ data }) => refreshAllVendorFavicons(getDb(), data))
 
-/** 業者フォームの「URL から取り込む」 */
+/** "URL から取り込む" (import from URL) in the vendor form */
 export const importRepresentativePhotoFromUrl = createServerFn({ method: 'POST' })
   .validator(importRepresentativePhotoInput)
   .handler(async ({ data }) =>
     importRepresentativePhotoFromUrlCore(getDb(), data.vendorId, data.url),
   )
 
-/** 業者フォームの「削除」（代表者の顔写真） */
+/** "削除" (delete) in the vendor form (the representative's face photo) */
 export const deleteRepresentativePhoto = createServerFn({ method: 'POST' })
   .validator(vendorIdInput)
   .handler(async ({ data }) => deleteRepresentativePhotoObjects(getDb(), data.vendorId))
 
-/** 業者フォームの「削除」（サイトのアイコン）。アップロードは multipart なので
- * createServerFn ではなく src/routes/api.vendor-favicon.$vendorId.tsx（raw route）で扱う */
+/** "削除" in the vendor form (the site icon). Upload is multipart, so it is handled by
+ * src/routes/api.vendor-favicon.$vendorId.tsx (raw route), not by createServerFn */
 export const deleteVendorFavicon = createServerFn({ method: 'POST' })
   .validator(vendorIdInput)
   .handler(async ({ data }) => deleteVendorFaviconObjects(getDb(), data.vendorId))

@@ -1,16 +1,19 @@
 import { Arrow, Figure, Label } from './Figure'
 
 /**
- * 左右2分割だと12px以上のラベルが収まらないため、上下2段に積み直した。
- * 上=第三種換気（排気ファンのみ・給気口から冷気）、下=第一種熱交換換気（給気と排気が熱交換器を通る）
+ * With a left/right split in 2, labels of 12px or more did not fit, so it was restacked
+ * into 2 rows, top and bottom.
+ * Top = type 3 ventilation (exhaust fan only, cold air from the supply vents), bottom =
+ * type 1 heat exchange ventilation (supply and exhaust pass through the heat exchanger)
  */
 export function VentilationDiagram() {
   return (
     <Figure label="換気方式の比較。上段は第三種換気で排気ファンのみ、給気口から冷気が入る。下段は第一種熱交換換気で給気と排気が熱交換器を通る">
       <line x1={10} y1={118} x2={310} y2={118} strokeDasharray="3 3" />
 
-      {/* 上段: 第三種。タイトルと「排気ファン」ラベルが同じ高さで重なっていたため、
-          ファンのラベルは円の下に、排気の矢印は右へ逃がして分離した */}
+      {/* Top row: type 3. The title and the "排気ファン" (exhaust fan) label overlapped at
+          the same height, so the fan label went below the circle and the exhaust arrow
+          was moved to the right to separate them */}
       <Label x={160} y={14} size={12}>
         第三種換気（排気ファンのみ）
       </Label>
@@ -29,7 +32,7 @@ export function VentilationDiagram() {
         冷気
       </Label>
 
-      {/* 下段: 第一種熱交換 */}
+      {/* Bottom row: type 1 heat exchange */}
       <Label x={160} y={136} size={13}>
         第一種換気（熱交換）
       </Label>

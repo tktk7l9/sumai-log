@@ -10,25 +10,25 @@ __unconfig*
 coverage
 /backups/
 
-# 秘密・個人情報（Keyway が書き出す .env.* も含めて塞ぐ）
+# Secrets and personal information (also blocks the .env.* files that Keyway writes out)
 .dev.vars*
 !.dev.vars.example
 .env
 .env.*
 !.env*.example
 
-# 実データ（見学先・写真・動画メモ）はコミットしない
+# Real data (visited places, photos, video notes) is never committed
 seed.local.json
 seed.local/
-# 上と同じく seed.local/ 配下だが、取り込みスクリプトの生成物であることを明示しておく
+# Also under seed.local/ like the above, but stated explicitly as output of the import script
 seed.local/out/
 
-# サブエージェント駆動の作業ファイル
+# Working files of subagent-driven work
 .superpowers/
 
-# git worktree（superpowers:using-git-worktrees）
+# git worktree (superpowers:using-git-worktrees)
 .worktrees/
 .claude/
 
-# Playwright MCP のスクリーンショット出力
+# Screenshot output of Playwright MCP
 .playwright-mcp/

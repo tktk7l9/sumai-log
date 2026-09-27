@@ -1,5 +1,6 @@
 /**
- * 受信メール → お知らせ（vendor_news）の行（設計 2026-09-19 §3-7）。RSS と同じ日程判定を使う。
+ * Inbound mail -> a vendor news (vendor_news) row (design 2026-09-19 §3-7). Uses the same event
+ * date detection as RSS.
  */
 
 import { extractEvent } from '../news/eventDate'
@@ -22,7 +23,7 @@ export type InboundForNews = {
   messageId: string
   subject: string
   text: string
-  /** YYYY-MM-DD か null */
+  /** YYYY-MM-DD or null */
   sentOn: string | null
 }
 

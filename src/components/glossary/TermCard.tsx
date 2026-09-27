@@ -6,10 +6,12 @@ import { DIAGRAMS } from './diagrams'
 import type { GlossarySearch } from './glossarySearch'
 
 /**
- * 用語 1 件分の表示。詳細ページ（`/glossary/$termId`）専用。
- * 用語名・読みは `PageShell` の見出しが担うので、ここでは一言定義より下だけを描く。
- * `search` は今の検索条件（`?q` `?c`）。関連語バッジで別の詳細に飛んでも、
- * そこから「← 用語集」で一覧に戻ったときに絞り込みが消えないよう転送する。
+ * The display of 1 term. Only for the detail page (`/glossary/$termId`).
+ * The term name and reading are handled by the heading of `PageShell`, so only what comes
+ * below the one-line definition is rendered here.
+ * `search` is the current search condition (`?q` `?c`). It is forwarded so that, even after
+ * jumping to another detail through a related term badge, the filter is not lost when
+ * going back to the list with "← 用語集" (glossary) from there.
  */
 export function TermCard({
   term,
@@ -69,9 +71,10 @@ export function TermCard({
       {related.length > 0 ? (
         <Group gap={6}>
           {related.map((r) => (
-            // Chip はチェックボックス入力を内包するため Link の中に置くと二重フォーカス
-            // ストップになる。Badge はただの装飾要素なので、Link 自体だけが
-            // フォーカス・読み上げ対象になる（VendorCard のバッジリンクと同じ形）。
+            // Chip contains a checkbox input, so placing it inside a Link creates a double
+            // focus stop. Badge is a purely decorative element, so only the Link itself
+            // becomes the focus and screen reading target (same shape as the badge links
+            // of VendorCard).
             <Link
               key={r.id}
               to="/glossary/$termId"

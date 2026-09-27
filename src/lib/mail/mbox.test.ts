@@ -16,7 +16,7 @@ body two
 `
 
 describe('splitMbox', () => {
-  it('"From " 行で分け、">From " のエスケープを戻す', () => {
+  it('splits on "From " lines and restores the ">From " escape', () => {
     const msgs = splitMbox(MBOX)
     expect(msgs).toHaveLength(2)
     expect(msgs[0]).toContain('Subject: one')
@@ -24,14 +24,14 @@ describe('splitMbox', () => {
     expect(msgs[0]).not.toContain('>From ')
     expect(msgs[1].startsWith('Subject: two')).toBe(true)
   })
-  it('空・区切りが無いなら空配列', () => {
+  it('returns an empty array when empty or without separators', () => {
     expect(splitMbox('')).toEqual([])
     expect(splitMbox('no separator')).toEqual([])
   })
-  it('CRLF でも分けられる', () => {
+  it('splits with CRLF too', () => {
     expect(splitMbox('From x Wed\r\nSubject: a\r\n\r\nb\r\n')).toEqual(['Subject: a\r\n\r\nb'])
   })
-  it('区切り直後が空行だけ（本文が無い）のメッセージは含めない', () => {
+  it('excludes a message with only blank lines right after the separator (no body)', () => {
     const withEmptyMessage = `From a@example.com Wed Sep 16 10:05:00 2026
 
 From b@example.com Thu Sep 17 10:05:00 2026

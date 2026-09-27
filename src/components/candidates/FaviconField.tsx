@@ -8,7 +8,8 @@ import { extractErrorMessage } from '../../lib/formError'
 import { photoUrl } from '../../lib/photos'
 import { deleteVendorFavicon } from '../../server/vendorImages'
 
-// SVG は含めない（sniffFaviconType が判定しない・stored XSS 対策。src/lib/favicon.ts 参照）
+// SVG is not included (sniffFaviconType does not detect it; a measure against stored XSS.
+// See src/lib/favicon.ts)
 const ACCEPT = 'image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon,.ico'
 
 async function uploadFile(vendorId: string, file: File): Promise<void> {
@@ -22,16 +23,20 @@ async function uploadFile(vendorId: string, file: File): Promise<void> {
 }
 
 /**
- * 業者フォームの「サイトのアイコン」欄。一部の業者サイトは Cloudflare からのアクセスを
- * 一律拒否し（README「取得を拒否するサイトへの対応」参照）、公式サイトから自動取得できない。
- * この欄はその代替: ファイルを選んでアップロード・削除の 2 操作。
+ * The "サイトのアイコン" (Site icon) field of the vendor form. Some vendor sites reject
+ * all access from Cloudflare (see the README section on handling sites that refuse
+ * fetching), so the icon cannot be fetched automatically from the official site.
+ * This field is the alternative: 2 operations, choose a file to upload, and delete.
  *
- * アップロードすると favicon_source が 'manual' になり、以後の自動取得（設定画面の
- * 「アイコンを取得」・保存時のインライン取得）では上書きされない（「取り直す」= force は例外）。
- * 端末側の Canvas 縮小はしない: ICO はそもそも Canvas で扱えず、小さなアイコン画像を
- * 再エンコードする利点も薄いため、選んだファイルをそのまま送る（サーバー側で 512KB 上限・
- * マジックバイト判定。RepresentativePhotoField.tsx と違うのはこの点だけ）。
- * vendorId が無い（＝まだ保存していない新規業者）ときは操作できない旨だけ出す。
+ * Uploading sets favicon_source to 'manual', and later automatic fetches ("アイコンを取得"
+ * (Fetch icons) on the settings screen, and the inline fetch on save) do not overwrite it
+ * ("取り直す" (Refetch) = force is the exception).
+ * No Canvas downscaling on the device: ICO cannot be handled by Canvas in the first place,
+ * and re-encoding a small icon image has little benefit, so the chosen file is sent as is
+ * (the server side applies a 512KB limit and magic byte detection. This is the only
+ * difference from RepresentativePhotoField.tsx).
+ * When there is no vendorId (= a new vendor not saved yet), it only shows that the
+ * operations are unavailable.
  */
 export function FaviconField({
   vendorId,

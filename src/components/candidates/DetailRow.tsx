@@ -1,6 +1,6 @@
 import { Group, Text } from '@mantine/core'
 
-/** 詳細ページの「ラベル: 値」1 行。vendors/$id と properties/$id で共有する */
+/** 1 "label: value" row of a detail page. Shared by vendors/$id and properties/$id */
 export function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   return (
     <Group justify="space-between" wrap="nowrap" align="flex-start">

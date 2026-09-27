@@ -1,4 +1,5 @@
-/** 候補（業者・マンション物件）の状態。並びは一覧の表示順でもある */
+/** Status of a candidate (a vendor or a condominium property). The order is also the display
+ * order of the list */
 export const CANDIDATE_STATUSES = [
   'shortlisted',
   'consulting',

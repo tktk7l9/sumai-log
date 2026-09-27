@@ -25,7 +25,7 @@ export async function insertComment(
   return id
 }
 
-/** 自分のコメントだけ消せる。消せたら true */
+/** Only your own comment can be deleted. true if it was deleted */
 export async function deleteOwnComment(db: Db, id: string, actorEmail: string): Promise<boolean> {
   const [row] = await db
     .select({ createdBy: comments.createdBy })

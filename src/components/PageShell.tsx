@@ -11,27 +11,36 @@ export function PageShell({
   titleHidden = false,
   children,
 }: {
-  /** 省略すると見出しブロックを出さない（ホームのように節見出しから始めるページ用）。
-   * 文字列以外（業者詳細のファビコン + 名前など）も渡せる */
+  /** When omitted, the heading block is not rendered (for pages that start with section
+   * headings, like home). Non-strings (such as favicon + name on the vendor detail) can
+   * also be passed */
   title?: React.ReactNode
   description?: React.ReactNode
-  /** 見出しの右に置く操作（デスクトップ用。スマホは FAB を使う） */
+  /** Actions placed to the right of the heading (for desktop. Phones use the FAB) */
   actions?: React.ReactNode
-  /** 親ページへ戻るリンク（詳細ページ用。<BackButton> を渡す）。見出しの上に置き、スマホでも
-   * ブラウザの戻るに頼らず一覧へ戻れるようにする（SHIG 59 ウェイファインディング・60 エスケープハッチ） */
+  /** Link back to the parent page (for detail pages. Pass <BackButton>). Placed above the
+   * heading so that, on phones too, the list can be reached without relying on the
+   * browser's back (SHIG 59 wayfinding, 60 escape hatch) */
   back?: React.ReactNode
-  /** このページが <Fab> を出すか。true なら最後のカードが隠れないよう下に余白を足す */
+  /**
+   * Whether this page renders <Fab>. If true, bottom spacing is added so the last card is not
+   * hidden
+   */
   fab?: boolean
-  /** true なら見出しと説明文を縦積みではなく 1 行（折り返しあり）で並べる */
+  /**
+   * If true, the heading and description are laid out in 1 row (with wrapping) instead of stacked
+   */
   inlineDescription?: boolean
-  /** true なら h1 を支援技術にだけ伝えて画面には出さない（下タブのラベルと同じ文言で
-   * 冗長になるページ用。見出し階層は保つ）。description と actions も出さない */
+  /** If true, the h1 is exposed only to assistive technology and not shown on screen (for
+   * pages where it would be redundant with the same wording as the bottom tab label. The
+   * heading hierarchy is kept). description and actions are not rendered either */
   titleHidden?: boolean
   children?: React.ReactNode
 }) {
   return (
     <Container size="sm" px={0} className={fab ? 'fab-clearance' : undefined}>
-      {/* 見出しと中身の間は 24px（セクション間と同じ）。見出しの中は 4px で束ねる */}
+      {/* 24px between the heading and the content (same as between sections). Inside the
+          heading, 4px groups the items */}
       <Stack gap="lg">
         {titleHidden ? (
           <VisuallyHidden>
@@ -71,8 +80,9 @@ export function PageShell({
 }
 
 /**
- * 詳細ページの「← 一覧」。renderLink で Link（to / search / params）を渡す。
- * 文言は親ページの名前（名詞）で揃える: 候補・記録・地図・用語集
+ * The "<- list" link of detail pages. Pass a Link (to / search / params) through renderLink.
+ * The wording is unified to the parent page's name (a noun): "候補" (candidates),
+ * "記録" (records), "地図" (map), "用語集" (glossary)
  */
 export function BackButton({
   label,

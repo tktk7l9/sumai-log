@@ -1,7 +1,8 @@
 /**
- * お知らせのドロワーに出す「行く」ボタンの状態（所有者の要望、2026-09-20）。
- * 日程を判定できたお知らせで、まだ終わっていないものだけに「9/27(土)に行く」を出す。
- * 日程が無ければ出さない（押してからのエラーを無くす）。終わったものは「終了」と示す。
+ * State of the "行く" (Go) button shown in the vendor news drawer (owner's request, 2026-09-20).
+ * "9/27(土)に行く" (Go on 9/27 (Sat)) is shown only for vendor news whose event dates were
+ * detected and that has not ended yet. Without event dates it is not shown (removes the error
+ * after pressing). Ended ones are marked "終了" (Ended).
  */
 
 import { formatShortDateWithWeekday } from '../calendar'

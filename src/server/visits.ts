@@ -24,21 +24,24 @@ import { reorderPhotosInput } from './visits.schema'
 import { dateField, idField, idInput, optionalText } from './zod'
 import { listLinkTargets } from './places'
 
-// reorderPhotosInput は visits.schema.ts から（テストの都合で分離した理由はそちら参照）。
-// 公開する import パス（'./visits' から reorderPhotosInput/ReorderPhotosInput を取れる）は変えない。
+// reorderPhotosInput comes from visits.schema.ts (see there for why it was split for the tests).
+// The public import path (reorderPhotosInput/ReorderPhotosInput available from './visits')
+// does not change.
 export { reorderPhotosInput }
 export type { ReorderPhotosInput } from './visits.schema'
 
 export const visitInput = z.object({
   id: idField.optional(),
-  // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+  // Update time as of opening. If the other person saved first, return a conflict instead
+  // of overwriting (repository/stale.ts)
   expectedUpdatedAt: z.string().max(40).nullish(),
   eventId: idField.nullable(),
   placeId: idField.nullable(),
   vendorId: idField.nullable(),
   propertyId: idField.nullable(),
   visitedOn: dateField,
-  // 同行者の入力欄は廃止（記録は基本二人で書く・2026-09-19）。列は残し常に既定値
+  // The attendees input field was removed (records are basically written by the two
+  // together, 2026-09-19). The column stays and always holds the default value
   attendees: z.enum(ATTENDEES).default('both'),
   good: optionalText,
   concerns: optionalText,
@@ -63,7 +66,7 @@ export const saveVisit = createServerFn({ method: 'POST' })
     saveOrConflict(async () => upsertVisit(getDb(), data, await currentActorEmail())),
   )
 
-/** 「次にやること」のチェックリストの保存。競合なら { conflict: true } */
+/** Saves the "次にやること" (next actions) checklist. On conflict, { conflict: true } */
 export const saveVisitNextActions = createServerFn({ method: 'POST' })
   .validator(
     z.object({
@@ -103,16 +106,16 @@ export const deletePhoto = createServerFn({ method: 'POST' })
     return { ok: row !== null }
   })
 
-/** 写真の並び替え。photoIds に指定した順で sortOrder を 0,1,… に振り直す。
- * その見学記録に属さない id が混ざっていたら何もせず ok: false（CommentThread の
- * deleteComment と同じパターン） */
+/** Reorders photos. Reassigns sortOrder as 0,1,... in the order given in photoIds.
+ * If an id that does not belong to that visit record is mixed in, does nothing and
+ * returns ok: false (same pattern as deleteComment of CommentThread) */
 export const reorderPhotos = createServerFn({ method: 'POST' })
   .validator(reorderPhotosInput)
   .handler(async ({ data }) => ({
     ok: await reorderPhotoRows(getDb(), data.visitId, data.photoIds),
   }))
 
-/** 見学記録フォームの選択肢。予定は直近 180 日 */
+/** Options for the visit record form. Events cover the last 180 days */
 export const visitFormOptions = createServerFn().handler(async () => {
   const db = getDb()
   const today = dateKey(nowJstIso())

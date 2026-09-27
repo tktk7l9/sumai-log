@@ -3,14 +3,15 @@ import { useMediaQuery } from '@mantine/hooks'
 import { useEffect } from 'react'
 
 /**
- * スマホでソフトキーボードが出ている間、Drawer をキーボードの上に収める。
+ * While the soft keyboard is shown on a phone, keep the Drawer above the keyboard.
  *
- * iOS Safari はキーボードが出てもレイアウトビューポート（100% / 100dvh）を縮めず、
- * 見えている範囲（visualViewport）だけが小さくなる。position: fixed の Drawer は
- * 画面いっぱいのままなので、下半分の入力欄がキーボードの下に隠れて打てなかった
- * （所有者の報告、2026-09-19）。visualViewport の高さと上端オフセットを CSS 変数に
- * 流し、Drawer の外枠をその範囲に合わせる。フォーカス中の欄はサイズ変更後に
- * 見える位置へスクロールする。
+ * iOS Safari does not shrink the layout viewport (100% / 100dvh) when the keyboard
+ * appears; only the visible area (visualViewport) gets smaller. A position: fixed Drawer
+ * stays full screen, so the inputs in the lower half were hidden under the keyboard and
+ * could not be typed into (reported by the owner, 2026-09-19). The height and top offset
+ * of visualViewport are fed into CSS variables, and the outer frame of the Drawer is
+ * fitted to that area. The focused field is scrolled into a visible position after the
+ * size change.
  */
 function useKeyboardSafeViewport(active: boolean) {
   useEffect(() => {
@@ -43,7 +44,9 @@ function useKeyboardSafeViewport(active: boolean) {
   }, [active])
 }
 
-/** スマホでは下から全画面、デスクトップでは右から幅 480 の Drawer */
+/**
+ * A Drawer that is full screen from the bottom on phones, and 480 wide from the right on desktop
+ */
 export function FormDrawer({
   opened,
   onClose,
@@ -55,8 +58,9 @@ export function FormDrawer({
   onClose: () => void
   title: string
   children: React.ReactNode
-  /** 既定は Mantine の modal 既定値（200）。地図タブでは地図の上に重ねた操作コントロールが
-   * z-index: 1000 で描かれるため、その上に出したいページから明示的に渡す */
+  /** Defaults to Mantine's modal default (200). On the map tab, the controls overlaid on
+   * the map are drawn at z-index: 1000, so pages that want to appear above them pass it
+   * explicitly */
   zIndex?: number
 }) {
   const isMobile = useMediaQuery('(max-width: 48em)', true)
@@ -74,13 +78,14 @@ export function FormDrawer({
         title: { fontWeight: 700, fontSize: 'var(--mantine-font-size-lg)' },
         ...(isMobile
           ? {
-              // inner は position: fixed; inset: 0 の外枠。キーボード分だけ縮めて上端を合わせる
+              // inner is the outer frame with position: fixed; inset: 0. Shrink it by the
+              // keyboard height and align the top edge
               inner: {
                 top: 'var(--form-drawer-top, 0px)',
                 bottom: 'auto',
                 height: 'var(--form-drawer-height, 100%)',
               },
-              // 縮んだ外枠の中でフォーム本体がスクロールする（content は overflow-y: auto）
+              // The form body scrolls inside the shrunken outer frame (content is overflow-y: auto)
               content: { height: '100%', maxHeight: '100%' },
             }
           : {}),

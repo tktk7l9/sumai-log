@@ -16,9 +16,9 @@ import { toMarkers } from '../lib/mapMarkers'
 import { getMapConfig } from '../server/mapConfig'
 import { listLinkTargets, listPlaces } from '../server/places'
 
-// 地図と一覧の切替は URL に持たせる（リロード・共有・戻るで保たれる）。
-// 省略時・壊れた値は地図（`?view` の無い `/map` へのリンクをそのまま使えるよう、
-// 既定値をスキーマに持たせず optional にしている）
+// The map / list switch is kept in the URL (it survives reload, sharing and back).
+// When omitted or broken the value is the map (it is optional, with no default in the schema,
+// so that links to `/map` without `?view` keep working as is)
 const search = z.object({
   view: z.enum(['map', 'list']).optional().catch(undefined),
 })
@@ -103,9 +103,10 @@ function Page() {
     </>
   )
 
-  // 一覧表示（所有者の要望、2026-09-21）。地図と同じ絞り込みのまま、座標の無い場所も
-  // 含めて縦に並べる。地図は高さぴったりの 1 枚なので PageShell を使わないが、
-  // 一覧は他のタブと同じ普通のページとして組む
+  // List view (owner's request, 2026-09-21). With the same filter as the map, places are
+  // stacked vertically, including the ones without coordinates. The map is 1 sheet that fits
+  // the height exactly, so it does not use PageShell, but the list is built as a normal page
+  // like the other tabs
   if (view === 'list') {
     return (
       <PageShell title="地図" titleHidden fab>
@@ -144,7 +145,7 @@ function Page() {
       />
 
       <Stack gap={6} style={{ position: 'absolute', top: 8, left: 8, right: 56, zIndex: 1000 }}>
-        {/* 影を持つのは FAB だけ。地図の上の板は罫線と面の色で浮かせる */}
+        {/* Only the FAB has a shadow. Panels over the map stand out through border and surface colour */}
         <Paper withBorder p={6}>
           <Stack gap={6}>
             <SegmentedControl
@@ -166,7 +167,8 @@ function Page() {
           </Stack>
         </Paper>
         {missingCount > 0 ? (
-          // 出せない理由の確認先は一覧表示。板ごと押せるようにして切り替える
+          // The list view is where to check why a place cannot be shown. The whole panel is
+          // pressable and switches to it
           <UnstyledButton onClick={() => setView('list')} w="100%">
             <Paper withBorder p={6} ta="left">
               <Text size="xs" c="dimmed">
@@ -183,9 +185,10 @@ function Page() {
         radius="xl"
         aria-label="現在地"
         onClick={locateMe}
-        // 右上には Google マップのズームコントロール（PlacesMap で INLINE_END_BLOCK_START）が
-        // 高さ約 81px + 上マージン 10px で乗るため、その下に配置して重なりを避ける。
-        // 左上の板は表示切替ぶん一段高くなったが、幅で重ならないのでこのままでよい
+        // The Google Maps zoom control (INLINE_END_BLOCK_START in PlacesMap) sits at the top
+        // right with a height of about 81px + a top margin of 10px, so this is placed below it
+        // to avoid overlap. The top-left panel grew one row taller for the view switch, but it
+        // does not overlap in width, so this is fine as is
         style={{ position: 'absolute', top: 100, right: 8, zIndex: 1000 }}
       >
         <LocateFixed size={18} aria-hidden />

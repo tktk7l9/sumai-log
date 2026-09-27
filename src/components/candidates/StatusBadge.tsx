@@ -7,7 +7,7 @@ export function StatusBadge({ status }: { status: CandidateStatus }) {
     <Badge
       color={STATUS_COLOR[status]}
       variant={status === 'dropped' ? 'outline' : 'light'}
-      // 名前が長くてもバッジ側を潰さない（「気に…」と切れていた）
+      // Do not squash the badge even when the name is long (it was cut off as "気に…")
       style={{ flexShrink: 0 }}
     >
       {STATUS_LABEL[status]}

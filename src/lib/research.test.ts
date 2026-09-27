@@ -17,7 +17,7 @@ import {
 } from './research'
 
 describe('parseBuildPlan', () => {
-  it('正しい JSON を読む', () => {
+  it('reads valid JSON', () => {
     expect(
       parseBuildPlan(JSON.stringify({ floors: 1, tsuboMin: 30, tsuboMax: 35, budgetManYen: 6000 })),
     ).toEqual({ floors: 1, tsuboMin: 30, tsuboMax: 35, budgetManYen: 6000 })
@@ -26,7 +26,7 @@ describe('parseBuildPlan', () => {
     ).toEqual({ floors: 2, tsuboMin: 30, tsuboMax: 30, budgetManYen: null })
   })
 
-  it('空・壊れた JSON・形の違う値は null', () => {
+  it('returns null for empty input, broken JSON and values of the wrong shape', () => {
     expect(parseBuildPlan(null)).toBeNull()
     expect(parseBuildPlan(undefined)).toBeNull()
     expect(parseBuildPlan('')).toBeNull()
@@ -46,7 +46,7 @@ describe('parseBuildPlan', () => {
 describe('estimateCost', () => {
   const plan = { tsuboMin: 30, tsuboMax: 35 }
 
-  it('坪単価の下限×坪数の下限〜上限×上限。総額は本体÷0.7', () => {
+  it('ranges from min price per tsubo x min tsubo to max x max. The total is body / 0.7', () => {
     const result = estimateCost({ pricePerTsuboMin: 80, pricePerTsuboMax: 100 }, plan)
     expect(result).toEqual({
       bodyMin: 2400,
@@ -56,7 +56,7 @@ describe('estimateCost', () => {
     })
   })
 
-  it('坪単価が片方しか無ければその値を両端に使う', () => {
+  it('uses the one value for both ends when only one price per tsubo is given', () => {
     expect(estimateCost({ pricePerTsuboMin: 90, pricePerTsuboMax: null }, plan)).toEqual({
       bodyMin: 2700,
       bodyMax: 3150,
@@ -66,7 +66,7 @@ describe('estimateCost', () => {
     expect(estimateCost({ pricePerTsuboMin: null, pricePerTsuboMax: 90 }, plan)?.bodyMin).toBe(2700)
   })
 
-  it('坪単価が無ければ null', () => {
+  it('returns null without a price per tsubo', () => {
     expect(estimateCost({ pricePerTsuboMin: null, pricePerTsuboMax: null }, plan)).toBeNull()
   })
 })
@@ -74,21 +74,21 @@ describe('estimateCost', () => {
 describe('judgeBudget', () => {
   const estimate = { bodyMin: 2800, bodyMax: 3500, totalMin: 4000, totalMax: 5000 }
 
-  it('上限が予算以下なら within、下限が予算超なら over、間なら tight', () => {
+  it('is within when the max is at or below the budget, over when the min exceeds it, tight in between', () => {
     expect(judgeBudget(estimate, 6000)).toBe('within')
     expect(judgeBudget(estimate, 5000)).toBe('within')
     expect(judgeBudget(estimate, 4500)).toBe('tight')
     expect(judgeBudget(estimate, 3999)).toBe('over')
   })
 
-  it('目安なし・予算なしは null', () => {
+  it('returns null without an estimate or without a budget', () => {
     expect(judgeBudget(null, 6000)).toBeNull()
     expect(judgeBudget(estimate, null)).toBeNull()
   })
 })
 
 describe('format', () => {
-  it('万円・レンジ・坪', () => {
+  it('formats man-yen, ranges and tsubo', () => {
     expect(formatManYen(4200)).toBe('4,200万円')
     expect(formatManYen(12000)).toBe('12,000万円')
     expect(formatManYenRange(3000, 4200)).toBe('3,000〜4,200万円')
@@ -99,7 +99,7 @@ describe('format', () => {
 })
 
 describe('presentFacts', () => {
-  it('値のあるキーだけを行順で返す。ラベルは対応表から', () => {
+  it('returns only keys with a value, in row order. Labels come from the lookup table', () => {
     const rows = presentFacts({ facts: { hiraya: '実績あり', founded: '1966 年', scale: '' } })
     expect(rows).toEqual([
       { key: 'founded', label: RESEARCH_FACT_LABEL.founded, value: '1966 年' },
@@ -108,13 +108,13 @@ describe('presentFacts', () => {
     expect(presentFacts(null)).toEqual([])
   })
 
-  it('全キーにラベルがある', () => {
+  it('has a label for every key', () => {
     for (const key of RESEARCH_FACT_KEYS) expect(RESEARCH_FACT_LABEL[key]).toBeTruthy()
   })
 })
 
 describe('emptyResearch', () => {
-  it('日付だけ入った空のメモ', () => {
+  it('is an empty memo with only the date filled in', () => {
     expect(emptyResearch('2030-01-05')).toEqual({
       version: 1,
       researchedOn: '2030-01-05',
@@ -130,14 +130,14 @@ describe('parseHiddenIds / serializeHiddenIds', () => {
   const a = '11111111-1111-4111-8111-111111111111'
   const b = '22222222-2222-4222-8222-222222222222'
 
-  it('カンマ区切りの UUID を読み、空白・重複・UUID でないものは捨てる', () => {
+  it('reads comma-separated UUIDs and drops whitespace, duplicates and non-UUIDs', () => {
     expect(parseHiddenIds(`${a}, ${b},${a},not-a-uuid,`)).toEqual([a, b])
     expect(parseHiddenIds('')).toEqual([])
     expect(parseHiddenIds(null)).toEqual([])
     expect(parseHiddenIds(undefined)).toEqual([])
   })
 
-  it('往復できる。空なら undefined', () => {
+  it('round-trips. Returns undefined when empty', () => {
     expect(serializeHiddenIds([a, b])).toBe(`${a},${b}`)
     expect(parseHiddenIds(serializeHiddenIds([a, b]))).toEqual([a, b])
     expect(serializeHiddenIds([])).toBeUndefined()

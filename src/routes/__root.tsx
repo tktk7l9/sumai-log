@@ -20,15 +20,15 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       {
         name: 'viewport',
-        // interactive-widget=resizes-content: Android Chrome でソフトキーボードが出たとき
-        // レイアウトビューポート自体を縮めて、下から出るフォーム Drawer がキーボードに
-        // 隠れないようにする（iOS Safari は無視するので FormDrawer 側で visualViewport を見る）
+        // interactive-widget=resizes-content: when the soft keyboard appears on Android Chrome,
+        // shrink the layout viewport itself so the form Drawer that slides up from the bottom
+        // is not hidden by the keyboard (iOS Safari ignores it, so FormDrawer watches visualViewport)
         content:
           'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content',
       },
       { name: 'robots', content: 'noindex, nofollow, noarchive' },
-      // theme-color はライト/ダーク 2 本を RootDocument の <head> に直接書く
-      // （head() の meta 配列は name が同じタグを 1 本にまとめてしまうため）
+      // theme-color: the 2 tags for light/dark are written directly in the <head> of RootDocument
+      // (the meta array of head() merges tags with the same name into 1)
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
       { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
       { title: '住まいログ' },
@@ -54,7 +54,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="ja" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="auto" />
-        {/* 地色は src/styles.css の --mantine-color-body と src/theme.ts の dark[7] に合わせる */}
+        {/* The background colour matches --mantine-color-body in src/styles.css and dark[7] in src/theme.ts */}
         <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)" />
         <HeadContent />

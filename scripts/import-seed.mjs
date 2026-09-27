@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 /**
- * seed.local.json（gitignore 済みの実データ）を D1/R2 へ取り込む CLI。
+ * CLI that imports seed.local.json (gitignored real data) into D1/R2.
  *
  *   node scripts/import-seed.mjs --local|--remote [--dry-run]
  *
- * 冪等: scripts/lib/seed.mjs の buildStatements が slug から決定的に id を作り、
- * すべて `INSERT ... ON CONFLICT DO UPDATE` で書くので、同じ引数で何度実行しても
- * 結果は変わらない（`INSERT OR REPLACE` は使わない: 既存行を一度 DELETE してから
- * 作り直すため、外部キーが ON DELETE CASCADE の子行 — vendor_news 等 — を
- * 巻き込んで消してしまう）。
+ * Idempotent: buildStatements in scripts/lib/seed.mjs builds ids deterministically from
+ * slugs and writes everything with `INSERT ... ON CONFLICT DO UPDATE`, so running it any
+ * number of times with the same arguments gives the same result (`INSERT OR REPLACE` is
+ * not used: it DELETEs the existing row once and recreates it, which also deletes child
+ * rows whose foreign key is ON DELETE CASCADE, such as vendor_news).
  *
- * 流れ:
- *   1. .dev.vars から DEV_IDENTITY_EMAIL を読む（= created_by。ここでは絶対に出力しない）
- *   2. seed.local.json を読む
- *   3. 場所を国土地理院 住所検索 API で座標に変換（1 リクエスト/1.2秒）。結果は geocode_cache にも書く
- *   4. 写真（HEIC）を sips で display/thumb の JPEG に変換し実寸を測る（macOS のみ）
- *   5. buildStatements で最終 SQL を作り、1 ファイルにまとめる
- *   6. --dry-run ならここで統計を出して終了。そうでなければ R2 へ写真を put → D1 に SQL を流す → 件数を表示
+ * Flow:
+ *   1. Read DEV_IDENTITY_EMAIL from .dev.vars (= created_by. Never print it here)
+ *   2. Read seed.local.json
+ *   3. Convert places to coordinates with the GSI address search API (1 request per 1.2 s).
+ *      The results are also written to geocode_cache
+ *   4. Convert photos (HEIC) to display/thumb JPEGs with sips and measure the actual size
+ *      (macOS only)
+ *   5. Build the final SQL with buildStatements and put it into 1 file
+ *   6. With --dry-run, print statistics here and exit. Otherwise put photos to R2 -> run
+ *      the SQL on D1 -> show the counts
  */
 
 import { execFileSync } from 'node:child_process'
@@ -35,12 +38,14 @@ import {
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const DATABASE = 'sumai-log'
 const R2_BUCKET = 'sumai-log-photos'
-// src/lib/geocode.ts の GSI_ADDRESS_SEARCH と同じ値。plain .mjs から TS を import できないため
-// 値を重複させている。変えるときは両方直す。
+// Same value as GSI_ADDRESS_SEARCH in src/lib/geocode.ts. The value is duplicated because
+// plain .mjs cannot import TS. When changing it, fix both.
 const GSI_ENDPOINT = 'https://msearch.gsi.go.jp/address-search/AddressSearch'
 const GSI_PAUSE_MS = 1200
 
-/** buildStatements が作る全テーブル名（geocode_cache は import-seed 側で足す） */
+/**
+ * All table names that buildStatements produces (geocode_cache is added on the import-seed side)
+ */
 const ALL_TABLES = [
   'settings',
   'vendors',
@@ -59,7 +64,7 @@ function parseArgs(argv) {
   return { target, dryRun }
 }
 
-/** .dev.vars の最小パーサ。値のクォートを外すだけ（check-pii.mjs と同じ流儀） */
+/** Minimal parser for .dev.vars. It only strips quotes from values (same style as check-pii.mjs) */
 function unquote(v) {
   return v.length >= 2 && v[0] === v[v.length - 1] && (v[0] === '"' || v[0] === "'")
     ? v.slice(1, -1)
@@ -103,12 +108,13 @@ async function sleep(ms) {
 }
 
 /**
- * 場所（住所つき）を国土地理院 住所検索 API で座標に変換する。
- * 見つからない/住所が無い場所は coords に含めない（呼び出し側で lat/lng が NULL のまま残る）。
- * 見つかった分は geocode_cache への INSERT 文も返す。
+ * Convert places (with an address) to coordinates with the GSI address search API.
+ * Places that are not found or have no address are not included in coords (lat/lng stays
+ * NULL on the caller side).
+ * For the ones found, INSERT statements for geocode_cache are also returned.
  *
- * レスポンス解析（範囲チェック込み）は seed.mjs の parseGsiResponse に委ねる。
- * アプリ本体の src/server/geocode.ts と同じ判定にするため。
+ * Response parsing (including the range check) is delegated to parseGsiResponse in seed.mjs,
+ * to make the same judgment as src/server/geocode.ts in the app itself.
  */
 async function geocodePlaces(places, now) {
   const coords = {}
@@ -142,13 +148,16 @@ async function geocodePlaces(places, now) {
 }
 
 /**
- * 代表者の顔写真を sips で display(800px)/thumb(240px) の JPEG に変換する
- * （src/lib/photos.ts の vendorImageKeys と同じサイズ規約: 見学の写真より小さい）。
- * macOS 以外では変換できないので何もせず空を返す（convertPhotos と同じ方針）。
- * 実寸は不要（vendors テーブルに width/height の列は無い）なので測らない。
+ * Convert the representative's portrait photo to display(800px)/thumb(240px) JPEGs with sips
+ * (same size convention as vendorImageKeys in src/lib/photos.ts: smaller than visit photos).
+ * Conversion is not possible outside macOS, so do nothing and return empty (same policy as
+ * convertPhotos).
+ * The actual size is not needed (the vendors table has no width/height columns), so it is
+ * not measured.
  *
- * vendor slug → { vendorId, displayPath, thumbPath } の map を返す（変換に成功した業者のみ）。
- * buildStatements の representativePhotoReady にはこの map の key（slug）の Set を渡す。
+ * Returns a map of vendor slug -> { vendorId, displayPath, thumbPath } (only vendors whose
+ * conversion succeeded).
+ * Pass a Set of this map's keys (slugs) as representativePhotoReady of buildStatements.
  */
 function convertRepresentativePhotos(vendorRows) {
   const withPhoto = (vendorRows ?? []).filter((v) => v.representativePhoto)
@@ -187,7 +196,10 @@ function convertRepresentativePhotos(vendorRows) {
   return ready
 }
 
-/** display の実寸を sips -g で読む。"  pixelWidth: 1600" のような行から数値を拾う */
+/**
+ * Read the actual size of display with sips -g. Picks the number from a line like "  pixelWidth:
+ * 1600"
+ */
 function readPixelSize(path) {
   const out = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', path], {
     encoding: 'utf8',
@@ -199,13 +211,15 @@ function readPixelSize(path) {
 }
 
 /**
- * 写真（HEIC）を display(1600px)/thumb(400px) の JPEG に変換し、display の実寸を測る。
- * macOS 以外では変換できないので何もせず空の結果を返す。
+ * Convert photos (HEIC) to display(1600px)/thumb(400px) JPEGs and measure the actual size
+ * of display.
+ * Conversion is not possible outside macOS, so do nothing and return an empty result.
  *
- * photoId → { displayPath, thumbPath } の map を返す。photos の SQL/R2 キーは
- * buildStatements を 2 回呼ぶ（座標・実寸を知る前後）ため、descriptor オブジェクトの
- * 参照は使い回せない。photoId は visitSlug + basename から決定的に決まるので、
- * この map を id 経由で引けば呼び出しをまたいで対応が取れる。
+ * Returns a map of photoId -> { displayPath, thumbPath }. For the SQL/R2 keys of photos,
+ * buildStatements is called 2 times (before and after the coordinates and actual sizes are
+ * known), so references to descriptor objects cannot be reused. photoId is determined
+ * deterministically from visitSlug + basename, so looking this map up by id keeps the
+ * correspondence across calls.
  */
 function convertPhotos(photoDescriptors) {
   if (process.platform !== 'darwin') {
@@ -286,8 +300,9 @@ async function main() {
   const devVars = readDevVars()
   const actorEmail = devVars.DEV_IDENTITY_EMAIL
   const now = new Date().toISOString()
-  // buildStatements（scripts/lib/seed.mjs）が representative_photo_key に埋め込む stamp と
-  // 同じ値をここでも作る（R2 へ実際に置くキーを、DB に書く値と一致させるため）。
+  // Build here the same value as the stamp that buildStatements (scripts/lib/seed.mjs) embeds
+  // in representative_photo_key (so the key actually put to R2 matches the value written to the
+  // DB).
   const representativePhotoStamp = new Date(now).getTime().toString(36)
 
   const seedPath = resolve(root, 'seed.local.json')
@@ -297,7 +312,8 @@ async function main() {
   }
   const seed = JSON.parse(readFileSync(seedPath, 'utf8'))
 
-  // 1回目: 座標・写真実寸を知る前の呼び出し。photos の descriptor（src/photoId/キー）を得るためだけに使う
+  // 1st call: before the coordinates and photo sizes are known. Used only to get the photos
+  // descriptors (src/photoId/keys)
   const { photos: photoDescriptors } = buildStatements(seed, { actorEmail, now })
 
   console.log(
@@ -324,7 +340,8 @@ async function main() {
     `  → 変換できた代表者の写真: ${Object.keys(repPhotosReady).length} / ${repPhotoVendors.length}`,
   )
 
-  // 2回目: 座標・写真実寸・代表者の写真の変換結果込みの最終 SQL
+  // 2nd call: the final SQL including coordinates, photo sizes and the representative photo
+  // conversion results
   const { sql, photos } = buildStatements(seed, {
     actorEmail,
     now,
@@ -370,8 +387,8 @@ async function main() {
   for (const p of photos) {
     const paths = photoPaths[p.photoId]
     if (!paths) continue
-    // r2 object put は --local/--remote を省略すると local 扱いになる（--help の記載と異なり
-    // 「remote が既定」ではなかった。target を毎回明示する）
+    // r2 object put is treated as local when --local/--remote is omitted (unlike what --help
+    // says, "remote is the default" was not true. State the target explicitly every time)
     wrangler([
       'r2',
       'object',

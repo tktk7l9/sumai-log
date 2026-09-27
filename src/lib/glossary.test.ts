@@ -16,7 +16,10 @@ import {
   termIdForMetric,
 } from './glossary'
 
-/** 純粋関数の検証はこの架空の用語だけで行う（本物のデータに依存させない） */
+/**
+ * The pure functions are verified only with these fictional terms (no dependency on the real
+ * data)
+ */
 const fixtures: GlossaryTerm[] = [
   {
     id: 'alpha',
@@ -47,19 +50,19 @@ const fixtures: GlossaryTerm[] = [
 ]
 
 describe('searchGlossary', () => {
-  it('空のクエリ・空白だけのクエリは全件を返す', () => {
+  it('returns everything for an empty query or a whitespace-only query', () => {
     expect(searchGlossary(fixtures, '')).toEqual(fixtures)
     expect(searchGlossary(fixtures, '  　')).toEqual(fixtures)
   })
 
-  it('用語名・読み・別名・一言定義の部分一致で絞る', () => {
+  it('narrows by partial match on term name, reading, alias and one-line definition', () => {
     expect(searchGlossary(fixtures, 'アルファ').map((t) => t.id)).toEqual(['alpha'])
     expect(searchGlossary(fixtures, 'べーた').map((t) => t.id)).toEqual(['beta'])
     expect(searchGlossary(fixtures, 'α値').map((t) => t.id)).toEqual(['alpha'])
     expect(searchGlossary(fixtures, '架空のお金').map((t) => t.id)).toEqual(['beta'])
   })
 
-  it('大文字小文字・全角半角（NFKC）・かなカナを同一視し、クエリ中の空白は無視する', () => {
+  it('treats upper/lower case, full/half width (NFKC) and hiragana/katakana as equal, and ignores whitespace in the query', () => {
     expect(searchGlossary(fixtures, 'alpha').map((t) => t.id)).toEqual(['alpha'])
     expect(searchGlossary(fixtures, 'ＡＬＰＨＡ').map((t) => t.id)).toEqual(['alpha'])
     expect(searchGlossary(fixtures, 'あるふぁ値').map((t) => t.id)).toEqual(['alpha'])
@@ -67,75 +70,75 @@ describe('searchGlossary', () => {
     expect(searchGlossary(fixtures, 'ア ル ファ').map((t) => t.id)).toEqual(['alpha'])
   })
 
-  it('本文（body）は検索対象にしない。一致が無ければ空配列', () => {
+  it('does not search the body. Returns an empty array when nothing matches', () => {
     expect(searchGlossary(fixtures, 'サッシ')).toEqual([])
     expect(searchGlossary(fixtures, '存在しない語')).toEqual([])
   })
 
-  it('本物のデータでも引ける（UA → UA値）', () => {
+  it('also finds terms in the real data (UA -> "UA値" (UA value))', () => {
     expect(searchGlossary(GLOSSARY, 'UA').map((t) => t.id)).toContain('ua-value')
     expect(searchGlossary(GLOSSARY, '').length).toBe(GLOSSARY.length)
   })
 })
 
 describe('groupByCategory', () => {
-  it('分類は GLOSSARY_CATEGORIES の順、用語は元の順を保つ', () => {
+  it('orders categories by GLOSSARY_CATEGORIES and keeps the original order of terms', () => {
     expect(groupByCategory(fixtures)).toEqual([
       { category: GLOSSARY_CATEGORIES[0], terms: [fixtures[0], fixtures[2]] },
       { category: GLOSSARY_CATEGORIES[3], terms: [fixtures[1]] },
     ])
   })
 
-  it('該当が無い分類は落とす。空の入力は空の結果', () => {
+  it('drops categories with no match. Empty input gives an empty result', () => {
     expect(groupByCategory([fixtures[1]]).map((g) => g.category.id)).toEqual(['money'])
     expect(groupByCategory([])).toEqual([])
   })
 })
 
 describe('findTerm', () => {
-  it('id で引ける。知らない id は null', () => {
+  it('looks up by id. An unknown id gives null', () => {
     expect(findTerm(fixtures, 'beta')?.term).toBe('ベータ')
     expect(findTerm(fixtures, 'nope')).toBeNull()
   })
 })
 
 describe('relatedTerms', () => {
-  it('related の id を解決し、知らない id は落とす', () => {
+  it('resolves the ids in related and drops unknown ids', () => {
     expect(relatedTerms(fixtures, fixtures[0]).map((t) => t.id)).toEqual(['beta'])
   })
 
-  it('related が無い・空なら空配列', () => {
+  it('returns an empty array when related is missing or empty', () => {
     expect(relatedTerms(fixtures, fixtures[1])).toEqual([])
     expect(relatedTerms(fixtures, fixtures[2])).toEqual([])
   })
 })
 
 describe('termIdForMetric', () => {
-  it('候補カードの指標を用語 id に対応させる', () => {
+  it('maps the metrics on a candidate card to term ids', () => {
     expect(termIdForMetric('ua')).toBe('ua-value')
     expect(termIdForMetric('c')).toBe('c-value')
     expect(termIdForMetric('seismic')).toBe('seismic-grade')
     expect(termIdForMetric('longTerm')).toBe('long-term-housing')
   })
 
-  it('対応先の用語が実在する', () => {
+  it('maps to terms that actually exist', () => {
     for (const metric of ['ua', 'c', 'seismic', 'longTerm'] as const) {
       expect(findTerm(GLOSSARY, termIdForMetric(metric))).not.toBeNull()
     }
   })
 })
 
-describe('GLOSSARY（データの体裁）', () => {
+describe('GLOSSARY (shape of the data)', () => {
   const ids = new Set(GLOSSARY.map((t) => t.id))
 
-  it('90 語・14 図解で、どの図解も少なくとも 1 語から使われている', () => {
+  it('has 90 terms and 14 diagrams, and every diagram is used by at least 1 term', () => {
     expect(GLOSSARY).toHaveLength(90)
     expect(DIAGRAM_IDS).toHaveLength(14)
     const used = new Set(GLOSSARY.map((t) => t.diagram).filter(Boolean))
     expect([...DIAGRAM_IDS].filter((d) => !used.has(d))).toEqual([])
   })
 
-  it('目安の label は用語内で重複しない（key に使う）', () => {
+  it('has no duplicate label among the reference numbers within a term (used as key)', () => {
     for (const term of GLOSSARY) {
       const labels = (term.numbers ?? []).map((n) => n.label)
       expect({ id: term.id, ok: new Set(labels).size === labels.length }).toEqual({
@@ -146,15 +149,15 @@ describe('GLOSSARY（データの体裁）', () => {
   })
   const categoryIds = new Set<CategoryId>(GLOSSARY_CATEGORIES.map((c) => c.id))
 
-  it('id は重複しない', () => {
+  it('has no duplicate ids', () => {
     expect(ids.size).toBe(GLOSSARY.length)
   })
 
-  it('全分類に用語がある', () => {
+  it('has terms in every category', () => {
     expect(groupByCategory(GLOSSARY).length).toBe(GLOSSARY_CATEGORIES.length)
   })
 
-  it('一言定義は 60 字以内、本文は 2〜4 段落、分類は既知のもの', () => {
+  it('has a one-line definition within 60 characters, a body of 2-4 paragraphs and a known category', () => {
     for (const term of GLOSSARY) {
       expect({ id: term.id, ok: term.summary.length <= 60 }).toEqual({ id: term.id, ok: true })
       expect({ id: term.id, ok: term.body.length >= 2 && term.body.length <= 4 }).toEqual({
@@ -165,7 +168,7 @@ describe('GLOSSARY（データの体裁）', () => {
     }
   })
 
-  it('関連語は 2〜4 件で、実在する別の用語を指す', () => {
+  it('has 2-4 related terms that point to other existing terms', () => {
     for (const term of GLOSSARY) {
       const related = term.related ?? []
       expect({ id: term.id, ok: related.length >= 2 && related.length <= 4 }).toEqual({
@@ -182,7 +185,7 @@ describe('GLOSSARY（データの体裁）', () => {
     }
   })
 
-  it('図解 id は用意された 14 種のどれか', () => {
+  it('has a diagram id that is one of the 14 prepared kinds', () => {
     for (const term of GLOSSARY) {
       if (!term.diagram) continue
       expect({
@@ -192,7 +195,7 @@ describe('GLOSSARY（データの体裁）', () => {
     }
   })
 
-  it('読みと検索用の別名がある', () => {
+  it('has a reading and aliases for search', () => {
     for (const term of GLOSSARY) {
       expect({ id: term.id, ok: Boolean(term.reading) }).toEqual({ id: term.id, ok: true })
       expect({ id: term.id, ok: (term.aliases ?? []).length > 0 }).toEqual({
@@ -202,20 +205,20 @@ describe('GLOSSARY（データの体裁）', () => {
     }
   })
 
-  it('我が家への効き方が全語にある', () => {
+  it('has the effect on our home for every term', () => {
     for (const term of GLOSSARY) {
       expect({ id: term.id, ok: Boolean(term.forUs) }).toEqual({ id: term.id, ok: true })
     }
   })
 
-  it('本文の各段落は空でない', () => {
+  it('has no empty paragraph in the body', () => {
     for (const term of GLOSSARY) {
       const ok = term.body.every((paragraph) => paragraph.trim().length > 0)
       expect({ id: term.id, ok }).toEqual({ id: term.id, ok: true })
     }
   })
 
-  it('numbers の label と value は空でない', () => {
+  it('has non-empty label and value in numbers', () => {
     for (const term of GLOSSARY) {
       const ok = (term.numbers ?? []).every(
         (n) => n.label.trim().length > 0 && n.value.trim().length > 0,
@@ -226,14 +229,14 @@ describe('GLOSSARY（データの体裁）', () => {
 })
 
 describe('pickRandomTerm', () => {
-  it('乱数で添字を決める。0 なら先頭、1 に近ければ末尾、空なら null', () => {
+  it('picks the index with a random number. 0 gives the first, close to 1 gives the last, empty gives null', () => {
     expect(pickRandomTerm(fixtures, () => 0)).toBe(fixtures[0])
     expect(pickRandomTerm(fixtures, () => 0.999999)).toBe(fixtures[fixtures.length - 1])
-    // 丸め誤差で 1 が来ても範囲外にならない
+    // Does not go out of range even when 1 arrives through rounding error
     expect(pickRandomTerm(fixtures, () => 1)).toBe(fixtures[fixtures.length - 1])
     expect(pickRandomTerm([], () => 0)).toBeNull()
   })
-  it('既定の乱数でも本物のデータから 1 語返る', () => {
+  it('returns 1 term from the real data with the default random too', () => {
     expect(GLOSSARY).toContain(pickRandomTerm(GLOSSARY))
   })
 })

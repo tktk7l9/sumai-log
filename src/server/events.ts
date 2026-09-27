@@ -17,18 +17,18 @@ import {
 } from './repository'
 import { dateField, idInput } from './zod'
 
-// eventInput は events.schema.ts から（テストの都合で分離した理由はそちら参照）。
-// 公開する import パス（'./events' から eventInput/EventInput を取れる）は変えない。
+// eventInput comes from events.schema.ts (see there for why it was split for the sake of tests).
+// The public import path (eventInput/EventInput available from './events') does not change.
 export { eventInput }
 export type { EventInput } from './events.schema'
 
 /**
- * 日付キーの事実上の最大値。予定の日付は TEXT の 'YYYY-MM-DD' なので、
- * between の上限にこれを渡せば「上限なし」と同じ意味になる。
+ * The de facto maximum date key. Event dates are TEXT 'YYYY-MM-DD', so passing this as
+ * the upper bound of between means the same as "no upper bound".
  */
 const MAX_DATE_KEY = '9999-12-31'
 
-/** 「今」。JST の ISO 文字列（Worker は UTC なので +9h して整形） */
+/** "Now". An ISO string in JST (the Worker runs in UTC, so add +9h and format) */
 export function nowJstIso(): string {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000)
   return `${d.toISOString().slice(0, 19)}+09:00`
@@ -58,8 +58,8 @@ export const listMonthEvents = createServerFn()
   })
 
 /**
- * 予定タブ（Mantine Schedule）用。日/週/月ビューが跨ぐ可能性のある任意の期間で取る。
- * listMonthEvents と違い年月ではなく日付の範囲そのものを受け取る。
+ * For the events tab (Mantine Schedule). Fetches any period that the day/week/month views may
+ * span. Unlike listMonthEvents it receives the date range itself instead of a year and month.
  */
 export const listEventsBetween = createServerFn()
   .validator(z.object({ from: dateField, to: dateField }))
@@ -100,21 +100,22 @@ export const deleteEvent = createServerFn({ method: 'POST' })
   })
 
 /**
- * ホーム用: 「記録を書きませんか」と、これからの予定（アジェンダ）。
- * アジェンダは今日以降の予定を**期間で切らずに全部**返す（所有者の要望、2026-09-21。
- * それまでは今日〜+27 日の 4 週間ぶんだけだった）。「次の予定」はアジェンダと重複する
- * ため 2026-09-19 に廃止。
+ * For the home page: "記録を書きませんか" (Write a record?) and the upcoming events (agenda).
+ * The agenda returns **all events from today on, without cutting by period** (owner's
+ * request, 2026-09-21. Until then it was only the 4 weeks from today to +27 days). "次の予定"
+ * (Next event) overlapped with the agenda and was removed on 2026-09-19.
  *
- * 未来側に上限を置かないので、クエリの範囲も上限なし（MAX_DATE_KEY）で引く。
- * 日付キーは 'YYYY-MM-DD' の文字列比較なので、事実上の最大値を上限に渡せば無制限に
- * なる。二人ぶんの予定なので件数は高々数十件で、絞り込みは取得済みの rows を
- * フィルタするだけで済ませる（同じ range を二度 DB に問い合わせない）。
+ * No upper bound is set on the future side, so the query range is also fetched without an
+ * upper bound (MAX_DATE_KEY). Date keys are compared as 'YYYY-MM-DD' strings, so passing the
+ * de facto maximum as the upper bound makes it unlimited. These are the events of two people,
+ * so the count is a few dozen at most, and narrowing is done just by filtering the rows
+ * already fetched (the same range is not queried from the DB twice).
  */
 export const listHomeEvents = createServerFn().handler(async () => {
   const db = getDb()
   const now = nowJstIso()
   const today = dateKey(now)
-  // 「記録を書きませんか」は過去 90 日ぶんを見れば十分。未来側は上限なし
+  // For "記録を書きませんか" looking at the past 90 days is enough. No upper bound on the future side
   const from = dateKey(new Date(Date.parse(today) - 90 * 86400000).toISOString())
   const [rows, recorded] = await Promise.all([
     listEventsWithLinks(db, from, MAX_DATE_KEY),
@@ -126,15 +127,16 @@ export const listHomeEvents = createServerFn().handler(async () => {
     pending: pendingVisitEvents(rows, recorded, now).slice(0, 5),
     agenda,
     agendaFrom,
-    // AgendaView は rangeStart〜rangeEnd の外に出たイベントを描かないので、
-    // 終わりは「最後の予定の日」に合わせる（終了日が開始日より後の予定も欠けないよう
-    // endsAt も見る）。1 件も無ければ今日だけの空レンジ
+    // AgendaView does not render events that fall outside rangeStart to rangeEnd, so the end
+    // is set to "the day of the last event" (endsAt is checked too, so that events whose end
+    // date is after the start date are not cut off). With no events it is an empty range of
+    // today only
     agendaTo: agendaEnd(agenda, agendaFrom),
     nowIso: now,
   }
 })
 
-/** アジェンダの rangeEnd。予定が無ければ from（= 今日）そのもの */
+/** The rangeEnd of the agenda. With no events it is from (= today) itself */
 function agendaEnd(agenda: readonly { startsAt: string; endsAt: string | null }[], from: string) {
   let end = from
   for (const e of agenda) {

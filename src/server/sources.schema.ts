@@ -7,12 +7,13 @@ import { isAllowedAvatarUrl, parseYoutubeChannelUrl } from '../lib/sources'
 import { idField } from './zod'
 
 /**
- * sources.ts から分離した理由: events.schema.ts と同じ（sources.ts は saveSource の中で
- * currentActorEmail 経由で `@tanstack/react-start/server` の getRequest を静的 import して
- * おり、それが素の vitest workers テストからは解決できない virtual specifier を踏んで
- * 落ちるため。sourceInput/resolveSourceInput 自体は D1 も members も要らない純粋な zod
- * スキーマなのでここへ切り出す。sources.ts は再エクスポートするだけで、公開 import パス
- * （'./sources' から sourceInput/SourceInput を取れる）は変えない）。
+ * Reason for the split from sources.ts: same as events.schema.ts (inside saveSource,
+ * sources.ts statically imports getRequest of `@tanstack/react-start/server` via
+ * currentActorEmail, and that hits a virtual specifier that cannot be resolved from a
+ * plain vitest workers test and fails. sourceInput/resolveSourceInput themselves are pure
+ * zod schemas that need neither D1 nor members, so they are extracted here. sources.ts
+ * only re-exports them, and the public import path (sourceInput/SourceInput can be taken
+ * from './sources') does not change).
  */
 
 const URL_MAX = 500
@@ -20,10 +21,12 @@ const NAME_MAX = 200
 const DESCRIPTION_MAX = 200
 const HANDLE_MAX = 100
 
-/** 情報源の URL（外部リンク・YouTube チャンネルなら「取得」で fetch する対象にもなる）。
- * https のみ（seed.mjs の validateSource と同じ規則に揃える）。さらに isAllowedRemoteUrl
- * （SSRF 対策のホスト名チェック）も保存時にかける。site 種別は「取得」で fetch されないが、
- * 将来 fetch する可能性・入口をひとつの規則に揃える目的で、ここでも同じ判定を通す。 */
+/** The URL of a source (an external link; for a YouTube channel it also becomes a target
+ * fetched by "取得" (Fetch)). https only (aligned with the same rule as validateSource in
+ * seed.mjs). In addition isAllowedRemoteUrl (the hostname check of the SSRF guard) is
+ * applied on save too. The site kind is not fetched by "取得", but the same check is
+ * applied here as well, because it may be fetched in the future and to align the entry
+ * points on one rule. */
 export const sourceUrl = z
   .string()
   .trim()
@@ -56,9 +59,10 @@ export const sourceInput = z
   })
   .transform((v) => ({
     ...v,
-    // kind はフォームでは選ばせず、URL から自動判定する（brief どおり）。
+    // kind is not chosen in the form; it is determined automatically from the URL (per the brief).
     kind: parseYoutubeChannelUrl(v.url) ? ('youtube' as const) : ('site' as const),
-    // ホスト許可リスト外の avatarUrl が万一送られても黙って落とす（表示時の二重チェックはしない）
+    // Even if an avatarUrl outside the host allowlist is ever sent, drop it silently
+    // (no double check at display time)
     avatarUrl: v.avatarUrl && isAllowedAvatarUrl(v.avatarUrl) ? v.avatarUrl : null,
   }))
 export type SourceInput = z.input<typeof sourceInput>

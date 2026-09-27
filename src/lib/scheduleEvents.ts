@@ -3,11 +3,13 @@ import type { ScheduleEventData } from '@mantine/schedule'
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 import { dateKey, splitStartsAt } from './calendar'
 
-/** カレンダーの予定は「自分たちの予定」だけ。外部由来のイベントは無いので kind は固定。 */
+/** Calendar events are only our own events. There are no externally sourced events, so kind
+ * is fixed. */
 export type OwnEventPayload = { kind: 'own'; eventId: string; past: boolean }
-/** 業者のお知らせ（情報レイヤー）。「行く」で自分の予定に変換するまでは own にならない。 */
+/** Vendor news (the information layer). It does not become own until "行く" (Go) converts it
+ * into our own event. */
 export type NewsEventPayload = { kind: 'news'; newsId: string; past: boolean }
-/** Schedule に渡すイベントの payload は、自分の予定・業者のお知らせのどちらか */
+/** The payload of an event passed to Schedule is either our own event or vendor news */
 export type CalendarPayload = OwnEventPayload | NewsEventPayload
 
 const KIND_COLOR: Record<EventWithLinks['kind'], string> = {
@@ -18,18 +20,19 @@ const KIND_COLOR: Record<EventWithLinks['kind'], string> = {
 }
 
 /**
- * 終わった予定の色（所有者の要望、2026-09-21）。種別の色（clay/blue/teal）を捨てて
- * グレーに落とし、これからの予定と一目で見分けられるようにする。`gray` は theme の
- * パレットにあるキーなので、Mantine が明暗どちらの配色でも読める前景色を選ぶ
- * （`'gray.4'` のように段を指定すると light variant の背景が生の色になり、ダークで
- * 文字が読めなくなるのでキーのまま渡す）。
+ * The color of finished events (owner's request, 2026-09-21). Drops the kind color
+ * (clay/blue/teal) and falls back to gray, so that they can be told apart from upcoming
+ * events at a glance. `gray` is a key in the theme palette, so Mantine picks a foreground
+ * color that is readable in both light and dark color schemes (specifying a shade such as
+ * `'gray.4'` makes the background of the light variant the raw color and the text becomes
+ * unreadable in dark, so the key is passed as is).
  */
 export const PAST_EVENT_COLOR = 'gray'
 
 /**
- * 「今」（`nowJstIso()` の 'YYYY-MM-DDTHH:MM:SS+09:00'、または日付だけの
- * 'YYYY-MM-DD'）を Schedule と同じ 'YYYY-MM-DD HH:mm:ss' に揃える。どちらも JST の
- * 壁時計なので、この形なら文字列比較で前後が決まる（Date に変換しない）。
+ * Aligns "now" ('YYYY-MM-DDTHH:MM:SS+09:00' from `nowJstIso()`, or a date-only
+ * 'YYYY-MM-DD') to 'YYYY-MM-DD HH:mm:ss', the same as Schedule. Both are JST wall-clock
+ * times, so in this shape a string comparison decides the order (no conversion to Date).
  */
 export function toScheduleStamp(nowIso: string): string {
   const date = dateKey(nowIso)
@@ -37,9 +40,10 @@ export function toScheduleStamp(nowIso: string): string {
 }
 
 /**
- * 業者のお知らせが「終わったイベント」か。日程（eventStart/eventEnd）を持つお知らせ
- * だけが対象で、日程の無いお知らせは（公開日は必ず過去なので）過去扱いしない。
- * 終了日の当日いっぱいは終わっていない扱いにする（todayKey より前なら過去）。
+ * Whether a vendor news item is a finished event. Only news with dates
+ * (eventStart/eventEnd) is considered, and news without dates is not treated as past
+ * (because the publication date is always in the past). Through the whole end date it is
+ * treated as not finished (it is past when earlier than todayKey).
  */
 export function isPastNews(
   news: { eventStart: string | null; eventEnd: string | null },
@@ -49,7 +53,8 @@ export function isPastNews(
   return (news.eventEnd ?? news.eventStart) < todayKey
 }
 
-/** 'YYYY-MM-DD' の翌日を 'YYYY-MM-DD' で返す。終日イベントの end や日またぎの計算に使う */
+/** Returns the day after 'YYYY-MM-DD' as 'YYYY-MM-DD'. Used for the end of all-day events
+ * and for calculations that cross midnight */
 export function nextDay(key: string): string {
   const [year, month, day] = key.split('-').map(Number)
   const d = new Date(Date.UTC(year, month - 1, day + 1))
@@ -58,7 +63,7 @@ export function nextDay(key: string): string {
   ).padStart(2, '0')}`
 }
 
-/** 'HH:MM' に 60 分足す。日をまたいだら date も翌日にする */
+/** Adds 60 minutes to 'HH:MM'. When it crosses midnight, date also moves to the next day */
 function plusOneHour(date: string, time: string): { date: string; time: string } {
   const [hour, minute] = time.split(':').map(Number)
   const total = hour * 60 + minute + 60
@@ -70,17 +75,17 @@ function plusOneHour(date: string, time: string): { date: string; time: string }
 }
 
 /**
- * 予定を @mantine/schedule の ScheduleEventData に変換する（純粋関数）。
+ * Converts events into ScheduleEventData of @mantine/schedule (pure function).
  *
- * 終日（allDay、または startsAt が日付のみで時刻を持たない）は
- * 'YYYY-MM-DD 00:00:00' 〜 翌日 'YYYY-MM-DD 00:00:00'。
- * 時刻ありは startsAt/endsAt をそのまま使い、endsAt が無ければ開始の 60 分後にする。
- * endsAt が入っている場合は eventInput（composeStartsAt 経由）により必ず時刻付きなので、
- * ここでは時刻の有無を再チェックしない。
+ * All-day (allDay, or startsAt is date-only with no time) becomes
+ * 'YYYY-MM-DD 00:00:00' through 'YYYY-MM-DD 00:00:00' of the next day.
+ * Timed events use startsAt/endsAt as they are, and without endsAt the end is 60 minutes
+ * after the start. When endsAt is set, eventInput (via composeStartsAt) guarantees that it
+ * has a time, so the presence of a time is not re-checked here.
  *
- * `nowIso`（`nowJstIso()` の値）を渡すと、終わった予定（終了が「今」より前）の色を
- * `PAST_EVENT_COLOR` に落とし、payload に `past: true` を立てる（所有者の要望、
- * 2026-09-21）。省略したときは全て「これから」の扱い。
+ * When `nowIso` (the value of `nowJstIso()`) is passed, the color of finished events (the
+ * end is before "now") falls back to `PAST_EVENT_COLOR`, and `past: true` is set on the
+ * payload (owner's request, 2026-09-21). When omitted, everything is treated as upcoming.
  */
 export function toScheduleEvents(
   events: readonly EventWithLinks[],
@@ -108,8 +113,8 @@ export function toScheduleEvents(
       }
     }
 
-    // 終わった＝「今」が終了時刻に達している。終日は翌日 00:00 が終了なので、
-    // その日のうちは過去にならない
+    // Finished = "now" has reached the end time. An all-day event ends at 00:00 the next
+    // day, so it does not become past during that day
     const past = nowStamp !== null && end <= nowStamp
     const payload: OwnEventPayload = { kind: 'own', eventId: e.id, past }
     return {
@@ -124,20 +129,23 @@ export function toScheduleEvents(
 }
 
 /**
- * 業者のお知らせ（イベント判定済みのもの）を @mantine/schedule の情報レイヤー用
- * ScheduleEventData に変換する（純粋関数）。design.md §4「カレンダー」のとおり、
- * 自分の予定とは別に常にグレーで描く（「行く」で自分の予定になっても、この情報
- * レイヤーからは消さない＝両方表示され続ける）。event_start/event_end が無い行
- * （イベント未判定）は呼び出し側で既に除かれている前提だが、念のためここでも
- * eventStart が無い行は捨てる。
+ * Converts vendor news (items already detected as events) into ScheduleEventData for the
+ * information layer of @mantine/schedule (pure function). As in design.md §4 "カレンダー"
+ * (Calendar), they are always drawn in gray, separately from our own events (even when
+ * "行く" makes one our own event, it is not removed from this information layer = both
+ * keep being shown). Rows without event_start/event_end (not detected as an event) are
+ * assumed to be already removed by the caller, but just in case, rows without eventStart
+ * are dropped here too.
  *
- * 終日イベントとして扱う（`toScheduleEvents` の終日ケースと同じ 00:00:00〜翌日
- * 00:00:00）。event_end が無ければ単日（event_start と同じ日）とみなす。
- * id は自分の予定の id と衝突しないよう `news-` を前置する（同じ Schedule に
- * 両方の配列を混ぜて渡すため）。
+ * They are treated as all-day events (00:00:00 through 00:00:00 the next day, the same as
+ * the all-day case of `toScheduleEvents`). Without event_end it is considered a single day
+ * (the same day as event_start). The id is prefixed with `news-` so that it does not
+ * collide with the ids of our own events (because both arrays are mixed and passed to the
+ * same Schedule).
  *
- * `todayKey`（'YYYY-MM-DD'）を渡すと、終わった日程のお知らせに `past: true` を立てる
- * （色は元からグレーなので変えない。描画側が文字色を落とす）。
+ * When `todayKey` ('YYYY-MM-DD') is passed, `past: true` is set on news whose dates are
+ * over (the color is gray to begin with, so it does not change. The renderer dims the text
+ * color).
  */
 export function newsToScheduleEvents(
   items: readonly NewsEventRow[],
@@ -165,13 +173,15 @@ export function newsToScheduleEvents(
 }
 
 /**
- * お知らせを公開日（publishedOn）ごとにまとめ、**新しい日を上**にして返す（純粋関数。
- * `NewsAgenda` の一覧用。所有者の要望、2026-09-24）。日付はイベント日（eventStart）ではなく
- * 公開日（「お知らせ」はまず公開されたことを見せる一覧で、イベント判定はバッジで添えるだけ）。
- * 同じ日の中は渡した順のまま。
+ * Groups vendor news by publication date (publishedOn) and returns it with **newer dates
+ * first** (pure function. For the list in `NewsAgenda`. Owner's request, 2026-09-24). The
+ * date is the publication date, not the event date (eventStart) ("お知らせ" (News) is a
+ * list that first of all shows that something was published, and event detection is only
+ * added as a badge). Within the same day the input order is kept.
  *
- * `todayKey`（'YYYY-MM-DD'）を渡すと、終わった日程のお知らせに `past: true` を立てる
- * （NewsAgenda が文字色を落とす。公開日そのものは常に過去なので基準にしない）。
+ * When `todayKey` ('YYYY-MM-DD') is passed, `past: true` is set on news whose dates are
+ * over (NewsAgenda dims the text color. The publication date itself is always in the past,
+ * so it is not used as the criterion).
  */
 export function groupNewsByDate<T extends NewsEventRow>(
   items: readonly T[],

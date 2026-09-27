@@ -8,9 +8,10 @@ export async function listTags(db: Db): Promise<Tag[]> {
 }
 
 /**
- * 無い名前だけ末尾の sortOrder で足す。既存名・呼び出し内の重複名は無視する。
- * `onConflictDoNothing()` は、直前の select 後に別リクエストが同じ名前を先に
- * 入れてしまう競合（`tags.name` の unique 制約に当たる）への保険
+ * Adds only the missing names, with sortOrder at the end. Existing names and duplicate
+ * names within the call are ignored. `onConflictDoNothing()` is insurance against the
+ * race where another request inserts the same name first after the preceding select
+ * (it hits the unique constraint on `tags.name`)
  */
 export async function ensureTags(db: Db, names: string[]): Promise<void> {
   const existing = new Set((await db.select({ name: tags.name }).from(tags)).map((r) => r.name))
@@ -27,9 +28,10 @@ export async function ensureTags(db: Db, names: string[]): Promise<void> {
 }
 
 /**
- * 並び＝配列順で全置換。動画側の tags は文字列配列で tags テーブルを参照していないため
- * 影響しない。delete と insert を `db.batch` で 1 つのアトミックな単位にし、途中で
- * 失敗して「全消去だけ効いた」状態にならないようにする
+ * Full replacement with order = array order. tags on the video side is a string array
+ * and does not reference the tags table, so it is not affected. delete and insert are
+ * made 1 atomic unit with `db.batch`, so that a failure midway does not leave the state
+ * where "only the delete-all took effect"
  */
 export async function replaceTags(db: Db, names: string[]): Promise<void> {
   const unique = [...new Set(names)]
@@ -45,7 +47,7 @@ export async function replaceTags(db: Db, names: string[]): Promise<void> {
   ])
 }
 
-/** 0 件のときだけ既定タグ（仕様 §3）を入れる。何度呼んでも冪等 */
+/** Inserts the default tags (spec §3) only when there are 0 rows. Idempotent however often it is called */
 export async function seedDefaultTags(db: Db): Promise<void> {
   const [row] = await db.select({ n: sql<number>`count(*)` }).from(tags)
   if (Number(row?.n ?? 0) > 0) return

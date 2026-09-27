@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { CANDIDATE_STATUSES, STATUS_COLOR, STATUS_LABEL, statusRank } from './status'
 
 describe('status', () => {
-  it('5 つの状態に日本語ラベルと色がある', () => {
+  it('has a Japanese label and a color for each of the 5 statuses', () => {
     expect(CANDIDATE_STATUSES).toEqual([
       'shortlisted',
       'consulting',
@@ -17,7 +17,7 @@ describe('status', () => {
     }
   })
 
-  it('本命が先・見送りが最後に並ぶ', () => {
+  it('sorts shortlisted first and dropped last', () => {
     expect(statusRank('shortlisted')).toBeLessThan(statusRank('interested'))
     expect(statusRank('interested')).toBeLessThan(statusRank('dropped'))
   })

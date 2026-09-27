@@ -7,12 +7,14 @@ import { PLACE_KIND_LABEL } from '../../db/schema'
 import type { PlaceWithLinks } from '../../server/repository'
 
 /**
- * 地図タブの「一覧」表示（所有者の要望、2026-09-21）。地図と同じ場所を同じ絞り込みで
- * 縦に並べる。地図と違って**座標の無い場所も出せる**のがこの表示の要点で、
- * 「地図に出せない場所が N 件（一覧で確認）」の確認先がここになる。
+ * The "一覧" (List) view of the map tab (owner's request, 2026-09-21). Lists the same
+ * places as the map, with the same filter, vertically. Unlike the map, **it can also show
+ * places without coordinates**; that is the point of this view, and it is where
+ * "地図に出せない場所が N 件（一覧で確認）" (N places cannot be shown on the map (check in
+ * the list)) sends the user to check.
  *
- * 行は読み取り専用のカードで、タップすると場所の詳細（/places/$id）へ行く
- * （地図のピン → PlaceSheet → 「詳細を見る」と同じ行き先）。
+ * A row is a read-only card; tapping it goes to the place detail (/places/$id)
+ * (the same destination as map pin -> PlaceSheet -> "詳細を見る" (See details)).
  */
 export function PlaceList({ places }: { places: PlaceWithLinks[] }) {
   if (places.length === 0) {
@@ -58,7 +60,8 @@ export function PlaceList({ places }: { places: PlaceWithLinks[] }) {
                     {place.address}
                   </Text>
                 ) : null}
-                {/* 地図に出せない場所は「出せない理由」を画面に書く（AGENTS.md の約束） */}
+                {/* For a place that cannot be shown on the map, write "the reason it cannot
+                    be shown" on the screen (a promise in AGENTS.md) */}
                 {place.lat == null || place.lng == null ? (
                   <Group gap={6} wrap="nowrap" c="dimmed">
                     <MapPinOff size={14} aria-hidden />

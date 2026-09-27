@@ -6,9 +6,9 @@ updates:
       interval: 'weekly'
     open-pull-requests-limit: 10
     ignore:
-      # @cloudflare/vitest-pool-workers が peer vitest@^4.1.0 を要求するため、
-      # vitest 系の major 更新は ERESOLVE で入らない（TypeScript 7 は問題なし）。
-      # pool 側が vitest 5 に対応したらこの ignore を消す。
+      # @cloudflare/vitest-pool-workers requires peer vitest@^4.1.0, so major updates of
+      # the vitest family fail to install with ERESOLVE (TypeScript 7 is fine).
+      # Remove this ignore once the pool supports vitest 5.
       - dependency-name: 'vitest'
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'

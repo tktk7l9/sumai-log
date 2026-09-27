@@ -3,22 +3,26 @@ import { Avatar, Group, Text } from '@mantine/core'
 import { findMember, type Member } from '../lib/members'
 
 /**
- * カードの左端に引く「誰が書いたか」の帯の色。設定の色名（`src/lib/members.ts` の
- * MEMBER_COLORS）から Mantine の変数を組み立てる。
+ * The color of the "who wrote it" band drawn on the left edge of a card. Builds the
+ * Mantine variable from the configured color name (MEMBER_COLORS in `src/lib/members.ts`).
  *
- * 使うのは色名の 6 段目＝その色の芯。MemberChip の丸（Avatar の light バリアント）は
- * 同じ色名の淡い地に濃い字（light は 1 段目の地に 9 段目の字、ダークは逆）なので、
- * 帯と丸は「同じ色名」で揃うが、同じ段ではない。3px の帯は薄い段だと見えないため。
+ * It uses shade 6 of the color name = the core of that color. The circle of MemberChip
+ * (the light variant of Avatar) is dark text on a pale ground of the same color name
+ * (light is shade 9 text on a shade 1 ground, dark is the reverse), so the band and the
+ * circle match by "the same color name" but not by the same shade. This is because a 3px
+ * band is invisible in a pale shade.
  */
 export function authorBandColor(members: readonly Member[], email: string): string {
   return `var(--mantine-color-${findMember(members, email).color}-6)`
 }
 
 /**
- * 丸いイニシャルと表示名。一覧では丸と左端の帯で「誰が」を追える。
- * `iconOnly` を立てると丸だけにして名前のテキストを出さない（最近の更新の行など、
- * 誰が書いたかは左端の帯の色と合わせて既に分かる場面向け）。名前は丸の
- * `title`/`aria-label` として残すので、アクセシビリティ上は失われない。
+ * A round initial and the display name. In lists, "who" can be followed by the circle and
+ * the left-edge band.
+ * Setting `iconOnly` shows only the circle without the name text (for cases such as rows
+ * of recent updates, where who wrote it is already clear together with the color of the
+ * left-edge band). The name stays as `title`/`aria-label` of the circle, so it is not lost
+ * for accessibility.
  */
 export function MemberChip({
   email,
@@ -31,7 +35,8 @@ export function MemberChip({
 }) {
   const m = findMember(members, email)
   const avatar = (
-    // 既定の light バリアント＝淡い地に濃い字。塗りつぶすと白字のコントラストが落ちる
+    // The default light variant = dark text on a pale ground. A filled one lowers the contrast of
+    // white text
     <Avatar
       size={22}
       radius="xl"

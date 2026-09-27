@@ -1,11 +1,15 @@
 /**
- * 日当たりの純粋関数（区画シミュレーター用）。太陽の位置・建物の影・ある点に日が当たるかを出す。
+ * Pure functions for sunlight (for the site plan simulator). Computes the position of the
+ * sun, the shadow of a building, and whether the sun hits a given point.
  *
- * 時刻は真太陽時（太陽が真南に来る時刻を 12 時とする）。均時差と経度の補正は入れない（数分〜
- * 十数分のずれで、日照時間の目安には効かない）。大気差も入れない。
+ * Time is true solar time (the time when the sun is due south is 12 o'clock). The equation
+ * of time and the longitude correction are not applied (the deviation is a few minutes to
+ * somewhat over ten minutes, which does not affect a rough guide of sunlight hours).
+ * Atmospheric refraction is not applied either.
  *
- * 方位は北を 0°・時計回り（東 90°・南 180°）。土地の座標（x: 間口方向、y: 道路→奥、z: 高さ）へは
- * 「右（+x）の方位」と「奥（+y）の方位」で写す。
+ * Azimuth is 0° at north, clockwise (east 90°, south 180°). It is mapped to land
+ * coordinates (x: along the frontage, y: road -> rear, z: height) by "the azimuth of right
+ * (+x)" and "the azimuth of rear (+y)".
  */
 
 export const SEASONS = ['winter', 'equinox', 'summer'] as const
@@ -15,7 +19,7 @@ export const SEASON_LABEL: Record<Season, string> = {
   equinox: '春分・秋分',
   summer: '夏至',
 }
-/** 太陽の赤緯（度） */
+/** Declination of the sun (degrees) */
 export const SEASON_DECLINATION: Record<Season, number> = {
   winter: -23.44,
   equinox: 0,
@@ -28,7 +32,7 @@ export type Vec3 = { x: number; y: number; z: number }
 export type Point = { x: number; y: number }
 export type Box = { x: number; y: number; width: number; depth: number; height: number }
 
-/** 太陽の高度・方位（度）。hour は真太陽時（12 = 南中） */
+/** Altitude and azimuth of the sun (degrees). hour is true solar time (12 = culmination) */
 export function solarPosition(
   latitude: number,
   declination: number,
@@ -44,7 +48,8 @@ export function solarPosition(
   return { altitude: Math.asin(up) / RAD, azimuth }
 }
 
-/** 太陽の方向（単位ベクトル）を土地の座標で。rightAz / backAz は土地の +x / +y の方位（度） */
+/** The direction of the sun (a unit vector) in land coordinates. rightAz / backAz are the
+ * azimuths of +x / +y of the land (degrees) */
 export function sunInLand(
   altitude: number,
   azimuth: number,
@@ -65,7 +70,7 @@ function cross(o: Point, a: Point, b: Point): number {
   return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
 }
 
-/** 凸包（Andrew の単調連鎖）。反時計回り */
+/** Convex hull (Andrew's monotone chain). Counterclockwise */
 export function convexHull(points: Point[]): Point[] {
   const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y)
   const lower: Point[] = []
@@ -83,7 +88,8 @@ export function convexHull(points: Point[]): Point[] {
   return [...lower.slice(0, -1), ...upper.slice(0, -1)]
 }
 
-/** 箱（建物）が地面に落とす影の多角形。日が出ていない・高さが無ければ null */
+/** The polygon of the shadow that a box (a building) casts on the ground. null when the sun
+ * is not up or there is no height */
 export function shadowPolygon(box: Box, sun: Vec3): Point[] | null {
   if (sun.z <= 0 || box.height <= 0) return null
   const k = box.height / sun.z
@@ -98,10 +104,12 @@ export function shadowPolygon(box: Box, sun: Vec3): Point[] | null {
   return convexHull([...corners, ...corners.map((c) => ({ x: c.x + dx, y: c.y + dy }))])
 }
 
-/** 点 p から太陽へ向かう光線が箱に当たるか（＝p はその箱の影の中か） */
+/** Whether the ray from point p toward the sun hits the box (= whether p is in the shadow of
+ * that box) */
 export function rayHitsBox(p: Vec3, sun: Vec3, box: Box): boolean {
   if (sun.z <= 0 || box.height <= p.z) return false
-  // 箱の高さに届くまでの距離。そこまでに箱の平面形に入れば遮られる
+  // The distance until the ray reaches the height of the box. If it enters the plan outline
+  // of the box before that, it is blocked
   const tMax = (box.height - p.z) / sun.z
   let t0 = 0
   let t1 = tMax

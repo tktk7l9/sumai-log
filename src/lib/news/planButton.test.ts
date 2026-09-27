@@ -5,19 +5,19 @@ import { planButtonState } from './planButton'
 const today = '2026-09-20'
 
 describe('planButtonState', () => {
-  it('予定化済みなら view', () => {
+  it('view when already turned into an event', () => {
     expect(
       planButtonState({ plannedEventId: 'e1', eventStart: '2026-01-01', eventEnd: null }, today),
     ).toEqual({ kind: 'view' })
   })
-  it('日程が無ければ none（ボタンを出さない）', () => {
+  it('none when there are no event dates (no button is shown)', () => {
     expect(
       planButtonState({ plannedEventId: null, eventStart: null, eventEnd: null }, today),
     ).toEqual({
       kind: 'none',
     })
   })
-  it('終了日（無ければ開始日）が今日より前なら ended', () => {
+  it('ended when the end date (or the start date when absent) is before today', () => {
     expect(
       planButtonState({ plannedEventId: null, eventStart: '2026-09-19', eventEnd: null }, today),
     ).toEqual({ kind: 'ended' })
@@ -28,7 +28,7 @@ describe('planButtonState', () => {
       ),
     ).toEqual({ kind: 'ended' })
   })
-  it('今日以降なら開始日付きの plan（複数日は終了日が今日以降なら出す）', () => {
+  it('plan with the start date when today or later (multi-day is shown when the end date is today or later)', () => {
     expect(
       planButtonState(
         { plannedEventId: null, eventStart: '2026-09-27', eventEnd: '2026-09-28' },

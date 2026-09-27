@@ -15,7 +15,7 @@ import { actor, db, reset } from './test-helpers'
 beforeEach(reset)
 
 describe('photos', () => {
-  it('sortOrder は追加順、削除は行を返し、visit のキー一覧が取れる', async () => {
+  it('sortOrder follows insertion order, delete returns the row, and the key list of a visit can be fetched', async () => {
     const placeId = await upsertPlace(db, { name: 'テスト会場', kind: 'open_house' }, actor)
     const visitId = crypto.randomUUID()
     await db
@@ -75,7 +75,7 @@ describe('photos', () => {
     ])
   })
 
-  it('visit を消すと photos は cascade で消える', async () => {
+  it('deleting a visit deletes photos by cascade', async () => {
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({ id: visitId, visitedOn: '2030-01-05', createdBy: actor })
     await insertPhoto(
@@ -117,7 +117,7 @@ describe('reorderPhotoRows', () => {
     return { visitId, ids }
   }
 
-  it('指定した順に sortOrder を 0,1,… に振り直し、true を返す', async () => {
+  it('renumbers sortOrder to 0,1,... in the given order and returns true', async () => {
     const { visitId, ids } = await seedVisitWithPhotos(3)
     const [a, b, c] = ids
     const ok = await reorderPhotoRows(db, visitId, [c, a, b])
@@ -125,7 +125,7 @@ describe('reorderPhotoRows', () => {
     expect((await listPhotos(db, visitId)).map((p) => p.id)).toEqual([c, a, b])
   })
 
-  it('件数が合わない（一部しか渡さない）と何もせず false', async () => {
+  it('does nothing and returns false when the count does not match (only some are passed)', async () => {
     const { visitId, ids } = await seedVisitWithPhotos(3)
     const before = (await listPhotos(db, visitId)).map((p) => p.id)
     const ok = await reorderPhotoRows(db, visitId, [ids[0]])
@@ -133,7 +133,7 @@ describe('reorderPhotoRows', () => {
     expect((await listPhotos(db, visitId)).map((p) => p.id)).toEqual(before)
   })
 
-  it('他の見学記録の写真 id が混ざっていると何もせず false（所有チェック）', async () => {
+  it('does nothing and returns false when a photo id of another visit record is mixed in (ownership check)', async () => {
     const { visitId, ids } = await seedVisitWithPhotos(2)
     const other = await seedVisitWithPhotos(1)
     const before = (await listPhotos(db, visitId)).map((p) => [p.id, p.sortOrder])
@@ -142,7 +142,7 @@ describe('reorderPhotoRows', () => {
     expect((await listPhotos(db, visitId)).map((p) => [p.id, p.sortOrder])).toEqual(before)
   })
 
-  it('空配列は何もせず false', async () => {
+  it('does nothing and returns false for an empty array', async () => {
     const { visitId } = await seedVisitWithPhotos(1)
     expect(await reorderPhotoRows(db, visitId, [])).toBe(false)
   })

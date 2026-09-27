@@ -5,7 +5,7 @@ import { GMAIL_FORWARDING_NOTICE, classifyRoute, normalizeEnvelopeAddress } from
 const allow = ['owner@example.com', 'partner@example.com']
 
 describe('classifyRoute', () => {
-  it('Gmail 自動転送: エンベロープが owner+caf_=... で業者の From → auto（forwardedBy は正規化後）', () => {
+  it('Gmail auto-forward: envelope is owner+caf_=... with a vendor From -> auto (forwardedBy is normalized)', () => {
     expect(
       classifyRoute(
         { from: 'news@vendor.example', forwardedFor: [] },
@@ -15,7 +15,7 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'auto', forwardedBy: 'owner@example.com' })
   })
 
-  it('手動転送: エンベロープも From も本人のアドレス → manual', () => {
+  it('manual forward: both the envelope and From are the member address -> manual', () => {
     expect(
       classifyRoute(
         { from: 'partner@example.com', forwardedFor: [] },
@@ -25,7 +25,7 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'manual', forwardedBy: 'partner@example.com' })
   })
 
-  it('X-Forwarded-For を偽装し From も許可アドレスでも、エンベロープが不正なら rejected', () => {
+  it('rejected when the envelope is invalid, even with a spoofed X-Forwarded-For and an allowed From', () => {
     expect(
       classifyRoute(
         { from: 'owner@example.com', forwardedFor: ['owner@example.com'] },
@@ -35,7 +35,7 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'rejected', reason: 'envelope sender not allowed' })
   })
 
-  it('Gmail の転送先確認: エンベロープが google.com なら system', () => {
+  it('Gmail forwarding address confirmation: system when the envelope is google.com', () => {
     expect(
       classifyRoute(
         { from: GMAIL_FORWARDING_NOTICE, forwardedFor: [] },
@@ -45,7 +45,7 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'system' })
   })
 
-  it('From は転送先確認メールを装っていても、エンベロープが google.com 以外なら rejected', () => {
+  it('rejected when the envelope is not google.com, even if From poses as the forwarding confirmation mail', () => {
     expect(
       classifyRoute(
         { from: GMAIL_FORWARDING_NOTICE, forwardedFor: [] },
@@ -55,7 +55,7 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'rejected', reason: 'envelope sender not trusted' })
   })
 
-  it('google.com のサブドメイン（例: bounces.google.com）も system として扱う', () => {
+  it('treats subdomains of google.com (e.g. bounces.google.com) as system too', () => {
     expect(
       classifyRoute(
         { from: GMAIL_FORWARDING_NOTICE, forwardedFor: [] },
@@ -65,10 +65,11 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'system' })
   })
 
-  it('ドメイン側に `@` が入ったエンベロープは system にしない（x@evil.example@google.com）', () => {
-    // 最初の `@` で割ると domain は `evil.example@google.com`。最後の `@` で割る実装だと
-    // `google.com` に見えてしまい、攻撃者の本文が system 行（確認コードとして展開表示
-    // される）として入る。どちらとも決められない形は信頼しない。
+  it('does not treat an envelope with `@` in the domain part as system (x@evil.example@google.com)', () => {
+    // Splitting at the first `@` gives the domain `evil.example@google.com`. An implementation
+    // that splits at the last `@` would see `google.com`, and the attacker's body would be stored
+    // as a system row (shown expanded as a confirmation code). Do not trust a shape that cannot
+    // be decided either way.
     expect(
       classifyRoute(
         { from: GMAIL_FORWARDING_NOTICE, forwardedFor: [] },
@@ -78,13 +79,13 @@ describe('classifyRoute', () => {
     ).toEqual({ kind: 'rejected', reason: 'envelope sender not trusted' })
   })
 
-  it('`@` の無いエンベロープは rejected（not allowed）', () => {
+  it('an envelope without `@` is rejected (not allowed)', () => {
     expect(
       classifyRoute({ from: 'news@vendor.example', forwardedFor: [] }, allow, 'no-at'),
     ).toEqual({ kind: 'rejected', reason: 'envelope sender not allowed' })
   })
 
-  it('エンベロープが許可リストに無ければ From が何であっても rejected（not allowed）', () => {
+  it('rejected (not allowed) whatever From is when the envelope is not in the allowlist', () => {
     expect(
       classifyRoute(
         { from: 'news@vendor.example', forwardedFor: [] },
@@ -96,30 +97,30 @@ describe('classifyRoute', () => {
 })
 
 describe('normalizeEnvelopeAddress', () => {
-  it('小文字化する', () => {
+  it('lowercases', () => {
     expect(normalizeEnvelopeAddress('Owner@Example.COM')).toBe('owner@example.com')
   })
 
-  it('前後の空白を除去する', () => {
+  it('trims leading and trailing whitespace', () => {
     expect(normalizeEnvelopeAddress('  owner@example.com  ')).toBe('owner@example.com')
   })
 
-  it('<> で囲まれていれば外す', () => {
+  it('strips surrounding <>', () => {
     expect(normalizeEnvelopeAddress('<owner@example.com>')).toBe('owner@example.com')
   })
 
-  it('ローカル部の +タグ を除去する（Gmail 自動転送の caf_ 形式）', () => {
+  it('removes the +tag of the local part (the caf_ form of Gmail auto-forward)', () => {
     expect(normalizeEnvelopeAddress('owner+caf_=news=sumai-log.app@gmail.com')).toBe(
       'owner@gmail.com',
     )
   })
 
-  it('空入力は空文字', () => {
+  it('empty input gives an empty string', () => {
     expect(normalizeEnvelopeAddress('')).toBe('')
     expect(normalizeEnvelopeAddress('   ')).toBe('')
   })
 
-  it('@ を含まない不正な値は小文字化だけして返す（防御的フォールバック）', () => {
+  it('an invalid value without @ is only lowercased and returned (defensive fallback)', () => {
     expect(normalizeEnvelopeAddress('Not-An-Email')).toBe('not-an-email')
   })
 })

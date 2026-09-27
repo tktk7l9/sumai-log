@@ -12,7 +12,10 @@ import {
   importRepresentativePhotoFromUrl,
 } from '../../server/vendorImages'
 
-/** 表示用 800px・サムネ 240px の JPEG。src/components/visits/PhotoUploader.tsx と同じ流儀 */
+/**
+ * JPEGs of 800px for display and 240px for the thumbnail. Same style as
+ * src/components/visits/PhotoUploader.tsx
+ */
 async function toJpeg(
   bitmap: ImageBitmap,
   maxEdge: number,
@@ -53,14 +56,17 @@ async function uploadFile(vendorId: string, file: File): Promise<void> {
 }
 
 /**
- * 業者フォームの「代表者の写真」欄。ファイルを選ぶ（端末側 Canvas で 800px/240px の
- * JPEG に縮小してから /api/vendor-photos/<vendorId> へ POST）・URL から取り込む
- * （サーバー側は Canvas が無いので原寸のまま保存。design の既知の限界）・削除の 3 操作。
- * vendorId が無い（＝まだ保存していない新規業者）ときは操作できない旨だけ出す。
+ * The "代表者の写真" (Representative's photo) field of the vendor form. 3 operations:
+ * choose a file (downscaled to 800px/240px JPEGs by Canvas on the device, then POSTed to
+ * /api/vendor-photos/<vendorId>), import from a URL (the server side has no Canvas, so it
+ * is saved at the original size. A known limitation of the design), and delete.
+ * When there is no vendorId (= a new vendor not saved yet), it only shows that the
+ * operations are unavailable.
  *
- * サムネ表示には `representativePhotoKey`（vendors.representative_photo_key の実際の値）が
- * 要る: 鍵に stamp を挟むようになったため（immutable キャッシュ対策）、vendorId だけからは
- * 現在の鍵を作れない。thumb キーは保存された display キーの末尾を置き換えて求める。
+ * Showing the thumbnail needs `representativePhotoKey` (the actual value of
+ * vendors.representative_photo_key): the key now includes a stamp (a measure against
+ * immutable caching), so the current key cannot be built from vendorId alone. The thumb
+ * key is derived by replacing the tail of the saved display key.
  */
 export function RepresentativePhotoField({
   vendorId,

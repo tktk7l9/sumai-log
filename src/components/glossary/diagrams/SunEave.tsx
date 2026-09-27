@@ -1,6 +1,9 @@
 import { Arrow, Figure, Label } from './Figure'
 
-/** 夏の高い太陽は軒で遮られ、冬の低い太陽は軒の下を通って窓の奥まで届く */
+/**
+ * The high summer sun is blocked by the eave, and the low winter sun passes under the eave and
+ * reaches deep inside through the window
+ */
 export function SunEaveDiagram() {
   return (
     <Figure label="夏は高い角度の太陽光が軒で遮られ、冬は低い角度の太陽光が軒の下を通って窓の奥まで届く">
@@ -22,7 +25,8 @@ export function SunEaveDiagram() {
 
       <circle cx={262} cy={20} r={6} />
       <Arrow x1={257} y1={26} x2={215} y2={69} dashed />
-      {/* 「夏」ラベルが太陽の丸と少し重なっていたため右へ離した */}
+      {/* The "夏" (summer) label slightly overlapped the sun circle, so it was moved to the
+          right */}
       <Label x={284} y={18} size={13}>
         夏
       </Label>

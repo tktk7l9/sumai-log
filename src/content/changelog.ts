@@ -1,10 +1,12 @@
 /**
- * アプリの変更履歴（`/changelog`）。**データだけ**を置く。
- * 新しい順。機能を足したり見た目を変えたりしたら、その PR で先頭に 1 項目足す。
- * 書き方: 利用者（二人）に見える変化だけを、画面の言葉で。内部の直しは書かない。
+ * The change history of the app (`/changelog`). Holds **data only**.
+ * Newest first. When a feature is added or the look changes, add 1 entry at the top in
+ * that PR.
+ * How to write: only changes visible to the users (the two of them), in the words of the
+ * screen. Internal fixes are not written.
  */
 export type ChangelogEntry = {
-  /** 'YYYY-MM-DD'（main に入った日） */
+  /** 'YYYY-MM-DD' (the day it landed on main) */
   date: string
   title: string
   items: string[]

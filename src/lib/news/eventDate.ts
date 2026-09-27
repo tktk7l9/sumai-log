@@ -1,22 +1,23 @@
 /**
- * お知らせの本文（呼び出し側でタイトル＋要約を連結したもの）から、イベントの
- * 種別と日程を抜き出す（design.md §3）。種別語が一つも無い、または実在する
- * 日付が一つも拾えなければイベントにしない（null）。
+ * Extracts the kind and dates of an event from the body of a vendor news item (title + summary
+ * joined by the caller) (design.md §3). When there is no kind word at all, or not a single
+ * real date can be found, it is not an event (null).
  *
- * 日付表現は投稿日の年を補って解決する（本文に明示の年が無ければ）。年をまたぐ
- * 判定は `inferYear` に切り出してある。拾った日付は月1〜12・日を実在の暦
- * （うるう年考慮）で検証し、実在しないものは個別に捨てる（他に実在する日が
- * あればイベントは成立する）。
+ * Date expressions are resolved by filling in the year of the published date (when the body
+ * has no explicit year). The year-crossing decision is split out into `inferYear`. Found dates
+ * are validated as month 1-12 and a day on the real calendar (leap years considered), and
+ * non-existent ones are dropped individually (the event still holds if another real day
+ * exists).
  *
- * 対応している日付の書式（詳細は各セクションのコメント参照）:
- *   - 漢字: `M月D日`（`YYYY年` は任意）、直後に続く独立した `D日` の列挙・範囲
- *     （`・18日` `〜23日(月祝)` 等。曜日・祝日の注記は無視）
- *   - スラッシュ: `M/D` 単独、`M/D-/D`（同月終端）、`M/D-M/D`（月をまたぐ終端）、
- *     `M/D〜M/D`・`M/D～D`（波ダッシュ/全角チルダの範囲）、
- *     `M/D.D`・`M/D・D`・`M/D、D`・`M/D,D`（`.` `・` `、` `,` 区切りの日の列挙。
- *     `8/22.23.24` のように繰り返せる。各要素は直前の日より大きい実在の日で
- *     なければならず、そうでなくなった時点でそこで列挙の読み取りを止める
- *     ——小数表記〔`1.5` `0.5割`〕との混同を避けるためのトレードオフ）
+ * Supported date formats (see the comments of each section for details):
+ *   - Kanji: `M月D日` (`YYYY年` is optional), and a list / range of standalone `D日` that
+ *     follows right after (`・18日` `〜23日(月祝)` etc.; weekday / holiday notes are ignored)
+ *   - Slash: `M/D` alone, `M/D-/D` (end in the same month), `M/D-M/D` (end that may cross
+ *     months), `M/D〜M/D` / `M/D～D` (range with wave dash / full-width tilde),
+ *     `M/D.D` / `M/D・D` / `M/D、D` / `M/D,D` (list of days separated by `.` `・` `、` `,`.
+ *     It can repeat, as in `8/22.23.24`. Each item must be a real day greater than the
+ *     previous day, and reading the list stops at the point where that no longer holds
+ *     -- a trade-off to avoid confusion with decimal notation [`1.5` `0.5割`])
  */
 
 import { pad } from './text'
@@ -24,7 +25,10 @@ import { pad } from './text'
 export type EventKindLabel =
   '完成見学会' | '構造見学会' | '見学会' | '相談会' | 'セミナー' | 'イベント'
 
-/** 種別語の優先順位。先に一致したものを採用する（「見学会」は「完成見学会」等の部分文字列でもあるため順序が要る）。 */
+/**
+ * Priority of the kind words. The first match wins (order matters because "見学会" is also a
+ * substring of "完成見学会" etc.).
+ */
 function detectKind(text: string): EventKindLabel | null {
   if (text.includes('完成見学会')) return '完成見学会'
   if (text.includes('構造見学会')) return '構造見学会'
@@ -36,9 +40,11 @@ function detectKind(text: string): EventKindLabel | null {
 }
 
 /**
- * 日付の月から、投稿日（`publishedOn` = 'YYYY-MM-DD'）を基準にした年を推定する。
- * 投稿月より **2 か月以上前**（`month < 投稿月 - 1`）の月は翌年の出来事とみなす。
- * それ以外（投稿月の1か月前まで・同月・後の月）は投稿日と同じ年。
+ * Infers the year from the month of a date, relative to the published date
+ * (`publishedOn` = 'YYYY-MM-DD'). A month **2 or more months before** the published month
+ * (`month < published month - 1`) is taken as an event of the next year.
+ * Anything else (up to 1 month before the published month, the same month, later months) is
+ * the same year as the published date.
  */
 export function inferYear(month: number, publishedOn: string): number {
   const postYear = Number(publishedOn.slice(0, 4))
@@ -62,8 +68,9 @@ function daysInMonth(year: number, month: number): number {
 }
 
 /**
- * 月1〜12・日がその年月に実在するか（うるう年考慮）。「1月32日」「2月30日」の
- * ような、正規表現の形は合うが暦には無い日を弾くための最終フィルタ。
+ * Whether the month is 1-12 and the day exists in that year and month (leap years considered).
+ * The final filter that rejects days such as "1月32日" and "2月30日", which match the shape of
+ * the regular expression but are not on the calendar.
  */
 function isRealDate(date: FoundDate): boolean {
   return (
@@ -74,25 +81,27 @@ function isRealDate(date: FoundDate): boolean {
   )
 }
 
-// 「YYYY年」は任意。「M月D日」は必須（曜日・祝の注記 `(土)` 等は無視して構わない。
-// 数字を含まないので後続の走査に影響しない）。
+// "YYYY年" is optional. "M月D日" is required (weekday / holiday notes such as `(土)` can be
+// ignored. They contain no digits, so they do not affect the later scan).
 const KANJI_DATE = /(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日/g
-// 「M月D日」の一部ではない、独立した「D日」（列挙・範囲の続き: `・18日` `〜23日` 等）。
+// A standalone "D日" that is not part of "M月D日" (continuation of a list / range: `・18日`
+// `〜23日` etc.).
 const BARE_DAY = /(\d{1,2})日/g
 
 type KanjiSpan = { start: number; end: number; year: number; month: number }
 
 /**
- * 「M月D日」（明示年つきも可）と、それに続く「D日」の列挙・範囲
- * （`・18日` `〜23日(月祝)` 等、曜日・祝の注記は無視）を拾う。
- * 独立した「D日」は直前の「M月D日」と同じ月・年とみなし、直前が無ければ捨てる。
+ * Picks up "M月D日" (an explicit year is allowed too) and the list / range of "D日" that
+ * follows it (`・18日` `〜23日(月祝)` etc.; weekday / holiday notes are ignored).
+ * A standalone "D日" is taken as the same month and year as the preceding "M月D日", and is
+ * dropped when there is none before it.
  */
 function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
   const spans: KanjiSpan[] = []
 
   for (const match of text.matchAll(KANJI_DATE)) {
-    // matchAll の一致は必ず index を持つ（型定義上は optional なだけ）
+    // A matchAll match always has an index (it is optional only in the type definition)
     const start = match.index as number
     const month = Number(match[2])
     const year = match[1] !== undefined ? Number(match[1]) : inferYear(month, publishedOn)
@@ -102,10 +111,10 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
 
   for (const match of text.matchAll(BARE_DAY)) {
     const start = match.index as number
-    // 既に KANJI_DATE で拾った「M月D日」の日部分なら二重カウントしない
+    // Do not double count the day part of a "M月D日" already picked up by KANJI_DATE
     if (spans.some((span) => start >= span.start && start < span.end)) continue
 
-    // 同じ月とみなす直前の「M月D日」（無ければこの「D日」は手がかりが無いので捨てる）
+    // The preceding "M月D日" whose month is reused (without one this "D日" has no clue, so drop it)
     let governing: KanjiSpan | undefined
     for (let i = spans.length - 1; i >= 0; i--) {
       if (spans[i].start < start) {
@@ -121,19 +130,21 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
   return dates
 }
 
-// 「M/D」に続けて、同月終端（`-/D` `～D`）か別月まで（`-M/D` `〜M/D`）の範囲を任意で許す。
+// After "M/D", optionally allows a range that ends in the same month (`-/D` `～D`) or runs to
+// another month (`-M/D` `〜M/D`).
 const SLASH_RANGE =
   /(\d{1,2})\/(\d{1,2})(?:[-〜～](?:(\d{1,2})\/(\d{1,2})|\/(\d{1,2})|(\d{1,2})))?/g
 
 /**
- * 範囲マーカー（`-` `〜` `～`）も曜日注記も無い、単独の「M/D」は分数表記との
- * 誤検出があり得る（「参加費は通常の1/2です」「先着1/2程度」等）。直前・
- * 直後にこれらの語があれば分数とみなして日付にしない。
+ * A lone "M/D" with neither a range marker (`-` `〜` `～`) nor a weekday note can be a false
+ * positive for fraction notation ("参加費は通常の1/2です", "先着1/2程度" etc.). When one of
+ * these words comes right before or right after, it is taken as a fraction and not as a date.
  *
- * 誤検出を完全には無くせないトレードオフがある: 例えば「見学会の9/12開催」の
- * ように、本当に日付を指していて直前に「の」が来る書き方は、この単純な
- * 語リストでは分数と区別できず、日付を捨ててしまう。範囲の一部（`7/6-/7` 等）
- * や `(土)` のような曜日注記が続く場合はこの判定の対象にせず常に日付として扱う。
+ * There is a trade-off: false detection cannot be removed completely. For example, a wording
+ * such as "見学会の9/12開催", which really means a date and has "の" right before it, cannot
+ * be told apart from a fraction with this simple word list, and the date is dropped. When it
+ * is part of a range (`7/6-/7` etc.) or a weekday note such as `(土)` follows, this check is
+ * not applied and it is always treated as a date.
  */
 const FRACTION_TRAILING_WORDS = ['程度', '以下', '以上', '割', '%', '名', '円', 'の', '倍']
 const FRACTION_LEADING_WORDS = ['の', 'は', '約', '先着']
@@ -147,17 +158,17 @@ function looksLikeFraction(text: string, start: number, end: number): boolean {
   )
 }
 
-// 「M/D」の直後から続く、日の列挙の1要素（`.` `・` `、` `,` のいずれかに続く
-// 1〜2桁の日）。3桁以上の数字（`.234` 等）の一部を切り出さないよう、直後に
-// さらに数字が続く場合はマッチさせない（`(?!\d)`）。
+// One item of the list of days that continues right after "M/D" (a 1-2 digit day following
+// one of `.` `・` `、` `,`). So as not to cut out part of a number with 3 or more digits
+// (`.234` etc.), it does not match when another digit follows right after (`(?!\d)`).
 const SLASH_DAY_LIST_ITEM = /^[.・、,](\d{1,2})(?!\d)/
 
 /**
- * `cursor` から始まる日の列挙を読めるだけ読む。各要素は直前の日より大きい
- * 実在の日（同じ年月）でなければならず、そうでなければそこで止める
- * （`1.5` `0.5割` のような小数表記を列挙と誤認しないためのトレードオフ。
- * 例えば `7/22.5割` は 5 が 22 より小さいので列挙にならず、単独の 7/22 のまま
- * 残る）。戻り値の `day` は最後に読めた日（列挙が1つも読めなければ null）。
+ * Reads as much of the list of days starting at `cursor` as it can. Each item must be a real
+ * day (same year and month) greater than the previous day; otherwise it stops there
+ * (a trade-off so that decimal notation such as `1.5` `0.5割` is not mistaken for a list.
+ * For example, in `7/22.5割` 5 is smaller than 22, so it is not a list and stays a lone
+ * 7/22). The returned `day` is the last day that was read (null when no list item was read).
  */
 function readDayList(
   text: string,
@@ -183,7 +194,7 @@ function readDayList(
   return lastDay
 }
 
-/** 「M/D」「M/D-/D」「M/D-M/D」「M/D〜M/D」「M/D～D」「M/D.D」「M/D・D」等を拾う。 */
+/** Picks up "M/D", "M/D-/D", "M/D-M/D", "M/D〜M/D", "M/D～D", "M/D.D", "M/D・D" etc. */
 function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
 
@@ -195,8 +206,9 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
     const end = start + match[0].length
     const year = inferYear(startMonth, publishedOn)
 
-    // 範囲マーカー（`-` `〜` `～`）が無ければ、直後に続く日の列挙を試す
-    // （`8/22.23` 等）。既存の範囲形と共存はしない（範囲があれば列挙は試さない）。
+    // Without a range marker (`-` `〜` `～`), try the list of days that follows right after
+    // (`8/22.23` etc.). It does not coexist with the existing range forms (when there is a
+    // range, the list is not tried).
     const listEndDay = hasRange ? null : readDayList(text, end, year, startMonth, startDay)
 
     if (!hasRange && listEndDay === null && looksLikeFraction(text, start, end)) continue
@@ -204,7 +216,7 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
     dates.push({ year, month: startMonth, day: startDay })
 
     if (match[3] !== undefined) {
-      // M/D-M/D（月をまたぐこともある終端）
+      // M/D-M/D (end that may cross months)
       const endMonth = Number(match[3])
       dates.push({
         year: inferYear(endMonth, publishedOn),
@@ -212,13 +224,13 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
         day: Number(match[4]),
       })
     } else if (match[5] !== undefined) {
-      // M/D-/D（同月終端）
+      // M/D-/D (end in the same month)
       dates.push({ year, month: startMonth, day: Number(match[5]) })
     } else if (match[6] !== undefined) {
-      // M/D～D（同月終端）
+      // M/D～D (end in the same month)
       dates.push({ year, month: startMonth, day: Number(match[6]) })
     } else if (listEndDay !== null) {
-      // M/D.D・M/D・D 等（列挙。最後に読めた日を終端にする）
+      // M/D.D, M/D・D etc. (list. The last day that was read becomes the end)
       dates.push({ year, month: startMonth, day: listEndDay })
     }
   }
@@ -226,10 +238,16 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   return dates
 }
 
-/** この日数を超える範囲は「1つの予定」とみなさず開始日だけを残す（MAX_RANGE_DAYS 参照）。 */
+/**
+ * A range longer than this many days is not taken as "one event" and only the start date is
+ * kept (see MAX_RANGE_DAYS).
+ */
 const MAX_RANGE_DAYS = 14
 
-/** 'YYYY-MM-DD' 同士の日数差（end − start。end が前なら負）。うるう年も UTC 通算で正しく数える。 */
+/**
+ * Difference in days between two 'YYYY-MM-DD' (end − start; negative when end is earlier).
+ * Counts leap years correctly through UTC totals.
+ */
 function daysBetween(startIso: string, endIso: string): number {
   const toUtcMs = (iso: string) =>
     Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)))
@@ -237,19 +255,19 @@ function daysBetween(startIso: string, endIso: string): number {
 }
 
 /**
- * タイトル＋要約（呼び出し側で連結した `text`）からイベントの種別と日程を抜く。
- * 種別語（完成見学会 / 構造見学会 / 見学会（お住まい見学会・オープンハウスを含む）/
- * 相談会 / セミナー / イベント）が一つも無ければ null。実在する日付表現が
- * 一つも拾えなければ null（1/32 や 2/30 のような実在しない日、分数表記と
- * みなした M/D は個別に捨てる）。複数の日が見つかれば最小を start・最大を
- * end にする（1 つなら両方同じ）。
+ * Extracts the kind and dates of an event from title + summary (`text` joined by the caller).
+ * null when there is no kind word at all ("完成見学会" / "構造見学会" / "見学会" (includes
+ * "お住まい見学会" and "オープンハウス") / "相談会" / "セミナー" / "イベント"). null when
+ * not a single real date expression can be found (non-existent days such as 1/32 or 2/30, and
+ * M/D taken as fraction notation, are dropped individually). When several days are found the
+ * smallest is start and the largest is end (with one day both are the same).
  *
- * ただし start〜end が MAX_RANGE_DAYS（14 日）を超える場合は end を start に
- * 揃える（1 日だけの予定にする）。「8月1日より受付開始。見学会は9月12日」の
- * ような、本文中に開催日と無関係な日付（受付期間など）が混ざっている場合、
- * min/max だけで範囲を決めると月をまたぐ長大な期間になり、カレンダーに
- * 何か月もの灰色バーが出たり「行く」が受付開始日（最小値）で予定を作って
- * しまったりする。範囲だと判断できる自信が無いときは単日に倒すほうが安全。
+ * However, when start to end exceeds MAX_RANGE_DAYS (14 days), end is aligned to start
+ * (it becomes a one-day event). When the body mixes in dates unrelated to the event date
+ * (a reception period etc.), as in "8月1日より受付開始。見学会は9月12日", deciding the range
+ * by min/max alone gives a very long period crossing months: the calendar shows a gray bar
+ * months long, or "行く" (Go) creates an event on the reception start date (the minimum).
+ * When there is no confidence that it is a range, falling back to a single day is safer.
  */
 export function extractEvent(
   text: string,

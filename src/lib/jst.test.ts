@@ -3,114 +3,114 @@ import { describe, expect, it } from 'vitest'
 import { formatJst, formatJstTime, parseToUtcMs, toJstDateKey } from './jst'
 
 describe('parseToUtcMs', () => {
-  it('D1 の空白区切り（オフセット無し=UTC）を UTC ミリ秒に直す', () => {
+  it('converts the D1 space-separated form (no offset = UTC) to UTC milliseconds', () => {
     expect(parseToUtcMs('2030-01-05 23:30:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
   })
 
-  it('ISO の Z 付きを UTC ミリ秒に直す', () => {
+  it('converts ISO with Z to UTC milliseconds', () => {
     expect(parseToUtcMs('2030-01-05T23:30:00Z')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
   })
 
-  it('ISO の +09:00 オフセット付きを UTC ミリ秒に直す（同じ瞬間になる）', () => {
+  it('converts ISO with a +09:00 offset to UTC milliseconds (the same instant)', () => {
     expect(parseToUtcMs('2030-01-06T08:30:00+09:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
   })
 
-  it('ISO の T 区切り・オフセット無しも UTC とみなす', () => {
+  it('also treats ISO with the T separator and no offset as UTC', () => {
     expect(parseToUtcMs('2030-01-05T23:30:00')).toBe(Date.UTC(2030, 0, 5, 23, 30, 0))
   })
 
-  it('形式が合わない文字列は null', () => {
+  it('returns null for a string that does not match the format', () => {
     expect(parseToUtcMs('not-a-date')).toBeNull()
     expect(parseToUtcMs('')).toBeNull()
   })
 
-  it('形式は合っていても実在しない月日（Date.parse が NaN を返す）は null', () => {
-    // 9月32日は存在しない（Date.parse がロールオーバーせず NaN を返すケース）
+  it('returns null for a nonexistent month or day even when the format matches (Date.parse returns NaN)', () => {
+    // September 32 does not exist (a case where Date.parse returns NaN without rolling over)
     expect(parseToUtcMs('2026-09-32T09:00:00+09:00')).toBeNull()
-    // 13月も存在しない
+    // Month 13 does not exist either
     expect(parseToUtcMs('2026-13-01T09:00:00+09:00')).toBeNull()
   })
 
-  it('秒の小数部（new Date().toISOString() の形）付き Z を UTC ミリ秒に直す', () => {
+  it('converts Z with fractional seconds (the shape of new Date().toISOString()) to UTC milliseconds', () => {
     expect(parseToUtcMs('2030-01-05T17:04:28.333Z')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 333))
   })
 
-  it('秒の小数部付き +09:00 オフセットも同じ瞬間になる', () => {
+  it('gives the same instant for a +09:00 offset with fractional seconds too', () => {
     expect(parseToUtcMs('2030-01-06T02:04:28.333+09:00')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 333))
   })
 
-  it('秒の小数部付き・D1 の空白区切り（オフセット無し=UTC）も読む', () => {
+  it('also reads the D1 space-separated form (no offset = UTC) with fractional seconds', () => {
     expect(parseToUtcMs('2030-01-05 17:04:28.100')).toBe(Date.UTC(2030, 0, 5, 17, 4, 28, 100))
   })
 })
 
 describe('formatJst', () => {
-  it('D1 の空白区切り（オフセット無し=UTC）を JST に直す（日付はスラッシュ区切り）', () => {
+  it('converts the D1 space-separated form (no offset = UTC) to JST (the date is slash-separated)', () => {
     expect(formatJst('2030-01-05 23:30:00')).toBe('2030/01/06 08:30')
   })
 
-  it('ISO の Z 付きは D1 と同じ結果になる', () => {
+  it('gives the same result as D1 for ISO with Z', () => {
     expect(formatJst('2030-01-05T23:30:00Z')).toBe('2030/01/06 08:30')
   })
 
-  it('ISO の +09:00 オフセット付きも読む', () => {
+  it('also reads ISO with a +09:00 offset', () => {
     expect(formatJst('2030-01-06T08:30:00+09:00')).toBe('2030/01/06 08:30')
   })
 
-  it('ISO の T 区切り・オフセット無しも UTC とみなす', () => {
+  it('also treats ISO with the T separator and no offset as UTC', () => {
     expect(formatJst('2030-01-05T23:30:00')).toBe('2030/01/06 08:30')
   })
 
-  it('withTime: false は日付だけ（スラッシュ区切り）', () => {
+  it('gives only the date for withTime: false (slash-separated)', () => {
     expect(formatJst('2030-01-05T23:30:00Z', { withTime: false })).toBe('2030/01/06')
   })
 
-  it('withTime を明示的に true にしても既定と同じ', () => {
+  it('gives the same as the default when withTime is explicitly true', () => {
     expect(formatJst('2030-01-05T23:30:00Z', { withTime: true })).toBe('2030/01/06 08:30')
   })
 
-  it('解釈できない文字列はそのまま返す', () => {
+  it('returns a string that cannot be interpreted as is', () => {
     expect(formatJst('not-a-date')).toBe('not-a-date')
     expect(formatJst('')).toBe('')
   })
 
-  it('実在しない月日（parseToUtcMs が null）もそのまま返す（NaN-NaN-NaN にならない）', () => {
+  it('also returns a nonexistent month or day (parseToUtcMs is null) as is (does not become NaN-NaN-NaN)', () => {
     expect(formatJst('2026-09-32T09:00:00+09:00')).toBe('2026-09-32T09:00:00+09:00')
   })
 
-  it('時刻の無い日付だけの文字列（watchedOn 等）は withTime: false ならそのまま通る', () => {
+  it('passes a date-only string without a time (watchedOn etc.) through as is with withTime: false', () => {
     expect(formatJst('2030-01-05', { withTime: false })).toBe('2030-01-05')
   })
 })
 
 describe('toJstDateKey', () => {
-  it('JST の日付キーを返す', () => {
+  it('returns the JST date key', () => {
     expect(toJstDateKey('2030-01-05T23:30:00Z')).toBe('2030-01-06')
   })
 
-  it('解釈できない文字列はそのまま返す', () => {
+  it('returns a string that cannot be interpreted as is', () => {
     expect(toJstDateKey('invalid')).toBe('invalid')
   })
 
-  it('実在しない月日もそのまま返す', () => {
+  it('also returns a nonexistent month or day as is', () => {
     expect(toJstDateKey('2026-09-32T09:00:00+09:00')).toBe('2026-09-32T09:00:00+09:00')
   })
 })
 
 describe('formatJstTime', () => {
-  it('D1 の空白区切り（オフセット無し=UTC）を JST の HH:mm に直す', () => {
+  it('converts the D1 space-separated form (no offset = UTC) to JST HH:mm', () => {
     expect(formatJstTime('2030-01-05 23:30:00')).toBe('08:30')
   })
 
-  it('ISO の Z 付きも同じ結果になる', () => {
+  it('gives the same result for ISO with Z too', () => {
     expect(formatJstTime('2030-01-05T23:30:00Z')).toBe('08:30')
   })
 
-  it('秒の小数部付きも読む', () => {
+  it('also reads fractional seconds', () => {
     expect(formatJstTime('2030-01-05T17:04:28.333Z')).toBe('02:04')
   })
 
-  it('解釈できない文字列は空文字', () => {
+  it('returns an empty string for a string that cannot be interpreted', () => {
     expect(formatJstTime('not-a-date')).toBe('')
     expect(formatJstTime('')).toBe('')
   })

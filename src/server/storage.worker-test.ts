@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { cleanupFailedUpload } from './storage'
 
 /**
- * `/api/photos` の POST ハンドラ（src/routes/api.photos.$.tsx）は、R2 への put や
- * insertPhoto が失敗した catch の中で「途中まで置いた R2 オブジェクトの片付け」を
- * 行い、片付け後に元のエラーを投げ直す。ルートハンドラ自体はサーバーランタイムが
- * 無いと呼べないため、その片付けロジックを storage.ts の cleanupFailedUpload に
- * 切り出してここで直接検証する（振る舞いは元のまま: 片付けが成功しても失敗しても、
- * 呼び出し元に見えるのは常にアップロード失敗の「元のエラー」）。
+ * The POST handler of `/api/photos` (src/routes/api.photos.$.tsx) does "cleanup of the
+ * R2 objects put so far" inside the catch for a failed put to R2 or insertPhoto, and
+ * rethrows the original error after the cleanup. The route handler itself cannot be called
+ * without the server runtime, so that cleanup logic is extracted into cleanupFailedUpload
+ * in storage.ts and verified directly here (behavior is unchanged: whether the cleanup
+ * succeeds or fails, what the caller sees is always "the original error" of the upload failure).
  */
 function fakeBucket(deleteImpl: (keys: string | string[]) => Promise<void>) {
   const del = vi.fn(deleteImpl)
@@ -16,7 +16,7 @@ function fakeBucket(deleteImpl: (keys: string | string[]) => Promise<void>) {
 }
 
 describe('cleanupFailedUpload', () => {
-  it('片付けが成功しても、投げ直されるのは元のエラー', async () => {
+  it('even when the cleanup succeeds, what is rethrown is the original error', async () => {
     const originalError = new Error('put に失敗')
     const { bucket, del } = fakeBucket(async () => {})
     await expect(
@@ -29,7 +29,7 @@ describe('cleanupFailedUpload', () => {
     expect(del).toHaveBeenCalledWith(['photos/a/x-display.jpg', 'photos/a/x-thumb.jpg'])
   })
 
-  it('片付け自体が失敗しても、片付けの失敗は握りつぶして元のエラーを投げ直す', async () => {
+  it('even when the cleanup itself fails, swallows the cleanup failure and rethrows the original error', async () => {
     const originalError = new Error('put に失敗')
     const { bucket, del } = fakeBucket(async () => {
       throw new Error('R2 delete も失敗')
@@ -41,7 +41,7 @@ describe('cleanupFailedUpload', () => {
         bucket,
       ),
     ).rejects.toBe(originalError)
-    // 片付けは呼ばれている（＝キーは渡っている）。失敗したのはその中身だけ
+    // The cleanup was called (= the keys were passed). Only its inside failed
     expect(del).toHaveBeenCalledWith(['photos/a/x-display.jpg', 'photos/a/x-thumb.jpg'])
   })
 })

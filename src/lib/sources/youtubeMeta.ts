@@ -1,22 +1,25 @@
 /**
- * YouTube チャンネルページの HTML から og:title / og:description / og:image と、
- * ページ内に埋め込まれた channelId（`"channelId":"UC…"`）を線形の正規表現で抜き出す。
- * design.md の方針どおり外部 HTML パーサは入れない（src/lib/favicon.ts の
- * pickFaviconCandidates と同じ流儀: `<meta>` タグをまるごとマッチさせてから属性を読む）。
+ * Extracts og:title / og:description / og:image and the channelId embedded in the page
+ * (`"channelId":"UC…"`) from the HTML of a YouTube channel page with linear-time regexes.
+ * Following the policy in design.md, no external HTML parser is added (the same style as
+ * pickFaviconCandidates in src/lib/favicon.ts: match the whole `<meta>` tag first, then
+ * read its attributes).
  *
- * 実際に fetch するのは src/server/sourcesFetcher.ts。ここは
- * 「HTML 文字列 → メタ情報」だけを担う。
+ * The actual fetch is done by src/server/sourcesFetcher.ts. This file is responsible only
+ * for "HTML string -> meta information".
  */
 
 import { decodeEntities, MAX_INPUT_LENGTH, truncate } from '../news/text'
 
-/** description の表示上限。db/schema.ts の sources.description 列のコメントと揃える */
+/** Display limit of description. Kept in line with the comment on the sources.description
+ * column in db/schema.ts */
 export const DESCRIPTION_MAX = 200
 
 const META_TAG = /<meta\b[^>]*>/gi
 const CHANNEL_ID_PATTERN = /"channelId":"(UC[\w-]{10,32})"/
 
-/** `name="value"` / `name='value'` / `name=value` のいずれの書式でも読む（favicon.ts の getAttr と同じ） */
+/** Reads any of the forms `name="value"` / `name='value'` / `name=value` (the same as
+ * getAttr in favicon.ts) */
 function getAttr(tag: string, name: string): string | null {
   const re = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i')
   const m = re.exec(tag)
@@ -24,8 +27,9 @@ function getAttr(tag: string, name: string): string | null {
   return decodeEntities((m[1] ?? m[2] ?? m[3]) as string)
 }
 
-/** `<meta property="og:xxx" content="...">`（`name=` 属性の場合も含む）の content を探す。
- * property/name と content の属性順は問わない。同名タグが複数あれば最初の 1 件を使う。 */
+/** Looks for the content of `<meta property="og:xxx" content="...">` (including the case of
+ * a `name=` attribute). The attribute order of property/name and content does not matter.
+ * When there are several tags of the same name, the first one is used. */
 function metaContent(html: string, key: string): string | null {
   for (const match of html.matchAll(META_TAG)) {
     const tag = match[0]
@@ -51,8 +55,9 @@ export type YoutubeMeta = {
 }
 
 /**
- * html が MAX_INPUT_LENGTH（news/text.ts と同じ上限）を超える場合はすべて null にする
- * （巨大な HTML を舐めない。sourcesFetcher.ts 側の 1MB キャップとは別の、この関数単体の防御）。
+ * When html exceeds MAX_INPUT_LENGTH (the same limit as news/text.ts), everything becomes
+ * null (does not scan a huge HTML. This is a defence of this function alone, separate from
+ * the 1MB cap on the sourcesFetcher.ts side).
  */
 export function extractYoutubeMeta(html: string): YoutubeMeta {
   if (html.length > MAX_INPUT_LENGTH) {

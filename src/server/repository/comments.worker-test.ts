@@ -8,7 +8,7 @@ import { deleteVisitCascade } from './visits'
 beforeEach(reset)
 
 describe('comments', () => {
-  it('古い順に並び、自分のものだけ消せる', async () => {
+  it('sorted oldest first, and only your own can be deleted', async () => {
     const target = crypto.randomUUID()
     const a = await insertComment(
       db,
@@ -27,7 +27,7 @@ describe('comments', () => {
     expect(await db.select().from(comments)).toHaveLength(1)
   })
 
-  it('対象を消すとコメントも消える', async () => {
+  it('deleting the target deletes its comments too', async () => {
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({ id: visitId, visitedOn: '2030-01-05', createdBy: actor })
     await insertComment(db, { targetType: 'visit', targetId: visitId, body: '一言' }, actor)

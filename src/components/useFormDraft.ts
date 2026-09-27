@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { parseDraft, sameValues, serializeDraft } from '../lib/drafts'
 
-/** 下書きを書き込むまでの待ち（ms）。打つたびに書かない */
+/** Wait before writing the draft (ms). Do not write on every keystroke */
 const WRITE_DELAY = 400
 
 function readStorage(key: string): string | null {
@@ -17,16 +17,17 @@ function writeStorage(key: string, value: string | null): void {
     if (value === null) window.localStorage.removeItem(key)
     else window.localStorage.setItem(key, value)
   } catch {
-    // プライベートモード等で書けなくてもフォームはそのまま使える
+    // The form stays usable even when writing fails, e.g. in private mode
   }
 }
 
 type DraftForm<T> = { values: T; setValues: (values: T) => void }
 
 /**
- * フォームの書きかけを端末に残す。Drawer の外側タップ・スワイプ・× で閉じても入力が消えず、
- * 開き直すと戻る（確認ダイアログは出さない）。初期値と同じなら下書きは消す。
- * 保存できたら clear() を呼ぶ。restored が true の間は DraftNotice で「破棄」を出す
+ * Keeps the unfinished input of a form on the device. The input survives closing the
+ * Drawer by an outside tap, a swipe or ×, and comes back on reopening (no confirmation
+ * dialog is shown). When it equals the initial values the draft is removed.
+ * Call clear() once saved. While restored is true, DraftNotice shows "破棄" (Discard)
  */
 export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
   const [restored, setRestored] = useState(false)
@@ -34,17 +35,17 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
   const stopped = useRef(false)
   const initialRef = useRef(initial)
 
-  // 開いたときに一度だけ下書きを読む
+  // Read the draft only once, on open
   useEffect(() => {
     const draft = parseDraft<T>(readStorage(key), Date.now())
     if (draft && !sameValues(draft, initialRef.current)) {
       form.setValues({ ...initialRef.current, ...draft })
       setRestored(true)
     }
-    // form は毎回別オブジェクトになりうるので、鍵が変わったときだけ読む
+    // form can be a different object every time, so read only when the key changes
   }, [key])
 
-  // 入力のたびに（少し待ってから）書く
+  // Write on every input (after a short wait)
   useEffect(() => {
     if (stopped.current) return
     if (timer.current) clearTimeout(timer.current)
@@ -61,7 +62,7 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
     }
   }, [form.values, key])
 
-  /** 保存できたとき: 下書きを消し、以後は書かない */
+  /** When saved: remove the draft and stop writing from then on */
   const clear = useCallback(() => {
     stopped.current = true
     if (timer.current) clearTimeout(timer.current)
@@ -69,7 +70,8 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
     setRestored(false)
   }, [key])
 
-  /** 続けて入力するとき: 下書きを消し、新しい初期値から書き直す */
+  /** When continuing to enter: remove the draft and start writing again from the new
+   * initial values */
   const restart = useCallback(
     (next: T) => {
       if (timer.current) clearTimeout(timer.current)
@@ -81,7 +83,7 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
     [key],
   )
 
-  /** 復元した下書きを捨てて、開いたときの値に戻す */
+  /** Discard the restored draft and go back to the values at open time */
   const discard = useCallback(() => {
     writeStorage(key, null)
     form.setValues(initialRef.current)

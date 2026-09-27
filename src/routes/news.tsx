@@ -10,23 +10,24 @@ import { formatMonthSlash } from '../lib/calendar'
 import { UUID_SHAPE } from '../lib/ids'
 import { listVendorNews, newsSources } from '../server/news'
 
-/** 1 か月ぶんの安全上限（もっと見るページングは fix round 1 で廃止。通常は届かない） */
+/** Safety cap for 1 month ("load more" paging was removed in fix round 1. Normally not reached) */
 const MONTH_LIMIT = 200
 
 const MONTH_SHAPE = /^\d{4}-\d{2}$/
 
 const newsSearchSchema = z.object({
-  // 絞り込み対象の業者 id。壊れた値（手打ち・古いブックマーク等）は絞り込み無しに倒す
+  // The vendor id to filter by. A broken value (hand typed, old bookmark, etc.) falls back to no filter
   v: z.string().regex(UUID_SHAPE).optional().catch(undefined),
-  // 表示中の月 'YYYY-MM'。無ければ今月（JST）。壊れた値は今月に倒す
+  // The month on display, 'YYYY-MM'. The current month (JST) when absent. A broken value falls
+  // back to the current month
   m: z.string().regex(MONTH_SHAPE).optional().catch(undefined),
 })
 
 /**
- * JST の今日 / 今月。calendar.tsx の todayKeyJst と同じ理由でローカルに計算する
- * （server/events.ts の nowJstIso をここで import すると、そちらが import する getDb 等が
- * クライアントバンドルに含まれてしまう懸念があるため。settings.tsx が members 絡みで
- * 同じ理由から回避しているのと同じパターン）。
+ * Today / the current month in JST. Computed locally for the same reason as todayKeyJst in
+ * calendar.tsx (importing nowJstIso of server/events.ts here risks pulling getDb and others
+ * that it imports into the client bundle. The same pattern as settings.tsx, which avoids it
+ * around members for the same reason).
  */
 function todayKeyJst(): string {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000)
@@ -39,13 +40,13 @@ function currentMonthJst(): string {
   return todayKeyJst().slice(0, 7)
 }
 
-/** 'YYYY-MM' の初日〜末日（どちらも 'YYYY-MM-DD'） */
+/** First day to last day of 'YYYY-MM' (both as 'YYYY-MM-DD') */
 function monthRange(month: string): { from: string; to: string } {
   const start = dayjs(`${month}-01T00:00:00`)
   return { from: start.format('YYYY-MM-DD'), to: start.endOf('month').format('YYYY-MM-DD') }
 }
 
-/** 'YYYY-MM' を n か月ずらす（負数で過去へ） */
+/** Shifts 'YYYY-MM' by n months (negative goes to the past) */
 function shiftMonth(month: string, delta: number): string {
   return dayjs(`${month}-01T00:00:00`).add(delta, 'month').format('YYYY-MM')
 }
@@ -61,8 +62,8 @@ export const Route = createFileRoute('/news')({
       listVendorNews({ data: { vendorId: deps.v, from, to, limit: MONTH_LIMIT, offset: 0 } }),
       newsSources(),
     ])
-    // 「今日」はサーバー側で決める（終わった日程のお知らせの色を落とす基準。
-    // クライアントの時計に依らせない）
+    // "Today" is decided on the server (the reference for dimming vendor news whose dates have
+    // passed. It must not depend on the client clock)
     return { news, sources, month, todayKey: todayKeyJst() }
   },
 })
@@ -72,8 +73,8 @@ function Page() {
   const { v } = Route.useSearch()
   const navigate = useNavigate({ from: '/news' })
   const range = monthRange(month)
-  // 今月より先（未来の月）へは進めない。今月そのものは見られる（「次の月」は今月を
-  // 表示しているときだけ無効にする）
+  // Cannot go beyond the current month (future months). The current month itself can be viewed
+  // ("次の月" (Next month) is disabled only while the current month is displayed)
   const canGoNext = month < currentMonthJst()
 
   function goToMonth(next: string) {

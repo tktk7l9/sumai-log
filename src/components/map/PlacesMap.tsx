@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from 'react'
 
 import { boundsOf, type MapMarker } from '../../lib/mapMarkers'
 
-/** 座標のある場所が 1 件も無いときの初期表示（東京駅あたり・関東が入る縮尺） */
+/** Initial view when no place has coordinates (around Tokyo Station, at a scale that fits
+ * the Kanto region) */
 const DEFAULT_CENTER = { lat: 35.68, lng: 139.69 }
 const DEFAULT_ZOOM = 9
 const SINGLE_ZOOM = 15
 
 let optionsApplied = false
-/** これだけ待っても地図が用意できなければ案内文に切り替える（ms） */
+/** If the map is still not ready after waiting this long, switch to the guidance text (ms) */
 const MAP_LOAD_TIMEOUT_MS = 15_000
 
-/** API キーなどは 1 度しか設定できない（2 回目以降は無視される）ので、最初の 1 回だけ渡す */
+/** The API key and other options can be set only once (later calls are ignored), so pass
+ * them only the first time */
 function ensureOptions(apiKey: string) {
   if (optionsApplied) return
   setOptions({ key: apiKey, v: 'weekly', language: 'ja', region: 'JP' })
@@ -27,7 +29,8 @@ type Gm = {
 }
 type Layer = { marker: google.maps.marker.AdvancedMarkerElement; pin: HTMLDivElement }
 
-/** ピンの DOM（見た目は src/styles.css の .place-pin）。AdvancedMarker は下端中央を座標に合わせる */
+/** DOM of the pin (the look is .place-pin in src/styles.css). AdvancedMarker aligns the
+ * bottom center to the coordinates */
 function pinElement(
   visited: boolean,
   active: boolean,
@@ -41,14 +44,15 @@ function pinElement(
 }
 
 /**
- * 場所のピンを Google マップ上に描く（Maps JavaScript API + AdvancedMarker）。
- * 地理院タイル + Leaflet から置き換えた（所有者の要望、2026-09-19）。
+ * Draws the place pins on Google Maps (Maps JavaScript API + AdvancedMarker).
+ * Replaced GSI tiles + Leaflet (owner's request, 2026-09-19).
  *
- * window に依存するのでこのファイル自体を直接 import してはいけない。
- * SSR を跨ぐ呼び出しは PlacesMapLazy から行う。
+ * It depends on window, so this file itself must not be imported directly.
+ * Calls that cross SSR go through PlacesMapLazy.
  *
- * API キーは server fn（getMapConfig）から loader 経由で受け取る。リファラー制限つきの
- * 公開キーなのでクライアントに置いてよいが、リポジトリには書かない（secret / .dev.vars）。
+ * The API key is received from the server fn (getMapConfig) via the loader. It is a public
+ * key with a referrer restriction, so it may live on the client, but it is not written in
+ * the repository (secret / .dev.vars).
  */
 export function PlacesMap({
   markers,
@@ -61,14 +65,15 @@ export function PlacesMap({
 }: {
   markers: MapMarker[]
   focusId?: string | null
-  /** 現在地などへ地図を寄せたいときに渡す。変わるたびに寄せる */
+  /** Pass this to move the map to the current location etc. It moves on every change */
   center?: { lat: number; lng: number }
   onSelect?: (id: string) => void
-  /** 未設定（null）なら地図の代わりに案内文を出す */
+  /** When not set (null), show the guidance text instead of the map */
   apiKey: string | null
-  /** AdvancedMarker に必須。Cloud コンソールで作った Map ID か 'DEMO_MAP_ID' */
+  /** Required by AdvancedMarker. A Map ID created in the Cloud console, or 'DEMO_MAP_ID' */
   mapId: string
-  /** 'cooperative' はページの中に埋めた小さな地図用（1 本指のスクロールを地図が奪わない） */
+  /** 'cooperative' is for a small map embedded in a page (the map does not steal
+   * one-finger scrolling) */
   gesture?: 'greedy' | 'cooperative'
 }) {
   const elRef = useRef<HTMLDivElement>(null)
@@ -83,16 +88,17 @@ export function PlacesMap({
     focusIdRef.current = focusId
   })
 
-  // 地図の配色はアプリで選んだ配色（設定のライト／ダーク）に合わせる。端末の設定に
-  // 従わせる（FOLLOW_SYSTEM）と、アプリをライトにしていても端末がダークなら地図だけ
-  // ダークになっていた（所有者の報告、2026-09-24）。colorScheme は地図を作るときにしか
-  // 渡せないので、切り替えたら作り直す
+  // The map color scheme follows the scheme chosen in the app (light/dark in settings).
+  // When it followed the device setting (FOLLOW_SYSTEM), only the map became dark if the
+  // device was dark even with the app set to light (owner's report, 2026-09-24).
+  // colorScheme can only be passed when the map is created, so recreate the map on switch
   const scheme = useComputedColorScheme('light')
 
   useEffect(() => {
     if (!apiKey || !elRef.current || gmRef.current) return
     let cancelled = false
-    // 読み込みが返ってこない（通信不良・キーの制限で無言のまま）ときも空白のままにしない
+    // Do not stay blank even when loading never returns (silent because of a bad
+    // connection or a key restriction)
     const timer = setTimeout(() => {
       if (!cancelled && !gmRef.current) setFailed(true)
     }, MAP_LOAD_TIMEOUT_MS)
@@ -110,8 +116,9 @@ export function PlacesMap({
         zoom: DEFAULT_ZOOM,
         minZoom: 4,
         maxZoom: 18,
-        // 既定 UI（地図/航空写真の切替・ストリートビュー・全画面）は出さず、ズームだけ右上に。
-        // 右下は FAB「場所を追加」が浮くので空けておく（置き換え前と同じ配置）
+        // Do not show the default UI (map/satellite switch, Street View, fullscreen); only
+        // zoom, at the top right. The bottom right is kept free because the FAB
+        // "場所を追加" (Add a place) floats there (same layout as before the replacement)
         disableDefaultUI: true,
         zoomControl: true,
         zoomControlOptions: { position: core.ControlPosition.INLINE_END_BLOCK_START },
@@ -134,9 +141,9 @@ export function PlacesMap({
     }
   }, [apiKey, mapId, gesture, scheme])
 
-  // マーカーを描き直し、表示範囲を合わせる。focusId はここでは見ない
-  // （ピンをタップしただけで視点が戻ってしまうのを防ぐため、アクティブ表示は
-  // 下の別 effect に分離している）。
+  // Redraw the markers and fit the visible range. focusId is not read here
+  // (to keep the viewpoint from resetting just because a pin was tapped, the active
+  // display is split into the separate effect below).
   useEffect(() => {
     const gm = gmRef.current
     if (!ready || !gm) return
@@ -170,7 +177,7 @@ export function PlacesMap({
     }
   }, [markers, ready])
 
-  // アクティブなピンの見た目だけ差し替える。視点は動かさない。
+  // Swap only the look of the active pin. Do not move the viewpoint.
   useEffect(() => {
     if (!ready) return
     for (const [id, { marker, pin }] of layerRef.current) {

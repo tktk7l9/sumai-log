@@ -1,6 +1,9 @@
 import { Arrow, Figure, Label } from './Figure'
 
-/** 同じ断面で、隙間（コンセント・配管まわり・サッシ）から風が入り込む向きの矢印 */
+/**
+ * On the same cross section, arrows in the direction wind enters through gaps (outlets, around
+ * pipes, window sashes)
+ */
 export function AirtightLeaksDiagram() {
   return (
     <Figure label="家の断面図。コンセント・配管まわり・サッシの隙間から風が入り込む矢印。C値は隙間の合計を床面積で割った値">

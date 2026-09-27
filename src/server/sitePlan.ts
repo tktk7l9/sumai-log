@@ -6,7 +6,7 @@ import { sitePlanInput } from './sitePlan.schema'
 
 export { sitePlanInput }
 
-/** 区画シミュレーターの初期表示。建築計画（坪数）は建物の既定値に使う */
+/** Initial display of the site plan simulator. The build plan (tsubo) is used for the building's defaults */
 export const getSitePlan = createServerFn().handler(async () => {
   const db = getDb()
   const [plan, buildPlan] = await Promise.all([readSitePlan(db), readBuildPlan(db)])

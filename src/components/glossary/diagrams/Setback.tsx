@@ -1,6 +1,6 @@
 import { Arrow, Figure, Label } from './Figure'
 
-/** 幅3mの道路、中心線、2mの後退線、その内側に建てる */
+/** A road 3m wide, the center line, the 2m setback line, and building inside of it */
 export function SetbackDiagram() {
   return (
     <Figure label="幅3mの道路の中心線から2m後退した線の内側に建物を建てる、セットバックの断面図">

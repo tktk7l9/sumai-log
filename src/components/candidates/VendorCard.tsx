@@ -142,9 +142,10 @@ export function VendorCard({
             </Group>
           ) : null}
         </Group>
-        {/* 坪単価・箇所数・リンクのどれも無ければ行自体を出さない。formatTsubo は
-            常に「—」を返すため、この行だけ表示すると中身の無い「—」だけの行が
-            残ってカード下部に余白ができて見える（所有者の指摘）。 */}
+        {/* If there is no price per tsubo, no place count and no link, the row itself is
+            not rendered. formatTsubo always returns "—", so rendering only this row would
+            leave a contentless row of just "—" that looks like blank space at the bottom
+            of the card (pointed out by the owner). */}
         {vendor.pricePerTsuboMin != null ||
         vendor.pricePerTsuboMax != null ||
         vendor.placeCount > 0 ||

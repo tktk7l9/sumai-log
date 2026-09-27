@@ -1,6 +1,9 @@
 import { Figure, Label } from './Figure'
 
-/** 30年の帯グラフ。マンション=管理費+積立金の階段、戸建て=自分で積む修繕費の波 */
+/**
+ * A band chart over 30 years. Condominium = steps of management fee + reserve fund, detached house
+ * = waves of repair costs saved up by yourself
+ */
 export function CostCompareDiagram() {
   return (
     <Figure label="30年間の維持費の比較。マンションは管理費と修繕積立金が階段状に増える。戸建ては自分で積み立てる修繕費が波状にかかる">

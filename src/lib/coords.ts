@@ -1,13 +1,13 @@
 /**
- * 座標の読み取りと表示用フォーマット。
+ * Reading coordinates and formatting them for display.
  *
- * kousan-admin `src/lib/maps.ts` から `LatLng` `parseCoordinate` `formatLatLng`
- * だけを移植したもの（Google Maps の URL 組み立ては持ってこない）。
+ * Ported from kousan-admin `src/lib/maps.ts`: only `LatLng` `parseCoordinate` `formatLatLng`
+ * (the Google Maps URL building is not brought over).
  */
 
 export type LatLng = { lat: number; lng: number }
 
-// 12°34'56.7"N 123°45'01.2"E （プライム記号での表記も受ける）
+// 12°34'56.7"N 123°45'01.2"E (notation with prime symbols is accepted too)
 const DMS =
   /^(\d{1,3})\s*°\s*(\d{1,2})\s*['′]\s*(\d{1,2}(?:\.\d+)?)\s*["″]\s*([NS])[\s,]+(\d{1,3})\s*°\s*(\d{1,2})\s*['′]\s*(\d{1,2}(?:\.\d+)?)\s*["″]\s*([EW])$/i
 
@@ -19,11 +19,12 @@ function inRange({ lat, lng }: LatLng): boolean {
 }
 
 /**
- * 座標の文字列を読む。度分秒と十進のどちらも受ける。
+ * Reads a coordinate string. Accepts both degrees-minutes-seconds and decimal.
  *
- * 台帳には調べた人が書いた表記のまま入れておき、変換はここでやる。
- * 十進に直した値だけを保存すると、元の記録と突き合わせられなくなる。
- * 読めない・範囲外の値は null を返し、画面側で「地図を出せない」と伝える。
+ * The ledger keeps the notation exactly as the person who looked it up wrote it; conversion
+ * happens here. Storing only the decimal value would make it impossible to check against the
+ * original record.
+ * Unreadable or out-of-range values return null, and the screen says the map cannot be shown.
  */
 export function parseCoordinate(value: string | null | undefined): LatLng | null {
   const trimmed = value?.trim()
@@ -32,7 +33,7 @@ export function parseCoordinate(value: string | null | undefined): LatLng | null
   const dms = DMS.exec(trimmed)
   if (dms) {
     const [, latDeg, latMin, latSec, ns, lngDeg, lngMin, lngSec, ew] = dms
-    // 分・秒が 60 以上の表記は書き間違いなので受けない
+    // Minutes or seconds of 60 or more are a typo, so reject them
     if (Number(latMin) >= 60 || Number(latSec) >= 60) return null
     if (Number(lngMin) >= 60 || Number(lngSec) >= 60) return null
 
@@ -55,7 +56,10 @@ export function parseCoordinate(value: string | null | undefined): LatLng | null
   return null
 }
 
-/** 座標を地図に渡す形にする。度分秒の割り算で出た端数は 6 桁で落とす（約 0.1m） */
+/**
+ * Formats coordinates for the map. The fraction from the DMS division is rounded to 6 digits
+ * (about 0.1m)
+ */
 export function formatLatLng({ lat, lng }: LatLng): string {
   const round = (value: number) => Number(value.toFixed(6)).toString()
   return `${round(lat)},${round(lng)}`

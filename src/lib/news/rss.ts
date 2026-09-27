@@ -1,7 +1,8 @@
 /**
- * 業者のお知らせフィード（RSS 2.0）を候補に変換する。design.md §1 の方針どおり
- * 外部 XML パーサは使わず、正規表現だけで `<item>` を拾う。壊れた XML や
- * 想定外の入力でも例外は投げず、読めなかった item を静かに落として続ける。
+ * Turns a vendor news feed (RSS 2.0) into candidates. Following the policy of design.md §1, no
+ * external XML parser is used and `<item>` is picked up with regular expressions only. Broken
+ * XML or unexpected input does not throw; items that could not be read are dropped silently
+ * and processing continues.
  */
 
 import { parseToUtcMs, toJstDateKey } from '../jst'
@@ -19,7 +20,7 @@ const SUMMARY_MAX = 300
 
 const ITEM_PATTERN = /<item\b[^>]*>([\s\S]*?)<\/item>/gi
 
-/** item のブロックから要素の中身（生テキスト）を取り出す。無ければ null。 */
+/** Takes the contents (raw text) of an element from an item block. null when absent. */
 function extractElementRaw(block: string, tag: string): string | null {
   const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')
   const match = pattern.exec(block)
@@ -28,7 +29,7 @@ function extractElementRaw(block: string, tag: string): string | null {
 
 const CDATA_PATTERN = /^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/
 
-/** `<![CDATA[...]]>` で包まれていれば中身を取り出す。包まれていなければそのまま。 */
+/** Takes the contents when wrapped in `<![CDATA[...]]>`. Returned as is when not wrapped. */
 function unwrapCdata(raw: string): string {
   const match = CDATA_PATTERN.exec(raw)
   return match ? match[1] : raw
@@ -58,14 +59,16 @@ const MONTHS: Record<string, number> = {
 const RESULT_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 /**
- * RFC 2822 の pubDate（`+0900` / `GMT` などのオフセット）を JST の 'YYYY-MM-DD' に直す。
- * 読めない・日が 1〜31 の範囲外・最終的な結果が `YYYY-MM-DD` の形にならなければ null。
+ * Converts an RFC 2822 pubDate (offsets such as `+0900` / `GMT`) into a JST 'YYYY-MM-DD'.
+ * null when it cannot be read, the day is outside 1-31, or the final result is not in the
+ * `YYYY-MM-DD` form.
  *
- * `Date.parse` は 2/31 のような実在しない日を NaN にせず「翌月へ繰り上げ」て
- * 解決してしまうことがある（例: `2026-02-31` → `2026-03-03`）。そのため
- * `parseToUtcMs` で得た UTC 時点の月を、パースする前の入力の月と突き合わせ、
- * ずれていれば繰り上がりが起きたとみなして捨てる（JST への変換で日付・月が
- * 変わるのは正常な挙動なので、その変換の前・UTC の時点で比べる）。
+ * `Date.parse` sometimes does not turn a non-existent day such as 2/31 into NaN but resolves
+ * it by "rolling over to the next month" (e.g. `2026-02-31` -> `2026-03-03`). So the month at
+ * the UTC instant from `parseToUtcMs` is compared with the month of the input before parsing,
+ * and when they differ a rollover is assumed and the item is dropped (the date / month
+ * changing in the conversion to JST is normal behavior, so the comparison is made before
+ * that conversion, at the UTC instant).
  */
 function pubDateToJstDateKey(raw: string): string | null {
   const match = PUB_DATE_PATTERN.exec(raw.trim())
@@ -89,11 +92,11 @@ function pubDateToJstDateKey(raw: string): string | null {
 }
 
 /**
- * RSS 2.0 の XML から `<item>` ごとに候補を作る。`link` が `http(s)` でない・
- * `link`/`pubDate` が読めない・`title` が空（要素が無い、または中身が空白のみ）の
- * item は落とす。`description` が無くても item 自体は残す（summary は null）。
- * 壊れた XML は `<item>` が一つも見つからず自然に空配列になる（例外は投げない）。
- * 入力が MAX_INPUT_LENGTH を超える場合も空配列。
+ * Builds a candidate for each `<item>` of RSS 2.0 XML. An item is dropped when `link` is not
+ * `http(s)`, `link`/`pubDate` cannot be read, or `title` is empty (no element, or only
+ * whitespace inside). Without `description` the item itself is kept (summary is null).
+ * Broken XML has no `<item>` to find and naturally gives an empty array (does not throw).
+ * Input longer than MAX_INPUT_LENGTH also gives an empty array.
  */
 export function parseRss(xml: string): NewsCandidate[] {
   if (xml.length > MAX_INPUT_LENGTH) return []

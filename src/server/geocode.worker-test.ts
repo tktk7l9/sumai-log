@@ -16,7 +16,7 @@ const fake =
     new Response(JSON.stringify(body), { status: ok ? 200 : 500 })
 
 describe('geocodeAddress', () => {
-  it('1 回目は API、2 回目はキャッシュ', async () => {
+  it('uses the API the 1st time and the cache the 2nd time', async () => {
     const hit = [{ geometry: { coordinates: [139.5, 35.5] }, properties: { title: 'テスト市' } }]
     expect(await geocodeAddress(db, ' 仮想県 テスト市 ', fake(hit))).toEqual({
       lat: 35.5,
@@ -31,7 +31,7 @@ describe('geocodeAddress', () => {
       source: 'cache',
     })
   })
-  it('API が空・失敗・例外なら null で、キャッシュに残さない', async () => {
+  it('returns null and caches nothing when the API is empty, fails or throws', async () => {
     expect(await geocodeAddress(db, '架空市', fake([]))).toBeNull()
     expect(await geocodeAddress(db, '架空市', fake([], false))).toBeNull()
     expect(

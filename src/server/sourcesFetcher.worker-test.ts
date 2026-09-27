@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveSourceCore } from './sourcesFetcher'
 
-/** build(url) が Response を返すフェイク fetch。実際の YouTube は一切叩かない */
+/** A fake fetch where build(url) returns the Response. Never hits the real YouTube */
 function fakeFetch(build: (url: string, init?: RequestInit) => Response | null): typeof fetch {
   return (async (url: string | URL, init?: RequestInit) => {
     const res = build(String(url), init)
@@ -30,7 +30,7 @@ function channelHtml(overrides: Partial<Record<'title' | 'description' | 'image'
 }
 
 describe('resolveSourceCore', () => {
-  it('YouTube チャンネルでない URL はエラー（fetch しない）', async () => {
+  it('a URL that is not a YouTube channel is an error (no fetch)', async () => {
     const fetchImpl = fakeFetch(() => {
       throw new Error('fetch されるべきではない')
     })
@@ -39,7 +39,7 @@ describe('resolveSourceCore', () => {
     if (!result.ok) expect(result.error).toContain('YouTube')
   })
 
-  it('YouTube チャンネル URL を取得して og:title/description/image/channelId を返す', async () => {
+  it('fetches a YouTube channel URL and returns og:title/description/image/channelId', async () => {
     const fetchImpl = fakeFetch((url) => {
       expect(url).toBe(CHANNEL_URL)
       return new Response(channelHtml(), { status: 200 })
@@ -57,7 +57,7 @@ describe('resolveSourceCore', () => {
     })
   })
 
-  it('Accept-Language: ja と Cookie: CONSENT=YES+1 を送る', async () => {
+  it('sends Accept-Language: ja and Cookie: CONSENT=YES+1', async () => {
     const fetchImpl = fakeFetch((_url, init) => {
       const headers = new Headers(init?.headers)
       expect(headers.get('accept-language')).toBe('ja')
@@ -68,7 +68,7 @@ describe('resolveSourceCore', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('/channel/UC… の URL は URL 由来の channelId を優先し、handle は null', async () => {
+  it('a /channel/UC… URL prefers the channelId from the URL, and handle is null', async () => {
     const channelUrl = `https://www.youtube.com/channel/${CHANNEL_ID}`
     const fetchImpl = fakeFetch(() => new Response(channelHtml(), { status: 200 }))
     const result = await resolveSourceCore(channelUrl, fetchImpl)
@@ -79,7 +79,7 @@ describe('resolveSourceCore', () => {
     }
   })
 
-  it('許可ホスト外の og:image は avatarUrl に採用しない（null）', async () => {
+  it('an og:image outside the allowed hosts is not adopted as avatarUrl (null)', async () => {
     const fetchImpl = fakeFetch(
       () =>
         new Response(channelHtml({ image: 'https://evil.example/avatar.jpg' }), { status: 200 }),
@@ -89,14 +89,14 @@ describe('resolveSourceCore', () => {
     if (result.ok) expect(result.fields.avatarUrl).toBeNull()
   })
 
-  it('HTTP エラーはそのステータスをエラーに含める', async () => {
+  it('an HTTP error includes its status in the error', async () => {
     const fetchImpl = fakeFetch(() => new Response('not found', { status: 404 }))
     const result = await resolveSourceCore(CHANNEL_URL, fetchImpl)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.error).toContain('404')
   })
 
-  it('content-length ヘッダが大きくても無視して本文を読む（先頭だけ読む方針のため content-length 自体は見ない）', async () => {
+  it('ignores a large content-length header and reads the body (content-length itself is not looked at, given the policy of reading only the top)', async () => {
     const fetchImpl = fakeFetch(
       () =>
         new Response('x', {
@@ -117,7 +117,7 @@ describe('resolveSourceCore', () => {
     }
   })
 
-  it('本文が 1MB を大きく超えていても失敗にせず、先頭部分だけで解析する（3MB のストリーム・<head> は先頭 100KB 以内）', async () => {
+  it('does not fail even when the body far exceeds 1MB, and parses with the top part only (3MB stream, <head> within the first 100KB)', async () => {
     const headBytes = new TextEncoder().encode(channelHtml())
     expect(headBytes.byteLength).toBeLessThan(100 * 1024)
     const totalBytes = 3 * 1024 * 1024
@@ -137,7 +137,8 @@ describe('resolveSourceCore', () => {
           controller.close()
           return
         }
-        // 中身は何でもよい（メタタグに一致しなければ抽出結果に影響しない）ので 0 埋め
+        // The content can be anything (it does not affect the extraction result unless
+        // it matches a meta tag), so zero-fill
         const size = Math.min(chunkSize, totalBytes - sent)
         controller.enqueue(new Uint8Array(size))
         sent += size
@@ -158,7 +159,7 @@ describe('resolveSourceCore', () => {
     })
   })
 
-  it('fetch が例外を投げてもクラッシュせずエラーを返す', async () => {
+  it('returns an error without crashing even when fetch throws', async () => {
     const fetchImpl = (async () => {
       throw new Error('network down')
     }) as typeof fetch
@@ -166,7 +167,7 @@ describe('resolveSourceCore', () => {
     expect(result).toEqual({ ok: false, error: 'network down' })
   })
 
-  it('リダイレクト先が許可されていなければエラー', async () => {
+  it('an error when the redirect target is not allowed', async () => {
     const fetchImpl = fakeFetch((url) => {
       if (url === CHANNEL_URL) {
         return new Response(null, { status: 302, headers: { location: 'https://localhost/evil' } })

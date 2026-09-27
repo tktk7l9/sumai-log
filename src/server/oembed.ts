@@ -2,16 +2,18 @@ import { canonicalYouTubeUrl, youtubeThumbnailUrl } from '../lib/youtube'
 
 export type OEmbedResult = { title: string; channel: string | null; thumbnailUrl: string }
 
-/** videos.ts の videoInput（title max 300 / channel max 200）を絶対に超えないように切る上限 */
+/** Truncation limits so that videoInput in videos.ts (title max 300 / channel max 200) is never exceeded */
 const TITLE_MAX = 300
 const CHANNEL_MAX = 200
 
 /**
- * YouTube の oEmbed エンドポイントを叩いて題名・チャンネル・サムネを取る。
- * 既定 5 秒（timeoutMs で差し替え可・テスト用）で諦める。非 200・JSON 不正・例外は
- * すべて null（呼び出し側は「自動取得できませんでした」に落とす）。thumbnail_url が
- * 無ければ youtubeThumbnailUrl(id) で補う。title/channel は videoInput の上限を
- * 超えないようここで切り詰める（フォームの zod 検証が oEmbed の出力だけで落ちないように）。
+ * Hits the YouTube oEmbed endpoint and gets the title, channel and thumbnail.
+ * Gives up after 5 seconds by default (replaceable with timeoutMs, for tests). Non-200,
+ * invalid JSON and exceptions all become null (the caller falls back to
+ * "自動取得できませんでした" (could not fetch automatically)). If thumbnail_url is
+ * missing, it is filled in with youtubeThumbnailUrl(id). title/channel are truncated here
+ * so they do not exceed the videoInput limits (so that the form's zod validation does not
+ * fail on the oEmbed output alone).
  */
 export async function fetchYouTubeOEmbed(
   videoId: string,

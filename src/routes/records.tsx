@@ -20,7 +20,8 @@ import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
   tab: z.enum(['visits', 'videos']).default('visits'),
-  // 予定から「記録を書く」で来たとき: その予定を初期値にしてフォームを開く
+  // When arriving from an event through "記録を書く" (Write a record): open the form with that
+  // event as the initial values
   fromEvent: z.string().regex(UUID_SHAPE).optional(),
 })
 
@@ -35,14 +36,15 @@ export const Route = createFileRoute('/records')({
       visitFormOptions(),
       videoFormOptions(),
     ])
-    // visitFormOptions の予定一覧は直近 180 日の窓に限られる。窓の外の予定から
-    // 「記録を書く」で来た場合はここで個別に引く（無ければ無視して既定値のまま）
+    // The event list of visitFormOptions is limited to a window of the last 180 days. When
+    // arriving through "記録を書く" from an event outside the window, look it up individually
+    // here (when absent, ignore it and keep the defaults)
     let fromEventRow: Event | undefined
     if (deps.fromEvent && !options.events.some((e) => e.id === deps.fromEvent)) {
       try {
         fromEventRow = (await getEvent({ data: { id: deps.fromEvent } })).event
       } catch {
-        // 404: 予定が既に削除されている等。既定値のまま進める
+        // 404: the event is already deleted, etc. Carry on with the defaults
       }
     }
     return { visits, videos, options, videoOptions, fromEventRow }
@@ -58,7 +60,8 @@ function Page() {
     fromEventRow: loadedFromEventRow,
   } = Route.useLoaderData()
   const { tab: tabParam, fromEvent } = Route.useSearch()
-  // 予定から「記録を書く」で来たときは、tab パラメータが無くても必ず見学タブを開く
+  // When arriving from an event through "記録を書く", always open the visits tab even without
+  // the tab parameter
   const tab = fromEvent ? 'visits' : tabParam
   const navigate = useNavigate({ from: '/records' })
   const [opened, setOpened] = useState(fromEvent !== undefined)

@@ -25,7 +25,7 @@ const item = (
 })
 
 describe('mergeFeed', () => {
-  it('at の新しい順に並べる', () => {
+  it('sorts by at, newest first', () => {
     const groups = [
       [item('visit', 'a', '2030-01-01T00:00:00Z')],
       [item('event', 'b', '2030-01-03T00:00:00Z')],
@@ -34,7 +34,7 @@ describe('mergeFeed', () => {
     expect(mergeFeed(groups, 10).map((i) => i.id)).toEqual(['b', 'c', 'a'])
   })
 
-  it('同時刻は kind の順（見学記録→予定→業者→物件→場所→動画→情報源→コメント→写真）で安定する', () => {
+  it('is stable at the same time by kind order (visit record -> event -> vendor -> property -> place -> video -> source -> comment -> photo)', () => {
     const at = '2030-01-01T00:00:00Z'
     const groups = [
       [item('photo', 'photo', at), item('video', 'video', at), item('visit', 'visit', at)],
@@ -50,7 +50,7 @@ describe('mergeFeed', () => {
     ])
   })
 
-  it('limit 件に絞る', () => {
+  it('narrows down to limit items', () => {
     const groups = [
       [
         item('visit', 'a', '2030-01-01T00:00:00Z'),
@@ -61,12 +61,12 @@ describe('mergeFeed', () => {
     expect(mergeFeed(groups, 2).map((i) => i.id)).toEqual(['c', 'b'])
   })
 
-  it('空なら空', () => {
+  it('returns empty for empty', () => {
     expect(mergeFeed([], 10)).toEqual([])
     expect(mergeFeed([[]], 10)).toEqual([])
   })
 
-  it('limit が 0 以下なら空（負数を slice にそのまま渡さない）', () => {
+  it('returns empty when limit is 0 or less (does not pass a negative number straight to slice)', () => {
     const groups = [
       [item('visit', 'a', '2030-01-01T00:00:00Z'), item('visit', 'b', '2030-01-02T00:00:00Z')],
     ]
@@ -74,14 +74,14 @@ describe('mergeFeed', () => {
     expect(mergeFeed(groups, -1)).toEqual([])
   })
 
-  it('at が読めない要素は最も古い扱いにする（feed から落とさない）', () => {
+  it('treats an item with an unreadable at as the oldest (does not drop it from the feed)', () => {
     const groups = [
       [item('visit', 'bad', 'invalid'), item('visit', 'good', '2030-01-01T00:00:00Z')],
     ]
     expect(mergeFeed(groups, 10).map((i) => i.id)).toEqual(['good', 'bad'])
   })
 
-  it('href.search を持つ項目もそのまま素通しする（予定の /calendar 遷移用）', () => {
+  it('passes an item with href.search through as is (for the event navigation to /calendar)', () => {
     const withSearch: FeedItem = {
       kind: 'event',
       id: 'e1',
@@ -94,7 +94,7 @@ describe('mergeFeed', () => {
     expect(mergeFeed([[withSearch]], 10)).toEqual([withSearch])
   })
 
-  it('入力の配列・要素を書き換えない', () => {
+  it('does not mutate the input arrays or items', () => {
     const groupA: readonly FeedItem[] = Object.freeze([item('visit', 'a', '2030-01-02T00:00:00Z')])
     const groupB: readonly FeedItem[] = Object.freeze([item('event', 'b', '2030-01-01T00:00:00Z')])
     const groups = Object.freeze([groupA, groupB])
@@ -107,7 +107,7 @@ describe('mergeFeed', () => {
 })
 
 describe('FEED_KIND_LABEL', () => {
-  it('全 kind に日本語ラベルがある', () => {
+  it('has a Japanese label for every kind', () => {
     expect(FEED_KIND_LABEL).toEqual({
       visit: '見学記録',
       event: '予定',
@@ -123,17 +123,17 @@ describe('FEED_KIND_LABEL', () => {
 })
 
 describe('FEED_ACTION_LABEL', () => {
-  it('add/update に日本語ラベルがある', () => {
+  it('has a Japanese label for add/update', () => {
     expect(FEED_ACTION_LABEL).toEqual({ add: '追加', update: '更新' })
   })
 })
 
 describe('groupFeedByDay', () => {
-  it('at（JST の日付キー）でまとめ、最初に出てきた順（新しい日が先）で日を並べる', () => {
+  it('groups by at (the JST date key) and orders days by first appearance (newer day first)', () => {
     const items = [
       item('event', 'b', '2030-01-02T20:00:00Z'), // JST 2030-01-03
       item('visit', 'a', '2030-01-02T00:00:00Z'), // JST 2030-01-02
-      item('vendor', 'c', '2030-01-01T23:00:00Z'), // JST 2030-01-02（同じ日にまとまる）
+      item('vendor', 'c', '2030-01-01T23:00:00Z'), // JST 2030-01-02 (grouped into the same day)
     ]
     const groups = groupFeedByDay(items)
     expect(groups.map((g) => g.day)).toEqual(['2030-01-03', '2030-01-02'])
@@ -141,7 +141,7 @@ describe('groupFeedByDay', () => {
     expect(groups[1]?.items.map((i) => i.id)).toEqual(['a', 'c'])
   })
 
-  it('同じ日が連続していれば 1 グループにまとまる', () => {
+  it('groups consecutive items of the same day into 1 group', () => {
     const items = [
       item('visit', 'a', '2030-01-02T00:00:00Z'),
       item('event', 'b', '2030-01-02T10:00:00Z'),
@@ -151,13 +151,13 @@ describe('groupFeedByDay', () => {
     expect(groups[0]).toEqual({ day: '2030-01-02', items: [items[0], items[1]] })
   })
 
-  it('空なら空', () => {
+  it('returns empty for empty', () => {
     expect(groupFeedByDay([])).toEqual([])
   })
 })
 
 describe('feedSentence', () => {
-  it('visit: 追加', () => {
+  it('visit: add', () => {
     const i: FeedItem = { ...item('visit', 'v1', '2030-01-01T00:00:00Z'), title: 'ギャラリーA' }
     expect(feedSentence(i)).toEqual({
       before: '見学記録「',
@@ -166,7 +166,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('visit: 更新', () => {
+  it('visit: update', () => {
     const i: FeedItem = {
       ...item('visit', 'v1', '2030-01-01T00:00:00Z', 'update'),
       title: 'ギャラリーA',
@@ -178,7 +178,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('event: 追加/更新', () => {
+  it('event: add/update', () => {
     const add: FeedItem = { ...item('event', 'e1', '2030-01-01T00:00:00Z'), title: '内覧会' }
     const update: FeedItem = {
       ...item('event', 'e1', '2030-01-01T00:00:00Z', 'update'),
@@ -188,7 +188,7 @@ describe('feedSentence', () => {
     expect(feedSentence(update)).toEqual({ before: '予定「', link: '内覧会', after: '」を更新' })
   })
 
-  it('vendor: 追加/更新', () => {
+  it('vendor: add/update', () => {
     const add: FeedItem = { ...item('vendor', 've1', '2030-01-01T00:00:00Z'), title: '甲建設' }
     const update: FeedItem = {
       ...item('vendor', 've1', '2030-01-01T00:00:00Z', 'update'),
@@ -198,7 +198,7 @@ describe('feedSentence', () => {
     expect(feedSentence(update)).toEqual({ before: '業者「', link: '甲建設', after: '」を更新' })
   })
 
-  it('property: 追加/更新', () => {
+  it('property: add/update', () => {
     const add: FeedItem = {
       ...item('property', 'p1', '2030-01-01T00:00:00Z'),
       title: 'ワイズマンション',
@@ -219,7 +219,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('place: 追加/更新', () => {
+  it('place: add/update', () => {
     const add: FeedItem = {
       ...item('place', 'pl1', '2030-01-01T00:00:00Z'),
       title: 'モデルハウスA',
@@ -240,7 +240,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('video: 追加/更新', () => {
+  it('video: add/update', () => {
     const add: FeedItem = { ...item('video', 'vi1', '2030-01-01T00:00:00Z'), title: 'テスト動画' }
     const update: FeedItem = {
       ...item('video', 'vi1', '2030-01-01T00:00:00Z', 'update'),
@@ -254,7 +254,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('source: 追加/更新', () => {
+  it('source: add/update', () => {
     const add: FeedItem = { ...item('source', 's1', '2030-01-01T00:00:00Z'), title: 'テストch' }
     const update: FeedItem = {
       ...item('source', 's1', '2030-01-01T00:00:00Z', 'update'),
@@ -268,7 +268,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('comment: 対象名をリンクに、本文をコロン以降に載せる（action に関わらず文言は固定）', () => {
+  it('comment: puts the target name in the link and the body after the colon (wording is fixed regardless of action)', () => {
     const i: FeedItem = {
       ...item('comment', 'c1', '2030-01-01T00:00:00Z'),
       subtitle: '乙建設',
@@ -281,7 +281,7 @@ describe('feedSentence', () => {
     })
   })
 
-  it('comment: subtitle が無ければ「（削除済み）」をリンクに使う', () => {
+  it('comment: uses "（削除済み）" (deleted) as the link when there is no subtitle', () => {
     const i: FeedItem = {
       ...item('comment', 'c1', '2030-01-01T00:00:00Z'),
       subtitle: undefined,
@@ -290,7 +290,7 @@ describe('feedSentence', () => {
     expect(feedSentence(i).link).toBe('（削除済み）')
   })
 
-  it('comment: 本文が 40 字を超えたら 40 字で切って … を付ける', () => {
+  it('comment: cuts the body at 40 characters and appends … when it exceeds 40 characters', () => {
     const body = 'あ'.repeat(45)
     const i: FeedItem = {
       ...item('comment', 'c1', '2030-01-01T00:00:00Z'),
@@ -300,7 +300,7 @@ describe('feedSentence', () => {
     expect(feedSentence(i).after).toBe(`」にコメント：${'あ'.repeat(40)}…`)
   })
 
-  it('comment: 本文がちょうど 40 字なら … は付かない', () => {
+  it('comment: does not append … when the body is exactly 40 characters', () => {
     const body = 'あ'.repeat(40)
     const i: FeedItem = {
       ...item('comment', 'c1', '2030-01-01T00:00:00Z'),
@@ -310,7 +310,7 @@ describe('feedSentence', () => {
     expect(feedSentence(i).after).toBe(`」にコメント：${body}`)
   })
 
-  it('photo: 見学記録名をリンクに、追加固定の文言になる', () => {
+  it('photo: puts the visit record name in the link, with wording fixed to add', () => {
     const i: FeedItem = {
       ...item('photo', 'ph1', '2030-01-01T00:00:00Z'),
       subtitle: 'ギャラリーC',
@@ -319,7 +319,7 @@ describe('feedSentence', () => {
     expect(feedSentence(i)).toEqual({ before: '「', link: 'ギャラリーC', after: '」に写真を追加' })
   })
 
-  it('photo: subtitle が無ければ「見学記録」をリンクに使う', () => {
+  it('photo: uses "見学記録" (visit record) as the link when there is no subtitle', () => {
     const i: FeedItem = {
       ...item('photo', 'ph1', '2030-01-01T00:00:00Z'),
       subtitle: undefined,

@@ -9,7 +9,7 @@ import { actor, db, reset } from './test-helpers'
 beforeEach(reset)
 
 describe('places', () => {
-  it('見学記録がある場所は消せない', async () => {
+  it('a place with visit records cannot be deleted', async () => {
     const placeId = await upsertPlace(db, { name: 'テスト会場', kind: 'open_house' }, actor)
     await db
       .insert(visits)
@@ -18,7 +18,7 @@ describe('places', () => {
     expect(await db.select().from(places).where(eq(places.id, placeId))).toHaveLength(1)
   })
 
-  it('地図用の一覧に業者名と見学済みが付く', async () => {
+  it('the list for the map carries the vendor name and the visited flag', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '乙建設', kind: 'koumuten', serviceAreas: [] },

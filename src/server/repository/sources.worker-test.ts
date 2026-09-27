@@ -32,7 +32,7 @@ const baseSource = (overrides: Partial<SourceSeed> = {}): SourceSeed => ({
 })
 
 describe('sources', () => {
-  it('新規作成は createdBy を記録し、更新では保たれる', async () => {
+  it('create records createdBy, and update keeps it', async () => {
     const id = await upsertSource(db, baseSource({ name: 'A' }), actor)
     await upsertSource(db, baseSource({ id, name: 'B' }), 'partner@example.com')
     const [row] = await db.select().from(sources).where(eq(sources.id, id))
@@ -40,18 +40,18 @@ describe('sources', () => {
     expect(row.createdBy).toBe(actor)
   })
 
-  it('削除できる（消した行を返す）', async () => {
+  it('can delete (returns the deleted row)', async () => {
     const id = await upsertSource(db, baseSource({ name: 'テスト' }), actor)
     const deleted = await deleteSourceRow(db, id)
     expect(deleted?.name).toBe('テスト')
     expect(await db.select().from(sources)).toHaveLength(0)
   })
 
-  it('存在しない id を消しても例外にならず null を返す', async () => {
+  it('deleting a non-existent id does not throw and returns null', async () => {
     await expect(deleteSourceRow(db, crypto.randomUUID())).resolves.toBeNull()
   })
 
-  it('更新で対象の id が既に無ければ SOURCE_NOT_FOUND_ERROR を投げる（黙って成功しない）', async () => {
+  it('throws SOURCE_NOT_FOUND_ERROR when the target id is already gone on update (does not silently succeed)', async () => {
     const missingId = crypto.randomUUID()
     await expect(
       upsertSource(db, baseSource({ id: missingId, name: 'ゴースト' }), actor),
@@ -59,17 +59,17 @@ describe('sources', () => {
     expect(await db.select().from(sources)).toHaveLength(0)
   })
 
-  it('同じ url で新規作成すると DUPLICATE_URL_ERROR を投げる（別 id では作られない）', async () => {
+  it('throws DUPLICATE_URL_ERROR when creating with the same url (not created under another id)', async () => {
     await upsertSource(db, baseSource({ name: 'A' }), actor)
     await expect(
-      upsertSource(db, baseSource({ name: 'B' }), actor), // url は baseSource の既定値のまま重複
+      upsertSource(db, baseSource({ name: 'B' }), actor), // url stays the baseSource default, so it duplicates
     ).rejects.toThrow(DUPLICATE_URL_ERROR)
     const rows = await db.select().from(sources)
     expect(rows).toHaveLength(1)
     expect(rows[0]?.name).toBe('A')
   })
 
-  it('既存行の url を別の行と同じ url に更新すると DUPLICATE_URL_ERROR を投げる（更新は反映されない）', async () => {
+  it('throws DUPLICATE_URL_ERROR when updating the url of an existing row to the same url as another row (the update is not applied)', async () => {
     await upsertSource(db, baseSource({ name: 'A' }), actor)
     const idB = await upsertSource(
       db,
@@ -77,14 +77,14 @@ describe('sources', () => {
       actor,
     )
     await expect(
-      upsertSource(db, baseSource({ id: idB, name: 'B改' }), actor), // url を A と同じに戻す
+      upsertSource(db, baseSource({ id: idB, name: 'B改' }), actor), // put url back to the same as A
     ).rejects.toThrow(DUPLICATE_URL_ERROR)
     const [rowB] = await db.select().from(sources).where(eq(sources.id, idB))
-    expect(rowB.name).toBe('B') // 更新前のまま
+    expect(rowB.name).toBe('B') // unchanged from before the update
     expect(rowB.url).toBe('https://www.youtube.com/@b')
   })
 
-  it('vendor を消すと sources.vendor_id は null になる（ON DELETE SET NULL）', async () => {
+  it('deleting a vendor sets sources.vendor_id to null (ON DELETE SET NULL)', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '乙建設', kind: 'koumuten', serviceAreas: [] },
@@ -96,7 +96,7 @@ describe('sources', () => {
     expect(row.vendorId).toBeNull()
   })
 
-  it('一覧は sortOrder 昇順・name 昇順で並び、業者名が付く', async () => {
+  it('the list is ordered by sortOrder ascending, name ascending, and carries the vendor name', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '甲工務店', kind: 'koumuten', serviceAreas: [] },

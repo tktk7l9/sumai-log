@@ -1,7 +1,9 @@
 /**
- * 記録の分析（/analysis）の集計。見学・動画メモ・業者・予定・コメントを受け取り、件数・時期・
- * 業者ごとの接点・よく出る用語や言葉・未完了の次アクション・書きかけの記録を数える純粋関数。
- * 外部には何も送らない（アプリの中で数えるだけ）。
+ * Aggregation for the analysis of records (/analysis). Pure functions that take visits,
+ * video memos, vendors, events and comments, and count the totals, the periods, the
+ * contacts per vendor, frequent glossary terms and words, unfinished next actions, and
+ * unfinished records.
+ * Nothing is sent outside (it only counts inside the app).
  */
 
 import { parseActions } from './nextActions'
@@ -46,7 +48,7 @@ export type AnalysisInput = {
   events: AnalysisEvent[]
   comments: AnalysisComment[]
   terms: readonly AnalysisTerm[]
-  /** 今日（YYYY-MM-DD）。予定の「これから」と「済み」を分ける */
+  /** Today (YYYY-MM-DD). Separates "upcoming" and "done" events */
   today: string
 }
 
@@ -60,7 +62,7 @@ export type VendorRow = {
   videos: number
   pastEvents: number
   upcomingEvents: number
-  /** 見学・動画・済んだ予定のうち最も新しい日付 */
+  /** The newest date among visits, videos and past events */
   lastContact: string | null
 }
 export type TermHit = { id: string; term: string; count: number }
@@ -94,16 +96,16 @@ export type Analysis = {
   gaps: { visitsWithoutNotes: Gap[]; videosWithoutTakeaways: Gap[]; visitsWithoutPhotos: Gap[] }
 }
 
-/** 月の並びは最大この数まで（古い方から切る） */
+/** The list of months has at most this many entries (cut from the oldest) */
 export const MAX_MONTHS = 24
-/** よく出る言葉・用語・タグなどの表示件数 */
+/** Number of frequent words, terms, tags etc. to show */
 export const TOP_N = 10
 
 function filled(v: string | null | undefined): v is string {
   return typeof v === 'string' && v.trim() !== ''
 }
 
-/** 多い順（同数は名前順）に並べて上位だけ返す */
+/** Sorts by count descending (ties by name) and returns only the top entries */
 export function countTop(names: Iterable<string>, limit: number = TOP_N): Count[] {
   const m = new Map<string, number>()
   for (const n of names) m.set(n, (m.get(n) ?? 0) + 1)
@@ -113,13 +115,14 @@ export function countTop(names: Iterable<string>, limit: number = TOP_N): Count[
     .slice(0, limit)
 }
 
-/** YYYY-MM から次の月へ */
+/** From YYYY-MM to the next month */
 function nextMonth(month: string): string {
   const [y, m] = month.split('-').map(Number) as [number, number]
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
 }
 
-/** 最初の記録の月から最後の記録の月まで、記録の無い月も 0 で埋めて並べる（最大 MAX_MONTHS） */
+/** Lists from the month of the first record to the month of the last record, filling
+ * months without records with 0 (at most MAX_MONTHS) */
 export function monthlyCounts(visits: AnalysisVisit[], videos: AnalysisVideo[]): MonthRow[] {
   const v = visits.map((x) => x.visitedOn.slice(0, 7))
   const w = videos.flatMap((x) => (x.watchedOn ? [x.watchedOn.slice(0, 7)] : []))
@@ -136,7 +139,7 @@ export function monthlyCounts(visits: AnalysisVisit[], videos: AnalysisVideo[]):
   return rows.slice(-MAX_MONTHS)
 }
 
-/** 業者ごとの接点。接点の多い順、同数は最後の接点が新しい順 */
+/** Contacts per vendor. Most contacts first; ties by the newer last contact */
 export function vendorContacts(input: AnalysisInput): VendorRow[] {
   return input.vendors
     .map((vendor) => {
@@ -167,14 +170,17 @@ export function vendorContacts(input: AnalysisInput): VendorRow[] {
     )
 }
 
-/** 照合用に表記をそろえる（全角英数→半角、英字は小文字） */
+/** Unifies the notation for matching (full-width alphanumerics -> half-width, letters
+ * lowercased) */
 function normalize(text: string): string {
   return text.normalize('NFKC').toLowerCase()
 }
 
 /**
- * 用語集の用語（用語名・別名）が記録に出てくる回数。1 件の記録の中で何度出ても 1 と数える
- * （長く書いた記録ほど多く数えないように）。1 文字の別名は誤一致が多いので使わない
+ * How many times glossary terms (term name, aliases) appear in the records. However many
+ * times one appears inside 1 record, it counts as 1 (so that a record written at length
+ * does not count more). Aliases of 1 character cause many false matches, so they are not
+ * used
  */
 export function termHits(texts: string[], terms: readonly AnalysisTerm[]): TermHit[] {
   const docs = texts.map(normalize)
@@ -189,7 +195,7 @@ export function termHits(texts: string[], terms: readonly AnalysisTerm[]): TermH
     .slice(0, TOP_N)
 }
 
-/** 数えない言葉（どの記録にも出るが中身を表さない） */
+/** Words that are not counted (they appear in every record but do not express the content) */
 const STOP_WORDS = new Set([
   '感じ',
   '部分',
@@ -206,9 +212,11 @@ const STOP_WORDS = new Set([
 ])
 
 /**
- * 文章からよく出る言葉を拾う。Intl.Segmenter（日本語の単語区切り）で分け、漢字・カタカナ・
- * 英数を含む 2 文字以上の語だけを数える（ひらがなだけの語は助詞や言い回しが多いので外す）。
- * 1 件の記録の中では同じ語を 1 回と数える
+ * Picks frequent words from text. Splits with Intl.Segmenter (Japanese word segmentation)
+ * and counts only words of 2 or more characters that contain kanji, katakana or
+ * alphanumerics (words of hiragana only are mostly particles and set phrases, so they are
+ * excluded).
+ * Inside 1 record the same word counts once
  */
 export function frequentWords(texts: string[], limit: number = TOP_N): Count[] {
   const segmenter = new Intl.Segmenter('ja', { granularity: 'word' })
@@ -227,14 +235,15 @@ export function frequentWords(texts: string[], limit: number = TOP_N): Count[] {
   return countTop(words, limit)
 }
 
-/** 見学の場所の呼び名（業者 > 物件 > 場所） */
+/** How the place of a visit is called (vendor > property > place) */
 function visitWhere(v: AnalysisVisit): string {
   return v.vendorName ?? v.propertyName ?? v.placeName ?? '（場所なし）'
 }
 
 /**
- * 見学記録の「次にやること」を 1 行ずつに分ける。行頭の「・」「-」「□」「1.」などは外し、
- * 「済」「✓」「[x]」で始まる行は終わったものとして数えない。新しい見学から順に並べる
+ * Splits "次にやること" (Next actions) of a visit record into single lines. Leading
+ * "・", "-", "□", "1." etc. are stripped, and lines that start with "済" (done), "✓" or
+ * "[x]" are finished and not counted. Listed from the newest visit
  */
 export function openNextActions(visits: AnalysisVisit[]): NextAction[] {
   return [...visits]
@@ -251,7 +260,7 @@ export function openNextActions(visits: AnalysisVisit[]): NextAction[] {
     )
 }
 
-/** 記録をまとめて分析する */
+/** Analyzes the records together */
 export function analyzeRecords(input: AnalysisInput): Analysis {
   const { visits, videos, comments } = input
   const dates = [

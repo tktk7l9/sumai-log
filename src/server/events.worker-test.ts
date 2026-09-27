@@ -3,19 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { eventInput } from './events.schema'
 
 /**
- * saveEvent は createServerFn でラップされているため、TanStack Start の
- * サーバーランタイム（AsyncLocalStorage の Start context）が無い素の
- * vitest workers テストから直接呼ぶと「No Start context found」で落ちる
- * （validator に届く前の話）。実質的な検証は validator である eventInput
- * 自体を見れば足りるので、ここでは eventInput.safeParse を直接確認する
- * （src/server/tags.worker-test.ts と同じパターン）。
+ * saveEvent is wrapped in createServerFn, so calling it directly from a plain vitest
+ * workers test without the TanStack Start server runtime (the Start context of
+ * AsyncLocalStorage) fails with "No Start context found" (before it even reaches the
+ * validator). Looking at eventInput itself, which is the validator, is enough for the
+ * actual validation, so this file checks eventInput.safeParse directly
+ * (the same pattern as src/server/tags.worker-test.ts).
  *
- * `./events` からではなく `./events.schema` から import しているのは、
- * events.ts が（saveEvent の中で使う）currentActorEmail 経由で
- * `@tanstack/react-start/server` の getRequest を静的 import しており、それが
- * TanStack Start の Vite プラグイン無しのこの素の vitest workers テストからは
- * 解決できない virtual specifier（`#tanstack-router-entry`）を踏んで落ちるため
- * （詳細は events.schema.ts のコメント）。
+ * The import comes from `./events.schema` instead of `./events` because events.ts
+ * statically imports getRequest of `@tanstack/react-start/server` through
+ * currentActorEmail (used inside saveEvent), which hits a virtual specifier
+ * (`#tanstack-router-entry`) that cannot be resolved from this plain vitest workers test
+ * without the TanStack Start Vite plugin, and crashes
+ * (details in the comment of events.schema.ts).
  */
 const base = {
   title: '見学会',
@@ -28,7 +28,7 @@ const base = {
 }
 
 describe('eventInput', () => {
-  it('終日なら startTime/endTime が null でも通り、startsAt は日付のみ', () => {
+  it('passes with null startTime/endTime when all day, and startsAt is the date only', () => {
     const result = eventInput.safeParse({
       ...base,
       allDay: true,
@@ -42,7 +42,7 @@ describe('eventInput', () => {
     }
   })
 
-  it('時刻ありなら startsAt/endsAt が +09:00 付きの ISO 文字列になる', () => {
+  it('turns startsAt/endsAt into ISO strings with +09:00 when a time is given', () => {
     const result = eventInput.safeParse({
       ...base,
       allDay: false,
@@ -56,7 +56,7 @@ describe('eventInput', () => {
     }
   })
 
-  it('終日でないのに startTime が無ければ拒否する（開始時刻を入れてください）', () => {
+  it('rejects a missing startTime when not all day (開始時刻を入れてください)', () => {
     const result = eventInput.safeParse({
       ...base,
       allDay: false,
@@ -70,7 +70,7 @@ describe('eventInput', () => {
     }
   })
 
-  it('終了時刻が開始時刻より前なら拒否する（終了時刻は開始より後にしてください）', () => {
+  it('rejects an end time before the start time (終了時刻は開始より後にしてください)', () => {
     const result = eventInput.safeParse({
       ...base,
       allDay: false,

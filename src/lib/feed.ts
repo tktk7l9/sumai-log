@@ -2,14 +2,18 @@ import { groupByDayKeepOrder } from './calendar'
 import { parseToUtcMs, toJstDateKey } from './jst'
 
 /**
- * ホームに出す横断フィード。見学記録・予定・業者・物件・場所・動画・コメント・写真を
- * 種類非依存の共通形にそろえ、時系列で束ねて表示するための型と結合関数。
+ * The cross-cutting feed shown on the home screen. Types and a merge function that bring visit
+ * records, events, vendors, properties, places, videos, comments and photos into a common,
+ * kind-independent shape and bundle them chronologically for display.
  */
 
 export type FeedKind =
   'visit' | 'event' | 'vendor' | 'property' | 'place' | 'video' | 'comment' | 'photo' | 'source'
 
-/** 新規追加か、既存レコードの更新か。comment/photo は常に 'add'（server/repository/feed.ts 参照） */
+/**
+ * A new addition or an update of an existing record. comment/photo are always 'add'
+ * (see server/repository/feed.ts)
+ */
 export type FeedAction = 'add' | 'update'
 
 export const FEED_ACTION_LABEL: Record<FeedAction, string> = {
@@ -23,13 +27,13 @@ export type FeedItem = {
   title: string
   subtitle?: string
   action: FeedAction
-  /** D1 の UTC datetime か ISO 文字列 */
+  /** A D1 UTC datetime or an ISO string */
   at: string
-  /** メールアドレス */
+  /** E-mail address */
   by: string
-  /** params はパスパラメータ（`/records/visits/$id` の id 等）、search はクエリ
-   * パラメータ（`/calendar?d=...` の d 等）。TanStack Router の `<Link>` にそのまま
-   * `params`/`search` として渡す想定 */
+  /** params is the path parameters (the id of `/records/visits/$id` etc.), search is the query
+   * parameters (the d of `/calendar?d=...` etc.). Meant to be passed as is to TanStack Router's
+   * `<Link>` as `params`/`search` */
   href: { to: string; params?: Record<string, string>; search?: Record<string, string> }
 }
 
@@ -45,7 +49,7 @@ export const FEED_KIND_LABEL: Record<FeedKind, string> = {
   source: '情報源',
 }
 
-/** 同時刻のときの表示優先順（この並び順が優先度） */
+/** Display priority at the same time (this order is the priority) */
 const FEED_KIND_ORDER: readonly FeedKind[] = [
   'visit',
   'event',
@@ -58,17 +62,20 @@ const FEED_KIND_ORDER: readonly FeedKind[] = [
   'photo',
 ]
 
-/** at が読めないデータは最も古い扱いにして末尾に流す（feed から落とさない） */
+/**
+ * Data with an unreadable at is treated as the oldest and sent to the end (not dropped from
+ * the feed)
+ */
 function atMs(item: FeedItem): number {
   return parseToUtcMs(item.at) ?? 0
 }
 
 /**
- * 複数系統のフィード項目を時系列（新しい順）に束ねる。
- * 同時刻は FEED_KIND_ORDER の順で安定させ、limit 件に絞る。
- * limit が 0 以下なら空配列（`slice(0, limit)` に負数をそのまま渡すと
- * 「末尾から絞る」挙動になってしまうため、Math.max(0, limit) で正規化する）。
- * 引数の配列・要素はいずれも書き換えない。
+ * Bundles feed items from several sources chronologically (newest first).
+ * The same time is made stable by FEED_KIND_ORDER, then narrowed to limit items.
+ * When limit is 0 or less the result is an empty array (passing a negative number straight to
+ * `slice(0, limit)` would trim from the end, so it is normalised with Math.max(0, limit)).
+ * Neither the argument arrays nor their items are mutated.
  */
 export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: number): FeedItem[] {
   const entries: { item: FeedItem; ms: number; order: number }[] = []
@@ -83,16 +90,16 @@ export function mergeFeed(groups: readonly (readonly FeedItem[])[], limit: numbe
 }
 
 /**
- * フィードを日（JST の日付キー）でまとめる。items は既に新しい順（mergeFeed 後）
- * を前提にしており、日の並び順は「最初に出てきた順」＝新しい日が先になる。
- * 日内の順序は items の並びをそのまま保つ。グルーピング自体は calendar.ts の
- * groupByDayKeepOrder（お知らせ一覧と共通）に委ねる薄いラッパー。
+ * Groups the feed by day (the JST date key). items is assumed to be already newest first
+ * (after mergeFeed), so the day order is order of first appearance = newer day first.
+ * The order within a day keeps the order of items as is. A thin wrapper that leaves the
+ * grouping itself to groupByDayKeepOrder in calendar.ts (shared with the vendor news list).
  */
 export function groupFeedByDay(items: readonly FeedItem[]): { day: string; items: FeedItem[] }[] {
   return groupByDayKeepOrder(items, (item) => toJstDateKey(item.at))
 }
 
-/** コメント本文の表示上限（超えたら末尾に … を付けて切る） */
+/** Display limit of a comment body (beyond it, cut and append … at the end) */
 const COMMENT_BODY_LIMIT = 40
 
 function truncate(text: string, limit: number): string {
@@ -100,8 +107,9 @@ function truncate(text: string, limit: number): string {
 }
 
 /**
- * フィード 1 件を「◯◯「対象名」を追加/更新」の文にするための断片。
- * link だけをクリック可能なリンクにする想定（対象名部分のみ）。
+ * Fragments for turning 1 feed item into a sentence of the form
+ * `<kind> "<target name>" を追加/更新` (added/updated).
+ * Only link is meant to become a clickable link (the target name part only).
  */
 export function feedSentence(item: FeedItem): { before: string; link: string; after: string } {
   const actionLabel = FEED_ACTION_LABEL[item.action]

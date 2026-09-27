@@ -3,9 +3,9 @@ import { Link } from 'lucide-react'
 import type { SocialPlatform } from '../../lib/social'
 
 /**
- * ブランドアイコンの path データは simple-icons（https://simpleicons.org, CC0 1.0）から
- * `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/<slug>.svg` を取得し、
- * `d` 属性の値のみをそのまま貼っている（2026-09-15 時点の最新版）。
+ * The path data of the brand icons comes from simple-icons (https://simpleicons.org,
+ * CC0 1.0): fetched `https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/<slug>.svg`
+ * and pasted only the value of the `d` attribute as is (latest version as of 2026-09-15).
  */
 const PATHS: Record<Exclude<SocialPlatform, 'other'>, string> = {
   instagram:

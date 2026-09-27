@@ -27,21 +27,22 @@ const RSS_FEED = `<?xml version="1.0" encoding="UTF-8"?>
   </item>
 </channel></rss>`
 
-// 一覧の日付（2026年9月10日）は parseHtmlList がタイトルから取り除いて publishedOn に
-// 回すため、タイトル自身にも日付を含めておかないと extractEvent が拾える日付が残らない
-// （html-list はどの li にも publishedOn 用の日付が要るので、これは実運用でも起こりうる形）。
+// parseHtmlList strips the list date (September 10, 2026) from the title and uses it as
+// publishedOn, so unless the title itself also contains a date, no date is left for
+// extractEvent to pick up (html-list needs a publishedOn date in every li, so this shape
+// can also occur in real operation).
 const HTML_LIST = `
 <ul>
   <li>2026年9月10日 <a href="./news/1.php">構造見学会 9月10日(土)開催</a></li>
 </ul>`
 
-/** fetchImpl の差し替え。実際のベンダーサイトは一切叩かない。 */
+/** Replacement for fetchImpl. Never hits a real vendor site. */
 function fakeFetch(build: (url: string) => Response): typeof fetch {
   return (async (url: string | URL) => build(String(url))) as typeof fetch
 }
 
 describe('fetchVendorNews', () => {
-  it('RSS: 成功で候補を追加し、イベント判定した行には event_* が入る', async () => {
+  it('RSS: adds candidates on success, and rows judged to be events get event_*', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -74,7 +75,7 @@ describe('fetchVendorNews', () => {
     expect(after.newsFetchError).toBeNull()
   })
 
-  it('2 回目は新着 0 件（url 重複は insertNewsIfNew がスキップ）', async () => {
+  it('the 2nd run adds 0 new items (insertNewsIfNew skips duplicate urls)', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -97,7 +98,7 @@ describe('fetchVendorNews', () => {
     expect(rows).toHaveLength(2)
   })
 
-  it('HTML: 成功で候補を追加する', async () => {
+  it('HTML: adds candidates on success', async () => {
     const vendorId = await makeVendor('テスト建設', {
       newsUrl: 'https://www.example-koumuten.co.jp/',
       newsSource: 'html-list',
@@ -121,7 +122,7 @@ describe('fetchVendorNews', () => {
     expect(rows[0].eventKind).toBe('構造見学会')
   })
 
-  it('非 200 はエラーを記録して 0 件（HTTP <status>）', async () => {
+  it('a non-200 records an error and adds 0 items (HTTP <status>)', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -145,7 +146,7 @@ describe('fetchVendorNews', () => {
     expect(after.newsFetchedAt).not.toBeNull()
   })
 
-  it('タイムアウト・ネットワークエラー（fetch が例外を投げる）はエラーを記録する', async () => {
+  it('a timeout or network error (fetch throws) records an error', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -156,9 +157,9 @@ describe('fetchVendorNews', () => {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
     }
-    // AbortSignal.timeout(10_000) が実際に発火するのを 10 秒待つ代わりに、
-    // fetchImpl 自体がタイムアウト由来の例外（DOMException 'TimeoutError'）を
-    // 投げるケースを直接シミュレートする。
+    // Instead of waiting 10 seconds for AbortSignal.timeout(10_000) to actually fire,
+    // directly simulate the case where fetchImpl itself throws the exception caused by
+    // a timeout (DOMException 'TimeoutError').
     const timeoutFetch = (async () => {
       throw new DOMException('The operation was aborted due to timeout', 'TimeoutError')
     }) as typeof fetch
@@ -168,7 +169,7 @@ describe('fetchVendorNews', () => {
     expect(result.error).toContain('timeout')
   })
 
-  it('1MB 超はエラーを記録する（本文を読み切らずに打ち切る）', async () => {
+  it('over 1MB records an error (aborts without reading the whole body)', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -190,7 +191,7 @@ describe('fetchVendorNews', () => {
     expect(result.error).toMatch(/1MB/)
   })
 
-  it('insertNewsIfNew が成功した後に markNewsFetched が例外を投げても、追加できた件数は失わずに返す', async () => {
+  it('returns the added count without losing it even if markNewsFetched throws after insertNewsIfNew succeeded', async () => {
     const vendorId = await makeVendor('記録失敗業者', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -202,10 +203,10 @@ describe('fetchVendorNews', () => {
       newsSource: 'rss',
     }
 
-    // markNewsFetched は db.update(vendors)... を呼ぶ。insertNewsIfNew（db.insert）が
-    // 成功した後、最初の markNewsFetched 呼び出しだけ失敗させる（2 回目 =
-    // フォールバックの記録は元の実装に戻し、その中身は .catch で握りつぶされる
-    // 想定なので added の検証には影響しない）。
+    // markNewsFetched calls db.update(vendors)... After insertNewsIfNew (db.insert)
+    // succeeds, make only the first markNewsFetched call fail (the 2nd call = the
+    // fallback record goes back to the original implementation, and its result is
+    // expected to be swallowed by .catch, so it does not affect the check of added).
     const originalUpdate = db.update.bind(db)
     let updateCalls = 0
     db.update = ((...args: Parameters<typeof db.update>) => {
@@ -220,7 +221,7 @@ describe('fetchVendorNews', () => {
         vendor,
         fakeFetch(() => new Response(RSS_FEED, { status: 200 })),
       )
-      // insertNewsIfNew 自体は成功しているので、added は 0 に化けない
+      // insertNewsIfNew itself succeeded, so added does not turn into 0
       expect(result.added).toBe(2)
       expect(result.error).not.toBeNull()
     } finally {
@@ -231,7 +232,7 @@ describe('fetchVendorNews', () => {
     expect(rows).toHaveLength(2)
   })
 
-  it('news_url / news_source が未設定ならエラーを記録する（防御的に）', async () => {
+  it('records an error when news_url / news_source is not set (defensively)', async () => {
     const vendorId = await makeVendor('URL未設定')
     const vendor: NewsSourceVendor = {
       id: vendorId,
@@ -249,9 +250,10 @@ describe('fetchVendorNews', () => {
     expect(result.error).not.toBeNull()
   })
 
-  it('許可されない URL（SSRF 対策）は fetch 自体を呼ばずにエラーにする', async () => {
-    // フォーム側の optionalHttpsUrl も同じ判定で弾くが、フォームを経由しない
-    // 既存データを想定して db に直接 IP リテラルの newsUrl を持つ業者を作る。
+  it('a disallowed URL (SSRF guard) becomes an error without calling fetch at all', async () => {
+    // optionalHttpsUrl on the form side rejects it with the same check, but to cover
+    // existing data that did not go through the form, create a vendor whose newsUrl is
+    // an IP literal directly in db.
     const vendorId = await makeVendor('内部URL業者', {
       newsUrl: 'https://192.168.1.1/feed/',
       newsSource: 'rss',
@@ -275,7 +277,7 @@ describe('fetchVendorNews', () => {
     expect(after.newsFetchError).toBe('URL が許可されていません')
   })
 
-  it('fetchImpl には AbortSignal（タイムアウト用）と User-Agent ヘッダを渡す', async () => {
+  it('passes an AbortSignal (for the timeout) and a User-Agent header to fetchImpl', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -301,7 +303,7 @@ describe('fetchVendorNews', () => {
     )
   })
 
-  it('許可されたホストへのリダイレクトは1回だけ追従して取得できる', async () => {
+  it('a redirect to an allowed host is followed just once and fetched', async () => {
     const vendorId = await makeVendor('リダイレクト業者', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -327,10 +329,10 @@ describe('fetchVendorNews', () => {
 
     const result = await fetchVendorNews(db, vendor, fetchImpl)
     expect(result).toEqual({ added: 2, error: null })
-    expect(calls).toBe(2) // 最初の 301 と、リダイレクト先への 1 回
+    expect(calls).toBe(2) // the first 301, and 1 call to the redirect target
   })
 
-  it('許可されないホストへのリダイレクトは、そのホストへ fetch されることなくエラーになる', async () => {
+  it('a redirect to a disallowed host becomes an error without that host being fetched', async () => {
     const vendorId = await makeVendor('リダイレクト業者2', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -345,7 +347,7 @@ describe('fetchVendorNews', () => {
     let blockedHostFetched = false
     const fetchImpl = (async (url: string | URL) => {
       if (String(url) === 'https://news.example.com/feed/') {
-        // 内部 IP リテラルへ誘導しようとするリダイレクト
+        // A redirect that tries to lead to an internal IP literal
         return new Response(null, {
           status: 302,
           headers: { Location: 'https://192.168.1.1/feed/' },
@@ -360,7 +362,7 @@ describe('fetchVendorNews', () => {
     expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
   })
 
-  it('自分自身のホスト（sumai-log.app）へのリダイレクトも拒否する', async () => {
+  it('also rejects a redirect to its own host (sumai-log.app)', async () => {
     const vendorId = await makeVendor('自己リダイレクト業者', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -389,7 +391,7 @@ describe('fetchVendorNews', () => {
     expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
   })
 
-  it('リダイレクトが4回連続すると（3回を超えるため）エラーになる', async () => {
+  it('4 redirects in a row become an error (because that exceeds 3)', async () => {
     const vendorId = await makeVendor('多段リダイレクト業者', {
       newsUrl: 'https://news.example.com/hop0',
       newsSource: 'rss',
@@ -417,7 +419,7 @@ describe('fetchVendorNews', () => {
     expect(result).toEqual({ added: 0, error: 'リダイレクト先が許可されていません' })
   })
 
-  it('リダイレクトが3回なら（境界）追従して成功する', async () => {
+  it('3 redirects (the boundary) are followed and succeed', async () => {
     const vendorId = await makeVendor('3段リダイレクト業者', {
       newsUrl: 'https://news.example.com/hop0',
       newsSource: 'rss',
@@ -445,7 +447,7 @@ describe('fetchVendorNews', () => {
     expect(result).toEqual({ added: 2, error: null })
   })
 
-  it('Location が相対パスでも「今いる URL」基準で解決してから許可判定する（最初の URL 基準ではない）', async () => {
+  it('resolves even a relative-path Location against the current URL before the allow check (not against the first URL)', async () => {
     const vendorId = await makeVendor('相対リダイレクト業者', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -459,16 +461,16 @@ describe('fetchVendorNews', () => {
 
     const fetchImpl = (async (url: string | URL) => {
       if (String(url) === 'https://news.example.com/feed/') {
-        // 1 hop目: 絶対 URL へ
+        // Hop 1: to an absolute URL
         return new Response(null, {
           status: 302,
           headers: { Location: 'https://news.example.com/sub/feed/' },
         })
       }
       if (String(url) === 'https://news.example.com/sub/feed/') {
-        // 2 hop目: 相対パス。「今いる URL」（.../sub/feed/）基準で解決すると
-        // .../sub/feed2/ になる（最初の URL である .../feed/ 基準なら .../feed2/ になり、
-        // このテストは区別できる）
+        // Hop 2: a relative path. Resolved against the current URL (.../sub/feed/) it
+        // becomes .../sub/feed2/ (resolved against the first URL, .../feed/, it would be
+        // .../feed2/, so this test can tell them apart)
         return new Response(null, { status: 302, headers: { Location: '../feed2/' } })
       }
       if (String(url) === 'https://news.example.com/sub/feed2/') {
@@ -483,7 +485,7 @@ describe('fetchVendorNews', () => {
 })
 
 describe('fetchAllVendorNews', () => {
-  it('1 社が失敗しても他の業者の取得は続ける', async () => {
+  it('keeps fetching the other vendors even if 1 vendor fails', async () => {
     const failingId = await makeVendor('失敗業者', {
       newsUrl: 'https://fail.example.com/feed/',
       newsSource: 'rss',
@@ -515,7 +517,7 @@ describe('fetchAllVendorNews', () => {
     })
   })
 
-  it('newsUrl が無い業者は対象外（listNewsSources が既に絞っている）', async () => {
+  it('vendors without newsUrl are excluded (listNewsSources already filters them)', async () => {
     await makeVendor('お知らせ無し')
     const results = await fetchAllVendorNews(
       db,
@@ -524,7 +526,7 @@ describe('fetchAllVendorNews', () => {
     expect(results).toEqual([])
   })
 
-  it('insertNewsIfNew が例外を投げても markNewsFetched でエラーを記録し、次の業者の取得は続ける', async () => {
+  it('even if insertNewsIfNew throws, records the error with markNewsFetched and keeps fetching the next vendor', async () => {
     const failingId = await makeVendor('挿入失敗業者', {
       newsUrl: 'https://fail-insert.example.com/feed/',
       newsSource: 'rss',
@@ -534,14 +536,15 @@ describe('fetchAllVendorNews', () => {
       newsSource: 'rss',
     })
 
-    // insertNewsIfNew 自体をスタブする代わりに、D1 の実際の外部キー制約を使って
-    // 「取得の最中に業者行が消える」という現実にありうる競合を再現する:
-    // fetchImpl がレスポンスを返す直前に業者行そのものを削除しておくと、続く
-    // insertNewsIfNew の INSERT が FOREIGN KEY 制約違反で例外を投げる（「壊れた行」）。
-    // url は vendorNews 全体で UNIQUE（業者ごとではない）なので、もう一方の業者
-    // （成功業者2）が使う RSS_FEED とは別の url を持つフィードを用意する。既に
-    // url が使われていて ON CONFLICT DO NOTHING でスキップされると、その行は
-    // そもそも INSERT されないため FOREIGN KEY 違反まで辿り着けなくなる。
+    // Instead of stubbing insertNewsIfNew itself, use the real foreign key constraint of
+    // D1 to reproduce a race that can happen in reality, "the vendor row disappears in
+    // the middle of a fetch": if the vendor row itself is deleted right before fetchImpl
+    // returns the response, the INSERT of the following insertNewsIfNew throws on a
+    // FOREIGN KEY constraint violation (a "broken row").
+    // url is UNIQUE across all of vendorNews (not per vendor), so prepare a feed whose
+    // urls differ from RSS_FEED, which the other vendor (the successful vendor 2) uses. If
+    // the url is already used and the row is skipped by ON CONFLICT DO NOTHING, that row is
+    // never INSERTed in the first place, so it cannot reach the FOREIGN KEY violation.
     const RSS_FEED_FOR_FAILING_VENDOR = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0"><channel>
   <item>
@@ -566,10 +569,10 @@ describe('fetchAllVendorNews', () => {
     expect(failing?.vendorName).toBe('挿入失敗業者')
     expect(failing?.added).toBe(0)
     expect(failing?.error).not.toBeNull()
-    // ERROR_MESSAGE_MAX（200字）に切り詰められている
+    // Truncated to ERROR_MESSAGE_MAX (200 characters)
     expect(failing?.error?.length).toBeLessThanOrEqual(200)
 
-    // 失敗した業者の後でも次の業者は正常に取得できる（ループが止まらない）
+    // Even after the failed vendor, the next vendor is fetched normally (the loop does not stop)
     expect(byVendor.get(okId)).toEqual({
       vendorId: okId,
       vendorName: '成功業者2',

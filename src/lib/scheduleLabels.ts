@@ -1,8 +1,8 @@
 import type { ScheduleLabels } from '@mantine/schedule'
 
 /**
- * @mantine/schedule の日本語ラベル。書いていないキーはライブラリの既定（英語）のまま出る
- * （ScheduleLabels は Partial で渡す設計）。
+ * Japanese labels for @mantine/schedule. Keys not written here are shown with the library
+ * default (English) (ScheduleLabels is designed to be passed as a Partial).
  */
 export const SCHEDULE_LABELS_JA: Partial<ScheduleLabels> = {
   day: '日',

@@ -1,8 +1,9 @@
 /**
- * seed.local.json（実データ・gitignore 済み）を D1 の INSERT 文へ変換する純粋な部分。
+ * The pure part that converts seed.local.json (real data, gitignored) into D1 INSERT statements.
  *
- * ここにはファイル I/O・ネットワーク・sips 呼び出しなどの副作用を一切書かない。
- * 副作用は scripts/import-seed.mjs 側に置き、ここは「入力→出力」だけのテスト可能な関数群にする。
+ * No side effects at all are written here, such as file I/O, network, or sips calls.
+ * Side effects live in scripts/import-seed.mjs, and this file is a set of testable
+ * "input -> output" functions only.
  */
 
 import { createHash } from 'node:crypto'
@@ -10,20 +11,20 @@ import { basename } from 'node:path'
 
 import { normalizeAddress, normalizeSocialUrls } from './normalize.mjs'
 
-// normalizeAddress・normalizeSocialUrls は scripts/lib/normalize.mjs に移した
-// （src/lib/normalize-parity.test.ts から .mjs 側の実装として直接 import できるように
-// する）。ここでの再エクスポートは既存の import パス（`./seed.mjs` から取れる）を
-// 変えないため（scripts/lib/seed.test.mjs・scripts/import-seed.mjs）。
+// normalizeAddress and normalizeSocialUrls were moved to scripts/lib/normalize.mjs
+// (so that src/lib/normalize-parity.test.ts can import them directly as the .mjs side
+// implementation). The re-export here keeps the existing import path (available from
+// `./seed.mjs`) unchanged (scripts/lib/seed.test.mjs, scripts/import-seed.mjs).
 export { normalizeAddress, normalizeSocialUrls }
 
 /**
- * slug（人間が読める識別子）から決定的に id を作る。
- * 同じ文字列は常に同じ id になるので、再取り込みが冪等になる（同じ id への
- * INSERT ... ON CONFLICT DO UPDATE が常に「同じ行の更新」になる）。
+ * Build an id deterministically from a slug (a human-readable identifier).
+ * The same string always gives the same id, so re-importing is idempotent (an
+ * INSERT ... ON CONFLICT DO UPDATE on the same id is always "an update of the same row").
  *
- * 呼び出し側は `<種類>:<slug>` のように種類を前置して渡す（例: `vendor:some-koumuten`）。
- * 種類をプレフィックスすることで、異なるテーブル間で slug 文字列がたまたま
- * 一致しても id が衝突しない。
+ * Callers pass it with the kind in front, like `<kind>:<slug>` (e.g. `vendor:some-koumuten`).
+ * Prefixing the kind means ids do not collide even when slug strings happen to
+ * match across different tables.
  */
 export function slugToId(slug) {
   const hex = createHash('sha256').update(`sumai-log:${slug}`).digest('hex').slice(0, 32)
@@ -31,11 +32,11 @@ export function slugToId(slug) {
 }
 
 /**
- * SQL リテラルへ変換する。
- * - null/undefined → NULL
- * - 真偽値 → 0/1（integer mode boolean の列に合わせる）
- * - 数値 → そのまま（クォートしない）
- * - それ以外 → 文字列化して `'` を `''` にエスケープし単一引用符で囲む
+ * Convert to an SQL literal.
+ * - null/undefined -> NULL
+ * - boolean -> 0/1 (matches integer mode boolean columns)
+ * - number -> as is (not quoted)
+ * - anything else -> stringify, escape `'` as `''`, and wrap in single quotes
  */
 export function sqlString(value) {
   if (value === null || value === undefined) return 'NULL'
@@ -49,10 +50,11 @@ function inRange(lat, lng) {
 }
 
 /**
- * 国土地理院 住所検索 API のレスポンス（JSON）から先頭の Feature の座標と title を取り出す。
- * src/lib/geocode.ts の parseGsiResponse と同一に保つ。
- * 空配列・配列でない・座標が数値でない・緯度経度が範囲外（lat: -90〜90, lng: -180〜180）は
- * すべて「該当なし」として null を返す。
+ * Extract the coordinates and title of the first Feature from a GSI address search API
+ * response (JSON).
+ * Keep identical to parseGsiResponse in src/lib/geocode.ts.
+ * An empty array, a non-array, non-numeric coordinates, and latitude/longitude out of range
+ * (lat: -90 to 90, lng: -180 to 180) all return null as "not found".
  */
 export function parseGsiResponse(json) {
   if (!Array.isArray(json) || json.length === 0) return null
@@ -66,19 +68,20 @@ export function parseGsiResponse(json) {
 }
 
 /**
- * 冪等な `INSERT ... ON CONFLICT DO UPDATE` 文を作る。
+ * Build an idempotent `INSERT ... ON CONFLICT DO UPDATE` statement.
  *
- * 以前は `INSERT OR REPLACE` を使っていたが、SQLite の REPLACE は主キーが
- * 衝突した既存行を一度 DELETE してから INSERT し直す。外部キーを ON で
- * 有効にしていると、その DELETE が `ON DELETE CASCADE` の子行まで巻き込んで
- * 消してしまう（例: vendors を REPLACE すると vendor_news が cascade で消える）。
- * `ON CONFLICT DO UPDATE` は既存行をその場で UPDATE するだけで DELETE を
- * 経由しないため、子行は残る。
+ * `INSERT OR REPLACE` was used before, but SQLite's REPLACE DELETEs the existing row
+ * whose primary key conflicts and then INSERTs again. With foreign keys turned ON,
+ * that DELETE also deletes the `ON DELETE CASCADE` child rows
+ * (e.g. REPLACE on vendors deletes vendor_news by cascade).
+ * `ON CONFLICT DO UPDATE` only UPDATEs the existing row in place and does not go
+ * through DELETE, so the child rows remain.
  *
- * `conflictColumn` は衝突判定に使う主キー列（既定 'id'。settings だけ 'key'）。
- * `excludeFromUpdate` に挙げた列（既定で created_by・created_at。存在しない
- * テーブルでは単に無視される）と `conflictColumn` 自身を除く全列を
- * `col = excluded.col` で UPDATE 対象にする。
+ * `conflictColumn` is the primary key column used for conflict detection (default 'id'.
+ * Only settings uses 'key').
+ * All columns except the ones listed in `excludeFromUpdate` (default created_by and
+ * created_at. Simply ignored for tables that do not have them) and `conflictColumn`
+ * itself become UPDATE targets as `col = excluded.col`.
  */
 function upsertStatement(
   table,
@@ -98,8 +101,8 @@ function upsertStatement(
 }
 
 /**
- * slug → id の対応表を引く。無ければ「どの種類のどの slug が見つからないか」が
- * わかるメッセージで例外を投げる（取り込み中断時に原因がすぐわかるように）。
+ * Look up the slug -> id table. If missing, throw with a message that tells "which slug
+ * of which kind was not found" (so the cause is clear right away when the import aborts).
  */
 function resolveId(map, slug, kind) {
   if (slug === null || slug === undefined) return null
@@ -110,11 +113,13 @@ function resolveId(map, slug, kind) {
   return id
 }
 
-// src/db/schema.ts の NEWS_SOURCES と同じ値。plain .mjs から TS を import できないため
-// 値を重複させている（他の enum も seed.mjs ではリテラルのまま検証している）。
+// Same values as NEWS_SOURCES in src/db/schema.ts. The values are duplicated because plain
+// .mjs cannot import TS (other enums are also validated as literals in seed.mjs).
 const NEWS_SOURCES = ['rss', 'html-list']
 
-/** newsSource が指定されているのに未知の値なら、どの業者のどの値かがわかるメッセージで例外を投げる */
+/**
+ * If newsSource is given but unknown, throw with a message that tells which value of which vendor
+ */
 function validateNewsSource(vendorSlug, newsSource) {
   if (newsSource === undefined || newsSource === null) return
   if (!NEWS_SOURCES.includes(newsSource)) {
@@ -124,11 +129,14 @@ function validateNewsSource(vendorSlug, newsSource) {
   }
 }
 
-// src/content/affiliations.ts の AFFILIATION_IDS と同じ値。plain .mjs から TS を import
-// できないため値を重複させている（NEWS_SOURCES と同じ理由）。
+// Same values as AFFILIATION_IDS in src/content/affiliations.ts. The values are duplicated
+// because plain .mjs cannot import TS (same reason as NEWS_SOURCES).
 const AFFILIATION_IDS = ['iedukuri100', 'miratsugu', 'kouzou-cram']
 
-/** affiliations に未知の id が混ざっていたら、どの業者のどの値かがわかるメッセージで例外を投げる */
+/**
+ * If affiliations contains an unknown id, throw with a message that tells which value of which
+ * vendor
+ */
 function validateAffiliations(vendorSlug, affiliations) {
   if (affiliations === undefined || affiliations === null) return
   for (const id of affiliations) {
@@ -140,8 +148,8 @@ function validateAffiliations(vendorSlug, affiliations) {
   }
 }
 
-// src/content/sourceGenres.ts の SOURCE_GENRE_IDS と同じ値。plain .mjs から TS を import
-// できないため値を重複させている（NEWS_SOURCES/AFFILIATION_IDS と同じ理由）。
+// Same values as SOURCE_GENRE_IDS in src/content/sourceGenres.ts. The values are duplicated
+// because plain .mjs cannot import TS (same reason as NEWS_SOURCES/AFFILIATION_IDS).
 const SOURCE_GENRE_IDS = [
   'candidates',
   'associations',
@@ -154,17 +162,20 @@ const SOURCE_GENRE_IDS = [
   'owners',
 ]
 
-// src/db/schema.ts の SOURCE_KINDS と同じ値。
+// Same values as SOURCE_KINDS in src/db/schema.ts.
 const SOURCE_KINDS = ['youtube', 'site']
 
-// src/lib/sources.ts の AVATAR_HOSTS と同じ値。plain .mjs から TS を import できないため
-// 値を重複させている（他の enum と同じ理由）。zod 側（sources.schema.ts の isAllowedAvatarUrl）
-// はホスト外の avatarUrl を黙って null に落とすが、seed はここで弾いて取り込みを止める
-// （データ入力ミスに気づけるように。値を書いた本人が seed.local.json を直せる）。
+// Same values as AVATAR_HOSTS in src/lib/sources.ts. The values are duplicated because plain
+// .mjs cannot import TS (same reason as the other enums). The zod side (isAllowedAvatarUrl in
+// sources.schema.ts) silently turns an avatarUrl outside these hosts into null, but seed
+// rejects it here and stops the import
+// (so that data entry mistakes get noticed. The person who wrote the value can fix
+// seed.local.json).
 const AVATAR_HOSTS = ['yt3.ggpht.com', 'yt3.googleusercontent.com', 'i.ytimg.com']
 
-/** 既知の YouTube チャンネル URL の形（src/lib/sources.ts の parseYoutubeChannelUrl と同じ
- * 判定を、TS を import できない .mjs 側で最小限だけ再実装）。取り込み時の kind 自動判定用 */
+/** The shape of a known YouTube channel URL (a minimal reimplementation, on the .mjs side that
+ * cannot import TS, of the same judgment as parseYoutubeChannelUrl in src/lib/sources.ts).
+ * Used to auto-detect kind at import time */
 function looksLikeYoutubeChannelUrl(url) {
   let parsed
   try {
@@ -178,8 +189,8 @@ function looksLikeYoutubeChannelUrl(url) {
   return Boolean(first)
 }
 
-/** 情報源の kind/genre/url/avatarUrl を検証する。どの slug のどの値が不正かがわかる
- * メッセージで例外を投げる（validateAffiliations と同じ流儀） */
+/** Validate kind/genre/url/avatarUrl of a source. Throws with a message that tells which
+ * value of which slug is invalid (same style as validateAffiliations) */
 function validateSource(s) {
   if (s.kind !== undefined && s.kind !== null && !SOURCE_KINDS.includes(s.kind)) {
     throw new Error(
@@ -218,9 +229,10 @@ function validateSource(s) {
 }
 
 /**
- * affiliationLinks（{ [affiliationId]: { url, note? } }）を検証する。省略は許容する
- * （所有者の seed.local.json は一部の業者にしか付けない想定。src/server/candidates.ts の
- * zod と同じ判定: キーは既知の affiliation id・url は https:// 始まり・note は 60 字以内）。
+ * Validate affiliationLinks ({ [affiliationId]: { url, note? } }). Omission is allowed
+ * (the owner's seed.local.json is expected to set it only for some vendors. Same judgment
+ * as the zod in src/server/candidates.ts: keys are known affiliation ids, url starts with
+ * https://, note is 60 characters or less).
  */
 function validateAffiliationLinks(vendorSlug, affiliationLinks) {
   if (affiliationLinks === undefined || affiliationLinks === null) return
@@ -242,22 +254,26 @@ function validateAffiliationLinks(vendorSlug, affiliationLinks) {
 }
 
 /**
- * seed.local.json の内容を D1 の INSERT ... ON CONFLICT DO UPDATE 文へ変換する。
+ * Convert the content of seed.local.json into D1 INSERT ... ON CONFLICT DO UPDATE statements.
  *
- * @param {object} seed - seed.local.json をパースしたオブジェクト
+ * @param {object} seed - the parsed seed.local.json object
  * @param {object} opts
- * @param {string} opts.actorEmail - created_by に入れるメール（.dev.vars の DEV_IDENTITY_EMAIL）
- * @param {string} [opts.now] - created_at/updated_at に入れる ISO-8601 文字列（省略時は new Date().toISOString()）
- * @param {Record<string, {width:number,height:number}>} [opts.photoSizes] - photoId → 実寸。
- *   無い写真は photos テーブルへの INSERT 文を作らない（sips 変換前の 1 回目の呼び出し用）。
- * @param {Record<string, {lat:number,lng:number}>} [opts.coords] - place slug → 座標。
- *   無い place は lat/lng/geocode_source が NULL のまま（地図に出せない場所として扱われる）。
- * @param {Set<string>} [opts.representativePhotoReady] - representativePhoto の sips 変換
- *   （→ R2 アップロード）が済んだ vendor slug の集合。無い vendor は representative_photo_key
- *   の列自体を出さない（R2 に実体が無いのに DB だけ「写真あり」を指さない・再取込のたびに
- *   フォーム経由の値を NULL に巻き戻さないため）。ready な vendor のキーには stamp
- *   （src/lib/photos.ts の vendorImageKeys と同じ形。immutable キャッシュ対策）を挟む。
- *   stamp は `now` から決定的に作る（テストで固定できるように、実時計を直接は読まない）。
+ * @param {string} opts.actorEmail - e-mail to put in created_by (DEV_IDENTITY_EMAIL in .dev.vars)
+ * @param {string} [opts.now] - ISO-8601 string to put in created_at/updated_at (new Date().toISOString() when omitted)
+ * @param {Record<string, {width:number,height:number}>} [opts.photoSizes] - photoId -> actual size.
+ *   For photos not in it, no INSERT statement for the photos table is built (for the 1st
+ *   call, before the sips conversion).
+ * @param {Record<string, {lat:number,lng:number}>} [opts.coords] - place slug -> coordinates.
+ *   For places not in it, lat/lng/geocode_source stay NULL (treated as a place that cannot
+ *   be shown on the map).
+ * @param {Set<string>} [opts.representativePhotoReady] - the set of vendor slugs whose
+ *   representativePhoto sips conversion (-> R2 upload) is done. For vendors not in it, the
+ *   representative_photo_key column itself is not emitted (so that the DB alone does not
+ *   claim "has a photo" when R2 has no object, and so that a value set through the form is
+ *   not rolled back to NULL on every re-import). The key of a ready vendor includes a stamp
+ *   (same shape as vendorImageKeys in src/lib/photos.ts. A measure against immutable caching).
+ *   The stamp is built deterministically from `now` (the real clock is not read directly,
+ *   so that tests can fix it).
  * @returns {{ sql: string[], photos: Array<{visitSlug:string, src:string, photoId:string, displayKey:string, thumbKey:string, sortOrder:number}> }}
  */
 export function buildStatements(seed, opts) {
@@ -270,8 +286,9 @@ export function buildStatements(seed, opts) {
   } = opts
 
   const sql = []
-  // representative_photo_key の stamp（src/lib/photos.ts の vendorImageKeys と同じ base36
-  // 形式）。`now` から決定的に作るので、テストで now を固定すれば stamp も固定できる。
+  // The stamp of representative_photo_key (same base36 format as vendorImageKeys in
+  // src/lib/photos.ts). It is built deterministically from `now`, so fixing now in a test
+  // also fixes the stamp.
   const representativePhotoStamp = new Date(now).getTime().toString(36)
 
   // --- settings ---------------------------------------------------------
@@ -323,15 +340,16 @@ export function buildStatements(seed, opts) {
         social_urls: JSON.stringify(normalizeSocialUrls(v.socialUrls)),
         news_url: v.newsUrl ?? null,
         news_source: v.newsSource ?? null,
-        // representative_photo_key は src/lib/photos.ts の vendorImageKeys と同じ形
-        // （vendorId + stamp から決まる。stamp は immutable キャッシュ対策）。sips 変換
-        // （→ R2 アップロード）が済んだ業者だけ列自体を出す。favicon_key と同じ理由で
-        // キーごと省略する（値を null にするのではない）: upsertStatement は row に含まれる
-        // 列だけを UPDATE SET に載せるため、ここで列を省略すれば再取り込みのたびに
-        // ON CONFLICT DO UPDATE が走っても既存値は変わらない。値を null にしてしまうと
-        // （favicon_key と違って）常に列が出るぶん、seed に representativePhoto が
-        // 無いだけで、フォーム経由でアップロード済みの写真キーが NULL に巻き戻ってしまう
-        // （R2 の実体は残ったまま UI から見えなくなる）。
+        // representative_photo_key has the same shape as vendorImageKeys in src/lib/photos.ts
+        // (determined from vendorId + stamp. The stamp is a measure against immutable
+        // caching). The column itself is emitted only for vendors whose sips conversion
+        // (-> R2 upload) is done. For the same reason as favicon_key, the whole key is
+        // omitted (not set to null): upsertStatement puts only the columns present in row
+        // into UPDATE SET, so omitting the column here keeps the existing value even though
+        // ON CONFLICT DO UPDATE runs on every re-import. If the value were set to null,
+        // the column would always be emitted (unlike favicon_key), so merely lacking
+        // representativePhoto in seed would roll a photo key uploaded through the form
+        // back to NULL (the R2 object remains but becomes invisible from the UI).
         ...(representativePhotoReady.has(v.slug)
           ? {
               representative_photo_key: `vendors/${vendorId}/representative-${representativePhotoStamp}-display.jpg`,
@@ -422,7 +440,7 @@ export function buildStatements(seed, opts) {
     )
   }
 
-  // --- photos（visit ごとに src 配列の並び順で sortOrder を振る） ------------------
+  // --- photos (sortOrder follows the order of the src array per visit) ------------
   const photos = []
   for (const vi of seed.visits ?? []) {
     const visitId = visitIdBySlug[vi.slug]
@@ -433,7 +451,7 @@ export function buildStatements(seed, opts) {
       photos.push({ visitSlug: vi.slug, src, photoId, displayKey, thumbKey, sortOrder })
 
       const size = photoSizes[photoId]
-      if (!size) return // 実寸を知らない写真は SQL を作らない（sips 変換前の 1 回目呼び出し）
+      if (!size) return // no SQL for photos of unknown size (1st call, before sips conversion)
 
       sql.push(
         upsertStatement('photos', {
@@ -476,12 +494,14 @@ export function buildStatements(seed, opts) {
   }
 
   // --- sources ---------------------------------------------------------------
-  // url が自然キー（conflictColumn: 'url'）: 情報源としての同一性は URL で決まるため。
-  // フォームから先に同じ URL の行が作られていた場合（別 id・sources.url は UNIQUE）でも、
-  // ON CONFLICT(id) だと INSERT がその UNIQUE 違反で失敗して --file 実行全体が止まってしまう。
-  // ON CONFLICT(url) なら「同じ URL の行を id ごと seed の内容で上書きする」形になり、
-  // 冪等に取り込める（id が変わる＝所有者が手で足した行が seed の決定的な id に揃う）。
-  // 他のテーブルは id が自然キーなので ON CONFLICT(id) のまま変えない。
+  // url is the natural key (conflictColumn: 'url'): the identity of a source is decided by
+  // its URL. When a row with the same URL was created from the form first (different id,
+  // sources.url is UNIQUE), with ON CONFLICT(id) the INSERT fails on that UNIQUE violation
+  // and the whole --file run stops.
+  // With ON CONFLICT(url) it becomes "overwrite the row with the same URL, id included,
+  // with the seed content", so the import is idempotent (the id changes = a row the owner
+  // added by hand is aligned to the deterministic id of seed).
+  // For the other tables id is the natural key, so they stay ON CONFLICT(id).
   for (const s of seed.sources ?? []) {
     validateSource(s)
     sql.push(

@@ -22,11 +22,11 @@ function json(status: number, body: unknown) {
 const MAX_UPLOAD_CONTENT_LENGTH = 6 * 1024 * 1024
 
 /**
- * 代表者の顔写真のアップロード（POST /api/vendor-photos/<vendorId>）。
- * `/api/photos/$` と同じ形（端末側 Canvas で縮小済みの display/thumb をまとめて受け取る）。
- * 配信は既存の `/api/photos/<key>`（src/routes/api.photos.$.tsx）が
- * `vendors/…` キーもそのまま扱えるので、こちらは POST だけを持つ（GET は無い）。
- * 認証は src/start.ts のグローバルミドルウェアが適用済み。
+ * Upload of the representative's face photo (POST /api/vendor-photos/<vendorId>).
+ * Same shape as `/api/photos/$` (receives display/thumb together, already downscaled by Canvas
+ * on the device). For delivery the existing `/api/photos/<key>` (src/routes/api.photos.$.tsx)
+ * handles `vendors/…` keys as is, so this route has POST only (no GET).
+ * Authentication is already applied by the global middleware in src/start.ts.
  */
 export const Route = createFileRoute('/api/vendor-photos/$vendorId')({
   server: {
@@ -68,8 +68,8 @@ export const Route = createFileRoute('/api/vendor-photos/$vendorId')({
         const db = getDb()
         if (!(await vendorExists(db, vendorId))) return json(404, { error: '業者が見つかりません' })
 
-        // 鍵に stamp（base36 の Date.now()）を挟むので、差し替えのたびに新しい URL になる
-        // （配信は immutable キャッシュなので、同じ URL のままだと差し替えが反映されない）
+        // The key includes a stamp (Date.now() in base36), so every replacement gets a new URL
+        // (delivery uses an immutable cache, so with the same URL a replacement would not show)
         const stamp = Date.now().toString(36)
         const keys = vendorImageKeys(vendorId, stamp)
         const bucket = getPhotosBucket()

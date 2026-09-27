@@ -4,8 +4,9 @@ import { RESEARCH_FACT_KEYS } from '../lib/research'
 import { dateField, idField, numberOrEmpty } from './zod'
 
 /**
- * 調査メモ・建築計画の zod。research.ts から分離しているのは candidates.schema.ts と同じ理由
- * （createServerFn のラッパーを素の workers テストから import できないため。詳細はそちら）。
+ * zod for the research memo and the build plan. Separated from research.ts for the same
+ * reason as candidates.schema.ts (the createServerFn wrapper cannot be imported from a
+ * plain workers test. Details are there).
  */
 
 const httpsUrl = z
@@ -14,7 +15,10 @@ const httpsUrl = z
   .max(500)
   .refine((v) => /^https:\/\//.test(v), 'URL は https:// で始めてください')
 
-/** facts は値の無いキー（空文字）を落として保存する（比較表・詳細が空行を出さないため） */
+/**
+ * facts is saved with valueless keys (empty strings) dropped (so that the comparison table
+ * and the detail do not show empty rows)
+ */
 export const vendorResearchInput = z.object({
   version: z.literal(1),
   researchedOn: dateField,
@@ -43,7 +47,7 @@ export type VendorResearchInput = z.infer<typeof vendorResearchInput>
 
 export const saveVendorResearchInput = z.object({
   id: idField,
-  /** null で調査メモを消す */
+  /** null clears the research memo */
   research: vendorResearchInput.nullable(),
 })
 

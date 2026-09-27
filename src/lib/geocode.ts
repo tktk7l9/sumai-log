@@ -1,6 +1,7 @@
 /**
- * 国土地理院 住所検索 API（キー不要・同一 IP 10 秒 10 回・継続保証なし）の
- * URL 組み立てとレスポンス解析。呼び出し（fetch）は src/server/geocode.ts。
+ * URL building and response parsing for the Geospatial Information Authority of Japan (GSI)
+ * address search API (no key needed, 10 requests per 10 seconds per IP, no guarantee of
+ * continuity). The call (fetch) is in src/server/geocode.ts.
  */
 
 export const GSI_ADDRESS_SEARCH = 'https://msearch.gsi.go.jp/address-search/AddressSearch'

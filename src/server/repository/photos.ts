@@ -40,7 +40,7 @@ export async function getPhoto(db: Db, id: string): Promise<Photo | null> {
   return row ?? null
 }
 
-/** 行を消して返す（R2 のキーを消す側で使う）。無ければ null */
+/** Deletes the row and returns it (used by the side that deletes the R2 keys). null if none */
 export async function deletePhotoRow(db: Db, id: string): Promise<Photo | null> {
   const row = await getPhoto(db, id)
   if (!row) return null
@@ -57,19 +57,19 @@ export async function photoKeysOfVisit(db: Db, visitId: string): Promise<string[
 }
 
 /**
- * 並び替え。photoIds はその見学記録の写真 id を新しい順で並べたもの。
- * 「本当にその visit に属する写真だけか」をここで確認する（UUID を知っていれば
- * 他人の見学記録の写真の sort_order を書き換えられてしまうのを防ぐ）。
- * 1 件でも属さない・件数が合わなければ何もせず false を返す。
- * 更新は db.batch で 1 つのアトミックな単位にする（tags.ts の replaceTags と同じ理由）。
+ * Reordering. photoIds is the photo ids of that visit record arranged in the new order.
+ * "Are these really only photos that belong to that visit" is checked here (prevents
+ * rewriting sort_order of photos of someone else's visit record just by knowing the UUID).
+ * If even 1 does not belong, or the count does not match, does nothing and returns false.
+ * The update is made 1 atomic unit with db.batch (same reason as replaceTags in tags.ts).
  */
 export async function reorderPhotoRows(
   db: Db,
   visitId: string,
   photoIds: string[],
 ): Promise<boolean> {
-  // 空配列は呼び出し側の zod（min(1)）で通常は弾かれるが、repository 単体で
-  // 呼ばれても db.batch に空配列を渡さないようここでも早く抜ける
+  // An empty array is normally rejected by the caller's zod (min(1)), but exit early here
+  // too so that an empty array is not passed to db.batch even if the repository is called alone
   if (photoIds.length === 0) return false
   const owned = new Set(
     (await db.select({ id: photos.id }).from(photos).where(eq(photos.visitId, visitId))).map(

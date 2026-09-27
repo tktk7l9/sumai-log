@@ -1,12 +1,13 @@
 /**
- * 情報収集ページ（/sources）の純粋関数: ジャンル別のグルーピング、YouTube チャンネル
- * URL の解析、アバター URL の許可判定。実際の fetch は src/server/sourcesFetcher.ts。
+ * Pure functions for the sources page (/sources): grouping by genre, parsing YouTube channel
+ * URLs, and deciding whether an avatar URL is allowed. The actual fetch is in
+ * src/server/sourcesFetcher.ts.
  */
 
 import { SOURCE_GENRES, type SourceGenre } from '../content/sourceGenres'
 
-/** ジャンルごとに束ねる。SOURCE_GENRES の並び順のまま、0 件のジャンルは含めない。
- * 各ジャンル内は sortOrder 昇順（同じなら name の辞書順）に並べる。 */
+/** Groups by genre. Keeps the order of SOURCE_GENRES and leaves out genres with 0 items.
+ * Within each genre, sorts by ascending sortOrder (by name in dictionary order when equal). */
 export function groupSourcesByGenre<T extends { genre: string; sortOrder: number; name: string }>(
   sources: readonly T[],
 ): { genre: SourceGenre; items: T[] }[] {
@@ -19,11 +20,13 @@ export function groupSourcesByGenre<T extends { genre: string; sortOrder: number
   })).filter((g) => g.items.length > 0)
 }
 
-/** チャンネル URL から取り出せる識別子。どちらか一方だけを持つ（両方は無い） */
+/** The identifier that can be taken from a channel URL. Holds only one of the two (never
+ * both) */
 export type YoutubeChannelRef = { handle: string } | { channelId: string }
 
-/** チャンネル URL を受け付けるホスト。youtu.be は動画専用の短縮ドメインで
- * チャンネルを指せないため、意図的に含めない（src/lib/youtube.ts の YOUTUBE_HOSTS とは別物） */
+/** Hosts accepted for a channel URL. youtu.be is a short domain for videos only and cannot
+ * point to a channel, so it is left out on purpose (this is separate from YOUTUBE_HOSTS in
+ * src/lib/youtube.ts) */
 const CHANNEL_HOSTS = new Set([
   'youtube.com',
   'www.youtube.com',
@@ -31,16 +34,18 @@ const CHANNEL_HOSTS = new Set([
   'music.youtube.com',
 ])
 
-/** 実際の YouTube チャンネル ID は 'UC' + 22 文字（計 24 文字）だが、多少緩めに受ける */
+/** A real YouTube channel ID is 'UC' + 22 characters (24 in total), but this accepts it
+ * somewhat loosely */
 const CHANNEL_ID_PATTERN = /^UC[\w-]{10,32}$/
 
 /**
- * YouTube チャンネルの URL からハンドル（'@…'）かチャンネル ID（'UC…'）を取り出す。
- * 対応する形: `/@handle`・`/channel/UC…`・`/c/カスタムURL`・`/user/レガシーユーザー名`。
- * `/c/`・`/user/` はチャンネル ID を持たないため、パスのその 1 セグメントをそのまま
- * handle として返す（実際の `@handle` と一致する保証は無いが、フォームの初期値・
- * resolveSource の対象判定としては十分）。対応外の形・URL として読めない・
- * youtu.be を含め対応外ホストは null。
+ * Takes the handle ('@…') or the channel ID ('UC…') from a YouTube channel URL.
+ * Supported shapes: `/@handle`, `/channel/UC…`, `/c/<custom URL>`, `/user/<legacy username>`.
+ * `/c/` and `/user/` carry no channel ID, so that 1 path segment is returned as is as the
+ * handle (there is no guarantee that it matches the real `@handle`, but it is enough for
+ * the initial value of the form and for deciding the target of resolveSource). Unsupported
+ * shapes, strings that cannot be read as a URL, and unsupported hosts including youtu.be
+ * give null.
  */
 export function parseYoutubeChannelUrl(url: string): YoutubeChannelRef | null {
   let parsed: URL
@@ -65,9 +70,9 @@ export function parseYoutubeChannelUrl(url: string): YoutubeChannelRef | null {
   return null
 }
 
-/** チャンネルアバターとして表示してよい URL か（https + ホスト許可リスト）。
- * i.ytimg.com は動画サムネと共有だが、チャンネルアイコン（`/vi/.../hqdefault.jpg` 以外の
- * パス）を返すページもあるため許可リストに含める。 */
+/** Whether the URL may be shown as a channel avatar (https + host allowlist).
+ * i.ytimg.com is shared with video thumbnails, but some pages return the channel icon from
+ * it (a path other than `/vi/.../hqdefault.jpg`), so it is included in the allowlist. */
 const AVATAR_HOSTS = new Set(['yt3.ggpht.com', 'yt3.googleusercontent.com', 'i.ytimg.com'])
 
 export function isAllowedAvatarUrl(url: string): boolean {
@@ -80,8 +85,9 @@ export function isAllowedAvatarUrl(url: string): boolean {
   return parsed.protocol === 'https:' && AVATAR_HOSTS.has(parsed.hostname.toLowerCase())
 }
 
-/** sources.url の重複（D1 の UNIQUE 制約違反）をユーザー向けに言い換えるときの文言。
- * src/server/repository/sources.ts（検出して投げる側）と
- * src/components/sources/SourceForm.tsx（URL 欄のフィールドエラーに出す側）の両方が
- * この定数を使う（文字列の重複を避け、どちらかだけ直して食い違う事故を防ぐ）。 */
+/** The wording used to rephrase a duplicate sources.url (a violation of the D1 UNIQUE
+ * constraint) for the user. Both src/server/repository/sources.ts (the side that detects
+ * and throws) and src/components/sources/SourceForm.tsx (the side that shows it as the
+ * field error of the URL field) use this constant (this avoids duplicating the string and
+ * prevents the accident where only one side is fixed and they diverge). */
 export const DUPLICATE_URL_ERROR = 'この URL は登録済みです'

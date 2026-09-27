@@ -13,7 +13,7 @@ function feed(items: string): string {
 }
 
 describe('parseRss', () => {
-  it('CDATA 題名・エンティティ・HTML description・javascript: リンクの3件を扱う', () => {
+  it('handles 3 items: CDATA title, entities, HTML description, javascript: link', () => {
     const xml = feed(`
       <item>
         <title><![CDATA[【完成見学会】平屋の家]]></title>
@@ -50,7 +50,7 @@ describe('parseRss', () => {
     ])
   })
 
-  it('http(s) 以外の link を持つ item は落ちる', () => {
+  it('drops an item whose link is not http(s)', () => {
     const xml = feed(`
       <item>
         <title>不正なリンク</title>
@@ -61,7 +61,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('link 要素が無い item は落ちる', () => {
+  it('drops an item without a link element', () => {
     const xml = feed(`
       <item>
         <title>リンク無し</title>
@@ -71,7 +71,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('pubDate 要素が無い item は落ちる', () => {
+  it('drops an item without a pubDate element', () => {
     const xml = feed(`
       <item>
         <title>日付無し</title>
@@ -81,7 +81,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('pubDate が RFC 2822 として読めない item は落ちる', () => {
+  it('drops an item whose pubDate cannot be read as RFC 2822', () => {
     const xml = feed(`
       <item>
         <title>日付が変</title>
@@ -92,7 +92,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('title 要素が無い item は落ちる（タイトルが空では意味が無いため）', () => {
+  it('drops an item without a title element (an empty title is meaningless)', () => {
     const xml = feed(`
       <item>
         <link>https://news.example.com/topics/11</link>
@@ -102,7 +102,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('title の中身が空白だけの item も落ちる', () => {
+  it('also drops an item whose title contains only whitespace', () => {
     const xml = feed(`
       <item>
         <title>   </title>
@@ -113,7 +113,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('title は200字に切り詰める', () => {
+  it('truncates title to 200 chars', () => {
     const longTitle = 'あ'.repeat(500)
     const xml = feed(`
       <item>
@@ -128,7 +128,7 @@ describe('parseRss', () => {
     expect(result[0].title.length).toBe(200)
   })
 
-  it('description は stripTags のうえ 300 字に切り詰める', () => {
+  it('passes description through stripTags and truncates it to 300 chars', () => {
     const long = '本'.repeat(310)
     const xml = feed(`
       <item>
@@ -144,17 +144,17 @@ describe('parseRss', () => {
     expect(result[0].summary?.length).toBe(300)
   })
 
-  it('壊れた XML は空配列（never throw）', () => {
+  it('broken XML gives an empty array (never throw)', () => {
     expect(parseRss('<rss><channel><item><title>Unclosed')).toEqual([])
     expect(parseRss('not xml at all')).toEqual([])
     expect(parseRss('')).toEqual([])
   })
 
-  it('item が無いチャンネルは空配列', () => {
+  it('a channel without items gives an empty array', () => {
     expect(parseRss(feed(''))).toEqual([])
   })
 
-  it('日が範囲外（32日）の pubDate を持つ item は落ちる', () => {
+  it('drops an item whose pubDate has a day out of range (the 32nd)', () => {
     const xml = feed(`
       <item>
         <title>日付が範囲外</title>
@@ -165,7 +165,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('実在しない日（2月31日）が Date.parse で翌月へ繰り上がる item は落ちる', () => {
+  it('drops an item whose non-existent day (February 31) rolls over to the next month in Date.parse', () => {
     const xml = feed(`
       <item>
         <title>実在しない日付</title>
@@ -176,7 +176,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('実在する日の pubDate は正しく解決する（32日・31日の回帰確認）', () => {
+  it('resolves a pubDate with a real day correctly (regression check for the 32nd / 31st)', () => {
     const xml = feed(`
       <item>
         <title>正しい日付</title>
@@ -189,7 +189,7 @@ describe('parseRss', () => {
     expect(result[0].publishedOn).toBe('2026-01-15')
   })
 
-  it('時刻が範囲外（25時）で Date.parse が NaN になる pubDate の item は落ちる', () => {
+  it('drops an item whose pubDate has an hour out of range (25) so Date.parse gives NaN', () => {
     const xml = feed(`
       <item>
         <title>時刻が範囲外</title>
@@ -200,10 +200,10 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('JST 変換で年が5桁に繰り上がる極端な日付は落ちる（結果が YYYY-MM-DD にならない）', () => {
-    // 9999年12月31日20:00 UTC + 9時間 = 10000年1月1日05:00 JST。
-    // getUTCFullYear() は年を4桁にゼロ埋めしないため、そのまま連結すると
-    // 「10000-01-01」になり ^\d{4}-\d{2}-\d{2}$ に一致しない。
+  it('drops an extreme date whose year rolls over to 5 digits in the JST conversion (the result is not YYYY-MM-DD)', () => {
+    // 9999-12-31 20:00 UTC + 9 hours = 10000-01-01 05:00 JST.
+    // getUTCFullYear() does not zero-pad the year to 4 digits, so plain concatenation gives
+    // "10000-01-01", which does not match ^\d{4}-\d{2}-\d{2}$.
     const xml = feed(`
       <item>
         <title>極端な日付</title>
@@ -214,7 +214,7 @@ describe('parseRss', () => {
     expect(parseRss(xml)).toEqual([])
   })
 
-  it('MAX_INPUT_LENGTH を超える入力は空配列', () => {
+  it('gives an empty array for input longer than MAX_INPUT_LENGTH', () => {
     expect(parseRss('a'.repeat(2_000_001))).toEqual([])
   })
 })

@@ -5,7 +5,7 @@ import { parseHtmlList } from './htmlList'
 const BASE_URL = 'https://www.example-koumuten.co.jp/'
 
 describe('parseHtmlList', () => {
-  it('3種類の日付表記・相対/絶対/ルート相対 href を持つ li を候補にする', () => {
+  it('turns li with 3 kinds of date notation and relative / absolute / root-relative href into candidates', () => {
     const html = `
       <ul>
         <li>2026年9月10日 <a href="./kengaku/1.php">完成見学会のお知らせ</a></li>
@@ -35,17 +35,17 @@ describe('parseHtmlList', () => {
     ])
   })
 
-  it('日付が無い li は捨てる', () => {
+  it('drops a li without a date', () => {
     const html = `<ul><li><a href="./news/4.php">日付の無いお知らせ</a></li></ul>`
     expect(parseHtmlList(html, BASE_URL)).toEqual([])
   })
 
-  it('href（<a> タグ）が無い li は捨てる', () => {
+  it('drops a li without href (an <a> tag)', () => {
     const html = `<ul><li>2026年9月25日 お知らせのみ（リンク無し）</li></ul>`
     expect(parseHtmlList(html, BASE_URL)).toEqual([])
   })
 
-  it('http(s) 以外のスキームに解決される li は捨てる', () => {
+  it('drops a li that resolves to a scheme other than http(s)', () => {
     const html = `
       <ul>
         <li>2026年10月1日 <a href="javascript:void(0)">JSリンク</a></li>
@@ -55,12 +55,12 @@ describe('parseHtmlList', () => {
     expect(parseHtmlList(html, BASE_URL)).toEqual([])
   })
 
-  it('href の解決自体に失敗する li は捨てる（例外を投げない）', () => {
+  it('drops a li whose href fails to resolve at all (does not throw)', () => {
     const html = `<ul><li>2026年10月3日 <a href="./kengaku/5.php">壊れたベースURL</a></li></ul>`
     expect(parseHtmlList(html, '')).toEqual([])
   })
 
-  it('href のクエリ文字列にあるエンティティ（&amp;）を解決してから URL を組み立てる', () => {
+  it('resolves the entity (&amp;) in the query string of href before building the URL', () => {
     const html = `<ul><li>2026年10月4日 <a href="./x.php?id=1&amp;p=2">クエリ付き</a></li></ul>`
     expect(parseHtmlList(html, BASE_URL)).toEqual([
       {
@@ -72,7 +72,7 @@ describe('parseHtmlList', () => {
     ])
   })
 
-  it('日付トークンの前後の文字も含めてタイトルにする', () => {
+  it('includes the text before and after the date token in the title', () => {
     const html = `<ul><li><span>2026年10月5日</span> <a href="./x.php">タイトル</a>（詳細はこちら）</li></ul>`
     const result = parseHtmlList(html, BASE_URL)
     expect(result).toHaveLength(1)
@@ -80,7 +80,7 @@ describe('parseHtmlList', () => {
     expect(result[0].publishedOn).toBe('2026-10-05')
   })
 
-  it('タイトルは200字に切り詰める', () => {
+  it('truncates the title to 200 chars', () => {
     const longTitle = 'あ'.repeat(210)
     const html = `<ul><li>2026年10月6日 <a href="./x.php">${longTitle}</a></li></ul>`
     const result = parseHtmlList(html, BASE_URL)
@@ -89,13 +89,13 @@ describe('parseHtmlList', () => {
     expect(result[0].title.length).toBe(200)
   })
 
-  it('li が無ければ空配列', () => {
+  it('gives an empty array when there is no li', () => {
     expect(parseHtmlList('<ul></ul>', BASE_URL)).toEqual([])
     expect(parseHtmlList('not html at all', BASE_URL)).toEqual([])
     expect(parseHtmlList('', BASE_URL)).toEqual([])
   })
 
-  it('MAX_INPUT_LENGTH を超える入力は空配列', () => {
+  it('gives an empty array for input longer than MAX_INPUT_LENGTH', () => {
     expect(parseHtmlList('a'.repeat(2_000_001), BASE_URL)).toEqual([])
   })
 })

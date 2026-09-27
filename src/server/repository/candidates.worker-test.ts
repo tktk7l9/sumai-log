@@ -21,7 +21,7 @@ import { actor, db, reset } from './test-helpers'
 beforeEach(reset)
 
 describe('vendors', () => {
-  it('作成→更新→削除。施工エリアは JSON 配列で往復し、削除で場所の vendorId が外れる', async () => {
+  it('create -> update -> delete. Service areas round-trip as a JSON array, and deletion detaches vendorId from places', async () => {
     const id = await upsertVendor(
       db,
       { name: '甲工務店', kind: 'koumuten', serviceAreas: ['テスト市'] },
@@ -50,7 +50,7 @@ describe('vendors', () => {
     expect(place.vendorId).toBeNull()
   })
 
-  it('代表者名・加盟団体は JSON 配列で往復し、未指定なら null / 空配列になる', async () => {
+  it('representative name and affiliations round-trip as a JSON array, and become null / an empty array when not given', async () => {
     const id = await upsertVendor(
       db,
       {
@@ -76,7 +76,7 @@ describe('vendors', () => {
     expect(row.affiliations).toEqual([])
   })
 
-  it('setVendorFaviconKey / setVendorRepresentativePhotoKey は差し替え前の値を返し、updated_at を動かさない', async () => {
+  it('setVendorFaviconKey / setVendorRepresentativePhotoKey return the value before the replacement and do not touch updated_at', async () => {
     const id = await upsertVendor(
       db,
       { name: 'キー更新工務店', kind: 'koumuten', serviceAreas: [] },
@@ -99,26 +99,27 @@ describe('vendors', () => {
     expect(after.representativePhotoKey).toBe(`vendors/${id}/representative-display.jpg`)
     expect(after.updatedAt).toBe(before.updatedAt)
 
-    // 2 回目は「差し替え前の値」として 1 回目に設定したキーが返り、source も差し替わる
+    // The 2nd call returns the key set by the 1st call as "the value before the
+    // replacement", and source is replaced too
     const prevFavicon2 = await setVendorFaviconKey(db, id, `vendors/${id}/favicon.ico`, 'manual')
     expect(prevFavicon2).toBe(`vendors/${id}/favicon.png`)
     ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(after.faviconSource).toBe('manual')
 
-    // key に null・source に null を渡すと両方消せる（削除の形）
+    // Passing null for key and null for source clears both (the deletion form)
     const prevFavicon3 = await setVendorFaviconKey(db, id, null, null)
     expect(prevFavicon3).toBe(`vendors/${id}/favicon.ico`)
     ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(after.faviconKey).toBeNull()
     expect(after.faviconSource).toBeNull()
 
-    // null を渡すと消せる
+    // Passing null clears it
     await setVendorRepresentativePhotoKey(db, id, null)
     ;[after] = await db.select().from(vendors).where(eq(vendors.id, id))
     expect(after.representativePhotoKey).toBeNull()
   })
 
-  it('getVendorFaviconSource は favicon_source を返し、未設定は null', async () => {
+  it('getVendorFaviconSource returns favicon_source, and null when not set', async () => {
     const id = await upsertVendor(
       db,
       { name: 'ソース確認工務店', kind: 'koumuten', serviceAreas: [] },
@@ -129,7 +130,7 @@ describe('vendors', () => {
     expect(await getVendorFaviconSource(db, id)).toBe('manual')
   })
 
-  it('getVendorWebsiteUrl は website_url を返し、無い業者は null', async () => {
+  it('getVendorWebsiteUrl returns website_url, and null for a vendor without one', async () => {
     const id = await upsertVendor(
       db,
       {
@@ -151,7 +152,7 @@ describe('vendors', () => {
     expect(await getVendorWebsiteUrl(db, '11111111-1111-1111-1111-111111111111')).toBeNull()
   })
 
-  it('listVendorsWithWebsite は website_url がある業者だけ返す', async () => {
+  it('listVendorsWithWebsite returns only vendors that have website_url', async () => {
     const withUrlId = await upsertVendor(
       db,
       {
@@ -177,7 +178,7 @@ describe('vendors', () => {
     })
   })
 
-  it('vendorExists は実在する id だけ true を返す（R2 write/delete の前段ガード用）', async () => {
+  it('vendorExists returns true only for an id that really exists (for the guard before R2 write/delete)', async () => {
     const id = await upsertVendor(
       db,
       { name: '存在確認業者', kind: 'koumuten', serviceAreas: [] },
@@ -192,7 +193,7 @@ describe('vendors', () => {
 })
 
 describe('properties', () => {
-  it('作成→削除。紐づく場所の propertyId が外れ、物件へのコメントも消える', async () => {
+  it('create -> delete. propertyId on linked places is detached, and comments on the property are deleted too', async () => {
     const id = await upsertProperty(
       db,
       { name: 'テストマンション', address: '東京都渋谷区' },
@@ -246,7 +247,7 @@ describe('vendorInput.newsEmailDomain', () => {
     hq: null,
     representative: null,
   }
-  it('正規化して保存する。空は null', () => {
+  it('normalizes and saves. Empty becomes null', () => {
     expect(
       vendorInput.parse({ ...base, newsEmailDomain: ' A.com, info@B.com ' }).newsEmailDomain,
     ).toBe('a.com,b.com')

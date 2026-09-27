@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { extractYoutubeMeta } from './youtubeMeta'
 
 describe('extractYoutubeMeta', () => {
-  it('og:title / og:description / og:image / channelId を抜き出す', () => {
+  it('extracts og:title / og:description / og:image / channelId', () => {
     const html = `
       <html><head>
         <meta property="og:title" content="架空チャンネル">
@@ -21,42 +21,42 @@ describe('extractYoutubeMeta', () => {
     })
   })
 
-  it('content が property より先でも読める（属性順を問わない）', () => {
+  it('reads content even when it comes before property (attribute order does not matter)', () => {
     const html = `<meta content="架空チャンネル" property="og:title">`
     expect(extractYoutubeMeta(html).title).toBe('架空チャンネル')
   })
 
-  it('シングルクォートの属性値も読める', () => {
+  it('also reads single-quoted attribute values', () => {
     const single = `<meta property='og:title' content='架空チャンネル'>`
     expect(extractYoutubeMeta(single).title).toBe('架空チャンネル')
   })
 
-  it('無クォートの属性値も読める', () => {
+  it('also reads unquoted attribute values', () => {
     const html = `<meta property=og:title content=架空チャンネル>`
     expect(extractYoutubeMeta(html).title).toBe('架空チャンネル')
   })
 
-  it('content 属性が無いタグはスキップし、次の候補を探す（見つからなければ null）', () => {
+  it('skips a tag without a content attribute and looks for the next candidate (null when none is found)', () => {
     const html = `<meta property="og:title"><meta name="unrelated" content="x">`
     expect(extractYoutubeMeta(html).title).toBeNull()
   })
 
-  it('name= 属性（property= の代わり）でも読める', () => {
+  it('also reads the name= attribute (in place of property=)', () => {
     const html = `<meta name="og:title" content="架空チャンネル">`
     expect(extractYoutubeMeta(html).title).toBe('架空チャンネル')
   })
 
-  it('property 値の大文字小文字を問わない', () => {
+  it('ignores the case of the property value', () => {
     const html = `<meta property="OG:TITLE" content="架空チャンネル">`
     expect(extractYoutubeMeta(html).title).toBe('架空チャンネル')
   })
 
-  it('HTML エンティティを解決する', () => {
+  it('resolves HTML entities', () => {
     const html = `<meta property="og:title" content="架空&amp;チャンネル">`
     expect(extractYoutubeMeta(html).title).toBe('架空&チャンネル')
   })
 
-  it('og:description は 200 字を超えたら切り詰める', () => {
+  it('truncates og:description when it exceeds 200 characters', () => {
     const long = 'あ'.repeat(250)
     const html = `<meta property="og:description" content="${long}">`
     const result = extractYoutubeMeta(html)
@@ -64,7 +64,7 @@ describe('extractYoutubeMeta', () => {
     expect(result.description?.length).toBe(200)
   })
 
-  it('見つからない項目は null', () => {
+  it('returns null for items that are not found', () => {
     expect(extractYoutubeMeta('<html></html>')).toEqual({
       title: null,
       description: null,
@@ -73,12 +73,12 @@ describe('extractYoutubeMeta', () => {
     })
   })
 
-  it('content が空文字/空白だけなら null 扱い', () => {
+  it('treats content that is empty or whitespace only as null', () => {
     const html = `<meta property="og:title" content="   ">`
     expect(extractYoutubeMeta(html).title).toBeNull()
   })
 
-  it('同名タグが複数あれば最初の 1 件を使う', () => {
+  it('uses the first one when there are several tags of the same name', () => {
     const html = `
       <meta property="og:title" content="1件目">
       <meta property="og:title" content="2件目">
@@ -86,18 +86,18 @@ describe('extractYoutubeMeta', () => {
     expect(extractYoutubeMeta(html).title).toBe('1件目')
   })
 
-  it('channelId は UC で始まらなければ拾わない', () => {
+  it('does not pick up a channelId that does not start with UC', () => {
     const html = `<script>{"channelId":"XXabcdefghijklmnopqrst"}</script>`
     expect(extractYoutubeMeta(html).channelId).toBeNull()
   })
 
-  it('関係の無い meta タグは無視する', () => {
+  it('ignores unrelated meta tags', () => {
     const html = `<meta charset="utf-8"><meta name="description" content="無関係">`
     expect(extractYoutubeMeta(html).title).toBeNull()
     expect(extractYoutubeMeta(html).description).toBeNull()
   })
 
-  it('入力が上限を超える場合はすべて null（巨大な HTML を舐めない）', () => {
+  it('returns null for everything when the input exceeds the limit (does not scan a huge HTML)', () => {
     const huge = `<meta property="og:title" content="x">${'a'.repeat(2_000_001)}`
     expect(extractYoutubeMeta(huge)).toEqual({
       title: null,

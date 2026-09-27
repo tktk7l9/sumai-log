@@ -3,14 +3,15 @@
 }
 
 /*
- * モバイル（主に iOS Safari）でページ最下部を超えてスクロールすると、ページ全体が
- * ゴムのように伸び縮みする「バウンス」が起きる。AppShell.Footer（.tabbar）は
- * position: fixed だが、このバウンス中はビューポート自体が動くため、固定のはずの
- * 下タブも一緒にずれて見える（所有者の報告）。overscroll-behavior-y: none で
- * バウンスそのものを止めるのが本体の対策（.tabbar 側の position: fixed は Mantine の
- * AppShell.Footer が既定で持っている。念のためここでも明示する。下の #root 経由の
- * 指定は入れない＝.app-main を別スクロールコンテナにする案は、地図タブが
- * 高さぴったりの 1 枚をこの main に頼っているため見送った）。
+ * On mobile (mainly iOS Safari), scrolling past the very bottom of the page causes a
+ * "bounce" where the whole page stretches and shrinks like rubber. AppShell.Footer
+ * (.tabbar) is position: fixed, but during this bounce the viewport itself moves, so the
+ * bottom tabs that should be fixed also appear to shift with it (reported by the owner).
+ * Stopping the bounce itself with overscroll-behavior-y: none is the main fix (the
+ * position: fixed on the .tabbar side is something Mantine's AppShell.Footer has by
+ * default. It is made explicit here too, just in case. No rule via #root below is added =
+ * the idea of making .app-main a separate scroll container was dropped, because the map
+ * tab relies on this main for its single exact-height sheet).
  */
 html,
 body {
@@ -18,18 +19,20 @@ body {
 }
 
 /*
- * 地の色だけは Mantine が light で `#fff` と決め打ちしていて theme のパレットから
- * 導けないので、ここで暖色に差し替える。セレクタは Mantine 本体と同じ形にして、
- * 読み込み順（__root.tsx で Mantine のあとに appCss）で勝たせている。
- * ダークは theme の dark[7]（地）がそのまま使われるので上書き不要。
+ * Only the ground color is hard-coded by Mantine as `#fff` for light and cannot be
+ * derived from the theme palette, so it is replaced with a warm color here. The selector
+ * has the same shape as Mantine's own, and it wins by load order (appCss after Mantine in
+ * __root.tsx).
+ * Dark uses dark[7] (ground) of the theme as is, so no override is needed.
  *
- * プレースホルダは既定だと入力欄の枠と同じ段（gray-5 / dark-3）で、文字としては
- * 薄すぎる（3.2:1 / 4.3:1）。枠は枠のまま、文字は補助文字と同じ段に上げて 4.5:1 を満たす。
+ * By default the placeholder is on the same step as the input border (gray-5 / dark-3),
+ * which is too faint for text (3.2:1 / 4.3:1). The border stays as the border, and the text
+ * is raised to the same step as secondary text to meet 4.5:1.
  *
- * ついでにこのアプリだけの語彙を 3 つ置く:
- *   --sumai-ring   キーボードフォーカスの輪郭
- *   --sumai-sunken 一段沈めた面（空状態・写真のプレースホルダ）
- *   --sumai-lift   浮いているもの（FAB）の影。灰色ではなく焦げ茶の影にする
+ * While here, define 3 terms used only by this app:
+ *   --sumai-ring   the outline of keyboard focus
+ *   --sumai-sunken a surface sunk one step (empty state, photo placeholder)
+ *   --sumai-lift   the shadow of floating things (FAB). A dark brown shadow, not a gray one
  */
 :root[data-mantine-color-scheme='light'],
 :host([data-mantine-color-scheme='light']) {
@@ -38,7 +41,8 @@ body {
   --sumai-ring: var(--mantine-color-clay-6);
   --sumai-sunken: var(--mantine-color-gray-2);
   --sumai-lift: 0 6px 18px -6px rgba(69, 45, 30, 0.35);
-  /* 分析のグラフの 2 系列（見学・動画）。dataviz の検証で色覚多様性の差・コントラストを確認済み */
+  /* The 2 series of the analysis charts (visits, videos). Color vision diversity
+     separation and contrast were confirmed by the dataviz validation */
   --sumai-series-visit: #a3542f;
   --sumai-series-video: #2f6fb3;
 }
@@ -54,10 +58,10 @@ body {
 }
 
 /*
- * 入力欄の枠は「触れる場所」の目印なので、カードの罫線（gray-4 / dark-4）より濃くして
- * 地に対して 3:1 を確保する。Mantine 本体が
- * `[data-mantine-color-scheme] .m_xxx[data-variant='default']` の強さで当てているため、
- * こちらは公開クラス名を足して 1 段強くする。
+ * The input border marks "a place you can touch", so it is made darker than the card rule
+ * lines (gray-4 / dark-4) to secure 3:1 against the ground. Mantine itself applies it with
+ * the strength of `[data-mantine-color-scheme] .m_xxx[data-variant='default']`, so here
+ * we add the public class name to make it 1 step stronger.
  */
 :root[data-mantine-color-scheme='light'] .mantine-Input-input[data-variant='default'] {
   --input-bd: var(--mantine-color-gray-5);
@@ -66,17 +70,18 @@ body {
   --input-bd: var(--mantine-color-dark-3);
 }
 
-/* 素の <a>（TanStack の Link）。既定の青はこの配色から浮くので、色は中身に任せて
-   下線だけをリンクの印にする。Anchor を中に置いた箇所は Anchor の色が下線にも乗る */
+/* Plain <a> (TanStack's Link). The default blue stands out from this color scheme, so the
+   color is left to the content and only the underline marks a link. Where an Anchor is
+   placed inside, the Anchor color also applies to the underline */
 a {
   color: inherit;
 }
 
-/* カード全体がリンクになっている箇所は Mantine のフォーカス輪郭が付かないので、ここで付ける。
-   border-radius: inherit は <a> 自身に角丸指定があるときだけ効く。カード全体を覆う
-   <a>（Card 自身に角丸があり <a> には無い場合）では効かず、輪郭は四角のままになる
-   （見た目の破綻はないため許容している。角丸に揃えたければ var(--mantine-radius-md) 等を
-   直接指定する） */
+/* Where a whole card is a link, Mantine's focus outline is not applied, so add it here.
+   border-radius: inherit works only when the <a> itself has a border radius. For an <a>
+   that covers a whole card (when the Card itself has rounded corners and the <a> does not)
+   it does not work, and the outline stays square (accepted because nothing looks broken.
+   To match the rounded corners, specify var(--mantine-radius-md) etc. directly) */
 a:focus-visible {
   outline: 2px solid var(--sumai-ring);
   outline-offset: 2px;
@@ -87,15 +92,16 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
-/* ヘッダ・左ナビ・下タブは「地」ではなく「面」に乗せて、本文と別の板に見せる */
+/* The header, left nav and bottom tabs sit on the "surface", not the "ground", so they
+   look like a separate board from the body */
 .appbar,
 .tabbar {
   background-color: var(--mantine-color-default);
 }
 
-/* 下タブ（AppShell.Footer）はホームインジケータの分だけ底上げする。position/bottom は
-   Mantine の AppShell.Footer が既定で fixed/0 を持っているが、バウンス対策の一部として
-   ここでも明示しておく（上の overscroll-behavior-y が本体の対策） */
+/* The bottom tabs (AppShell.Footer) are raised by the height of the home indicator.
+   Mantine's AppShell.Footer has fixed/0 for position/bottom by default, but they are made
+   explicit here too as part of the bounce fix (overscroll-behavior-y above is the main fix) */
 .tabbar {
   position: fixed;
   bottom: 0;
@@ -103,9 +109,9 @@ a:focus-visible {
 }
 
 /*
- * AppShell は下タブの高さ（56px）しか本文の下に空けてくれないので、ホームインジケータ分を
- * 足す。足さないと最後のカードがタブバーの裏に潜る。
- * Mantine の指定と同じ計算に env() を 1 つ足しただけ。
+ * AppShell leaves only the height of the bottom tabs (56px) below the body, so add the
+ * home indicator's share. Without it the last card slips behind the tab bar.
+ * It is the same calculation as Mantine's rule with just 1 env() added.
  */
 .app-main {
   padding-bottom: calc(
@@ -115,43 +121,50 @@ a:focus-visible {
 }
 
 /*
- * FAB は下タブの 16px 上（bottom 72px）に高さ約 50px で浮いているので、下タブ分を空けただけ
- * では最後のカードがまだ隠れる。差分（FAB の高さ＋余白）を本文の一番外側で足す。
+ * The FAB floats 16px above the bottom tabs (bottom 72px) with a height of about 50px, so
+ * leaving room only for the bottom tabs still hides the last card. The difference (the FAB
+ * height + margin) is added at the outermost part of the body.
  *
- * ここを .app-main ではなく PageShell 側に付けているのは、地図タブが
- * 「ヘッダと下タブを引いた高さぴったりの 1 枚」で、main の下 padding を増やすと
- * その分だけページ全体がスクロールしてしまうため（地図は PageShell を使っていない）。
+ * This is put on the PageShell side and not on .app-main because the map tab is "a single
+ * sheet exactly as high as the screen minus the header and bottom tabs", and increasing
+ * the bottom padding of main would make the whole page scroll by that much (the map does
+ * not use PageShell).
  */
 .fab-clearance {
   padding-bottom: 64px;
 }
 
-/* 空状態・写真のプレースホルダなど、一段沈めた面 */
+/* A surface sunk one step, such as the empty state and photo placeholders */
 .sunken {
   background-color: var(--sumai-sunken);
 }
 
 /*
- * 「誰が書いたか」をカードの左端 3px の帯で示す（丸をもう 1 つ足さずに一覧で追えるように）。
- * 帯は MemberChip の丸と同じ色名の 6 段目。丸のほう（Avatar の light バリアント）は
- * 同じ色名の淡い地＋濃い字なので、色みは揃うが明るさは別段になる。
- * border ではなく内側の影で引くので、角丸に沿って切れるしカードの幅も動かない。
+ * Shows "who wrote it" with a 3px band on the left edge of the card (so it can be followed
+ * in a list without adding 1 more circle).
+ * The band is step 6 of the same color name as the MemberChip circle. The circle (the light
+ * variant of Avatar) is a pale ground + dark text of the same color name, so the hue
+ * matches but the lightness is on a different step.
+ * It is drawn with an inset shadow, not a border, so it is clipped along the rounded
+ * corners and the card width does not move.
  */
 .author-band {
   box-shadow: inset 3px 0 0 0 var(--author-color, transparent);
 }
 
-/* 浮いている追加ボタン */
+/* The floating add button */
 .lifted {
   box-shadow: var(--sumai-lift);
 }
 
-/* Google マップ（PlacesMap）。高さは親が決める。キー未設定の案内文もこの枠に出す */
+/* Google Maps (PlacesMap). The parent decides the height. The notice for a missing key is
+   also shown in this frame */
 .places-map {
   width: 100%;
   height: 100%;
 }
-/* AdvancedMarker の content。下端中央が座標に乗るので、ピンの尖りをそこに合わせる */
+/* The content of AdvancedMarker. The bottom center sits on the coordinates, so the pin tip
+   is aligned there */
 .place-pin-wrap {
   width: 22px;
   height: 22px;
@@ -164,7 +177,8 @@ a:focus-visible {
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   background: var(--mantine-color-gray-4);
-  /* 地図タイルはダークでも明るいままなので、縁取りは配色によらず明るい方で固定する */
+  /* The map tiles stay light even in dark, so the outline is fixed to the light one
+     regardless of the color scheme */
   border: 2px solid var(--mantine-color-white);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
@@ -177,9 +191,10 @@ a:focus-visible {
 }
 
 /*
- * 地図タブ本体。ヘッダ(52px)・下タブ(56px)・ホームインジケータを差し引いた高さいっぱいに出す。
- * AppShell の padding="md" 分だけ負のマージンで打ち消して縁いっぱいに広げる
- * （打ち消さないと main の上下 padding が二重に積んで 100dvh をはみ出す）。
+ * The map tab itself. It fills the height left after subtracting the header (52px), the
+ * bottom tabs (56px) and the home indicator.
+ * The padding="md" of AppShell is cancelled with a negative margin to spread edge to edge
+ * (without cancelling, the top and bottom padding of main stacks twice and overflows 100dvh).
  */
 .map-page {
   height: calc(100dvh - 52px - 56px - env(safe-area-inset-bottom, 0px));
@@ -193,27 +208,29 @@ a:focus-visible {
 }
 
 /*
- * `/calendar` の月表示（@mantine/schedule の MonthView）。既定は1セルの最小幅が
- * 84px（7列で588px）あり、390px 幅のスマホでは7列が画面に収まらず横スクロール
- * が要る（所有者の報告、2026-09-16）。sm 未満だけ、Styles API の静的クラス
- * （`mantine-MonthView-*`。デスクトップと同じ CSS Modules クラスに加えて
- * Mantine が付ける安定クラス名。DOM 調査で確認済み）を通じて `--min-day-width`
- * を下げる。実際のセル幅はこの下限ではなく `flex: 0 0 calc(100% / 7)` の
- * 計算値（コンテナ幅を7等分した値）になるので、下限を下げるだけで横スクロール
- * せずに7列すべてが収まり、390px 幅の実機ではセル幅は約49〜51px になる
- * （下限そのものは、それより極端に狭い端末でも下限に張り付いて詰まりすぎない
- * ための保険）。
+ * The month view of `/calendar` (MonthView of @mantine/schedule). By default the minimum
+ * width of 1 cell is 84px (588px for 7 columns), so on a 390px wide phone the 7 columns do
+ * not fit the screen and horizontal scrolling is needed (reported by the owner,
+ * 2026-09-16). Only below sm, `--min-day-width` is lowered through the static classes of
+ * the Styles API (`mantine-MonthView-*`. Stable class names that Mantine adds on top of
+ * the same CSS Modules classes as desktop. Confirmed by inspecting the DOM). The actual
+ * cell width is not this lower bound but the computed value of
+ * `flex: 0 0 calc(100% / 7)` (the container width divided into 7 equal parts), so just
+ * lowering the lower bound makes all 7 columns fit without horizontal scrolling, and on a
+ * real 390px wide device the cell width is about 49-51px (the lower bound itself is
+ * insurance so that even on an extremely narrower device the cells stick to the lower
+ * bound and do not get too cramped).
  *
- * 1セルの高さ（`calc(52px + var(--month-view-max-events, 2) * 24px)`）は
- * ここでは触らない。この CSS 変数は Mantine 自身の varsResolver が
- * `monthViewProps.maxEventsPerDay` から決めるため、ここで直接上書きすると
- * 「何件まで表示してから+Nにまとめるか」という実際の描画ロジックと高さの
- * 計算がズレてしまう。高さは `calendar.tsx` 側で画面幅に応じて
- * `maxEventsPerDay` を出し分けることで揃える（1件なら 76px。週の行数×76px
- * ＋曜日ヘッダーぶんが 390×844 の画面に収まる）。
+ * The height of 1 cell (`calc(52px + var(--month-view-max-events, 2) * 24px)`) is not
+ * touched here. This CSS variable is decided by Mantine's own varsResolver from
+ * `monthViewProps.maxEventsPerDay`, so overriding it directly here would make the height
+ * calculation drift from the actual rendering logic of "how many to show before
+ * collapsing into +N". The height is aligned by switching `maxEventsPerDay` by screen
+ * width on the `calendar.tsx` side (76px for 1 event. The number of week rows x 76px
+ * + the weekday header fits a 390x844 screen).
  *
- * 日付の丸バッジ（monthViewDayLabel）はセルが狭くなる分だけ文字サイズを
- * 落とす。デスクトップ（sm 以上）は一切変えない。
+ * The round date badge (monthViewDayLabel) gets a smaller font size by as much as the
+ * cell gets narrower. Desktop (sm and above) is not changed at all.
  */
 @media (max-width: 47.99em) {
   .mantine-MonthView-monthView {
@@ -227,9 +244,11 @@ a:focus-visible {
 }
 
 /*
- * `NewsAgenda`（お知らせ。ホームの「お知らせ」ブロックと `/news` の両方で共有）。
- * 新しい日が上の自前の一覧（2026-09-24 に AgendaView から置き換え）。日付見出しは行との
- * 境界線だけだと区切りが弱いので、少し上に余白を足す（所有者の報告、2026-09-16）。
+ * `NewsAgenda` (vendor news. Shared by both the "お知らせ" (vendor news) block on the home
+ * page and `/news`).
+ * Our own list with newer days on top (replaced AgendaView on 2026-09-24). With only the
+ * border line against the rows the date heading separates weakly, so a little margin is
+ * added above (reported by the owner, 2026-09-16).
  */
 .news-agenda-range {
   padding-bottom: 4px;
@@ -252,14 +271,15 @@ a:focus-visible {
 }
 
 /*
- * 終わったもの（ホームの「これからの予定」で今日のうちに過ぎた予定、終わった日程の
- * お知らせ）の行。色を落として「これから」と見分けられるようにする（所有者の要望、
- * 2026-09-21）。`data-past` は HomeAgenda / NewsAgenda の renderEvent が行のルートに
- * 付ける。ドット（agendaViewEventColor）の色は ScheduleEventData の color 側で
- * グレーに落としているので、ここでは文字だけを扱う。
+ * Rows of things that are over (events in "これからの予定" (upcoming events) on the home
+ * page that already passed within today, vendor news whose dates are over). The color is
+ * toned down so they can be told apart from "upcoming" ones (requested by the owner,
+ * 2026-09-21). `data-past` is put on the row root by renderEvent of HomeAgenda /
+ * NewsAgenda. The color of the dot (agendaViewEventColor) is toned down to gray on the
+ * color side of ScheduleEventData, so only the text is handled here.
  *
- * 落とす先は `--mantine-color-dimmed`（light: gray-7 / dark: dark-2）。opacity で
- * 薄めると本文の 4.5:1 を割るため、色そのものを差し替える。
+ * It is toned down to `--mantine-color-dimmed` (light: gray-7 / dark: dark-2). Fading with
+ * opacity would break the 4.5:1 of body text, so the color itself is replaced.
  */
 .mantine-AgendaView-agendaViewEvent[data-past] .mantine-AgendaView-agendaViewEventTitle,
 .mantine-AgendaView-agendaViewEvent[data-past] .mantine-AgendaView-agendaViewEventTime {
@@ -267,10 +287,13 @@ a:focus-visible {
 }
 
 /*
- * 候補の比較表（/candidates/compare）。列＝業者なので、スマホでは横にスクロールする。
- * 項目名の列（各行の th）だけ左に固定して、どの行を見ているか分かるようにする。
- * 固定した th は下のセルが透けないよう面の色で塗る（見出し行の th は Mantine の
- * stickyHeader が上に固定するので、左上の 1 マスは両方に効く）。
+ * The comparison table of candidates (/candidates/compare). Columns = vendors, so it
+ * scrolls horizontally on a phone.
+ * Only the column of item names (the th of each row) is fixed to the left so that you can
+ * tell which row you are looking at.
+ * The fixed th is painted with the surface color so the cells under it do not show through
+ * (the th of the header row is fixed to the top by Mantine's stickyHeader, so both apply
+ * to the 1 cell at the top left).
  */
 .compare-table th:first-child {
   position: sticky;
@@ -283,10 +306,11 @@ a:focus-visible {
 }
 
 /*
- * 区画シミュレーター（/site）の平面図。SVG の単位はメートルなので、線の太さは
- * vector-effect で画面のピクセルに固定する。高さは画面の 7 割弱までに抑え、縦長の土地でも
- * 下の数値と操作が見えるようにする。区画と建物はドラッグ対象なので touch-action を切る
- * （ページのスクロールと取り合わないように）。色は明暗どちらでも読める組み合わせにする。
+ * The plan view of the site plan simulator (/site). The SVG unit is meters, so line widths
+ * are fixed to screen pixels with vector-effect. The height is kept to a little under 70%
+ * of the screen so that the numbers and controls below stay visible even for a tall plot.
+ * The lots and the building are drag targets, so touch-action is turned off (so as not to
+ * fight with page scrolling). The colors are a combination readable in both light and dark.
  */
 .site-canvas {
   display: block;
@@ -327,7 +351,8 @@ a:focus-visible {
   stroke-width: 1.5;
   stroke-dasharray: 3 3;
 }
-/* 2 階の延焼ライン（5m）は細い一点鎖線で 1 階（3m）と見分ける */
+/* The fire spread line of the 2nd floor (5m) is told apart from the 1st floor (3m) by a
+   thin dash-dot line */
 .site-fireline-upper {
   stroke-width: 1;
   stroke-dasharray: 8 3 2 3;
@@ -355,7 +380,8 @@ a:focus-visible {
   fill-opacity: 0.22;
   pointer-events: none;
 }
-/* 3D 表示。指の操作は three.js（OrbitControls）が受けるのでページのスクロールと取り合わない */
+/* 3D view. three.js (OrbitControls) receives the finger gestures, so they do not fight
+   with page scrolling */
 .site3d {
   position: relative;
   width: 100%;
@@ -432,10 +458,12 @@ a:focus-visible {
 }
 
 /*
- * 上に引っ張って更新（src/components/PullToRefresh.tsx）。iOS 標準の見せ方に合わせ、
- * 本文の先頭に引いたぶんの空き（.ptr-space）を作り、その中央に放射状 12 本のスピナーを置く。
- * 引いている間（data-pulling）は指に追従させるので height の transition を切り、離した後は
- * 空きが縮むアニメーションで戻る。更新中（data-spinning）は 12 本を順に濃くして回す。
+ * Pull to refresh (src/components/PullToRefresh.tsx). Following the standard iOS look, a
+ * gap of the pulled amount (.ptr-space) is made at the top of the body, and a spinner of
+ * 12 radial bars is placed at its center.
+ * While pulling (data-pulling) it follows the finger, so the height transition is turned
+ * off; after release it returns with an animation of the gap shrinking. While refreshing
+ * (data-spinning) the 12 bars are darkened in turn to spin.
  */
 .ptr-space {
   position: relative;
@@ -529,8 +557,10 @@ a:focus-visible {
 }
 
 /*
- * 記録の分析（/analysis）。横棒は 1 系列なのでアクセント色 1 色、数値は文字色で添える。
- * 月ごとの縦棒は 2 系列（--sumai-series-*）で凡例と数値ラベルを必ず出す
+ * Analysis of the records (/analysis). The horizontal bars are 1 series, so they use 1
+ * accent color, with the numbers added in the text color.
+ * The monthly vertical bars are 2 series (--sumai-series-*), and always show the legend
+ * and the value labels
  */
 .analysis-bars,
 .analysis-plain-list,
@@ -616,8 +646,9 @@ a:focus-visible {
 }
 
 /*
- * フォームの保存ボタンを Drawer の下端に固定する（長いフォームでもキーボードを出したまま
- * 押せるように）。Drawer の content がスクロールする箱なので sticky が効く
+ * Fixes the save button of a form to the bottom edge of the Drawer (so that it can be
+ * pressed with the keyboard still shown, even in a long form). The content of the Drawer
+ * is the scrolling box, so sticky works
  */
 .form-actions {
   position: sticky;
@@ -629,7 +660,8 @@ a:focus-visible {
   background: var(--mantine-color-body);
   border-top: 1px solid var(--mantine-color-default-border);
 }
-/* 狭い端末でもボタンの文字を切らない（Mantine の Button は既定で 1 行・はみ出しは隠す） */
+/* Do not cut off the button text even on narrow devices (Mantine's Button is 1 line by
+   default and hides overflow) */
 .form-actions .mantine-Button-label {
   white-space: normal;
   text-align: center;

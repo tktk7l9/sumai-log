@@ -37,7 +37,7 @@ import { getSettings } from '../server/settings'
 import { listTagNames, saveTags } from '../server/tags'
 import { faviconSources as loadFaviconSources, refreshVendorFavicons } from '../server/vendorImages'
 
-/** 「お知らせ」カードで取得 URL を短く見せる（全文は title 属性で見られる）。 */
+/** Shows the fetch URL shortened on the "お知らせ" (vendor news) card (the full text is in the title attribute). */
 const NEWS_URL_DISPLAY_MAX = 40
 function truncateForDisplay(url: string): string {
   return url.length > NEWS_URL_DISPLAY_MAX ? `${url.slice(0, NEWS_URL_DISPLAY_MAX)}…` : url
@@ -95,7 +95,7 @@ function Page() {
   const [fetchingFavicons, setFetchingFavicons] = useState(false)
 
   async function submitTags() {
-    // 0 件保存はサーバーも拒否するが、往復させずにここで止める
+    // The server also rejects saving 0 items, but stop here without a round trip
     if (tagValues.length === 0) {
       notifications.show({ message: 'タグは 1 つ以上必要です', color: 'red' })
       return
@@ -121,8 +121,8 @@ function Page() {
     try {
       const { results } = await fetchNewsNowFn()
       for (const r of results) {
-        // fetchAllVendorNews が業者名を返す（UUID をそのまま見せない）。
-        // 万一空文字が来ても（あり得ないはずだが）読める文言にフォールバックする
+        // fetchAllVendorNews returns the vendor name (the UUID is not shown as is).
+        // Even if an empty string arrives (it should not happen), fall back to readable wording
         const name = r.vendorName || '不明な業者'
         if (r.error) {
           notifications.show({ message: `${name}: エラー ${r.error}`, color: 'red' })
@@ -139,9 +139,9 @@ function Page() {
   }
 
   /**
-   * 「日程を再解析」。`eventDate.ts` の抽出ロジックが直った後に、既存の
-   * vendor_news 全件へ再適用する（取得し直さず、保存済みのタイトル/要約から
-   * 再計算するだけ）。
+   * "日程を再解析" (Re-parse dates). After the extraction logic in `eventDate.ts` is fixed,
+   * reapply it to all existing vendor_news rows (no refetch; it only recomputes from the
+   * saved title/summary).
    */
   async function handleReparseNews() {
     setReparsingNews(true)
@@ -179,8 +179,9 @@ function Page() {
           notifications.show({ message: `${name}: アイコンを取得しました` })
         }
       }
-      // 1 回の呼び出しで処理する業者数には上限があるので、残りがあれば続けて押してもらう
-      // （次回は今回処理した分の stamp が新しくなっているので、自然に次の分へ順番が回る）
+      // The number of vendors handled in 1 call is capped, so when some remain the user presses
+      // again (next time the stamp of the ones handled now is newer, so the turn naturally
+      // moves on to the next ones)
       if (remaining > 0) {
         notifications.show({
           message: `残り ${remaining} 件（もう一度押してください）`,
@@ -398,14 +399,16 @@ function Page() {
           ) : (
             <Stack gap="xs">
               {faviconVendors.map((v) => {
-                // ファビコンの自動取得自体は成否しか記録しない（HTTP ステータスつきの理由を
-                // 持つ列が無い）ため、同じお知らせ取得結果（newsFetchError）を手がかりに
-                // 「Cloudflare を拒否するサーバー」かどうかを判定する（design 背景: 両方とも
-                // 同じサーバー側の拒否が原因であることが多い）。未取得のときだけ意味がある。
-                // news_url と website_url が別ホストだと単なる推測になるため、同じホストの
-                // ときだけこのヒントを見せる（PR #12 レビュー指摘。sameHost は
-                // src/lib/news/url.ts）。別ホスト・お知らせ URL 未設定なら null のままにして、
-                // Badge の「未取得」（中立表示）だけを見せる
+                // The automatic favicon fetch itself records only success or failure (there is
+                // no column holding a reason with the HTTP status), so the vendor news fetch
+                // result of the same vendor (newsFetchError) is used as a clue to judge whether
+                // this is "a server that refuses Cloudflare" (design background: both are often
+                // caused by the same refusal on the server side). Meaningful only when not yet
+                // fetched. When news_url and website_url are on different hosts this is a mere
+                // guess, so the hint is shown only for the same host (PR #12 review finding.
+                // sameHost is in src/lib/news/url.ts). For a different host or an unset vendor
+                // news URL it stays null and only the Badge "未取得" (Not fetched) (neutral
+                // display) is shown
                 const blocked =
                   v.faviconKey === null && v.newsFetchError && sameHost(v.newsUrl, v.websiteUrl)
                     ? describeFetchError(v.newsFetchError)

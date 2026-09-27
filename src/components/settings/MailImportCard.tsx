@@ -27,14 +27,14 @@ const STATUS_COLOR: Record<InboundMail['status'], string> = {
   system: 'gray',
 }
 
-/** 設定ページの「メール取込」（設計 2026-09-19 §5） */
+/** "メール取込" (Mail import) on the settings page (design 2026-09-19 §5) */
 export function MailImportCard({
   inboxAddress,
   unassigned,
   recent,
   vendors,
 }: {
-  /** 転送先アドレス（secret MAIL_INBOX_ADDRESS）。未設定なら null */
+  /** The forwarding address (secret MAIL_INBOX_ADDRESS). null when not set */
   inboxAddress: string | null
   unassigned: InboundMail[]
   recent: InboundMail[]
@@ -44,7 +44,8 @@ export function MailImportCard({
   const assign = useServerFn(assignMail)
   const remove = useServerFn(deleteMail)
   const [choice, setChoice] = useState<Record<string, string | null>>({})
-  // `<mailId>:assign` / `<mailId>:delete`。押したボタンだけを回すため、行 id だけでは足りない
+  // `<mailId>:assign` / `<mailId>:delete`. The row id alone is not enough, because only
+  // the pressed button should spin
   const [busy, setBusy] = useState<string | null>(null)
 
   async function run(key: string, action: () => Promise<unknown>, done: string) {

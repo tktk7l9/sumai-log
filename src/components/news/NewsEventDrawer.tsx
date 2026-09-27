@@ -11,14 +11,17 @@ import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
 
 /**
- * お知らせをタップしたときに開くドロワーの中身。カレンダーの情報レイヤー
- * （src/routes/calendar.tsx の FormDrawer）と、お知らせのアジェンダ表示
- * （src/components/news/NewsAgenda.tsx の FormDrawer）の両方で使う共通部品。
- * 「行く」で自分の予定に変換すると（router.invalidate 後、同じ news をこの props に
- * 渡し直せば）plannedEventId が付き、ボタンが自動的に「予定を見る」に変わる。
+ * The content of the drawer that opens when a vendor news item is tapped. A shared part
+ * used by both the information layer of the calendar (FormDrawer in
+ * src/routes/calendar.tsx) and the agenda view of vendor news (FormDrawer in
+ * src/components/news/NewsAgenda.tsx).
+ * When "行く" (Go) converts it into the user's own event (after router.invalidate, if the
+ * same news is passed again to these props), plannedEventId is set and the button
+ * automatically changes to "予定を見る" (See event).
  *
- * メール由来（url が mail:）は外部リンクが無いので、タイトルを文字で出し本文を下に表示する
- * （設計 2026-09-19 §5）。本文は開いたときに取りに行く（一覧の payload に本文を含めない）。
+ * News that comes from mail (url is mail:) has no external link, so the title is shown as
+ * text and the body is shown below (design 2026-09-19 §5). The body is fetched when
+ * opened (the list payload does not include the body).
  */
 export function NewsEventDrawer({
   news,
@@ -32,7 +35,8 @@ export function NewsEventDrawer({
   onViewEvent: () => void
 }) {
   const mail = isMailNews(news.url)
-  // 「行く」は日程を判定できた今後のお知らせにだけ出す（lib/news/planButton）。今日は JST
+  // "行く" is shown only for upcoming news whose dates could be determined
+  // (lib/news/planButton). Today is in JST
   const plan = planButtonState(news, toJstDateKey(new Date().toISOString()))
   return (
     <Stack gap="sm">
@@ -99,9 +103,9 @@ function MailBody({ mailId }: { mailId: string }) {
         本文を読み込めませんでした。
       </Text>
     )
-  // Drawer 自体が縦にスクロールするので、本文を別のスクロール箱に入れない（スマホで
-  // 入れ子スクロールになる）。長い URL などは breakable（overflow-wrap: anywhere）で
-  // 折り返し、横スクロールを出さない（所有者の報告、2026-09-25）
+  // The Drawer itself scrolls vertically, so do not put the body in a separate scroll box
+  // (it becomes nested scrolling on a phone). Long URLs etc. wrap with breakable
+  // (overflow-wrap: anywhere), and no horizontal scroll appears (owner's report, 2026-09-25)
   return (
     <Text size="sm" className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
       {body}

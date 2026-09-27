@@ -1,24 +1,28 @@
 /**
- * seed.mjs から切り出した正規化関数（住所・SNS URL）。
+ * Normalization functions (address, SNS URL) extracted from seed.mjs.
  *
- * どちらも src/lib/ 側（geocode.ts の normalizeAddress・social.ts の
- * normalizeSocialUrls）と挙動を同一に保つ必要がある。片方だけ変えない
- * （seed 側は plain `.mjs` で TS を import できないため、あえて重複させている。
- * AGENTS.md「重複ロジックの同期」節と src/lib/normalize-parity.test.ts を参照）。
+ * Both must keep the same behavior as the src/lib/ side (normalizeAddress in geocode.ts,
+ * normalizeSocialUrls in social.ts). Never change only one side
+ * (the seed side is plain `.mjs` and cannot import TS, so the duplication is deliberate.
+ * See the AGENTS.md section on keeping duplicated logic in sync and
+ * src/lib/normalize-parity.test.ts).
  */
 
 /**
- * 住所を国土地理院 API に投げる前後で揺れが出ないように正規化する。
- * - NFKC で全角英数・全角記号を半角に寄せる
- * - 空白（全角含む）を削る
- * - ダッシュ類を半角ハイフンに揃える
- * - 「N丁目M番K号」→「N-M-K」、「N丁目M番地」→「N-M」
+ * Normalize an address so that it does not vary before and after sending it to the
+ * GSI (Geospatial Information Authority of Japan) API.
+ * - Use NFKC to fold full-width alphanumerics and full-width symbols to half-width
+ * - Remove whitespace (including full-width)
+ * - Unify dash-like characters to the half-width hyphen
+ * - "N丁目M番K号" -> "N-M-K", "N丁目M番地" -> "N-M"
  *
- * geocode_cache.query のキーにもこの正規化後の文字列を使う。
+ * This normalized string is also used as the key of geocode_cache.query.
  *
- * src/lib/geocode.ts の normalizeAddress と同一に保つ（geocode_cache のキーが一致しなくなる）。
- * null/undefined だけそのまま返す（アプリ側は呼び出し元の型で string を保証しているが、
- * こちらは JSON から読む値を渡すことがあるため防御的に扱う。実際の文字列変換ロジックは同じ）。
+ * Keep identical to normalizeAddress in src/lib/geocode.ts (otherwise the geocode_cache
+ * keys stop matching).
+ * Only null/undefined are returned as is (the app side guarantees string through the
+ * caller's types, but here values read from JSON may be passed in, so handle them
+ * defensively. The actual string conversion logic is the same).
  */
 export function normalizeAddress(address) {
   if (address === null || address === undefined) return address
@@ -31,10 +35,11 @@ export function normalizeAddress(address) {
 }
 
 /**
- * 業者の SNS URL を正規化する。trim・空除去・重複除去・`http(s)://` 以外は除外・最大 10 件。
+ * Normalize a vendor's SNS URLs. Trim, drop empties, drop duplicates, exclude anything
+ * other than `http(s)://`, at most 10 entries.
  *
- * src/lib/social.ts の normalizeSocialUrls と同一に保つ（plain .mjs から TS を import
- * できないためロジックを重複させている。変えるときは両方直す）。
+ * Keep identical to normalizeSocialUrls in src/lib/social.ts (the logic is duplicated
+ * because plain .mjs cannot import TS. When changing it, fix both).
  */
 export function normalizeSocialUrls(list) {
   const seen = new Set()

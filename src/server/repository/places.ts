@@ -19,7 +19,7 @@ export async function upsertPlace(db: Db, input: PlaceInput, actorEmail: string)
   return id
 }
 
-/** 場所を消す。見学記録が紐づいていたら消さない（記録の方が大事）。消すときはコメントも消す */
+/** Deletes a place. Not deleted if visit records are linked (records matter more). Also deletes comments */
 export async function deletePlaceCascade(
   db: Db,
   id: string,
@@ -34,7 +34,7 @@ export async function deletePlaceCascade(
   return { ok: true }
 }
 
-/** 地図用: 場所に業者名・物件名・見学済みかを付ける */
+/** For the map: attaches the vendor name, property name and whether it was visited to places */
 export async function listPlacesWithLinks(db: Db) {
   const rows = await db
     .select({

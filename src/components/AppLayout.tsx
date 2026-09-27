@@ -27,7 +27,7 @@ import {
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
 import { PullToRefresh } from './PullToRefresh'
 
-/** ヘッダ右側のリンク（下タブに無いページ）。並びは表示順 */
+/** Links on the right side of the header (pages not in the bottom tabs). Listed in display order */
 const HEADER_LINKS = [
   { to: '/news', label: 'お知らせ', Icon: Newspaper },
   { to: '/glossary', label: '用語集', Icon: BookOpen },
@@ -46,8 +46,8 @@ const ICONS: Record<NavIcon, typeof House> = {
 }
 
 /**
- * スマホ: 上に小さなヘッダ、下にタブバー。デスクトップ(sm 以上): 左ナビ。
- * 同じ NAV_ITEMS を両方で使う。追加操作は各ページの FAB が担う。
+ * Phone: a small header on top, a tab bar at the bottom. Desktop (sm and up): left nav.
+ * Both use the same NAV_ITEMS. The add action is handled by each page's FAB.
  */
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation()
@@ -72,9 +72,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             住まいログ
           </Text>
-          {/* スマホ幅（sm 未満）: 無ラベルのアイコンを 6 つ並べると意味が取れず入口も多すぎる
-              （SHIG 17・31）。よく使う「お知らせ」だけアイコンで残し、残りはラベル付きの
-              メニューにまとめる */}
+          {/* Phone width (below sm): 6 unlabeled icons in a row are hard to understand and
+              are too many entry points (SHIG 17, 31). Only the frequently used
+              "お知らせ" (vendor news) stays as an icon, and the rest go into a labeled menu */}
           <Group gap={4} wrap="nowrap" hiddenFrom="sm">
             {HEADER_LINKS.filter(({ to }) => to === '/news').map(({ to, label, Icon }) => {
               const active = isNavItemActive(pathname, to)
@@ -139,8 +139,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <PullToRefresh>{children}</PullToRefresh>
       </AppShell.Main>
 
-      {/* 下タブは 56px。ホームインジケータ分は .tabbar の padding-bottom で足すので、
-          中身は h="100%" にして残りの高さに収める */}
+      {/* The bottom tabs are 56px. The home indicator part is added by padding-bottom of
+          .tabbar, so the content uses h="100%" to fit in the remaining height */}
       <AppShell.Footer hiddenFrom="sm" className="tabbar" withBorder>
         <Group grow gap={0} h="100%" component="nav" aria-label="主要なページ">
           {NAV_ITEMS.map(({ to, label, icon }) => {
@@ -155,7 +155,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 h="100%"
                 c={active ? 'clay' : 'dimmed'}
               >
-                {/* 選択中は色だけでなく線の太さと字の太さでも分かるようにする */}
+                {/* The selected tab is shown not only by color but also by stroke width and
+                    font weight */}
                 <Stack align="center" justify="center" gap={3} h="100%">
                   <Icon size={20} aria-hidden strokeWidth={active ? 2.5 : 1.75} />
                   <Text size="xs" fw={active ? 700 : 500} lh={1}>
@@ -171,7 +172,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** スマホのヘッダ右端「その他」。下タブにもヘッダにも無いページを、名前付きで並べる */
+/**
+ * "その他" (More) at the right end of the phone header. Lists, with names, the pages that are in
+ * neither the bottom tabs nor the header
+ */
 function MoreMenu({ pathname }: { pathname: string }) {
   const items = HEADER_LINKS.filter(({ to }) => to !== '/news')
   const active = items.some(({ to }) => isNavItemActive(pathname, to))

@@ -4,7 +4,7 @@ import { Link } from '@tanstack/react-router'
 import { PLACE_KIND_LABEL } from '../../db/schema'
 import type { PlaceWithLinks } from '../../server/repository'
 
-/** ピンをタップしたときに下から出す簡易カード */
+/** A simple card that comes up from the bottom when a pin is tapped */
 export function PlaceSheet({
   place,
   onClose,
@@ -17,19 +17,21 @@ export function PlaceSheet({
       opened={place != null}
       onClose={onClose}
       position="bottom"
-      // Mantine 9 は position="bottom" の Drawer で size="auto" を指定しても
-      // コンテンツに合わせて縮まらず、常に画面いっぱいの高さになる
-      // （top/bottom は flex-basis を強制的に 100% にする実装のため）。
-      // 「タップで下からカード」という仕様どおり、固定高の縮小カードにする。
-      // 300px は 名前見出し + 種別バッジ + 業者名 + マンション物件名 + 長め（2 行）の
-      // 住所 + 「詳細を見る」ボタンをすべて表示しても収まることを実機（390×844 と
-      // 1280×800）で確認した値。overflow は発生していない
-      // （scrollHeight === clientHeight === 300 を確認済み）
+      // In Mantine 9, a Drawer with position="bottom" does not shrink to its content even
+      // with size="auto"; it always takes the full screen height
+      // (the implementation forces flex-basis to 100% for top/bottom).
+      // Following the spec "tap to get a card from the bottom", make it a small card of
+      // fixed height.
+      // 300px is a value confirmed on real devices (390×844 and 1280×800) to fit the name
+      // heading + kind badge + vendor name + condominium property name + a longish
+      // (2 lines) address + the "詳細を見る" (See details) button all shown together.
+      // No overflow occurs (confirmed scrollHeight === clientHeight === 300)
       size={300}
       title={place?.name}
       padding="md"
-      // 地図の上に重ねた操作コントロール（地図タブの現在地ボタンなど）は z-index: 1000 で
-      // 描かれるため、Mantine の既定（modal: 200）のままだとシートの下に隠れる
+      // Controls overlaid on the map (such as the current location button of the map tab)
+      // are drawn at z-index: 1000, so with the Mantine default (modal: 200) the sheet
+      // would be hidden under them
       zIndex={1300}
     >
       {place ? (

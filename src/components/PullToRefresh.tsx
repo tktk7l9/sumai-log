@@ -5,17 +5,18 @@ import { useEffect, useRef, useState } from 'react'
 import { PULL_HOLD, pullDistance, pullOpacity, shouldRefresh } from '../lib/pullToRefresh'
 
 /**
- * スマホで、ページ先頭にいるときに下へ引っ張ると loader を取り直す（router.invalidate）。
- * ページ自体は再読み込みしない（フォームや検索条件はそのまま）。
+ * On a phone, pulling down while at the top of the page refetches the loader
+ * (router.invalidate).
+ * The page itself is not reloaded (forms and search conditions stay as they are).
  *
- * 効かせない場面:
- * - 地図タブ（Google マップのドラッグと衝突する）
- * - Drawer / Modal の中（フォームをスクロールしたいだけ）
- * - 自前でスクロールする箱の中でその箱が先頭にいないとき
- * - ページが先頭にいないとき（window.scrollY > 0）
- * タッチ端末（pointer: coarse）だけで購読する。
+ * Cases where it is disabled:
+ * - The map tab (conflicts with dragging Google Maps)
+ * - Inside a Drawer / Modal (the user only wants to scroll the form)
+ * - Inside a box that scrolls by itself, when that box is not at its top
+ * - When the page is not at the top (window.scrollY > 0)
+ * It subscribes only on touch devices (pointer: coarse).
  */
-/** 更新中の表示を最低これだけ見せる（ms） */
+/** Show the refreshing indicator for at least this long (ms) */
 const MIN_SPIN_MS = 500
 
 export function PullToRefresh({ children }: { children: React.ReactNode }) {
@@ -63,7 +64,8 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
       setRefreshing(true)
       setPull(PULL_HOLD)
       try {
-        // 取り直しが一瞬で終わっても「更新した」と分かるよう、最低でも少しの間は回す
+        // Spin for at least a short time, so that "it refreshed" is clear even when the
+        // refetch finishes in an instant
         await Promise.all([router.invalidate(), new Promise((r) => setTimeout(r, MIN_SPIN_MS))])
       } finally {
         refreshingRef.current = false
@@ -83,8 +85,9 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, router])
 
-  // iOS 標準（UIRefreshControl）と同じ見せ方: 本文の先頭に引いたぶんの空きができ、
-  // その中で放射状のスピナーが濃くなっていき、離すと回る。浮いたバッジは出さない
+  // Same presentation as the iOS standard (UIRefreshControl): a gap of the pulled amount
+  // opens at the top of the content, the radial spinner in it gets darker, and it spins
+  // on release. No floating badge is shown
   return (
     <>
       <div
@@ -111,7 +114,10 @@ export function PullToRefresh({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** ドロワー・地図・自前スクロール中の箱から始まったタッチは引っ張り更新にしない */
+/**
+ * Touches that start in a drawer, the map, or a box in the middle of its own scroll do not trigger
+ * pull to refresh
+ */
 function canPullFrom(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return true
   if (target.closest('[role="dialog"], .places-map')) return false

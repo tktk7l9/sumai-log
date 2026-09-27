@@ -6,8 +6,9 @@ import { presentFacts, type VendorResearch } from '../../lib/research'
 import { Row } from '../candidates/DetailRow'
 
 /**
- * 業者詳細の「調査メモ」。一言・事実（比較表と同じ項目）・読み物の節・出典を、この順で出す。
- * 本文は改行をそのまま活かす（pre-wrap。features と同じ）。
+ * "調査メモ" (Research memo) of the vendor detail. Shows the one-line summary, facts (the
+ * same items as the comparison table), reading sections and sources, in this order.
+ * The body keeps its line breaks as is (pre-wrap, same as features).
  */
 export function ResearchSection({ research }: { research: VendorResearch }) {
   const facts = presentFacts(research)

@@ -68,17 +68,19 @@ import {
 import { SEASONS, SEASON_LABEL, solarPosition, SEASON_DECLINATION, type Season } from '../lib/sun'
 import { getSitePlan, saveSitePlan } from '../server/sitePlan'
 
-// 3D 表示（three.js）は切り替えたときだけ読み込む（平面の図だけ見る人に重さを載せない）。
-// サーバーでは描かない（初期表示は平面）ので、Worker のバンドルに three.js を入れない
+// The 3D view (three.js) is loaded only when switched to (no weight for people who only look
+// at the flat drawing). It is not rendered on the server (the initial view is flat), so
+// three.js is kept out of the Worker bundle
 const SiteView3D = import.meta.env.SSR
   ? () => null
   : lazy(() => import('../components/site/SiteView3D').then((m) => ({ default: m.SiteView3D })))
 
 /**
- * 区画シミュレーター（所有者の要望、2026-09-23）。大きな土地のうち一部（例: 100 坪）を
- * 自分たちの敷地として使うとき、道路側（手前）に取るか奥に取るかを図で動かして比べる。
- * 土地は長方形で近似し、保存するのは寸法の数値だけ（所在地・地番は持たない。design.md §1）。
- * 保存は二人で共有（設定 `sitePlan`）。
+ * Site plan simulator (owner's request, 2026-09-23). When a part (e.g. 100 tsubo) of a large
+ * piece of land is used as the couple's own site, compare taking it on the road side (front)
+ * or at the back by moving it in the drawing. The land is approximated as a rectangle, and
+ * only the dimension numbers are saved (no location or lot number. design.md §1).
+ * The saved plan is shared by the two (setting `sitePlan`).
  */
 export const Route = createFileRoute('/site')({
   component: Page,
@@ -97,8 +99,9 @@ function initialPlan(
   buildPlan: { tsuboMax: number; floors: Floors } | null,
 ): SitePlan {
   if (saved) return saved
-  // 保存が無ければ既定値から。建物の坪数と階数は建築計画（設定）を使い（無ければ平屋）、
-  // 南側に庭が取れるよう北へ寄せて置く
+  // Without a saved plan, start from the defaults. The tsubo and floor count of the building
+  // come from the building plan (settings) (single storey when absent), and the building is
+  // placed towards the north so that a garden fits on the south side
   const floors = buildPlan?.floors ?? DEFAULT_SITE_PLAN.floors
   return placeBuildingNorth(
     normalizePlan({
@@ -120,9 +123,9 @@ function Page() {
   const save = useServerFn(saveSitePlan)
   const [plan, setPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
   const [saving, setSaving] = useState(false)
-  // 筆界は「10.5, 20」のような文字で入れる。打ちかけの値を消さないよう文字のまま持つ
+  // Lot lines are entered as text such as "10.5, 20". Kept as text so a half-typed value is not erased
   const [lotText, setLotText] = useState(() => formatLotLines(plan.lotLines))
-  // 影の表示（保存しない。見るための状態）
+  // Shadow display (not saved. State for viewing only)
   const [shadowOn, setShadowOn] = useState(true)
   const [season, setSeason] = useState<Season>('winter')
   const [hour, setHour] = useState(10)
@@ -131,7 +134,8 @@ function Page() {
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
-  // 区画を左右に動かせる範囲（駐車場への通路があれば、その帯を避ける）
+  // The range the section can move left and right (avoids the strip of the access lane to the
+  // parking lot when there is one)
   const lane = accessRect(plan)
   const xRange = {
     min: lane && plan.accessSide === 'left' ? plan.accessWidth : 0,
@@ -154,7 +158,7 @@ function Page() {
   }
 
   function addNeighbor() {
-    // 既定は土地の左（西など）に接する 2 階建てくらいの建物
+    // The default is a building of about 2 storeys touching the left of the land (west, etc.)
     update({
       neighbors: [
         ...plan.neighbors,
@@ -558,7 +562,7 @@ function Page() {
                   value={String(plan.floors)}
                   onChange={(v) => {
                     const floors = Number(v) as Floors
-                    // 高さは階数の目安に合わせ直す（あとで数値を変えられる）
+                    // Reset the height to the guideline for the floor count (the number can be changed later)
                     update({ floors, buildingHeight: DEFAULT_BUILDING_HEIGHT[floors] })
                   }}
                   data={FLOORS.map((f) => ({ value: String(f), label: FLOORS_LABEL[f] }))}

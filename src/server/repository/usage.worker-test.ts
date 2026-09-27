@@ -8,7 +8,7 @@ import { vendors } from '../../db/schema'
 beforeEach(reset)
 
 describe('measureD1', () => {
-  it('テーブルごとの行数と、データベースの大きさを返す', async () => {
+  it('returns the row count per table and the database size', async () => {
     const empty = await measureD1(env.DB)
     expect(empty.rows.vendors).toBe(0)
     expect(empty.rows.visits).toBe(0)
@@ -19,13 +19,13 @@ describe('measureD1', () => {
     const usage = await measureD1(env.DB)
     expect(usage.rows.vendors).toBe(2)
     expect(usage.rows.photos).toBe(0)
-    // miniflare の D1 も meta.size_after を返す（ページ単位なので 0 より大きい）
+    // miniflare's D1 also returns meta.size_after (it is in page units, so greater than 0)
     expect(usage.bytes === null || usage.bytes > 0).toBe(true)
   })
 })
 
 describe('measureR2', () => {
-  it('オブジェクト数と合計サイズを数える', async () => {
+  it('counts the object count and total size', async () => {
     const before = await measureR2(env.PHOTOS)
     await env.PHOTOS.put('usage-test/a', new Uint8Array(10))
     await env.PHOTOS.put('usage-test/b', new Uint8Array(30))
@@ -36,7 +36,7 @@ describe('measureR2', () => {
     await env.PHOTOS.delete(['usage-test/a', 'usage-test/b'])
   })
 
-  it('一覧が上限のページ数を超えたら truncated', async () => {
+  it('truncated when the list exceeds the page limit', async () => {
     const fake = {
       list: async () => ({ objects: [{ size: 1 }], truncated: true, cursor: 'c' }),
     } as unknown as R2Bucket

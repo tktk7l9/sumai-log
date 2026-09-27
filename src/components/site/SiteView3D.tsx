@@ -16,7 +16,7 @@ import {
 import type { SitePlan } from '../../lib/sitePlan'
 import type { Season } from '../../lib/sun'
 
-/** 面の色は Mantine の CSS 変数から取る（明暗どちらのテーマでも読めるように） */
+/** Plane colors come from Mantine CSS variables (readable in both light and dark themes) */
 const PLANE_COLOR: Record<ScenePlaneKind, string> = {
   road: '--mantine-color-gray-5',
   land: '--mantine-color-gray-2',
@@ -31,7 +31,7 @@ const BOX_COLOR: Record<SceneBoxKind, string> = {
   construction: '--mantine-color-gray-4',
   unknown: '--mantine-color-gray-4',
 }
-/** 面を少しずつ浮かせて重なりのちらつき（z-fighting）を避ける（m） */
+/** Lift the planes little by little to avoid flicker from overlap (z-fighting) (m) */
 const PLANE_LIFT: Record<ScenePlaneKind, number> = {
   road: 0,
   open: 0.01,
@@ -59,16 +59,19 @@ type Ctx = {
 }
 
 /**
- * 区画シミュレーターの 3D 表示（three.js）。土地・区画・通路・隣地を面で、建物を箱で置き、
- * 指定の季節・時刻の太陽から平行光で影を落とす。指で回す・ピンチで寄る（OrbitControls）。
- * 描くのは値や視点が変わったときだけ（常時のアニメーションはしない）。
+ * The 3D view of the site plan simulator (three.js). Places the land, section, passage and
+ * neighboring lots as planes and the buildings as boxes, and casts shadows with a
+ * directional light from the sun of the given season and time. Rotate with a finger,
+ * pinch to zoom (OrbitControls).
+ * It renders only when a value or the viewpoint changes (no continuous animation).
  */
 export function SiteView3D({
   plan,
   sun,
 }: {
   plan: SitePlan
-  /** 影を落とす季節と時刻。null なら影なし（真上寄りの光だけ） */
+  /** The season and time to cast shadows for. null means no shadows (only a light from
+   * nearly straight above) */
   sun: { season: Season; hour: number } | null
 }) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -77,7 +80,7 @@ export function SiteView3D({
   const season = sun?.season ?? null
   const hour = sun?.hour ?? null
 
-  // 描画の土台（一度だけ）
+  // The rendering foundation (once only)
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -154,7 +157,7 @@ export function SiteView3D({
     }
   }, [])
 
-  // 値・太陽が変わったら中身を組み直す
+  // Rebuild the content when the values or the sun change
   useEffect(() => {
     const ctx = ctxRef.current
     const host = hostRef.current
@@ -215,7 +218,7 @@ export function SiteView3D({
       )
     }
 
-    // 方位（北の矢印）: 土地の手前右の外に置く
+    // Compass (north arrow): placed outside the land, at the front right
     const [nx, nz] = northDirection3d(plan)
     const arrowAt = new THREE.Vector3(
       ...toThree({ x: plan.landWidth + 3, y: -plan.roadWidth - 3, z: 0.2 }),
@@ -230,7 +233,7 @@ export function SiteView3D({
       ),
     )
 
-    // 太陽。影のカメラはシーン全体を覆う
+    // The sun. The shadow camera covers the whole scene
     const target = new THREE.Vector3(...toThree({ x: center.x, y: center.y, z: 0 }))
     const sunDir = season !== null && hour !== null ? sunDirection3d(plan, season, hour) : null
     const dir = sunDir?.dir ?? [0.3, 1, 0.5]
@@ -239,7 +242,8 @@ export function SiteView3D({
       .add(new THREE.Vector3(...dir).normalize().multiplyScalar(span * 2))
     sunLight.target.position.copy(target)
     sunLight.castShadow = sunDir !== null
-    // 影を表示中で日が沈んでいれば暗く、影を消しているときは真上寄りの光で明るく
+    // Dark when shadows are shown and the sun has set; bright with a light from nearly
+    // straight above when shadows are off
     sunLight.intensity = sunDir ? 2.2 : season !== null ? 0.3 : 1.4
     const cam = sunLight.shadow.camera
     cam.left = cam.bottom = -span
@@ -310,7 +314,8 @@ export function SiteView3D({
   )
 }
 
-/** 手前（道路側）の斜め上から、シーン全体が入る距離で見下ろす */
+/** Looks down from diagonally above the front (road side), at a distance that fits the
+ * whole scene */
 function frame(
   camera: THREE.PerspectiveCamera,
   controls: OrbitControls,
@@ -351,7 +356,8 @@ function label(text: string, at: { x: number; y: number; z: number }, position?:
   return obj
 }
 
-/** グループの中身を外し、GPU のバッファと CSS2D のラベルの DOM を片付ける */
+/** Removes the content of the group and cleans up the GPU buffers and the DOM of the
+ * CSS2D labels */
 function disposeGroup(group: THREE.Group) {
   for (const child of [...group.children]) {
     child.traverse((o) => {

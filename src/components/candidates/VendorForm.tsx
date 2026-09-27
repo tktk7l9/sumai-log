@@ -29,9 +29,10 @@ import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 
 /**
- * socialUrls だけは Textarea 1 個で編集するので、フォーム上は改行区切りの文字列として持つ。
- * affiliations は MultiSelect が素の string[] で onChange を返すので、フォーム上は緩めた型にし、
- * 送信時に AffiliationId[] へ戻す（実際の選択肢は AFFILIATIONS の id に限られる）。
+ * Only socialUrls is edited with 1 Textarea, so the form holds it as a newline-separated string.
+ * For affiliations, MultiSelect returns a plain string[] from onChange, so the form uses a
+ * loosened type and converts back to AffiliationId[] on submit (the actual options are
+ * limited to the ids of AFFILIATIONS).
  */
 type Values = Omit<VendorInput, 'id' | 'socialUrls' | 'affiliations'> & {
   socialUrls: string
@@ -72,8 +73,9 @@ export function VendorForm({
   vendor: Vendor | null
   homeAreas: string[]
   onSaved: (id: string) => void
-  /** 候補ページの「追加」ドロワー（戸建て/マンションの切替）が、切替前に確認を挟むかの
-   * 判定に使う。渡さなければ何もしない（既存の編集フォームは呼び出し元を増やさない） */
+  /** Used by the "追加" (Add) drawer of the candidates page (switching between detached
+   * house and condominium) to decide whether to confirm before switching. Does nothing
+   * when not passed (existing edit forms do not add callers) */
   onDirtyChange?: (dirty: boolean) => void
 }) {
   const router = useRouter()
@@ -86,8 +88,9 @@ export function VendorForm({
     initialValues,
     validate: {
       name: (v) => (v.trim() ? null : '名前は必須です'),
-      // サーバー側（optionalHttpsUrl）と同じ判定を先に見せる。送信してから
-      // 一般的なエラー文言だけ返ってくるより、どこが・なぜ悪いかをその場で伝える。
+      // Show the same judgment as the server side (optionalHttpsUrl) up front. Rather than
+      // getting only a generic error message back after submitting, tell on the spot
+      // what is wrong and why.
       newsUrl: (v) => {
         if (!v) return null
         if (!/^https:\/\//.test(v)) return 'URL は https:// で始めてください'
@@ -96,11 +99,12 @@ export function VendorForm({
     },
   })
 
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(form, draftKey('vendor', vendor?.id, vendor?.updatedAt), initialValues)
 
-  // 候補ページの「追加」ドロワーが切替確認に使うだけの軽い通知。form.isDirty() は
-  // 呼ぶたびに initialValues と比較するだけなので、依存は values の変化だけで十分
+  // A light notification that the "追加" drawer of the candidates page uses only for the
+  // switch confirmation. form.isDirty() only compares with initialValues on each call, so
+  // depending on changes of values alone is enough
   useEffect(() => {
     onDirtyChange?.(form.isDirty())
   }, [form.values])
@@ -108,8 +112,8 @@ export function VendorForm({
   async function submit(values: Values) {
     setSaving(true)
     try {
-      // affiliationLinks は選んでいない団体の分・URL 未入力の分を送らない（zod は
-      // キーがあれば url を必須にしているため、空欄のまま送ると弾かれる）
+      // For affiliationLinks, entries of groups not selected and entries without a URL are
+      // not sent (zod requires url when the key exists, so sending it blank is rejected)
       const affiliationLinks = Object.fromEntries(
         Object.entries(values.affiliationLinks)
           .filter(([id, link]) => values.affiliations.includes(id) && link.url.trim() !== '')
@@ -129,7 +133,8 @@ export function VendorForm({
       })
       if (res.conflict) {
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
-        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        // Reflect the partner's content on screen (the next save is based on the latest updated
+        // time)
         await router.invalidate()
         return
       }
@@ -138,9 +143,10 @@ export function VendorForm({
       notifications.show({ message: vendor ? '業者を更新しました' : '業者を追加しました' })
       onSaved(res.id)
     } catch (error) {
-      // サーバー側の zod（optionalHttpsUrl 等）で拒否された場合、汎用の
-      // 「保存できませんでした」ではなく実際の理由を出す（src/components/videos/VideoForm.tsx
-      // と同じパターン）。対象フィールドが分かれば setFieldError でその場に出す。
+      // When rejected by the server-side zod (optionalHttpsUrl etc.), show the actual reason
+      // instead of the generic "保存できませんでした" (Could not save) (same pattern as
+      // src/components/videos/VideoForm.tsx). If the target field is known, show it in
+      // place with setFieldError.
       const { message, path } = extractFormError(error)
       notifications.show({ message, color: 'red' })
       if (path) form.setFieldError(path, message)
@@ -186,9 +192,9 @@ export function VendorForm({
           const affiliation = AFFILIATIONS.find((a) => a.id === affId)
           if (!affiliation) return null
           const link = form.values.affiliationLinks[affId as AffiliationId]
-          // Mantine form の setFieldValue はドットパスの途中が無いと辿れない
-          // （affiliationLinks に affId のキーがまだ無いと落ちる）。選んだ団体を
-          // 増やした直後はキーが無い状態なので、常にオブジェクト全体を差し替える
+          // setFieldValue of Mantine form cannot follow a dot path when a middle part is
+          // missing (it fails when affiliationLinks has no affId key yet). Right after a
+          // selected group is added the key does not exist, so always replace the whole object
           function setLink(patch: { url?: string; note?: string }) {
             form.setFieldValue('affiliationLinks', {
               ...form.values.affiliationLinks,

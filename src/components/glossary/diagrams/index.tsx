@@ -1,6 +1,6 @@
 /**
- * 用語集の図解一覧。`term.diagram` の id からコンポーネントを引く。
- * `Record<DiagramId, React.FC>` なので、14 個のどれか一つでも欠けると型検査で落ちる。
+ * The list of glossary diagrams. Looks up the component from the id of `term.diagram`.
+ * It is `Record<DiagramId, React.FC>`, so if even one of the 14 is missing, type checking fails.
  */
 
 import type { FC } from 'react'

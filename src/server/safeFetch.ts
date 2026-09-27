@@ -1,36 +1,41 @@
 /**
- * 許可された URL への手動リダイレクト追従（SSRF 対策の一部）。newsFetcher.ts
- * （業者のお知らせ取得）・vendorImages.ts（ファビコン・代表者写真取得）で共有する。
+ * Manual redirect following to allowed URLs (part of the SSRF guard). Shared by
+ * newsFetcher.ts (vendor news fetch) and vendorImages.ts (favicon and representative
+ * photo fetch).
  *
- * Cloudflare Workers の fetch は既定でリダイレクトを自動で追う。追わせたままだと
- * 「許可された URL への最初の fetch」を通過した後、その先の 3xx が isAllowedRemoteUrl
- * を一度も通らずに（内部ホスト等へ）飛んでしまう。そのため `redirect: 'manual'` にし、
- * 3xx を受け取るたびにここで Location を「今いる URL」基準で解決し、isAllowed
- * （既定 isAllowedRemoteUrl）を再度通してから次の hop を fetch する（許可されない
- * hop 先には絶対に fetchImpl を呼ばない）。maxHops（既定 3）を超えて 3xx が続く場合も
- * 同じエラーにする。Location が無い 3xx はリダイレクトとして扱わず、そのままの
- * レスポンスを返す（後段の response.ok チェックに委ねる）。
+ * The fetch of Cloudflare Workers follows redirects automatically by default. If left to
+ * follow, after passing "the first fetch to an allowed URL", a later 3xx would jump (to an
+ * internal host etc.) without ever going through isAllowedRemoteUrl. So it uses
+ * `redirect: 'manual'`, and every time a 3xx is received it resolves Location here
+ * against the current URL and runs it through isAllowed (default isAllowedRemoteUrl)
+ * again before fetching the next hop (fetchImpl is never called for a disallowed hop
+ * target). When 3xx continue beyond maxHops (default 3), that is the same error too.
+ * A 3xx without Location is not treated as a redirect, and the response is returned as is
+ * (left to the later response.ok check).
  */
 
 import { truncate } from '../lib/news/text'
 import { isAllowedRemoteUrl } from '../lib/news/url'
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
-/** 呼び出し元に返すエラーメッセージの上限（D1 の news_fetch_error 等、保存先の都合） */
+/**
+ * Limit of the error message returned to the caller (for the sake of where it is stored,
+ * e.g. news_fetch_error in D1)
+ */
 const ERROR_MESSAGE_MAX = 200
 
 export type GuardedFetchOutcome = { response: Response; finalUrl: string } | { error: string }
 
 export type FetchWithGuardedRedirectsOptions = {
-  /** 1 hop あたりのタイムアウト（ミリ秒）。hop ごとに新しい AbortSignal.timeout を作る */
+  /** Timeout per hop (milliseconds). A new AbortSignal.timeout is created for each hop */
   timeoutMs: number
   headers?: Record<string, string>
-  /** 追従する最大リダイレクト回数（初回の fetch は含まない）。既定 3 */
+  /** Maximum number of redirects to follow (not counting the first fetch). Default 3 */
   maxHops?: number
-  /** hop 先の URL を許可するかの判定。既定 isAllowedRemoteUrl */
+  /** Decides whether to allow the URL of a hop target. Default isAllowedRemoteUrl */
   isAllowed?: (url: string) => boolean
   fetchImpl?: typeof fetch
-  /** hop 上限超過・Location の解決失敗・許可されない hop 先のときのエラーメッセージ */
+  /** Error message for: hop limit exceeded, failure to resolve Location, or a disallowed hop target */
   redirectBlockedError?: string
 }
 

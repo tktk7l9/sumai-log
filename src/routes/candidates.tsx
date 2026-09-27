@@ -25,10 +25,10 @@ type VendorKind = (typeof VENDOR_KINDS)[number]
 type CandidateKind = 'vendors' | 'properties'
 
 /**
- * 候補一覧のカードを工務店とハウスメーカーで分けて表示する（所有者の要望）。
- * 工務店／ハウスメーカー／設計事務所は名前どおりの見出し、それ以外
- * （デベロッパー等、増えても）は「その他」にまとめる。0 件の分類は出さない
- * （フィルタで絞って空になった分類も同様）。
+ * Shows the cards of the candidates list split into builders and house makers (owner's request).
+ * Builder / house maker / design office get a heading with their own name; everything else
+ * (developers and so on, even if more are added) is gathered under "その他" (Other). A group
+ * with 0 items is not shown (the same goes for a group emptied by the filter).
  */
 const VENDOR_GROUPS: { label: string; match: (kind: VendorKind) => boolean }[] = [
   { label: VENDOR_KIND_LABEL.koumuten, match: (k) => k === 'koumuten' },
@@ -56,9 +56,10 @@ function Page() {
     vendors: shownVendors.filter((v) => g.match(v.kind)),
   })).filter((g) => g.vendors.length > 0)
 
-  // マンション（物件）が 1 件も無ければ戸建て/マンションの切替タブ自体を出さない
-  // （所有者の要望）。?tab=properties を直接開いた場合はそのまま尊重し、下の一覧・
-  // 追加ドロワーの初期選択は tab の値をそのまま使う（タブが無いだけで動作は変えない）
+  // When there is not even 1 condominium (property), the detached house / condominium switch
+  // tabs themselves are not shown (owner's request). Opening ?tab=properties directly is
+  // respected as is, and the list below and the initial selection of the add drawer use the
+  // value of tab as is (only the tabs are absent; the behaviour does not change)
   const showTabs = properties.length > 0
 
   return (
@@ -82,8 +83,8 @@ function Page() {
           />
         ) : null}
         <Group gap="xs" justify="space-between" align="center">
-          {/* 常にどれか 1 つが選ばれた状態にする（未選択＝全件、が見て分からないため）。
-              「すべて」は状態の値ではないので search には持たない */}
+          {/* Always keep exactly 1 selected (nothing selected = all items is not visible at a
+              glance). "すべて" (All) is not a status value, so it is not kept in search */}
           <Chip.Group
             value={status ?? 'all'}
             onChange={(v) =>
@@ -103,7 +104,7 @@ function Page() {
               ))}
             </Group>
           </Chip.Group>
-          {/* 業者が 2 社以上あるときだけ比較表へ（1 社では比べるものが無い） */}
+          {/* Link to the comparison table only with 2 or more vendors (1 has nothing to compare) */}
           {tab === 'vendors' && vendors.length >= 2 ? (
             <Button
               component={Link}
@@ -167,12 +168,13 @@ function Page() {
 }
 
 /**
- * 「追加」ドロワーの中身。上に戸建て（業者）/マンション（物件）の SegmentedControl を置き、
- * 下にどちらかのフォームを出す（所有者の要望: 「業者を追加」「物件を追加」を「追加」に
- * 統一し、フォーム側で種別を選べるようにする）。切替は `key` でフォームを丸ごと作り直す
- * ことで「もう一方の入力状態をリセットする」を素直に満たす。入力中に切り替えようとしたら
- * （dirty のときだけ）確認を挟む。dirty かどうかは表示中のフォーム（VendorForm /
- * PropertyForm）が `onDirtyChange` で都度教えてくれる。
+ * The contents of the "追加" (Add) drawer. A SegmentedControl for detached house (vendor) /
+ * condominium (property) sits on top, and one of the two forms is shown below (owner's request:
+ * unify "業者を追加" (Add vendor) and "物件を追加" (Add property) into "追加", and let the form
+ * side choose the kind). Switching rebuilds the whole form through `key`, which plainly
+ * satisfies "reset the input state of the other one". An attempt to switch while typing gets
+ * a confirmation in between (only when dirty). Whether it is dirty is reported each time by
+ * the form on display (VendorForm / PropertyForm) through `onDirtyChange`.
  */
 function CandidateAddForm({
   initialKind,

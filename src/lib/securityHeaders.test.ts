@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SECURITY_HEADERS, applySecurityHeaders, securityHeadersInit } from './securityHeaders'
 
 describe('applySecurityHeaders', () => {
-  it('クリックジャッキングと MIME スニッフィングを止めるヘッダを載せる', () => {
+  it('sets the headers that stop clickjacking and MIME sniffing', () => {
     const headers = applySecurityHeaders(new Headers())
     expect(headers.get('x-frame-options')).toBe('DENY')
     expect(headers.get('x-content-type-options')).toBe('nosniff')
@@ -13,7 +13,7 @@ describe('applySecurityHeaders', () => {
     expect(headers.get('cross-origin-opener-policy')).toBe('same-origin')
   })
 
-  it('img-src に Google マップのホストと i.ytimg.com が含まれ、地理院タイルは含まれない', () => {
+  it('includes the Google Maps hosts and i.ytimg.com in img-src, and not the GSI tiles', () => {
     const headers = applySecurityHeaders(new Headers())
     const csp = headers.get('content-security-policy')
     expect(csp).toContain('https://maps.googleapis.com')
@@ -22,7 +22,7 @@ describe('applySecurityHeaders', () => {
     expect(csp).not.toContain('cyberjapandata.gsi.go.jp')
   })
 
-  it('connect-src は self と Google マップ（ベクタータイル）だけ', () => {
+  it('limits connect-src to self and Google Maps (vector tiles)', () => {
     const headers = applySecurityHeaders(new Headers())
     const csp = headers.get('content-security-policy') ?? ''
     const connect = csp
@@ -32,19 +32,19 @@ describe('applySecurityHeaders', () => {
     expect(connect).toBe("connect-src 'self' https://maps.googleapis.com")
   })
 
-  it('img-src に情報源（YouTube チャンネル）のアバターのホストが含まれる', () => {
+  it('includes the avatar hosts of sources (YouTube channels) in img-src', () => {
     const headers = applySecurityHeaders(new Headers())
     const csp = headers.get('content-security-policy')
     expect(csp).toContain('https://yt3.ggpht.com')
     expect(csp).toContain('https://yt3.googleusercontent.com')
   })
 
-  it('geolocation は self だけ許可する', () => {
+  it('allows geolocation for self only', () => {
     const headers = applySecurityHeaders(new Headers())
     expect(headers.get('permissions-policy')).toContain('geolocation=(self)')
   })
 
-  it('同じ名前があれば上書きする', () => {
+  it('overwrites a header of the same name', () => {
     const headers = new Headers({ 'x-frame-options': 'SAMEORIGIN' })
     applySecurityHeaders(headers)
     expect(headers.get('x-frame-options')).toBe(SECURITY_HEADERS['x-frame-options'])
@@ -52,7 +52,7 @@ describe('applySecurityHeaders', () => {
 })
 
 describe('securityHeadersInit', () => {
-  it('content-type など既存の値は残す', () => {
+  it('keeps existing values such as content-type', () => {
     const headers = securityHeadersInit({ 'content-type': 'text/plain; charset=utf-8' })
     expect(headers.get('content-type')).toBe('text/plain; charset=utf-8')
     expect(headers.get('x-content-type-options')).toBe('nosniff')

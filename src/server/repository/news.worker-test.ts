@@ -23,9 +23,10 @@ async function makeVendor(name: string, overrides: Record<string, unknown> = {})
 }
 
 /**
- * 並び順・期間検索の境界テストのために first_seen_at まで明示して直接 INSERT する。
- * insertNewsIfNew は first_seen_at を datetime('now') で自動生成する（同一秒内の
- * 複数呼び出しで値が揃ってしまい、並びのテストが不安定になるため使わない）。
+ * For the ordering and period-search boundary tests, INSERT directly with even
+ * first_seen_at stated explicitly. insertNewsIfNew auto-generates first_seen_at with
+ * datetime('now') (not used, because multiple calls within the same second get the same
+ * value and the ordering tests become unstable).
  */
 async function insertRow(row: {
   id: string
@@ -52,7 +53,7 @@ async function insertRow(row: {
 }
 
 describe('insertNewsIfNew', () => {
-  it('新着だけ追加し、追加できた件数を返す', async () => {
+  it('adds only new items and returns the number added', async () => {
     const vendorId = await makeVendor('テスト工務店')
     const first = await insertNewsIfNew(db, [
       {
@@ -72,7 +73,7 @@ describe('insertNewsIfNew', () => {
     expect(await db.select().from(vendorNews)).toHaveLength(2)
   })
 
-  it('url が既存なら何もしない（タイトル等の更新は追わない）。スキップ分は戻り値に含めない', async () => {
+  it('does nothing when the url exists (updates to the title etc. are not tracked). Skipped items are not in the return value', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertNewsIfNew(db, [
       {
@@ -99,11 +100,11 @@ describe('insertNewsIfNew', () => {
     expect(dup?.title).toBe('最初のタイトル')
   })
 
-  it('空配列なら何もせず 0 を返す', async () => {
+  it('does nothing and returns 0 for an empty array', async () => {
     expect(await insertNewsIfNew(db, [])).toBe(0)
   })
 
-  it('25件（10件ずつのチャンク境界をまたぐ件数）を一度に渡しても全件追加される', async () => {
+  it('all are added even when 25 items (a count that crosses the chunk boundaries of 10) are passed at once', async () => {
     const vendorId = await makeVendor('テスト工務店')
     const rows = Array.from({ length: 25 }, (_, i) => ({
       vendorId,
@@ -117,7 +118,7 @@ describe('insertNewsIfNew', () => {
     expect(stored).toHaveLength(25)
   })
 
-  it('チャンクをまたいでも url の重複判定は効く（2回目は0件）', async () => {
+  it('the url duplicate check works across chunks too (0 items the 2nd time)', async () => {
     const vendorId = await makeVendor('テスト工務店')
     const rows = Array.from({ length: 25 }, (_, i) => ({
       vendorId,
@@ -132,7 +133,7 @@ describe('insertNewsIfNew', () => {
 })
 
 describe('listNews', () => {
-  it('published_on desc, first_seen_at desc で並び、業者名が付く', async () => {
+  it('ordered by published_on desc, first_seen_at desc, and carries the vendor name', async () => {
     const vendorA = await makeVendor('A工務店')
     const vendorB = await makeVendor('B工務店')
 
@@ -152,7 +153,7 @@ describe('listNews', () => {
       publishedOn: '2026-09-05',
       firstSeenAt: '2026-09-05 00:00:00',
     })
-    // 同じ published_on で first_seen_at が異なる2件（タイブレークの確認）
+    // 2 items with the same published_on and different first_seen_at (checks the tie-break)
     await insertRow({
       id: 'same-day-1',
       vendorId: vendorA,
@@ -175,7 +176,7 @@ describe('listNews', () => {
     expect(rows[0].vendorName).toBe('B工務店')
   })
 
-  it('vendorId で絞り込める', async () => {
+  it('can filter by vendorId', async () => {
     const vendorA = await makeVendor('A工務店')
     const vendorB = await makeVendor('B工務店')
     await insertRow({
@@ -199,7 +200,7 @@ describe('listNews', () => {
     expect(rows.map((r) => r.title)).toEqual(['Aのお知らせ'])
   })
 
-  it('limit/offset でページングできる', async () => {
+  it('can page with limit/offset', async () => {
     const vendorId = await makeVendor('テスト工務店')
     for (let i = 0; i < 5; i++) {
       await insertRow({
@@ -212,11 +213,11 @@ describe('listNews', () => {
       })
     }
     const page = await listNews(db, { limit: 2, offset: 1 })
-    // 新しい順: お知らせ4, お知らせ3, お知らせ2, お知らせ1, お知らせ0 → offset 1, limit 2
+    // Newest first: news 4, news 3, news 2, news 1, news 0 -> offset 1, limit 2
     expect(page.map((r) => r.title)).toEqual(['お知らせ3', 'お知らせ2'])
   })
 
-  it('from/to（published_on、境界含む）で絞り込める（/news の月ごとのアジェンダ用）', async () => {
+  it('can filter by from/to (published_on, bounds inclusive) (for the monthly agenda of /news)', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertRow({
       id: 'before-month',
@@ -263,7 +264,7 @@ describe('listNews', () => {
     expect(rows.map((r) => r.id)).toEqual(['last-day', 'mid-month', 'first-day'])
   })
 
-  it('from/to を省略すれば従来どおり期間を絞らない', async () => {
+  it('does not narrow the period, as before, when from/to are omitted', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertRow({
       id: 'old',
@@ -277,7 +278,7 @@ describe('listNews', () => {
     expect(rows.map((r) => r.id)).toContain('old')
   })
 
-  it('vendorId と from/to を同時に指定できる（AND で絞り込む）', async () => {
+  it('vendorId and from/to can be given together (filters with AND)', async () => {
     const vendorA = await makeVendor('A工務店')
     const vendorB = await makeVendor('B工務店')
     await insertRow({
@@ -309,9 +310,9 @@ describe('listNews', () => {
 })
 
 describe('listNewsEventsBetween', () => {
-  it('event_start <= to かつ event_end >= from の行を返す（境界含む）', async () => {
+  it('returns rows with event_start <= to and event_end >= from (bounds inclusive)', async () => {
     const vendorId = await makeVendor('テスト工務店')
-    // ぴったり境界: event_start === to
+    // Exactly on the boundary: event_start === to
     await insertRow({
       id: 'start-eq-to',
       vendorId,
@@ -323,7 +324,7 @@ describe('listNewsEventsBetween', () => {
       eventEnd: '2026-09-10',
       eventKind: '見学会',
     })
-    // ぴったり境界: event_end === from
+    // Exactly on the boundary: event_end === from
     await insertRow({
       id: 'end-eq-from',
       vendorId,
@@ -335,7 +336,7 @@ describe('listNewsEventsBetween', () => {
       eventEnd: '2026-09-01',
       eventKind: '見学会',
     })
-    // 範囲の中に完全に収まる
+    // Fits completely inside the range
     await insertRow({
       id: 'inside',
       vendorId,
@@ -347,7 +348,7 @@ describe('listNewsEventsBetween', () => {
       eventEnd: '2026-09-06',
       eventKind: '完成見学会',
     })
-    // 範囲外（前）
+    // Out of range (before)
     await insertRow({
       id: 'before',
       vendorId,
@@ -359,7 +360,7 @@ describe('listNewsEventsBetween', () => {
       eventEnd: '2026-08-11',
       eventKind: '見学会',
     })
-    // 範囲外（後）
+    // Out of range (after)
     await insertRow({
       id: 'after',
       vendorId,
@@ -371,7 +372,7 @@ describe('listNewsEventsBetween', () => {
       eventEnd: '2026-10-11',
       eventKind: '見学会',
     })
-    // イベント判定されていない（event_start/end が null）お知らせは絶対に含まれない
+    // Vendor news not judged to be an event (event_start/end are null) is never included
     await insertNewsIfNew(db, [
       {
         vendorId,
@@ -387,7 +388,7 @@ describe('listNewsEventsBetween', () => {
 })
 
 describe('listNewsSources', () => {
-  it('newsUrl が設定されている業者だけを返す', async () => {
+  it('returns only vendors with newsUrl set', async () => {
     const withNews = await makeVendor('お知らせありの工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -407,7 +408,7 @@ describe('listNewsSources', () => {
 })
 
 describe('markNewsFetched', () => {
-  it('成功時は news_fetched_at を進め news_fetch_error を null にする（updated_at は動かさない）', async () => {
+  it('on success advances news_fetched_at and sets news_fetch_error to null (updated_at is not touched)', async () => {
     const vendorId = await makeVendor('テスト工務店', {
       newsUrl: 'https://news.example.com/feed/',
       newsSource: 'rss',
@@ -427,7 +428,7 @@ describe('markNewsFetched', () => {
 })
 
 describe('linkPlannedEvent', () => {
-  it('planned_event_id を設定する', async () => {
+  it('sets planned_event_id', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertNewsIfNew(db, [
       {
@@ -455,7 +456,7 @@ describe('linkPlannedEvent', () => {
 })
 
 describe('reparseNewsEventDates', () => {
-  it('「8/22.23」の取りこぼし（終端が1日目のまま）を再解析で直す', async () => {
+  it('re-parsing fixes the miss on "8/22.23" (the end stayed on day 1)', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertRow({
       id: 'fix-me',
@@ -464,7 +465,8 @@ describe('reparseNewsEventDates', () => {
       title: '完成見学会 8/22.23開催のおしらせ',
       publishedOn: '2026-08-01',
       firstSeenAt: '2026-08-01 00:00:00',
-      // 直す前の eventDate.ts が実際に出していたバグの形（列挙の2日目が拾えず単日のまま）
+      // The bug shape eventDate.ts actually produced before the fix (day 2 of the
+      // enumeration was not picked up, so it stayed a single day)
       eventStart: '2026-08-22',
       eventEnd: '2026-08-22',
       eventKind: '完成見学会',
@@ -479,7 +481,7 @@ describe('reparseNewsEventDates', () => {
     expect(after.eventKind).toBe('完成見学会')
   })
 
-  it('既に正しい行は checked に数えるが updated には数えない', async () => {
+  it('rows that are already correct count toward checked but not toward updated', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertRow({
       id: 'already-correct',
@@ -505,7 +507,7 @@ describe('reparseNewsEventDates', () => {
     expect(result).toEqual({ checked: 2, updated: 0 })
   })
 
-  it('planned_event_id（「行く」で紐づけた自分の予定）は変えない', async () => {
+  it('does not change planned_event_id (your own event linked by "行く" (Go))', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertRow({
       id: 'with-planned',
@@ -539,13 +541,13 @@ describe('reparseNewsEventDates', () => {
     expect(after.eventEnd).toBe('2026-08-23')
   })
 
-  it('vendor_news が無ければ checked: 0, updated: 0', async () => {
+  it('checked: 0, updated: 0 when there is no vendor_news', async () => {
     expect(await reparseNewsEventDates(db)).toEqual({ checked: 0, updated: 0 })
   })
 })
 
-describe('vendor 削除時の cascade', () => {
-  it('業者を削除すると vendor_news も消える', async () => {
+describe('cascade on vendor deletion', () => {
+  it('deleting a vendor deletes vendor_news too', async () => {
     const vendorId = await makeVendor('テスト工務店')
     await insertNewsIfNew(db, [
       {
@@ -563,22 +565,22 @@ describe('vendor 削除時の cascade', () => {
   })
 })
 
-describe('vendors の再取り込み（scripts/lib/seed.mjs の upsertStatement と同じ形）', () => {
+describe('re-importing vendors (same shape as upsertStatement in scripts/lib/seed.mjs)', () => {
   /**
-   * scripts/lib/seed.mjs は以前 `INSERT OR REPLACE INTO vendors` を使っていたが、
-   * SQLite の REPLACE は主キー衝突時に既存行を DELETE してから INSERT し直すため、
-   * `vendor_news.vendor_id`（ON DELETE CASCADE）を巻き込んで vendor_news を
-   * 全部消してしまっていた（`npm run import:seed` の再実行という、実際に
-   * 起こりうる操作で発生する）。ここでは実 D1 に対して、seed.mjs の
-   * upsertStatement が実際に生成する形（INSERT ... ON CONFLICT(id) DO UPDATE、
-   * id・created_by・created_at 以外の列を更新）をそのまま流し、DELETE を経由
-   * しない＝vendor_news が cascade で消えないことを確認する。
+   * scripts/lib/seed.mjs used to use `INSERT OR REPLACE INTO vendors`, but SQLite's
+   * REPLACE DELETEs the existing row and INSERTs it again on a primary key conflict, so
+   * it dragged in `vendor_news.vendor_id` (ON DELETE CASCADE) and deleted all of
+   * vendor_news (this happens with an operation that can really occur: re-running
+   * `npm run import:seed`). Here, against a real D1, run the shape that seed.mjs's
+   * upsertStatement actually generates (INSERT ... ON CONFLICT(id) DO UPDATE, updating
+   * the columns other than id, created_by and created_at) as is, and check that it does
+   * not go through DELETE = vendor_news is not deleted by cascade.
    */
-  it('vendors を INSERT ... ON CONFLICT(id) DO UPDATE で再取り込みしても vendor_news は残る', async () => {
+  it('vendor_news remains even when vendors is re-imported with INSERT ... ON CONFLICT(id) DO UPDATE', async () => {
     const vendorId = crypto.randomUUID()
     const now = '2026-09-01 00:00:00'
 
-    // scripts/lib/seed.mjs の upsertStatement('vendors', {...}) が渡す列とまったく同じ並び
+    // Exactly the same column order that upsertStatement('vendors', {...}) in scripts/lib/seed.mjs passes
     const columns = [
       'id',
       'name',
@@ -648,8 +650,8 @@ describe('vendors の再取り込み（scripts/lib/seed.mjs の upsertStatement 
       await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId)),
     ).toHaveLength(1)
 
-    // upsertStatement と同じ形で「再取り込み」する: 同じ id、name だけ変えて、
-    // id・created_by・created_at 以外の列を ON CONFLICT DO UPDATE で更新する。
+    // "Re-import" in the same shape as upsertStatement: same id, only name changed, and
+    // the columns other than id, created_by and created_at updated with ON CONFLICT DO UPDATE.
     const updateColumns = columns.filter((c) => !['id', 'created_by', 'created_at'].includes(c))
     const updatedValues = initialValues.map((v, i) =>
       columns[i] === 'name' ? "'再取り込みテスト業者（更新後）'" : v,
@@ -659,12 +661,12 @@ describe('vendors の再取り込み（scripts/lib/seed.mjs の upsertStatement 
       `INSERT INTO vendors (${columns.join(', ')}) VALUES (${updatedValues.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${setClause};`,
     )
 
-    // vendor_news が cascade で消えていない
+    // vendor_news has not been deleted by cascade
     const rows = await db.select().from(vendorNews).where(eq(vendorNews.vendorId, vendorId))
     expect(rows).toHaveLength(1)
     expect(rows[0].title).toBe('再取り込み確認用のお知らせ')
 
-    // 再取り込みで name はちゃんと更新されている（upsert が効いている）
+    // name is properly updated by the re-import (the upsert works)
     const [vendor] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(vendor.name).toBe('再取り込みテスト業者（更新後）')
   })

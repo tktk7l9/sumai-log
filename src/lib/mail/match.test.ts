@@ -9,7 +9,7 @@ import {
 } from './match'
 
 describe('normalizeDomains', () => {
-  it('小文字化・空白除去・@ の右だけ・重複除去。空は null', () => {
+  it('lowercases, removes whitespace, keeps only the right of @, removes duplicates. Empty gives null', () => {
     expect(normalizeDomains(' A.com, @Mail.B.com ,info@c.com,a.com ')).toBe(
       'a.com,mail.b.com,c.com',
     )
@@ -18,13 +18,13 @@ describe('normalizeDomains', () => {
     expect(normalizeDomains(null)).toBeNull()
     expect(normalizeDomains(undefined)).toBeNull()
   })
-  it('改行区切りも受ける', () => {
+  it('also accepts newline separators', () => {
     expect(normalizeDomains('a.com\nb.com')).toBe('a.com,b.com')
   })
 })
 
 describe('splitDomains', () => {
-  it('カンマ区切りを配列に。null は空', () => {
+  it('turns comma-separated values into an array. null gives empty', () => {
     expect(splitDomains('a.com,b.com')).toEqual(['a.com', 'b.com'])
     expect(splitDomains(null)).toEqual([])
     expect(splitDomains('')).toEqual([])
@@ -32,11 +32,11 @@ describe('splitDomains', () => {
 })
 
 describe('domainOf', () => {
-  it('表示名付き・大文字・空白を吸収する', () => {
+  it('absorbs a display name, uppercase and whitespace', () => {
     expect(domainOf('Some One <Some@Example.COM>')).toBe('example.com')
     expect(domainOf('  x@y.com ')).toBe('y.com')
   })
-  it('@ が無い・空なら null', () => {
+  it('returns null when there is no @ or it is empty', () => {
     expect(domainOf('nobody')).toBeNull()
     expect(domainOf('')).toBeNull()
     expect(domainOf('x@')).toBeNull()
@@ -44,7 +44,7 @@ describe('domainOf', () => {
 })
 
 describe('domainMatches', () => {
-  it('完全一致とサブドメインだけ一致する', () => {
+  it('matches only an exact match and subdomains', () => {
     expect(domainMatches('example.com', 'example.com')).toBe(true)
     expect(domainMatches('mail.example.com', 'example.com')).toBe(true)
     expect(domainMatches('notexample.com', 'example.com')).toBe(false)
@@ -58,11 +58,11 @@ describe('matchVendorByDomain', () => {
     { id: 'b', newsEmailDomain: null },
     { id: 'c', newsEmailDomain: 'c.com' },
   ]
-  it('最初に一致した業者を返す', () => {
+  it('returns the first vendor that matches', () => {
     expect(matchVendorByDomain('x@mail.news.a.jp', vendors)?.id).toBe('a')
     expect(matchVendorByDomain('Y <y@C.com>', vendors)?.id).toBe('c')
   })
-  it('一致しない・差出人が読めないなら null', () => {
+  it('returns null when nothing matches or the sender is unreadable', () => {
     expect(matchVendorByDomain('x@d.com', vendors)).toBeNull()
     expect(matchVendorByDomain('broken', vendors)).toBeNull()
   })

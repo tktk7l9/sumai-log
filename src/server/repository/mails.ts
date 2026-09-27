@@ -14,15 +14,17 @@ import { insertNewsIfNew } from './news'
 export type NewInbound = Omit<NewInboundMail, 'id' | 'createdAt' | 'updatedAt'>
 
 /**
- * message_id が既にあれば何もせず既存 id を返す（冪等）。`existingStatus` は既存行が
- * あったときのその時点の status（無ければ null）。呼び出し側（handleInboundMail）は
- * これを見て「reject 済みの行を、後から正しく転送されてきた内容で生き返らせる」
- * （reviveRejectedInboundMail）か、素直に「重複」として扱うかを判断する。
+ * If message_id already exists, does nothing and returns the existing id (idempotent).
+ * `existingStatus` is the status at that moment when an existing row was there (null if
+ * none). The caller (handleInboundMail) looks at it and decides whether to "revive an
+ * already rejected row with the content that was correctly forwarded later"
+ * (reviveRejectedInboundMail) or to simply treat it as a "duplicate".
  *
- * 挿入に失敗した直後の SELECT で行が見つからない（衝突した相手をその隙に誰かが
- * 消した）ときは、例外にせず `existingStatus: null` を返す。呼び出し側はそれを
- * 「重複」として扱い、1 通のメールを取りこぼすだけで済ませる（設定ページから
- * 再取込できる。ここで投げると server.ts のログ 1 行に化けるだけで何も残らない）。
+ * When the SELECT right after a failed insert finds no row (someone deleted the
+ * conflicting row in that gap), it does not throw and returns `existingStatus: null`.
+ * The caller treats that as a "duplicate" and gets away with dropping just 1 mail (it can
+ * be re-imported from the settings page. Throwing here would only turn into 1 log line in
+ * server.ts and leave nothing behind).
  */
 export async function insertInboundMail(
   db: Db,
@@ -45,11 +47,12 @@ export async function insertInboundMail(
 }
 
 /**
- * 同じ message_id で最初は本人以外から直接届いて reject された行を、後日ちゃんと
- * 転送されてきた内容で上書きし unassigned に戻す（handleInboundMail の auto/manual
- * 経路専用。Gmail の自動転送は元の Message-ID を保つため、直接届いた reject と
- * 後からの正しい転送が同じ行を取り合う）。news_id には触れない
- * （reject 行は必ず null のまま。呼び出し側が必要ならこの後 importMailAsNews を呼ぶ）。
+ * A row with the same message_id that first arrived directly from someone other than the
+ * member and was rejected is overwritten with the content properly forwarded at a later
+ * date and put back to unassigned (only for the auto/manual paths of handleInboundMail.
+ * Gmail auto-forwarding keeps the original Message-ID, so the directly delivered reject
+ * and the later correct forward compete for the same row). news_id is not touched
+ * (a reject row always stays null. The caller calls importMailAsNews after this if needed).
  */
 export async function reviveRejectedInboundMail(
   db: Db,
@@ -75,9 +78,10 @@ export async function reviveRejectedInboundMail(
 }
 
 /**
- * 受信メールをお知らせに変換して vendor_news に入れ、inbound_mails を imported に更新する。
- * inbound_mails を imported にし newsId を付けるのはここだけ（handleInboundMail は常に
- * unassigned で入れる）。url（mail:<messageId>）が既にあれば新しく作らず、その id に紐づける。
+ * Converts an inbound mail into vendor news, puts it into vendor_news, and updates
+ * inbound_mails to imported. This is the only place that sets inbound_mails to imported
+ * and attaches newsId (handleInboundMail always inserts as unassigned). If the url
+ * (mail:<messageId>) already exists, it does not create a new one and links to that id.
  */
 export async function importMailAsNews(
   db: Db,
@@ -136,7 +140,7 @@ export async function deleteInboundMail(db: Db, id: string): Promise<void> {
   await db.delete(inboundMails).where(eq(inboundMails.id, id))
 }
 
-/** rejected / system で olderThanIso より古い行を消す。戻り値は件数 */
+/** Deletes rows that are rejected / system and older than olderThanIso. Returns the count */
 export async function cleanupInboundMails(db: Db, olderThanIso: string): Promise<number> {
   const removed = await db
     .delete(inboundMails)

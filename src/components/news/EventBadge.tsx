@@ -3,9 +3,10 @@ import { Badge } from '@mantine/core'
 import { formatEventBadge } from '../../lib/calendar'
 
 /**
- * 業者のお知らせがイベント（見学会・相談会など）と判定されているときだけ出す
- * バッジ。「見学会 2026/09/12(土)」（単日）／「見学会 2026/09/12(土)〜2026/09/13(日)」（複数日）。
- * イベントでなければ何も描画しない（呼び出し側で isEvent を分岐しなくてよい）。
+ * A badge shown only when the vendor news is judged to be an event (open house,
+ * consultation, etc.). "見学会 2026/09/12(土)" (Open house, Sat; single day) /
+ * "見学会 2026/09/12(土)〜2026/09/13(日)" (Sat to Sun; multiple days).
+ * Renders nothing when it is not an event (the caller does not need to branch on isEvent).
  */
 export function EventBadge({
   eventKind,

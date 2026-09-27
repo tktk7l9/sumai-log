@@ -1,20 +1,21 @@
 /**
- * 業者が加盟している団体のデータ。ここは **データだけ**（関数を置かない。解決は `src/lib/affiliations.ts`）。
+ * Data of the organizations vendors are members of. This file holds **data only** (no
+ * functions. Resolution is in `src/lib/affiliations.ts`).
  *
- * 用語集の対応する用語（`src/content/glossary.ts`）と `glossaryId` で結びつく。
+ * Linked to the corresponding glossary term (`src/content/glossary.ts`) by `glossaryId`.
  */
 
 export type Affiliation = {
   id: 'iedukuri100' | 'miratsugu' | 'kouzou-cram'
-  /** 正式名 */
+  /** Official name */
   name: string
-  /** 通称 */
+  /** Common name */
   shortName: string
-  /** 公式サイト */
+  /** Official site */
   url: string
-  /** 用語集の id（/glossary/$termId） */
+  /** Glossary id (/glossary/$termId) */
   glossaryId: string
-  /** 内容を確認した日 */
+  /** The day the content was checked */
   checkedOn: string
 }
 

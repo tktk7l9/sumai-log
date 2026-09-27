@@ -9,14 +9,14 @@ import { SCHEDULE_LABELS_JA } from '../../lib/scheduleLabels'
 import type { EventWithLinks } from '../../server/repository'
 
 /**
- * ホームの「これからの予定」。today 以降の予定を**全部**アジェンダ表示する
- * （所有者の要望、2026-09-21。それまでは 4 週間ぶんだけだった）。
- * 範囲（rangeStart/rangeEnd）は listHomeEvents が返す agendaFrom/agendaTo をそのまま渡す
- * （ここでは再計算しない）。
+ * "これからの予定" (Upcoming events) on the home page. Shows **all** events from today
+ * onward as an agenda (owner's request, 2026-09-21; before that it was only 4 weeks).
+ * The range (rangeStart/rangeEnd) is the agendaFrom/agendaTo returned by listHomeEvents,
+ * passed as is (not recalculated here).
  *
- * 今日の予定のうち、もう終わった時間のものは色を落とす（`toScheduleEvents` が色を
- * グレーにし、payload.past が立つ。行の文字色は styles.css の
- * `.mantine-AgendaView-agendaViewEvent[data-past]` が落とす）。
+ * Among today's events, those whose time has already passed are dimmed
+ * (`toScheduleEvents` makes the color gray and sets payload.past. The row text color is
+ * dimmed by `.mantine-AgendaView-agendaViewEvent[data-past]` in styles.css).
  */
 export function HomeAgenda({
   events,
@@ -27,7 +27,7 @@ export function HomeAgenda({
   events: EventWithLinks[]
   rangeStart: string
   rangeEnd: string
-  /** 「今」（JST）。終わった予定の色を落とすための基準 */
+  /** "Now" (JST). The reference for dimming events that have ended */
   nowIso: string
 }) {
   const navigate = useNavigate()
@@ -40,8 +40,8 @@ export function HomeAgenda({
     navigate({ to: '/calendar', search: { m: key.slice(0, 7), d: key } })
   }
 
-  // 既定の行の中身（rootProps.children）はそのまま使い、終わった予定の行にだけ
-  // data-past を付ける（文字色は CSS 側で落とす）
+  // Use the default row content (rootProps.children) as is, and add data-past only to
+  // rows of events that have ended (the text color is dimmed in CSS)
   const renderEvent: AgendaViewProps['renderEvent'] = (event, rootProps) => {
     const payload = event.payload as OwnEventPayload | undefined
     return <UnstyledButton {...rootProps} data-past={payload?.past ? true : undefined} />
@@ -56,11 +56,13 @@ export function HomeAgenda({
         events={scheduleEvents}
         locale="ja"
         labels={SCHEDULE_LABELS_JA}
-        // AgendaView が渡す date は 'YYYY-MM-DD HH:mm:ss'（実質 'YYYY-MM-DD'）。
-        // dateKey で日付部分に切り出し、次の予定と同じ書式（formatDateWithWeekday）に揃える
+        // The date AgendaView passes is 'YYYY-MM-DD HH:mm:ss' (in effect 'YYYY-MM-DD').
+        // Cut out the date part with dateKey and match the format of the next event
+        // (formatDateWithWeekday)
         dateHeaderFormat={(date) => formatDateWithWeekday(dateKey(date))}
-        // 「9/19 – 10/16」のようなレンジ見出しは不要（所有者の要望、2026-09-19）。
-        // headerFormat では消せない（常に `${開始} – ${終了}` で結合される）ので Styles API で隠す
+        // A range header such as "9/19 – 10/16" is not needed (owner's request, 2026-09-19).
+        // headerFormat cannot remove it (it is always joined as `${start} – ${end}`), so
+        // hide it with the Styles API
         styles={{ agendaViewHeader: { display: 'none' } }}
         renderEvent={renderEvent}
         onEventClick={handleEventClick}

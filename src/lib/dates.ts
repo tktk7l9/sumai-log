@@ -1,9 +1,9 @@
 /**
- * 日付入力の読み取り。
+ * Reading date input.
  *
- * 台帳に入る形は 'YYYY-MM-DD' のひと通りだが、書き写す元（登記簿・通知書・
- * 名刺・メール）の表記はまちまちで、打つ人が毎回そこに気を遣うのは無駄。
- * よくある書き方を受けて、保存する形に直す。
+ * The ledger stores only one form, 'YYYY-MM-DD', but the sources being copied (land
+ * registry, notices, business cards, mail) vary in notation, and making the typist mind
+ * that every time is a waste. Accept the common notations and convert to the stored form.
  */
 
 const PATTERNS: readonly RegExp[] = [
@@ -17,7 +17,7 @@ const PATTERNS: readonly RegExp[] = [
   /^(\d{4})年(\d{1,2})月(\d{1,2})日?$/,
 ]
 
-/** 実在する日付か。2026-02-30 のような繰り上がる値を弾く。 */
+/** Whether the date exists. Rejects values that roll over, such as 2026-02-30. */
 function isRealDate(year: number, month: number, day: number): boolean {
   const date = new Date(Date.UTC(year, month - 1, day))
   return (
@@ -26,10 +26,10 @@ function isRealDate(year: number, month: number, day: number): boolean {
 }
 
 /**
- * 打たれた文字列を 'YYYY-MM-DD' に直す。読めなければ null。
+ * Converts the typed string to 'YYYY-MM-DD'. Returns null when unreadable.
  *
- * 「7/30」のように年が無いものは受けない。今年だと決めつけると、
- * 過去の記録を写しているときに黙って違う年で保存されてしまう。
+ * Values without a year, such as "7/30", are rejected. Assuming this year would
+ * silently save the wrong year while copying past records.
  */
 export function parseDateInput(value: string | null | undefined): string | null {
   const trimmed = value?.trim()

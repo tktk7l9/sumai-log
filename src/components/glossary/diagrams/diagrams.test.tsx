@@ -1,7 +1,8 @@
 /**
- * DIAGRAMS の全 14 図を renderToStaticMarkup で描画し、Figure.tsx が保証すべき
- * 形（role/aria-label/viewBox/width/currentColor）とテーマ追従（hex・rgb() 不使用）、
- * 日本語ラベルの有無を確認する。ブラウザ・jsdom を使わない純粋な SSR テスト。
+ * Renders all 14 diagrams of DIAGRAMS with renderToStaticMarkup and checks the shape that
+ * Figure.tsx must guarantee (role/aria-label/viewBox/width/currentColor), theme following
+ * (no hex or rgb()), and the presence of Japanese labels. A pure SSR test that uses
+ * neither a browser nor jsdom.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -35,7 +36,8 @@ describe('DIAGRAMS', () => {
       expect(markup).not.toContain('rgb(')
       expect(markup).toMatch(JAPANESE_TEXT)
 
-      // グローバル制約「文字は font-size 12〜14」。すべての font-size 属性が範囲内かを見る。
+      // The global constraint "text is font-size 12 to 14". Checks that every font-size
+      // attribute is within the range.
       const sizes = [...markup.matchAll(/font-size="(\d+(?:\.\d+)?)"/g)].map((m) => Number(m[1]))
       expect(sizes.length, `${id}: font-size 属性が見つからない`).toBeGreaterThan(0)
       for (const size of sizes) {

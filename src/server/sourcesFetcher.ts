@@ -1,12 +1,13 @@
 /**
- * 情報源フォームの「取得」ボタンの実処理。newsFetcher.ts / vendorImagesFetcher.ts と
- * 同じ理由でファイルを分けている: createServerFn でラップしていない素の関数だけを
- * 置くことで sourcesFetcher.worker-test.ts から直接呼べる（No Start context の制約を
- * 受けない）。createServerFn のラッパーは sources.ts 側に置く。
+ * The real work of the "取得" (Fetch) button of the source form. The file is split for the
+ * same reason as newsFetcher.ts / vendorImagesFetcher.ts: by placing only plain functions
+ * not wrapped in createServerFn, they can be called directly from
+ * sourcesFetcher.worker-test.ts (not subject to the No Start context restriction). The
+ * createServerFn wrapper lives on the sources.ts side.
  *
- * YouTube チャンネル URL だけを対象にする（brief どおり）。他サイトの <title>/
- * og:description/favicon 取得はここでは行わない（Task 6 の業者ファビコン取得
- * パイプラインとは別物で、情報源の「取得」は YouTube チャンネル限定）。
+ * Targets only YouTube channel URLs (per the brief). Fetching <title>/og:description/
+ * favicon of other sites is not done here (it is separate from the vendor favicon fetch
+ * pipeline of Task 6, and "取得" for sources is limited to YouTube channels).
  */
 
 import { isAllowedRemoteUrl } from '../lib/news/url'
@@ -28,13 +29,15 @@ function errorMessage(e: unknown): string {
 }
 
 /**
- * レスポンス本文の**先頭 maxBytes だけ**を読む。og:title 等の `<meta>` は通常 `<head>`
- * （ページの先頭）に出るため、ページ全体が maxBytes を超えていても先頭さえ読めれば
- * 抽出には十分。newsFetcher.ts の readCappedBytes / vendorImagesFetcher.ts の readCapped
- * （どちらも上限超過を「取得失敗」にする）とは方針が異なり、ここでは**サイズ超過をエラーに
- * しない**: 先頭 maxBytes 分だけ読んだところでストリームを打ち切り（`reader.cancel()`）、
- * 読めた分だけを返す。content-length ヘッダは見ない（大きいと分かっていても先頭は読みたい
- * ため）。返り値は常に Uint8Array（null にはならない）。
+ * Reads **only the first maxBytes** of the response body. `<meta>` such as og:title
+ * normally appears in `<head>` (the top of the page), so even if the whole page exceeds
+ * maxBytes, being able to read the top is enough for extraction. The policy differs from
+ * readCappedBytes in newsFetcher.ts / readCapped in vendorImagesFetcher.ts (both turn
+ * exceeding the limit into a "fetch failure"); here **exceeding the size is not an
+ * error**: the stream is cut off (`reader.cancel()`) once the first maxBytes have been
+ * read, and only what was read is returned. The content-length header is not looked at
+ * (the top should be read even when the page is known to be large). The return value is
+ * always a Uint8Array (never null).
  */
 async function readPrefix(response: Response, maxBytes: number): Promise<Uint8Array> {
   const reader = response.body?.getReader()
@@ -83,14 +86,15 @@ export type ResolveSourceResult =
   { ok: true; fields: ResolveSourceFields } | { ok: false; error: string }
 
 /**
- * URL が YouTube チャンネルの形（src/lib/sources.ts の parseYoutubeChannelUrl）でなければ
- * 即座にエラーを返す。そうでなければ、SSRF 対策の isAllowedRemoteUrl を通してから
- * `fetchWithGuardedRedirects`（10 秒タイムアウト・手動リダイレクト追従）でページを取得し、
- * 先頭 1MB だけ読んで（`readPrefix`）og:title/og:description/og:image/channelId を抜く
- * （youtubeMeta.ts）。ページ全体が 1MB を超えていても、`<head>` さえ先頭に収まっていれば
- * 抽出でき、失敗にはしない（大きめの実チャンネルページでも「取得」が使えるように）。
- * URL のパス自体から分かる handle/channelId を優先し、無ければページから抜いた値で補う。
- * 例外は投げない（design 通り）。
+ * If the URL is not in YouTube channel form (parseYoutubeChannelUrl in src/lib/sources.ts),
+ * returns an error immediately. Otherwise, after passing the SSRF guard
+ * isAllowedRemoteUrl, fetches the page with `fetchWithGuardedRedirects` (10 second
+ * timeout, manual redirect following), reads only the first 1MB (`readPrefix`) and
+ * extracts og:title/og:description/og:image/channelId (youtubeMeta.ts). Even if the whole
+ * page exceeds 1MB, extraction works as long as `<head>` fits in the top, and it is not a
+ * failure (so that "取得" can be used even on larger real channel pages).
+ * handle/channelId known from the URL path itself take priority, and if missing they are
+ * filled in with the values extracted from the page. Does not throw (per the design).
  */
 export async function resolveSourceCore(
   url: string,

@@ -1,10 +1,11 @@
 import { applyD1Migrations, env, type D1Migration } from 'cloudflare:test'
 
 /**
- * TEST_MIGRATIONS はテスト設定（vitest.workers.config.ts）でだけ渡すバインディング。
- * 本番の Env には存在しないので、本番側の型に混ぜずにここで受け取る。
+ * TEST_MIGRATIONS is a binding passed only by the test config (vitest.workers.config.ts).
+ * It does not exist in the production Env, so it is received here without mixing it into
+ * the production types.
  */
 const testEnv = env as unknown as { TEST_MIGRATIONS: D1Migration[] }
 
-// 各テストファイルのストレージは分離されるので、その都度スキーマを作る
+// Storage is isolated per test file, so create the schema each time
 await applyD1Migrations(env.DB, testEnv.TEST_MIGRATIONS)

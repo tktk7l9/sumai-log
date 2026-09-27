@@ -1,24 +1,26 @@
 /**
- * サーバーから実際に fetch してよい URL かを判定する（SSRF 対策の多層防御の一つ）。
- * 元は業者のお知らせ URL 専用だったが、代表者写真の URL 取り込み・ファビコン取得
- * （src/server/vendorImages.ts）でも同じ判定を使うため `isAllowedRemoteUrl` に改名した。
- * `isAllowedNewsUrl` は既存の呼び出し元（zod.ts の optionalHttpsUrl・newsFetcher.ts・
- * VendorForm.tsx）をそのまま動かすための別名（下の export const）。
+ * Decides whether a URL may actually be fetched from the server (one layer of the
+ * defense in depth against SSRF). It was originally only for vendor news URLs, but the same
+ * check is used for importing the representative's photo by URL and fetching the favicon
+ * (src/server/vendorImages.ts), so it was renamed to `isAllowedRemoteUrl`.
+ * `isAllowedNewsUrl` is an alias (the export const below) that keeps the existing callers
+ * (optionalHttpsUrl in zod.ts, newsFetcher.ts, VendorForm.tsx) working unchanged.
  *
- * Cloudflare Workers の fetch はそもそもプライベートネットワーク（10.0.0.0/8 等）への
- * 経路を持たず、DNS 解決結果を覗く API も無い。したがってこのホスト名の拒否リストは
- * 「念のため」の多層防御であり、本体の防御は Workers のネットワーク境界そのもの。
+ * The fetch of Cloudflare Workers has no route to private networks (10.0.0.0/8 etc.) in the
+ * first place, and there is no API to look at DNS resolution results. So this hostname
+ * denylist is a "just in case" layer of defense in depth, and the main defense is the network
+ * boundary of Workers itself.
  *
- * リダイレクトは newsFetcher.ts / vendorImages.ts 側で `redirect: 'manual'` にしたうえで、
- * `Location` を解決するたびにこの関数を再度通す（最大 3 ホップ）。この関数自体はどの
- * URL に対して呼ばれても同じ判定をするだけで、それが最初の URL かリダイレクト先かは
- * 意識しない。
+ * For redirects, newsFetcher.ts / vendorImages.ts set `redirect: 'manual'` and pass every
+ * resolved `Location` through this function again (3 hops at most). This function itself
+ * only makes the same decision for whatever URL it is called with, and is not aware of
+ * whether that is the first URL or a redirect target.
  */
 
 const DENYLISTED_EXACT_HOSTS = new Set([
   'localhost',
-  // このアプリ自身のカスタムドメイン。お知らせの取得元がリダイレクトでここに
-  // 誘導されると、Worker が自分自身（や別の Worker）に対してリクエストする形になる。
+  // The custom domain of this app itself. If a vendor news source is led here by a redirect,
+  // the Worker ends up sending a request to itself (or to another Worker).
   'sumai-log.app',
 ])
 
@@ -32,15 +34,16 @@ const DENYLISTED_SUFFIXES = [
   '.sumai-log.app',
 ]
 
-/** 末尾の '.'（FQDN 表記）を落としてから小文字化する。先に落とさないと workers.dev の
- * ような拒否リストの suffix チェックを末尾ドットで回避されうる。 */
+/** Drops the trailing '.' (FQDN notation) and lowercases. Unless it is dropped first, a trailing
+ * dot could bypass the suffix check of the denylist, such as workers.dev. */
 function normalizeHostname(hostname: string): string {
   const lower = hostname.toLowerCase()
   return lower.endsWith('.') ? lower.slice(0, -1) : lower
 }
 
-/** `new URL()` は 16進・8進・10進などの IPv4 の別表記も正規の 'a.b.c.d' に直すので、
- * ここでは正規化後の形だけを見れば別表記による回避も一緒に弾ける。 */
+/** `new URL()` also converts other IPv4 notations such as hex, octal and decimal into the
+ * canonical 'a.b.c.d', so looking only at the normalized form here also rejects bypasses
+ * through another notation. */
 function isIpv4Literal(hostname: string): boolean {
   return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
 }
@@ -55,14 +58,14 @@ export function isAllowedRemoteUrl(url: string): boolean {
 
   if (parsed.protocol !== 'https:') return false
   if (parsed.username !== '' || parsed.password !== '') return false
-  if (parsed.port !== '') return false // 既定ポート（443）以外は拒否
+  if (parsed.port !== '') return false // Reject anything but the default port (443)
 
   const hostname = normalizeHostname(parsed.hostname)
-  if (hostname.startsWith('[')) return false // ブラケット付き IPv6 リテラル
+  if (hostname.startsWith('[')) return false // Bracketed IPv6 literal
   if (isIpv4Literal(hostname)) return false
-  // 完全一致の拒否判定は、この下のドット必須チェックより先に行う（'localhost' は
-  // ドットを含まないため、順序を逆にするとドット判定だけで弾かれてしまい、
-  // ここの分岐がテストで踏めなくなる）。
+  // The exact-match deny check runs before the dot-required check below ('localhost' has no
+  // dot, so with the order reversed it would be rejected by the dot check alone and this
+  // branch could not be reached in tests).
   if (DENYLISTED_EXACT_HOSTS.has(hostname)) return false
   if (!hostname.includes('.')) return false
   if (DENYLISTED_SUFFIXES.some((suffix) => hostname.endsWith(suffix))) return false
@@ -70,16 +73,18 @@ export function isAllowedRemoteUrl(url: string): boolean {
   return true
 }
 
-/** `isAllowedRemoteUrl` の旧名。既存の呼び出し元はこちらを import したままでよい */
+/** Old name of `isAllowedRemoteUrl`. Existing callers may keep importing this one */
 export const isAllowedNewsUrl = isAllowedRemoteUrl
 
 /**
- * 2 つの URL のホスト名が一致するか。settings.tsx の「候補のサイトアイコン」カードで、
- * お知らせ取得の失敗理由（newsFetchError）をアイコン取得のヒントとして使い回してよいかの
- * 判定に使う。news_url と website_url が別ホストなら、お知らせ側の拒否理由（Cloudflare を
- * 拒否するサーバー）をアイコン取得の理由として見せるのは推測に過ぎない（PR #12 レビュー
- * 指摘）。どちらかが null・URL として読めない場合は false（違うホスト扱い＝ヒントを出さず
- * 「未取得」の中立表示に倒す。安全側）。
+ * Whether the hostnames of 2 URLs match. Used in the "候補のサイトアイコン" (Candidate site
+ * icons) card of settings.tsx to decide whether the failure reason of the vendor news fetch
+ * (newsFetchError) may be reused as a hint for the icon fetch. When news_url and website_url
+ * are different hosts, showing the refusal reason of the news side (a server that refuses
+ * Cloudflare) as the reason for the icon fetch is only a guess (pointed out in the PR #12
+ * review). When either one is null or cannot be read as a URL the result is false (treated
+ * as different hosts = no hint is shown and it falls back to the neutral "未取得" (Not
+ * fetched) display. The safe side).
  */
 export function sameHost(a: string | null, b: string | null): boolean {
   if (!a || !b) return false

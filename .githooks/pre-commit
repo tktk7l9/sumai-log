@@ -1,14 +1,15 @@
 #!/bin/sh
-# コミットに実データが混ざっていないか確かめる。
+# Check that no real data is mixed into the commit.
 #
-# AGENTS.md に書くだけでは守られず、コメントとテストの fixture に実名・実住所・
-# 実地番が入って履歴を作り直すことになった。人の注意力に任せない。
+# Writing the rule in AGENTS.md alone did not protect us: real names, real addresses and
+# real lot numbers got into comments and test fixtures, and the history had to be rebuilt.
+# Do not rely on human attention.
 #
-# 見るのはインデックスの内容だけ（コミットに実際に入るもの）。0.2秒ほどで終わる。
-# どうしても通したいときは git commit --no-verify。
+# Only the index content is checked (what actually goes into the commit). Takes about 0.2 s.
+# If you really must get through: git commit --no-verify.
 #
-# このフックは .githooks/ に置いてありコミットされる。有効化は npm install が
-# 走ったときの prepare スクリプトが行う（core.hooksPath を向ける）。
+# This hook lives in .githooks/ and is committed. It is enabled by the prepare script that
+# runs on npm install (it points core.hooksPath here).
 
 node scripts/check-pii.mjs --staged || {
   echo ''

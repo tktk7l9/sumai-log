@@ -1,17 +1,18 @@
 /**
- * 業者のお知らせ本文の文字コードを判定する。design.md は明示していないが、
- * html-list（RSS が無い古めの会社サイト）は Shift_JIS / EUC-JP を返すことがある。
- * それを常に UTF-8 として読むと本文が文字化けし、`url` が新着判定のキーで
- * タイトルの更新を追わない設計（一度保存したら直せない）ため、文字化けが恒久化する。
+ * Detects the character encoding of a vendor news body. design.md does not say so, but
+ * html-list sources (older company sites without RSS) sometimes return Shift_JIS / EUC-JP.
+ * Always reading them as UTF-8 garbles the body, and because `url` is the key for detecting
+ * new items and title updates are not tracked by design (once saved it cannot be fixed), the
+ * garbled text becomes permanent.
  *
- * 優先順位: HTTP の `Content-Type` ヘッダの `charset` → 本文先頭 2KB の
+ * Priority: the `charset` of the HTTP `Content-Type` header -> a naive sniff of
  * `<meta charset="…">` / `<meta http-equiv="Content-Type" content="…charset=…">`
- * の素朴な sniff → どちらも無ければ `'utf-8'`。
+ * in the first 2KB of the body -> `'utf-8'` when neither exists.
  *
- * sniff は Latin-1（1 バイト = 1 コードポイント。どのエンコーディングでも
- * ASCII 範囲のバイト列はそのままの並びなので、実際の charset が判明していない
- * 時点でも `<meta>` タグの中身だけは安全に読める）で覗く。外部 HTML パーサは
- * 使わず正規表現だけで `<meta …>` タグを探す（design.md §1 の方針どおり）。
+ * The sniff peeks as Latin-1 (1 byte = 1 code point; in every encoding the bytes in the ASCII
+ * range keep their order, so the contents of the `<meta>` tag alone can be read safely even
+ * before the real charset is known). No external HTML parser is used; the `<meta …>` tags are
+ * found with regular expressions only (following the policy of design.md §1).
  */
 
 const CONTENT_TYPE_CHARSET = /charset\s*=\s*["']?([\w-]+)/i
@@ -20,7 +21,7 @@ const CHARSET_IN_ATTR = /charset\s*=\s*["']?([\w-]+)/i
 
 export const DEFAULT_CHARSET = 'utf-8'
 
-/** sniff する本文の先頭バイト数。ほとんどの `<meta charset>` はここに収まる。 */
+/** Number of leading body bytes to sniff. Most `<meta charset>` tags fit in here. */
 const HEAD_SNIFF_BYTES = 2048
 
 function sniffMetaCharset(headBytes: Uint8Array): string | null {
@@ -34,10 +35,10 @@ function sniffMetaCharset(headBytes: Uint8Array): string | null {
 }
 
 /**
- * `contentType` は `response.headers.get('content-type')` の値（無ければ null）。
- * `headBytes` は本文のバイト列（先頭だけ渡しても全体を渡してもよい。内部で
- * 先頭 HEAD_SNIFF_BYTES だけを見る）。戻り値は `TextDecoder` にそのまま渡せる
- * ラベル文字列（呼び出し側で未知のラベルなら utf-8 にフォールバックすること）。
+ * `contentType` is the value of `response.headers.get('content-type')` (null when absent).
+ * `headBytes` is the bytes of the body (pass only the head or the whole body; internally only
+ * the first HEAD_SNIFF_BYTES are looked at). The return value is a label string that can be
+ * passed to `TextDecoder` as is (the caller must fall back to utf-8 for an unknown label).
  */
 export function detectCharset(contentType: string | null, headBytes: Uint8Array): string {
   const fromHeader = contentType ? CONTENT_TYPE_CHARSET.exec(contentType)?.[1] : null

@@ -1,14 +1,14 @@
 import { env } from 'cloudflare:workers'
 
 /**
- * 写真の保管先（R2, バインディング PHOTOS）。公開バケットにはしない。
- * 読み書きするキーは src/lib/photos.ts の isManagedPhotoKey を通ったものだけ。
+ * Where photos are stored (R2, binding PHOTOS). Never made a public bucket.
+ * The only keys read or written are those that passed isManagedPhotoKey in src/lib/photos.ts.
  */
 export function getPhotosBucket(): R2Bucket {
   return env.PHOTOS
 }
 
-/** R2 の bucket.delete は 1 回に渡せるキー数の上限があるので 1000 件ずつに分ける */
+/** R2 bucket.delete has a limit on the number of keys per call, so split into groups of 1000 */
 const DELETE_CHUNK_SIZE = 1000
 
 export async function deletePhotoObjects(
@@ -22,11 +22,11 @@ export async function deletePhotoObjects(
 }
 
 /**
- * アップロード（src/routes/api.photos.$.tsx の POST）が途中で失敗したときの
- * 後片付け。既に R2 へ置いたオブジェクトを消してから、常に originalError を
- * 投げ直す。片付け自体が失敗しても（bucket.delete が例外を投げても）それを
- * 呼び出し元に見せない: 片付け失敗はアップロード失敗という本来の理由を
- * 覆い隠してしまうので握りつぶす。
+ * Cleanup for when an upload (POST of src/routes/api.photos.$.tsx) fails midway.
+ * Deletes the objects already put in R2, then always rethrows originalError.
+ * Even if the cleanup itself fails (even if bucket.delete throws), that is not shown to
+ * the caller: a cleanup failure would mask the real reason, the upload failure, so it
+ * is swallowed.
  */
 export async function cleanupFailedUpload(
   keys: readonly string[],
@@ -36,7 +36,7 @@ export async function cleanupFailedUpload(
   try {
     await deletePhotoObjects(keys, bucket)
   } catch {
-    // 片付け失敗は無視: 呼び出し元には元のエラーを伝える
+    // Ignore a cleanup failure: the caller gets the original error
   }
   throw originalError
 }

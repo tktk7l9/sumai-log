@@ -21,9 +21,11 @@ import { DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 
 /**
- * 調査メモの編集フォーム。日付・一言・事実（キーごとの短文）・節（見出し＋本文）・出典。
- * 節と出典は行の追加/削除ができる。保存は saveVendorResearch（research 列だけを差し替え、
- * 業者フォームの他の項目には触らない）。
+ * The edit form of the research memo. Date, one-line summary, facts (a short text per
+ * key), sections (heading + body), sources.
+ * Rows of sections and sources can be added/removed. Saving goes through
+ * saveVendorResearch (it replaces only the research column and does not touch the other
+ * fields of the vendor form).
  */
 export function ResearchForm({
   vendorId,
@@ -37,7 +39,8 @@ export function ResearchForm({
   const router = useRouter()
   const save = useServerFn(saveVendorResearch)
   const [saving, setSaving] = useState(false)
-  // 新規作成時の調査日は「今日」。VisitForm と同じ理由でコンポーネント内で計算する
+  // The research date of a new memo is "today". Calculated inside the component for the
+  // same reason as VisitForm
   const today = dayjs().format('YYYY-MM-DD')
   const initialValues: VendorResearch = research ?? emptyResearch(today)
   const form = useForm<VendorResearch>({
@@ -54,7 +57,7 @@ export function ResearchForm({
       },
     },
   })
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(form, draftKey('research', vendorId), initialValues)
 
   async function submit(values: VendorResearch) {

@@ -6,8 +6,9 @@ import type { Source } from '../../db/schema'
 import { findAffiliation } from '../../lib/affiliations'
 
 /**
- * 情報収集ページの 1 行。アバター（無ければ頭文字）・外部リンク・説明（2 行まで）・
- * バッジ（候補の会社／加盟団体）・「…」メニュー（編集／削除）。
+ * One row of the sources page. Avatar (the initial when there is none), external link,
+ * description (up to 2 lines), badges (candidate company / member organization), and the
+ * "…" menu (edit / delete).
  */
 export function SourceRow({
   source,

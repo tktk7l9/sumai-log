@@ -3,26 +3,26 @@ import { describe, expect, it } from 'vitest'
 import { NAV_ITEMS, isNavItemActive } from './nav'
 
 describe('isNavItemActive', () => {
-  it("'/' はトップだけで有効になる", () => {
+  it("'/' is active only on the top page", () => {
     expect(isNavItemActive('/', '/')).toBe(true)
     expect(isNavItemActive('/company', '/')).toBe(false)
   })
 
-  it('完全一致で有効になる', () => {
+  it('is active on an exact match', () => {
     expect(isNavItemActive('/company', '/company')).toBe(true)
   })
 
-  it('配下のパスでも有効になる', () => {
+  it('is active on a nested path too', () => {
     expect(isNavItemActive('/properties/1', '/properties')).toBe(true)
   })
 
-  it('接頭辞が同じだけの別ルートは有効にしない', () => {
+  it('is not active on a different route that only shares the prefix', () => {
     expect(isNavItemActive('/company-archive', '/company')).toBe(false)
   })
 })
 
 describe('NAV_ITEMS', () => {
-  it('タブは 5 つで、設定はタブに含めない', () => {
+  it('has 5 tabs, and settings is not one of them', () => {
     expect(NAV_ITEMS.map((i) => i.to)).toEqual([
       '/',
       '/calendar',
@@ -32,7 +32,7 @@ describe('NAV_ITEMS', () => {
     ])
   })
 
-  it('候補の詳細ページでも「候補」タブが選択される', () => {
+  it('selects the "候補" (Candidates) tab on a candidate detail page too', () => {
     expect(isNavItemActive('/candidates/vendors/abc', '/candidates')).toBe(true)
     expect(isNavItemActive('/places/abc', '/map')).toBe(false)
   })

@@ -6,7 +6,7 @@ import { formatDateSlash } from '../../lib/calendar'
 import { photoUrl } from '../../lib/photos'
 import type { VisitWithLinks } from '../../server/repository'
 
-/** サムネイルは 4:3。390px 幅でも本文に 200px 以上残る大きさ */
+/** The thumbnail is 4:3. A size that leaves 200px or more for the text even at 390px width */
 const THUMB_W = 104
 const THUMB_H = 78
 
@@ -20,7 +20,8 @@ export function VisitCard({ visit }: { visit: VisitWithLinks }) {
     >
       <Card withBorder padding="md">
         <Group wrap="nowrap" align="flex-start" gap="sm">
-          {/* 見学の写真は横長 4:3 で切り出す（部屋の写真は横位置で撮ることが多い） */}
+          {/* Visit photos are cropped to landscape 4:3 (room photos are mostly taken in
+              landscape orientation) */}
           {visit.firstThumbKey ? (
             <Image
               src={photoUrl(visit.firstThumbKey)}

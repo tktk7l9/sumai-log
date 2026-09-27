@@ -13,7 +13,7 @@ import {
 import { listPhotos, photoKeysOfVisit } from './photos'
 import { assertUpdated } from './stale'
 
-/** その場所に見学記録が1件でもあるか。詳細ページのピンを塗る/塗らないの判定に使う */
+/** Whether the place has even 1 visit record. Used to decide whether to fill the pin on the detail page */
 export async function hasVisits(db: Db, placeId: string): Promise<boolean> {
   const [row] = await db
     .select({ n: sql<number>`count(*)` })
@@ -56,8 +56,9 @@ export async function upsertVisit(db: Db, input: VisitInput, actorEmail: string)
 }
 
 /**
- * 見学記録の「次にやること」だけを書き換える（詳細ページのチェックリストから）。開いた時点の
- * 更新日時と違えば StaleWriteError。書き換えたあとの更新日時を返す（続けて押したときの基準にする）
+ * Rewrites only "次にやること" (next actions) of a visit record (from the checklist on the
+ * detail page). StaleWriteError if it differs from the update time from when it was
+ * opened. Returns the update time after the rewrite (used as the baseline for consecutive presses)
  */
 export async function setVisitNextActions(
   db: Db,
@@ -74,7 +75,10 @@ export async function setVisitNextActions(
   return rows[0]!.updatedAt
 }
 
-/** 見学記録を消す。写真行は FK cascade。コメントは消す。R2 のキーを返すので呼び側で消す */
+/**
+ * Deletes a visit record. Photo rows go by FK cascade. Comments are deleted. Returns the
+ * R2 keys, so the caller deletes them
+ */
 export async function deleteVisitCascade(db: Db, id: string): Promise<string[]> {
   const keys = await photoKeysOfVisit(db, id)
   await db.delete(comments).where(and(eq(comments.targetType, 'visit'), eq(comments.targetId, id)))

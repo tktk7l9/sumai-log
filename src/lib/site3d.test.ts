@@ -18,7 +18,7 @@ const nb = (o: Partial<Neighbor>): Neighbor => ({
 })
 
 describe('buildScene', () => {
-  it('道路・土地・区画・平屋を置く（通路・路地状部分は無いとき置かない）', () => {
+  it('places the road, land, section and single-story house (no passage or flag-lot access strip when absent)', () => {
     const s = buildScene(plan())
     expect(s.planes.map((p) => p.kind)).toEqual(['road', 'land', 'section'])
     expect(s.boxes).toHaveLength(1)
@@ -27,12 +27,12 @@ describe('buildScene', () => {
     expect(s.bounds).toEqual({ minX: 0, maxX: 20, minY: -4, maxY: 50 })
   })
 
-  it('駐車場への通路と、奥の区画の路地状部分も面として置く', () => {
+  it('also places the passage to the parking lot and the flag-lot access strip of the rear section as planes', () => {
     const s = buildScene(plan({ parkingAccess: true, sectionWidth: 14, sectionY: 20 }))
     expect(s.planes.map((p) => p.kind)).toEqual(['road', 'land', 'access', 'section', 'flag'])
   })
 
-  it('隣地: 空地は面、建物は箱。高さ不明は仮の高さで置き、道路はシーンの幅いっぱい', () => {
+  it('neighbors: open land is a plane, a building is a box. Unknown height uses a provisional height, and the road spans the scene width', () => {
     const s = buildScene(
       plan({
         neighbors: [
@@ -55,12 +55,12 @@ describe('buildScene', () => {
   })
 })
 
-describe('座標', () => {
-  it('土地の奥は -Z、高さは Y', () => {
+describe('coordinates', () => {
+  it('maps the rear of the land to -Z and height to Y', () => {
     expect(toThree({ x: 1, y: 2, z: 3 })).toEqual([1, 3, -2])
   })
 
-  it('北の向き: 道路が南なら奥（-Z）、東へ振れれば少し右', () => {
+  it('north direction: the rear (-Z) when the road is to the south, slightly right when rotated toward the east', () => {
     const [x, z] = northDirection3d(plan())
     expect(x).toBeCloseTo(0, 10)
     expect(z).toBeCloseTo(-1, 10)
@@ -68,7 +68,7 @@ describe('座標', () => {
     expect(x2).toBeGreaterThan(0)
   })
 
-  it('太陽: 冬至の南中は手前（+Z）の上から。夜は null', () => {
+  it('sun: at culmination on the winter solstice it comes from above the front (+Z). null at night', () => {
     const noon = sunDirection3d(plan(), 'winter', 12)!
     expect(noon.altitude).toBeCloseTo(31.06, 1)
     expect(noon.dir[1]).toBeGreaterThan(0)

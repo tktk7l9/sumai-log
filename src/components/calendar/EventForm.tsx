@@ -71,7 +71,8 @@ export function EventForm({
       startTime: (v, values) => (!values.allDay && !v ? '開始時刻を入れてください' : null),
     },
   })
-  // 書きかけを端末に残す。新規は「どこから開いたか」（日付・業者・場所）ごとに分ける
+  // Keep the unfinished input on the device. New entries are separated by "where it was
+  // opened from" (date, vendor, place)
   const draft = useFormDraft(
     form,
     draftKey(
@@ -101,7 +102,8 @@ export function EventForm({
       })
       if (res.conflict) {
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
-        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        // Reflect the partner's content on screen (the next save is based on the latest updated
+        // time)
         await router.invalidate()
         return
       }
@@ -116,7 +118,8 @@ export function EventForm({
     }
   }
 
-  // 場所を選んだら、その場所の業者/物件を自動で合わせる（手で変えてもよい）
+  // When a place is chosen, the vendor/property of that place is set automatically (it
+  // can still be changed by hand)
   function onPlaceChange(placeId: string | null) {
     form.setFieldValue('placeId', placeId)
     const p = places.find((x) => x.id === placeId)

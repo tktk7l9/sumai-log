@@ -16,7 +16,8 @@ export function VideoCard({ video }: { video: VideoRow }) {
     >
       <Card withBorder padding="md">
         <Stack gap="xs">
-          {/* 動画のサムネは 16:9。YouTube が返す 4:3 の画像は上下を切って使う */}
+          {/* Video thumbnails are 16:9. The 4:3 image YouTube returns is used with the top
+              and bottom cropped */}
           <AspectRatio ratio={16 / 9}>
             {video.thumbnailUrl ? (
               <Image

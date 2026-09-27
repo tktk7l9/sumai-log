@@ -4,7 +4,8 @@ import { getDb } from '../db/client'
 import { readBuildPlan, setVendorResearch, vendorExists, writeBuildPlan } from './repository'
 import { buildPlanInput, saveVendorResearchInput, vendorResearchInput } from './research.schema'
 
-// スキーマは research.schema.ts から（分離した理由はそちら）。公開 import パスは変えない
+// Schemas come from research.schema.ts (the reason for the split is there).
+// The public import path does not change
 export { buildPlanInput, saveVendorResearchInput, vendorResearchInput }
 export type { BuildPlanInput, VendorResearchInput } from './research.schema'
 

@@ -11,9 +11,9 @@ const allow = ['owner@example.com', 'partner@example.com']
 const NOW = '2026-09-17T01:00:00.000Z'
 
 /**
- * ForwardableEmailMessage の代わり。setReject の呼び出しを state.rejected に記録する。
- * `from` は Email Routing が検証したエンベロープ送信者（信頼できる）。既定値は Gmail の
- * 自動転送がエンベロープを書き換えた形（owner@example.com の caf_ 形式）。
+ * A stand-in for ForwardableEmailMessage. Records calls of setReject in state.rejected.
+ * `from` is the envelope sender verified by Email Routing (trustworthy). The default is the
+ * shape of an envelope rewritten by Gmail auto-forwarding (the caf_ form of owner@example.com).
  */
 function msg(raw: string, over: Partial<InboundMessage> = {}) {
   const state = { rejected: null as string | null }
@@ -51,7 +51,7 @@ async function vendor(domain: string | null) {
 }
 
 describe('handleInboundMail', () => {
-  it('自動転送 + 業者一致 → imported（お知らせ行と日程が付く）', async () => {
+  it('auto forward + vendor match -> imported (gets a vendor news row and dates)', async () => {
     const vendorId = await vendor('vendor.example')
     const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
     expect(r.status).toBe('imported')
@@ -67,7 +67,7 @@ describe('handleInboundMail', () => {
     expect(mail.newsId).toBe(news.id)
   })
 
-  it('自動転送 + 業者不一致 → unassigned（本文は保存）', async () => {
+  it('auto forward + no vendor match -> unassigned (the body is saved)', async () => {
     await vendor('other.example')
     const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
     expect(r.status).toBe('unassigned')
@@ -77,7 +77,7 @@ describe('handleInboundMail', () => {
     expect(await db.select().from(vendorNews)).toHaveLength(0)
   })
 
-  it('HTML だけのメールでも本文をテキスト化して保存する', async () => {
+  it('turns the body into text and saves it even for an HTML-only mail', async () => {
     const vendorId = await vendor('vendor.example')
     const raw = [
       'Message-ID: <html1@vendor.example>',
@@ -93,14 +93,14 @@ describe('handleInboundMail', () => {
     expect(r.status).toBe('imported')
     const [mail] = await db.select().from(inboundMails)
     expect(mail.vendorId).toBe(vendorId)
-    // style の中身は出さず、タグは落ちてテキストだけが残る
+    // The contents of style are not output, tags are dropped and only the text remains
     expect(mail.bodyText).toBe('9月27日(土) 完成見学会を開催します。')
     expect(mail.bodyTruncated).toBe(false)
     const [news] = await db.select().from(vendorNews)
     expect(news.eventStart).toBe('2026-09-27')
   })
 
-  it('同じ Message-ID を 2 回受けたら duplicate', async () => {
+  it('returns duplicate when the same Message-ID is received 2 times', async () => {
     await vendor('vendor.example')
     await handleInboundMail(msg(AUTO).message, db, allow, NOW)
     const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
@@ -108,10 +108,10 @@ describe('handleInboundMail', () => {
     expect(await db.select().from(inboundMails)).toHaveLength(1)
   })
 
-  it('X-Forwarded-For を偽装しても、エンベロープ送信者が許可リストに無ければ rejected（本文は保存しない）', async () => {
-    // AUTO はそのまま（owner@example.com を含む X-Forwarded-For ヘッダも残す＝偽装）。
-    // ただしエンベロープ（Email Routing が検証する message.from）は業者自身のアドレスで、
-    // 許可リストに無い＝直接 news@ を狙い撃ちした攻撃を想定。
+  it('returns rejected when the envelope sender is not in the allowlist, even with a forged X-Forwarded-For (the body is not saved)', async () => {
+    // AUTO is used as is (the X-Forwarded-For header containing owner@example.com also stays
+    // = forged). But the envelope (message.from, which Email Routing verifies) is the vendor's
+    // own address and is not in the allowlist = this assumes an attack aimed directly at news@.
     const { message, state } = msg(AUTO, { from: 'news@vendor.example' })
     const r = await handleInboundMail(message, db, allow, NOW)
     expect(r.status).toBe('rejected')
@@ -122,7 +122,7 @@ describe('handleInboundMail', () => {
     expect(mail.bodyText).toBeNull()
   })
 
-  it('reject された後に正しく転送されると、同じ Message-ID の行が imported に生き返る', async () => {
+  it('revives the row with the same Message-ID to imported when it is forwarded correctly after a reject', async () => {
     const vendorId = await vendor('vendor.example')
     const first = await handleInboundMail(
       msg(AUTO, { from: 'news@vendor.example' }).message,
@@ -143,7 +143,7 @@ describe('handleInboundMail', () => {
     expect(rows[0].vendorId).toBe(vendorId)
   })
 
-  it('reject が 2 回目は duplicate になり、行は増えない', async () => {
+  it('returns duplicate for the 2nd reject and adds no row', async () => {
     const { message: m1, state: s1 } = msg(AUTO, { from: 'news@vendor.example' })
     const first = await handleInboundMail(m1, db, allow, NOW)
     expect(first.status).toBe('rejected')
@@ -157,7 +157,7 @@ describe('handleInboundMail', () => {
     expect(await db.select().from(inboundMails)).toHaveLength(1)
   })
 
-  it('手動転送は転送ブロックから元の差出人・日付・件名を復元して照合する', async () => {
+  it('restores the original sender, date and subject from the forwarded block of a manual forward and matches on them', async () => {
     const vendorId = await vendor('vendor.example')
     const raw = [
       'Message-ID: <fwd1@mail.example>',
@@ -191,7 +191,7 @@ describe('handleInboundMail', () => {
     expect(mail.vendorId).toBe(vendorId)
   })
 
-  it('Gmail の転送先確認は system として本文ごと保存し、お知らせにはしない', async () => {
+  it('saves the Gmail forwarding confirmation as system together with the body and does not turn it into vendor news', async () => {
     const raw = [
       'Message-ID: <sys1@google.example>',
       'From: forwarding-noreply@google.com',
@@ -212,7 +212,7 @@ describe('handleInboundMail', () => {
     expect(await db.select().from(vendorNews)).toHaveLength(0)
   })
 
-  it('From を Gmail の転送先確認に偽装しても、エンベロープが google.com 以外なら rejected（本文は保存しない）', async () => {
+  it('returns rejected when the envelope is not google.com, even with From forged as the Gmail forwarding confirmation (the body is not saved)', async () => {
     const raw = [
       'Message-ID: <sys2@google.example>',
       'From: forwarding-noreply@google.com',
@@ -231,7 +231,7 @@ describe('handleInboundMail', () => {
     expect(mail.bodyText).toBeNull()
   })
 
-  it('大きすぎるメールは読まずに拒否し、記録も残さない', async () => {
+  it('rejects a mail that is too large without reading it and leaves no record', async () => {
     const { message, state } = msg(AUTO, { rawSize: 3_000_000 })
     const r = await handleInboundMail(message, db, allow, NOW)
     expect(r.status).toBe('too-large')

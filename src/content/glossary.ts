@@ -1,13 +1,18 @@
 /**
- * 用語集のデータ。ここは **データだけ**（関数を置かない。検索・分類は `src/lib/glossary.ts`）。
+ * Data of the glossary. This file holds **data only** (no functions. Search and
+ * categorization are in `src/lib/glossary.ts`).
  *
- * 書き方の約束:
- * - 数値は代表値で、地域区分・制度改正で変わるものには「◯年時点」を添える（2026-09 に一括確認済み）
- * - 自信の持てない数字は書かず、仕組みだけを説明する
- * - 実在の会社名は書かない。例外は加盟団体（家づくり百貨・未来へつなぐ工務店の会・
- *   構造塾 家づくり応援・業者マップ）と公的な商品名（フラット35）。構造塾の主宰者名
- *   （M's構造設計・佐藤実氏）は所有者の要望で明記する。地名は団体の発祥地など説明に必要な範囲だけ
- *   （それ以外の地域は「6地域（関東の平地など）」のような一般表現）
+ * Writing rules:
+ * - Numbers are representative values; those that change with the region class or a
+ *   revision of the system get "◯年時点" (as of year N) (all checked at once in 2026-09)
+ * - Do not write numbers we are not confident in; explain only the mechanism
+ * - Do not write names of real companies. The exceptions are the member organizations
+ *   ("家づくり百貨", "未来へつなぐ工務店の会", "構造塾 家づくり応援", "業者マップ") and
+ *   a public product name ("フラット35"). The name of the organizer of "構造塾"
+ *   ("M's構造設計・佐藤実氏") is written explicitly at the owner's request. Place names
+ *   only as far as the explanation needs them, such as where an organization originated
+ *   (other regions use a general expression such as "6地域（関東の平地など）"
+ *   (region 6 (e.g. the flatlands of Kanto)))
  */
 
 export const GLOSSARY_CATEGORIES = [
@@ -22,7 +27,8 @@ export const GLOSSARY_CATEGORIES = [
 export type GlossaryCategory = (typeof GLOSSARY_CATEGORIES)[number]
 export type CategoryId = GlossaryCategory['id']
 
-/** 図解（`src/components/glossary/diagrams/`）の一覧。用語の `diagram` はこの中から選ぶ */
+/** List of diagrams (`src/components/glossary/diagrams/`). The `diagram` of a term is
+ * chosen from these */
 export const DIAGRAM_IDS = [
   'envelope-heat',
   'airtight-leaks',
@@ -42,30 +48,31 @@ export const DIAGRAM_IDS = [
 
 export type DiagramId = (typeof DIAGRAM_IDS)[number]
 
-/** 「目安」の表。値は単位まで含めた文字列で持つ（計算には使わない） */
+/** The "目安" (Reference values) table. Values are held as strings including the unit
+ * (not used for calculation) */
 export type GlossaryNumber = { label: string; value: string }
 
 export type GlossaryTerm = {
   id: string
   term: string
-  /** ひらがな・カタカナの読み。検索の同一視に使う */
+  /** Reading in hiragana/katakana. Used to treat spellings as the same in search */
   reading?: string
   category: CategoryId
-  /** 一言定義（60字以内） */
+  /** One-line definition (60 characters or fewer) */
   summary: string
-  /** 本文。2〜4 段落 */
+  /** Body. 2 to 4 paragraphs */
   body: string[]
   numbers?: GlossaryNumber[]
-  /** 我が家への効き方（1〜2文） */
+  /** How it affects our home (1 to 2 sentences) */
   forUs?: string
   related?: string[]
   diagram?: DiagramId
-  /** 検索用の別名・英語・略記 */
+  /** Aliases, English and abbreviations for search */
   aliases?: string[]
 }
 
 export const GLOSSARY: readonly GlossaryTerm[] = [
-  // ---------------------------------------------------------------- 性能
+  // ---------------------------------------------------------------- Performance
   {
     id: 'ua-value',
     term: 'UA値（外皮平均熱貫流率）',
@@ -422,7 +429,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     aliases: ['制震', '免震', '制振', 'ダンパー', 'せいしん', 'めんしん'],
   },
 
-  // ---------------------------------------------------------------- 土地・法規
+  // ---------------------------------------------------------------- Land and regulations
   {
     id: 'zoning',
     term: '用途地域',
@@ -797,7 +804,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     aliases: ['境界', '確定測量', '越境', '境界標', 'きょうかい'],
   },
 
-  // ---------------------------------------------------------------- 構造・工法
+  // ---------------------------------------------------------------- Structure and methods
   {
     id: 'foundation',
     term: 'ベタ基礎・布基礎',
@@ -1063,7 +1070,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     aliases: ['吹き抜け', '勾配天井', 'ふきぬけ', 'こうばいてんじょう', '高天井'],
   },
 
-  // ---------------------------------------------------------------- お金
+  // ---------------------------------------------------------------- Money
   {
     id: 'tsubo-price',
     term: '坪単価',
@@ -1546,7 +1553,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     aliases: ['頭金', 'あたまきん', '自己資金', 'フルローン', '手元資金'],
   },
 
-  // ---------------------------------------------------------------- 進め方
+  // ---------------------------------------------------------------- Process
   {
     id: 'design-build-split',
     term: '設計施工分離',
@@ -1883,7 +1890,7 @@ export const GLOSSARY: readonly GlossaryTerm[] = [
     aliases: ['構造塾マップ', '家づくり応援・業者マップ', 'こうぞうじゅく'],
   },
 
-  // ---------------------------------------------------------------- マンション
+  // ---------------------------------------------------------------- Condominiums
   {
     id: 'exclusive-area',
     term: '専有面積（壁芯・内法）',
