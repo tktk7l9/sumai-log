@@ -1,12 +1,13 @@
 import { ActionIcon, Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { NextActionsChecklist } from '../components/visits/NextActionsChecklist'
+import { RouteNotFoundState } from '../components/ErrorStates'
 import { FormDrawer } from '../components/FormDrawer'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -23,10 +24,14 @@ import {
   reorderPhotos,
   visitFormOptions,
 } from '../server/visits'
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/records_/visits/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, options, commentData] = await Promise.all([
       getVisit({ data: { id: params.id } }),
       visitFormOptions(),
@@ -175,5 +180,18 @@ function Page() {
         <VisitForm visit={visit} options={options} onSaved={() => setEditing(false)} />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="記録"
+          renderLink={(p) => <Link {...p} to={'/records'} search={{ tab: 'visits' }} />}
+        />
+      }
+    />
   )
 }

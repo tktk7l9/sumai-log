@@ -1,11 +1,12 @@
 import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { RouteNotFoundState } from '../components/ErrorStates'
 import { FormDrawer } from '../components/FormDrawer'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -15,10 +16,14 @@ import { PLACE_KIND_LABEL } from '../db/schema'
 import { listCommentsFor } from '../server/comments'
 import { getMapConfig } from '../server/mapConfig'
 import { deletePlace, getPlace, listLinkTargets } from '../server/places'
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/places/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, targets, commentData, mapConfig] = await Promise.all([
       getPlace({ data: { id: params.id } }),
       listLinkTargets(),
@@ -116,5 +121,18 @@ function Page() {
         />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="地図"
+          renderLink={(p) => <Link {...p} to={'/map'} search={{ view: 'list' }} />}
+        />
+      }
+    />
   )
 }

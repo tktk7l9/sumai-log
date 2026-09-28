@@ -1,11 +1,12 @@
 import { ActionIcon, Anchor, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { RouteNotFoundState } from '../components/ErrorStates'
 import { FormDrawer } from '../components/FormDrawer'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -17,10 +18,14 @@ import { formatSqm, formatYen } from '../lib/format'
 import { deleteProperty, getProperty } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/candidates_/properties/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, targets, commentData] = await Promise.all([
       getProperty({ data: { id: params.id } }),
       listLinkTargets(),
@@ -166,5 +171,18 @@ function Page() {
         />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to={'/candidates'} search={{ tab: 'properties' }} />}
+        />
+      }
+    />
   )
 }

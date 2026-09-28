@@ -1,3 +1,4 @@
+import { notFound } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 
 import { getDb } from '../db/client'
@@ -26,7 +27,7 @@ export const getVideo = createServerFn()
   .validator(idInput)
   .handler(async ({ data }) => {
     const detail = await getVideoDetail(getDb(), data.id)
-    if (!detail) throw new Response('Not Found', { status: 404 })
+    if (!detail) throw notFound()
     return detail
   })
 

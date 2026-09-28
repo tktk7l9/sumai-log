@@ -11,12 +11,13 @@ import {
   Title,
 } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { RouteNotFoundState } from '../components/ErrorStates'
 import { FormDrawer } from '../components/FormDrawer'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
@@ -57,10 +58,14 @@ function MetricLabel({
     </Link>
   )
 }
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/candidates_/vendors/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, homeAreas, targets, commentData, buildPlan] = await Promise.all([
       getVendor({ data: { id: params.id } }),
       getHomeAreas(),
@@ -369,5 +374,18 @@ function Page() {
         />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to={'/candidates'} search={{ tab: 'vendors' }} />}
+        />
+      }
+    />
   )
 }

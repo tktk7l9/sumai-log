@@ -1,3 +1,4 @@
+import { notFound } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
@@ -56,7 +57,7 @@ export const getVisit = createServerFn()
   .validator(idInput)
   .handler(async ({ data }) => {
     const detail = await getVisitDetail(getDb(), data.id)
-    if (!detail) throw new Response('Not Found', { status: 404 })
+    if (!detail) throw notFound()
     return detail
   })
 
