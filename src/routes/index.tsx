@@ -52,8 +52,10 @@ function Home() {
       {/* "Now" uses the value decided by the server (listHomeEvents). Finished events and vendor
           news whose dates have passed are dimmed (owner's request, 2026-09-21) */}
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} nowIso={nowIso} />
-      <HomeNews items={news} todayKey={dateKey(nowIso)} />
+      {/* The call to the major task (writing up a visit) comes right after the events, above
+          vendor news, which grows with every fetch (SHIG 20) */}
       <PendingVisits events={pending} />
+      <HomeNews items={news} todayKey={dateKey(nowIso)} />
       {/* The daily glossary term is reading material, so it goes after events, vendor news and
           unfinished records (at the top it pushes down the events, which are the main purpose) */}
       <GlossaryPick term={glossaryPick} />
