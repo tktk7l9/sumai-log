@@ -2,7 +2,7 @@ import { Anchor, Avatar, Badge, Button, Card, Group, Stack, Text, Title } from '
 import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { ExternalLink, MapPin, NotebookPen, Plus } from 'lucide-react'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { RouteNotFoundState } from '../components/ErrorStates'
@@ -21,6 +21,7 @@ import { ResearchSection } from '../components/research/ResearchSection'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
+import { vendorSpecHalves } from '../lib/vendorSpecs'
 import { termIdForMetric } from '../lib/glossary'
 import { photoUrl, representativeThumbKeyFromDisplayKey } from '../lib/photos'
 import { deleteVendor, getVendor } from '../server/candidates'
@@ -28,6 +29,34 @@ import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
 import { getBuildPlan } from '../server/research'
 import { getHomeAreas } from '../server/settings'
+
+type SpecHalf = { label: React.ReactNode; value: string } | null
+
+/** A combined "A / B" spec row that shows only the halves that are registered and nothing at
+ * all when both are missing (SHIG 1, 37) */
+function SpecRow({ left, right }: { left: SpecHalf; right: SpecHalf }) {
+  const halves = [left, right].filter((h): h is NonNullable<SpecHalf> => h !== null)
+  if (halves.length === 0) return null
+  return (
+    <Row
+      label={
+        <Group component="span" gap={4} wrap="nowrap">
+          {halves.map((h, i) => (
+            <Fragment key={i}>
+              {i > 0 ? (
+                <Text span size="sm" c="dimmed">
+                  /
+                </Text>
+              ) : null}
+              {h.label}
+            </Fragment>
+          ))}
+        </Group>
+      }
+      value={halves.map((h) => h.value).join(' / ')}
+    />
+  )
+}
 
 /** The "view in the glossary" link attached to a DetailRow label. The headword itself becomes the link */
 function MetricLabel({
@@ -77,6 +106,7 @@ function Page() {
   const [addingPlace, setAddingPlace] = useState(false)
   const [editingResearch, setEditingResearch] = useState(false)
   const pendingDeletes = usePendingDeletes()
+  const spec = vendorSpecHalves(vendor)
   // Hidden at once while its deletion can still be undone
   const research = pendingDeletes.has(researchDeleteId(vendor.id)) ? null : vendor.research
 
@@ -123,14 +153,15 @@ function Page() {
               建築予定地が施工エリア内
             </Badge>
           ) : null}
-          <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="md" />
+          {/* The website is the 「公式」 (Official) row below; only SNS icons here (SHIG 31) */}
+          <VendorLinks websiteUrl={null} socialUrls={vendor.socialUrls} size="md" />
           <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
       <Card withBorder padding="md">
         <Stack gap="xs">
-          <Row label="本社" value={vendor.hq} />
+          {vendor.hq ? <Row label="本社" value={vendor.hq} /> : null}
           {vendor.representative ? (
             <Group justify="space-between" wrap="nowrap" align="center">
               <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
@@ -153,33 +184,26 @@ function Page() {
               </Group>
             </Group>
           ) : null}
-          <Row
-            label="施工エリア"
-            value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}
-          />
-          <Row
-            label={
-              <Group component="span" gap={4} wrap="nowrap">
-                <MetricLabel metric="ua" text="UA値" />
-                <Text span size="sm" c="dimmed">
-                  /
-                </Text>
-                <MetricLabel metric="c" text="C値" />
-              </Group>
+          {vendor.serviceAreas.length ? (
+            <Row label="施工エリア" value={vendor.serviceAreas.join('、')} />
+          ) : null}
+          <SpecRow
+            left={
+              spec.ua ? { label: <MetricLabel metric="ua" text="UA値" />, value: spec.ua } : null
             }
-            value={`${vendor.uaValue ?? '—'} / ${vendor.cValuePublished ? '実測公開' : '非公開'}`}
+            right={spec.c ? { label: <MetricLabel metric="c" text="C値" />, value: spec.c } : null}
           />
-          <Row
-            label={
-              <Group component="span" gap={4} wrap="nowrap">
-                <MetricLabel metric="seismic" text="耐震等級" />
-                <Text span size="sm" c="dimmed">
-                  /
-                </Text>
-                <MetricLabel metric="longTerm" text="長期優良" />
-              </Group>
+          <SpecRow
+            left={
+              spec.seismic
+                ? { label: <MetricLabel metric="seismic" text="耐震等級" />, value: spec.seismic }
+                : null
             }
-            value={`${vendor.seismicGrade ?? '—'} / ${vendor.longTermCertified ? '対応' : '—'}`}
+            right={
+              spec.longTerm
+                ? { label: <MetricLabel metric="longTerm" text="長期優良" />, value: spec.longTerm }
+                : null
+            }
           />
           {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
             <Row

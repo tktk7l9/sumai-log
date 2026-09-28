@@ -1,15 +1,4 @@
-import {
-  ActionIcon,
-  Avatar,
-  Badge,
-  Button,
-  Chip,
-  Group,
-  Stack,
-  Switch,
-  Table,
-  Text,
-} from '@mantine/core'
+import { Avatar, Badge, Button, Chip, Group, Stack, Switch, Table, Text } from '@mantine/core'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { EyeOff } from 'lucide-react'
 import { useState } from 'react'
@@ -94,7 +83,8 @@ function Page() {
     { label: '本社', cell: (v) => v.hq ?? '—' },
     { label: '構造', cell: (v) => v.structure ?? '—' },
     { label: 'UA値', cell: (v) => (v.uaValue != null ? String(v.uaValue) : '—') },
-    { label: 'C値', cell: (v) => (v.cValuePublished ? '実測公開' : '非公開') },
+    // Unchecked is not the same as confirmed not public, so it is 「—」, not 「非公開」 (SHIG 56)
+    { label: 'C値', cell: (v) => (v.cValuePublished ? '実測公開' : '—') },
     { label: '耐震等級', cell: (v) => (v.seismicGrade != null ? String(v.seismicGrade) : '—') },
     { label: '長期優良', cell: (v) => (v.longTermCertified ? '対応' : '—') },
     { label: '坪単価', cell: (v) => formatTsubo(v.pricePerTsuboMin, v.pricePerTsuboMax) },
@@ -229,16 +219,18 @@ function Page() {
                               </Text>
                             </Group>
                           </Link>
-                          <ActionIcon
+                          {/* A visible word next to the icon: an eye-off alone does not say what it does (SHIG 31, 34) */}
+                          <Button
                             variant="subtle"
                             color="gray"
-                            size="sm"
-                            aria-label={`${v.name} を非表示にする`}
-                            title="非表示"
+                            size="compact-xs"
+                            aria-label={`${v.name} を比較から隠す`}
+                            leftSection={<EyeOff size={14} aria-hidden />}
                             onClick={() => hide(v.id)}
+                            style={{ flexShrink: 0 }}
                           >
-                            <EyeOff size={14} aria-hidden />
-                          </ActionIcon>
+                            隠す
+                          </Button>
                         </Group>
                         {v.research?.summary ? (
                           <Text size="xs" c="dimmed" fw={400} lineClamp={3}>
