@@ -17,6 +17,7 @@ import { PhotoUploader } from '../components/visits/PhotoUploader'
 import { VisitForm } from '../components/visits/VisitForm'
 import type { Photo } from '../db/schema'
 import { formatDateWithWeekday } from '../lib/calendar'
+import { visitSummary } from '../lib/visitSummary'
 import { listCommentsFor } from '../server/comments'
 import {
   deletePhoto,
@@ -101,7 +102,15 @@ function Page() {
           renderLink={(p) => <Link {...p} to="/records" search={{ tab: 'visits' }} />}
         />
       }
-      title={formatDateWithWeekday(visit.visitedOn)}
+      title={
+        visitSummary({
+          placeName: place?.name ?? null,
+          vendorName: vendor?.name ?? null,
+          propertyName: property?.name ?? null,
+          good: null,
+        }).title
+      }
+      description={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">
           <EditButton onClick={() => setEditing(true)} />
@@ -144,13 +153,14 @@ function Page() {
         </Stack>
       </Card>
 
-      {BLOCKS.map((b) => (
+      {/* Blocks left empty are not shown as 「—」 (SHIG 1, 37) */}
+      {BLOCKS.filter((b) => visit[b.key]?.trim()).map((b) => (
         <Stack key={b.key} gap={4}>
           <Title order={2} size="h3">
             {b.label}
           </Title>
           <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
-            {visit[b.key] || '—'}
+            {visit[b.key]}
           </Text>
         </Stack>
       ))}

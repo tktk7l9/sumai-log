@@ -119,14 +119,16 @@ export function VideoDetail({
         </Group>
       ) : null}
 
-      <Stack gap={4}>
-        <Title order={2} size="h3">
-          学び
-        </Title>
-        <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
-          {video.takeaways || '—'}
-        </Text>
-      </Stack>
+      {video.takeaways?.trim() ? (
+        <Stack gap={4}>
+          <Title order={2} size="h3">
+            学び
+          </Title>
+          <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
+            {video.takeaways}
+          </Text>
+        </Stack>
+      ) : null}
 
       <CommentThread
         targetType="video"
