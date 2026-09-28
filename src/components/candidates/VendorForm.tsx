@@ -330,7 +330,7 @@ export function VendorForm({
         />
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            業者を保存
           </Button>
         </div>
       </Stack>

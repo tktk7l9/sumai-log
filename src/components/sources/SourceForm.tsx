@@ -226,7 +226,7 @@ export function SourceForm({
             </Button>
           ) : null}
           <Button type="submit" loading={saving}>
-            保存
+            情報源を保存
           </Button>
         </Group>
       </Stack>

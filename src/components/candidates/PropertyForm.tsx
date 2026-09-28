@@ -157,7 +157,7 @@ export function PropertyForm({
         />
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            物件を保存
           </Button>
         </div>
       </Stack>

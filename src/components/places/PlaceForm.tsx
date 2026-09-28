@@ -191,7 +191,7 @@ export function PlaceForm({
         />
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            場所を保存
           </Button>
         </div>
       </Stack>

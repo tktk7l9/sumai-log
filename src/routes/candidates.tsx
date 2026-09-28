@@ -157,7 +157,7 @@ function Page() {
         label={tab === 'vendors' ? '業者を追加' : '物件を追加'}
         onClick={() => setOpened(true)}
       />
-      <FormDrawer opened={opened} onClose={() => setOpened(false)} title="追加">
+      <FormDrawer opened={opened} onClose={() => setOpened(false)} title="候補を追加">
         <CandidateAddForm
           initialKind={tab}
           homeAreas={homeAreas}
@@ -173,7 +173,7 @@ function Page() {
 }
 
 /**
- * The contents of the "追加" (Add) drawer. A SegmentedControl for detached house (vendor) /
+ * The contents of the "候補を追加" (Add candidate) drawer. A SegmentedControl for detached house (vendor) /
  * condominium (property) sits on top, and one of the two forms is shown below (owner's request:
  * unify "業者を追加" (Add vendor) and "物件を追加" (Add property) into "追加", and let the form
  * side choose the kind). Switching rebuilds the whole form through `key`. No confirmation:

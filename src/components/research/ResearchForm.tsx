@@ -221,7 +221,7 @@ export function ResearchForm({
 
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            調査メモを保存
           </Button>
         </div>
         {research ? (

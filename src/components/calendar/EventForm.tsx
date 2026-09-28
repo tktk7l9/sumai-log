@@ -9,6 +9,7 @@ import { useState } from 'react'
 
 import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/schema'
 import { splitStartsAt } from '../../lib/calendar'
+import { resolveEventTitle, suggestEventTitle } from '../../lib/eventTitle'
 import { draftKey } from '../../lib/drafts'
 import { saveEvent, type EventInput } from '../../server/events'
 import type { EventWithLinks, PlaceWithLinks } from '../../server/repository'
@@ -64,10 +65,22 @@ export function EventForm({
         propertyId: defaults?.propertyId ?? null,
         note: defaults?.note ?? null,
       }
+  function titleSuggestion(values: Values): string {
+    return suggestEventTitle({
+      kindLabel: EVENT_KIND_LABEL[values.kind],
+      vendorName: targets.vendors.find((v) => v.id === values.vendorId)?.name,
+      propertyName: targets.properties.find((p) => p.id === values.propertyId)?.name,
+      placeName: places.find((p) => p.id === values.placeId)?.name,
+    })
+  }
+
   const form = useForm<Values>({
     initialValues: initial,
     validate: {
-      title: (v) => (v.trim() ? null : 'タイトルは必須です'),
+      title: (v, values) =>
+        resolveEventTitle(v, titleSuggestion(values))
+          ? null
+          : 'タイトルか、業者・場所を入れてください',
       startTime: (v, values) => (!values.allDay && !v ? '開始時刻を入れてください' : null),
     },
   })
@@ -90,6 +103,7 @@ export function EventForm({
     try {
       const normalized = {
         ...values,
+        title: resolveEventTitle(values.title, titleSuggestion(values)),
         startTime: values.startTime || null,
         endTime: values.endTime || null,
         note: values.note || null,
@@ -133,11 +147,34 @@ export function EventForm({
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
         {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
-        <TextInput label="タイトル" required {...form.getInputProps('title')} />
+        {/* What and with whom first, then when, then the title that can be derived from them
+            (SHIG 40 a form with a story, 14 pre-computation) */}
         <Select
           label="種別"
           data={EVENT_KINDS.map((k) => ({ value: k, label: EVENT_KIND_LABEL[k] }))}
           {...form.getInputProps('kind')}
+        />
+        <Select
+          label="場所"
+          clearable
+          searchable
+          data={places.map((p) => ({ value: p.id, label: p.name }))}
+          value={form.values.placeId}
+          onChange={onPlaceChange}
+        />
+        <Select
+          label="業者"
+          clearable
+          searchable
+          data={targets.vendors.map((v) => ({ value: v.id, label: v.name }))}
+          {...form.getInputProps('vendorId')}
+        />
+        <Select
+          label="マンション物件"
+          clearable
+          searchable
+          data={targets.properties.map((p) => ({ value: p.id, label: p.name }))}
+          {...form.getInputProps('propertyId')}
         />
         <DateInput
           label="日付"
@@ -162,27 +199,12 @@ export function EventForm({
             />
           </Group>
         ) : null}
-        <Select
-          label="場所"
-          clearable
-          searchable
-          data={places.map((p) => ({ value: p.id, label: p.name }))}
-          value={form.values.placeId}
-          onChange={onPlaceChange}
-        />
-        <Select
-          label="業者"
-          clearable
-          searchable
-          data={targets.vendors.map((v) => ({ value: v.id, label: v.name }))}
-          {...form.getInputProps('vendorId')}
-        />
-        <Select
-          label="マンション物件"
-          clearable
-          searchable
-          data={targets.properties.map((p) => ({ value: p.id, label: p.name }))}
-          {...form.getInputProps('propertyId')}
+        {/* Optional: left empty, it becomes 「<業者> 見学」 (<vendor> visit) from the choices above */}
+        <TextInput
+          label="タイトル"
+          description="空欄なら、選んだ業者・場所と種別から付けます"
+          placeholder={titleSuggestion(form.values) || '例: 打合せ'}
+          {...form.getInputProps('title')}
         />
         <Textarea
           label="メモ"
@@ -193,7 +215,7 @@ export function EventForm({
         />
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            予定を保存
           </Button>
         </div>
       </Stack>
