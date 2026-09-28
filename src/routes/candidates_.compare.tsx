@@ -172,7 +172,8 @@ function Page() {
                 {v.name}
               </Chip>
             ))}
-            <Button variant="subtle" size="compact-xs" onClick={() => setHidden([])}>
+            {/* size xs = 30px tall; compact-xs (22px) is under 7mm (SHIG 78) */}
+            <Button variant="subtle" size="xs" onClick={() => setHidden([])}>
               すべて表示
             </Button>
           </Group>

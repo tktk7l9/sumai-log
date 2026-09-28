@@ -1,6 +1,6 @@
 import { Button, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { useSyncExternalStore } from 'react'
+import { type FocusEvent, type PointerEvent, useSyncExternalStore } from 'react'
 
 import { UNDO_WINDOW_MS, createDeferredQueue } from '../lib/deferredDelete'
 import { type FetchLike, withKeepalive } from '../lib/keepalive'
@@ -81,11 +81,23 @@ export function deleteWithUndo({
   if (!scheduled) return
   notifications.show({
     id: notificationId,
-    autoClose: UNDO_WINDOW_MS,
+    // The queue owns the clock: the commit hides the notification, and hovering or focusing it
+    // pauses the queue's timer as well (SHIG 54). With Mantine's own autoClose the toast stayed
+    // while hovered but the delete still went through after UNDO_WINDOW_MS
+    autoClose: false,
+    ...pauseWhileAttended(id),
+    // Closed with its "×" while paused: the focused element is removed without a blur, so start
+    // the window again here (a no-op after undo or commit, when nothing is paused)
+    onClose: () => {
+      queue.resume(id)
+    },
+    // Tab from "元に戻す" (Undo) lands on the close button, which has no name of its own
+    closeButtonProps: { 'aria-label': '通知を閉じる' },
     message: (
       <Group justify="space-between" wrap="nowrap" gap="sm">
         <Text size="sm">{message}</Text>
         <Button
+          ref={focusOnMount}
           variant="subtle"
           size="sm"
           onClick={() => {
@@ -99,4 +111,58 @@ export function deleteWithUndo({
       </Group>
     ),
   })
+}
+
+/**
+ * The deleted element (a detail page's delete button, a list row) goes away, so focus would fall
+ * to <body>. Put it on "元に戻す" (Undo) instead, where a keyboard or screen-reader user can
+ * take the delete back at once (SHIG 54, 94)
+ */
+function focusOnMount(button: HTMLButtonElement | null) {
+  button?.focus({ preventScroll: true })
+}
+
+/**
+ * Pause the delete while a mouse is over the notification or keyboard focus is inside it, and
+ * start a new window when both have left. Touch taps and the programmatic focus after a click
+ * do not count (not :focus-visible), otherwise the delete would wait until the next tap
+ * elsewhere
+ */
+function pauseWhileAttended(id: string) {
+  let hovered = false
+  let focused = false
+  const update = () => {
+    if (hovered || focused) queue.pause(id)
+    else queue.resume(id)
+  }
+  return {
+    onPointerEnter: (e: PointerEvent<HTMLElement>) => {
+      if (e.pointerType !== 'mouse') return
+      hovered = true
+      update()
+    },
+    onPointerLeave: (e: PointerEvent<HTMLElement>) => {
+      if (e.pointerType !== 'mouse') return
+      hovered = false
+      update()
+    },
+    onFocusCapture: (e: FocusEvent<HTMLElement>) => {
+      focused = isFocusVisible(e.target)
+      update()
+    },
+    onBlurCapture: (e: FocusEvent<HTMLElement>) => {
+      const next = e.relatedTarget
+      if (next instanceof Node && e.currentTarget.contains(next)) return
+      focused = false
+      update()
+    },
+  }
+}
+
+function isFocusVisible(el: Element): boolean {
+  try {
+    return el.matches(':focus-visible')
+  } catch {
+    return false
+  }
 }
