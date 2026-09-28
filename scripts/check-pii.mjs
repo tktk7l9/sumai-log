@@ -13,9 +13,12 @@
  * list of forbidden words
  * (this avoids the circular problem of the list itself becoming PII).
  *
- * In an environment without .dev.vars (right after a clone in CI, etc.) there is simply
- * nothing to match against, so succeed silently. To really protect in CI, run it
+ * In an environment without .dev.vars (right after a clone in CI, etc.) there are simply
+ * no words to match against, so that part is skipped. To really protect in CI, run it
  * locally where the real data exists, or put it in pre-commit.
+ *
+ * Coordinates are checked by shape (scripts/lib/pii.mjs), not against a list, so that
+ * part runs everywhere, including CI.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -23,12 +26,16 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { findCoordinateLines } from './lib/pii.mjs'
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const devVarsPath = resolve(root, '.dev.vars')
 
-if (!existsSync(devVarsPath)) {
-  console.log('.dev.vars が無いので照合できません（実データを持つ環境で実行してください）。')
-  process.exit(0)
+const hasDevVars = existsSync(devVarsPath)
+if (!hasDevVars) {
+  console.log(
+    'No .dev.vars: names and e-mails are not checked (run this where the real data is). Coordinates are still checked.',
+  )
 }
 
 /**
@@ -43,7 +50,7 @@ function unquote(v) {
     : v
 }
 const vars = Object.fromEntries(
-  readFileSync(devVarsPath, 'utf8')
+  (hasDevVars ? readFileSync(devVarsPath, 'utf8') : '')
     .split('\n')
     .filter((l) => l.includes('=') && !l.trim().startsWith('#'))
     .map((l) => {
@@ -93,6 +100,7 @@ const files = (
   .filter((file) => !SKIP.test(file))
 
 const hits = []
+const coordinateHits = []
 for (const file of files) {
   let content
   try {
@@ -105,19 +113,33 @@ for (const file of files) {
     const line = content.split('\n').findIndex((text) => text.includes(secret)) + 1
     hits.push({ file, line, secret })
   }
+  for (const line of findCoordinateLines(content)) coordinateHits.push({ file, line })
 }
 
-if (hits.length === 0) {
-  const scope = staged ? 'コミット対象' : '追跡ファイル'
-  console.log(`実データの混入なし（${secretList.length} 語を ${scope} ${files.length} 件と照合）。`)
+if (hits.length === 0 && coordinateHits.length === 0) {
+  const scope = staged ? 'staged files' : 'tracked files'
+  console.log(
+    `No real data found (${secretList.length} words and coordinates checked against ${files.length} ${scope}).`,
+  )
   process.exit(0)
 }
 
-console.error('コミット対象に実データが混ざっています（AGENTS.md 1）:')
+console.error('Real data is mixed into what is being committed (AGENTS.md 1):')
 for (const hit of hits) {
   // Do not print the found word itself. If the output stays in a log, that is a leak too
-  const masked = `${hit.secret.slice(0, 1)}…（${hit.secret.length}文字）`
+  const masked = `${hit.secret.slice(0, 1)}... (${hit.secret.length} characters)`
   console.error(`  ${hit.file}:${hit.line}  ${masked}`)
 }
-console.error('\n架空の値に置き換えてください。実データは .dev.vars 経由でのみ入れます。')
+for (const hit of coordinateHits) {
+  // The value is not printed, for the same reason
+  console.error(`  ${hit.file}:${hit.line}  coordinates (5 or more decimal places)`)
+}
+console.error(
+  '\nReplace them with made-up values. Real data goes in only through .dev.vars and seed.local.json.',
+)
+if (coordinateHits.length > 0) {
+  console.error(
+    'A made-up or public-landmark coordinate can be added to ALLOWED_COORDINATES in scripts/lib/pii.mjs.',
+  )
+}
 process.exit(1)

@@ -168,11 +168,11 @@ async function main() {
   mkdirSync(dirname(out), { recursive: true })
   writeFileSync(out, lines.join('\n') + '\n')
 
-  console.log(`mails: ${messages.length} 通 → ${out}`)
+  console.log(`mails: ${messages.length} → ${out}`)
   for (const [name, n] of perVendor) console.log(`  ${name}: ${n}`)
-  console.log(`  未割当: ${unassigned}`)
-  console.log(`  日程あり: ${withEvent}`)
-  console.log('次: npx wrangler d1 execute sumai-log --remote --file seed.local/out/mails.sql')
+  console.log(`  unassigned: ${unassigned}`)
+  console.log(`  with event date: ${withEvent}`)
+  console.log('next: npx wrangler d1 execute sumai-log --remote --file seed.local/out/mails.sql')
 }
 
 main().catch((e) => {

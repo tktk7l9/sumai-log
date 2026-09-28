@@ -216,7 +216,7 @@ function fictionalSeed(overrides = {}) {
 test('buildStatements: includes the INSERT ... ON CONFLICT(key) DO UPDATE statement for settings', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO settings'))
-  assert.ok(stmt, 'settings statement が見つからない')
+  assert.ok(stmt, 'settings statement not found')
   assert.match(stmt, /^INSERT INTO settings/)
   assert.match(stmt, /ON CONFLICT\(key\) DO UPDATE SET/)
   assert.doesNotMatch(stmt, /OR REPLACE/)
@@ -244,7 +244,7 @@ test('buildStatements: vendors/places/events/visits/videos produce INSERT ... ON
 test('buildStatements: ON CONFLICT DO UPDATE of vendors excludes created_by/created_at from the update (other columns are updated)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorStmt, 'vendor-a statement not found')
   assert.doesNotMatch(vendorStmt, /created_by = excluded\.created_by/)
   assert.doesNotMatch(vendorStmt, /created_at = excluded\.created_at/)
   assert.match(vendorStmt, /name = excluded\.name/)
@@ -260,7 +260,7 @@ test('buildStatements: actorEmail goes into created_by', () => {
 test('buildStatements: serviceAreas/tags are serialized as JSON strings', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorStmt, 'vendor-a statement not found')
   assert.match(vendorStmt, /\["架空市","隣町"\]/)
   const videoStmt = sql.find((s) => s.includes('INTO videos'))
   assert.match(videoStmt, /\["タグ1","タグ2"\]/)
@@ -269,20 +269,20 @@ test('buildStatements: serviceAreas/tags are serialized as JSON strings', () => 
 test('buildStatements: socialUrls of a vendor becomes a JSON string, and an empty array when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.match(
     vendorAStmt,
     /\["https:\/\/www\.instagram\.com\/example\/","https:\/\/x\.com\/example"\]/,
   )
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   assert.match(vendorBStmt, /'\[\]'/)
 })
 
 test('buildStatements: newsUrl/newsSource of a vendor go into the vendors INSERT when specified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.match(vendorAStmt, /'https:\/\/news\.example\.com\/feed\/'/)
   assert.match(vendorAStmt, /'rss'/)
 })
@@ -290,7 +290,7 @@ test('buildStatements: newsUrl/newsSource of a vendor go into the vendors INSERT
 test('buildStatements: newsUrl/newsSource of a vendor become NULL when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   // Right after social_urls (the column positions of news_url, news_source) come NULL, NULL.
   // representative_photo_key is not in representativePhotoReady, so the whole column is
   // not emitted (see Finding 3)
@@ -318,7 +318,7 @@ test('buildStatements: representative/affiliations of a vendor go into the vendo
   seed.vendors[0].affiliations = ['iedukuri100', 'miratsugu']
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.match(vendorAStmt, /'山田太郎'/)
   assert.match(vendorAStmt, /\["iedukuri100","miratsugu"\]/)
 })
@@ -326,7 +326,7 @@ test('buildStatements: representative/affiliations of a vendor go into the vendo
 test('buildStatements: representative/affiliations of a vendor become NULL / empty array when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   assert.match(vendorBStmt, /hq, representative, service_areas, affiliations/)
   assert.match(vendorBStmt, /NULL, NULL, '\[\]', '\[\]'/)
 })
@@ -347,7 +347,7 @@ test('buildStatements: affiliationLinks of a vendor goes into the vendors INSERT
   }
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.match(
     vendorAStmt,
     /\{"kouzou-cram":\{"url":"https:\/\/kouzou-cram\.com\/partnermap\/example\/","note":"構造 ★★★"\}\}/,
@@ -357,7 +357,7 @@ test('buildStatements: affiliationLinks of a vendor goes into the vendors INSERT
 test('buildStatements: affiliationLinks becomes an empty object when unspecified (allowed)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   assert.match(vendorBStmt, /affiliations, affiliation_links/)
   assert.match(vendorBStmt, /'\[\]', '\{\}'/)
 })
@@ -403,7 +403,7 @@ test('buildStatements: when the slug is in representativePhotoReady, representat
   const vendorAId = slugToId('vendor:vendor-a')
   const stamp = new Date(now).getTime().toString(36)
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.match(
     vendorAStmt,
     new RegExp(`'vendors/${vendorAId}/representative-${stamp}-display\\.jpg'`),
@@ -428,7 +428,7 @@ test('buildStatements: the key for representativePhotoReady gets a different sta
 test('buildStatements: for a vendor not in representativePhotoReady, representative_photo_key stays NULL (same for the default when unspecified)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
   assert.doesNotMatch(vendorAStmt, /representative-display\.jpg/)
 })
 
@@ -444,8 +444,8 @@ test('buildStatements: the INSERT statement of a vendor without representativePh
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   assert.doesNotMatch(vendorAStmt, /representative_photo_key/)
   assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
@@ -458,8 +458,8 @@ test('buildStatements: only a vendor whose slug is in representativePhotoReady h
   })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
-  assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
-  assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
+  assert.ok(vendorAStmt, 'vendor-a statement not found')
+  assert.ok(vendorBStmt, 'vendor-b statement not found')
   assert.match(vendorAStmt, /representative_photo_key = excluded\.representative_photo_key/)
   assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
@@ -469,7 +469,7 @@ test("buildStatements: a name containing ' is still escaped", () => {
   seed.vendors[0].name = "架空's工務店"
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes("架空''s工務店"))
-  assert.ok(vendorStmt, 'エスケープされた名前を含む文が見つからない')
+  assert.ok(vendorStmt, 'statement containing the escaped name not found')
 })
 
 test('buildStatements: error when vendor refers to a nonexistent slug (includes the slug)', () => {
@@ -586,7 +586,7 @@ test('buildStatements: sources produce INSERT ... ON CONFLICT(url) DO UPDATE sta
   const seed = fictionalSeed({ sources: [fictionalSource()] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
-  assert.ok(stmt, 'sources statement が見つからない')
+  assert.ok(stmt, 'sources statement not found')
   assert.match(stmt, /^INSERT INTO sources/)
   assert.match(stmt, /ON CONFLICT\(url\) DO UPDATE SET/)
   assert.doesNotMatch(stmt, /ON CONFLICT\(id\)/)
@@ -724,7 +724,7 @@ test('buildStatements: unspecified handle/channelId/description/avatarUrl/affili
   // Loosely check only that at least 6 NULLs (handle, channel_id, description, avatar_url,
   // vendor_id, affiliation) are present (without depending too much on column order)
   const nullCount = (stmt.match(/NULL/g) ?? []).length
-  assert.ok(nullCount >= 6, `NULL の数が想定より少ない: ${nullCount}`)
+  assert.ok(nullCount >= 6, `fewer NULLs than expected: ${nullCount}`)
 })
 
 test('buildStatements does not throw even for a seed without sources (the sources key itself is missing)', () => {
