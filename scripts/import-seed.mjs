@@ -73,7 +73,7 @@ function unquote(v) {
 function readDevVars() {
   const path = resolve(root, '.dev.vars')
   if (!existsSync(path)) {
-    throw new Error('.dev.vars が見つかりません（ローカル開発用の値をコピーして作ってください）')
+    throw new Error('.dev.vars not found (create it by copying the values for local development)')
   }
   const vars = Object.fromEntries(
     readFileSync(path, 'utf8')
@@ -85,7 +85,7 @@ function readDevVars() {
       }),
   )
   if (!vars.DEV_IDENTITY_EMAIL) {
-    throw new Error('.dev.vars に DEV_IDENTITY_EMAIL がありません')
+    throw new Error('DEV_IDENTITY_EMAIL is missing in .dev.vars')
   }
   return vars
 }
@@ -164,7 +164,7 @@ function convertRepresentativePhotos(vendorRows) {
   if (process.platform !== 'darwin') {
     if (withPhoto.length > 0) {
       console.log(
-        `代表者の写真は変換できないので飛ばします（sips は macOS 専用。現在: ${process.platform}）。`,
+        `Skipping representative photos because they cannot be converted (sips is macOS only. current: ${process.platform}).`,
       )
     }
     return {}
@@ -206,7 +206,7 @@ function readPixelSize(path) {
   })
   const width = Number(out.match(/pixelWidth:\s*(\d+)/)?.[1])
   const height = Number(out.match(/pixelHeight:\s*(\d+)/)?.[1])
-  if (!width || !height) throw new Error(`sips が ${path} の実寸を読めなかった`)
+  if (!width || !height) throw new Error(`sips could not read the actual size of ${path}`)
   return { width, height }
 }
 
@@ -224,7 +224,7 @@ function readPixelSize(path) {
 function convertPhotos(photoDescriptors) {
   if (process.platform !== 'darwin') {
     console.log(
-      `写真は変換できないので飛ばします（sips は macOS 専用。現在: ${process.platform}）。SQL のみ流します。`,
+      `Skipping photos because they cannot be converted (sips is macOS only. current: ${process.platform}). Only the SQL is executed.`,
     )
     return { photoSizes: {}, photoPaths: {} }
   }
@@ -307,7 +307,7 @@ async function main() {
 
   const seedPath = resolve(root, 'seed.local.json')
   if (!existsSync(seedPath)) {
-    console.error('seed.local.json が見つかりません。')
+    console.error('seed.local.json not found.')
     process.exit(1)
   }
   const seed = JSON.parse(readFileSync(seedPath, 'utf8'))
@@ -317,27 +317,27 @@ async function main() {
   const { photos: photoDescriptors } = buildStatements(seed, { actorEmail, now })
 
   console.log(
-    `国土地理院 API で ${seed.places?.length ?? 0} 件の場所を座標に変換中（1件あたり${GSI_PAUSE_MS}ms待機）…`,
+    `Converting ${seed.places?.length ?? 0} places to coordinates with the GSI API (waiting ${GSI_PAUSE_MS}ms per place)…`,
   )
   const { coords, geocodeCacheSql, skippedNoAddress, notFound } = await geocodePlaces(
     seed.places ?? [],
     now,
   )
   console.log(
-    `  → 座標が付いた場所: ${Object.keys(coords).length} / 住所なし: ${skippedNoAddress} / 該当なし: ${notFound}`,
+    `  → places with coordinates: ${Object.keys(coords).length} / no address: ${skippedNoAddress} / not found: ${notFound}`,
   )
 
-  console.log(`写真 ${photoDescriptors.length} 枚を変換中…`)
+  console.log(`Converting ${photoDescriptors.length} photos…`)
   const { photoSizes, photoPaths } = convertPhotos(photoDescriptors)
   console.log(
-    `  → 実寸を取得できた写真: ${Object.keys(photoSizes).length} / ${photoDescriptors.length}`,
+    `  → photos with a measured actual size: ${Object.keys(photoSizes).length} / ${photoDescriptors.length}`,
   )
 
   const repPhotoVendors = (seed.vendors ?? []).filter((v) => v.representativePhoto)
-  console.log(`代表者の写真 ${repPhotoVendors.length} 枚を変換中…`)
+  console.log(`Converting ${repPhotoVendors.length} representative photos…`)
   const repPhotosReady = convertRepresentativePhotos(seed.vendors)
   console.log(
-    `  → 変換できた代表者の写真: ${Object.keys(repPhotosReady).length} / ${repPhotoVendors.length}`,
+    `  → representative photos converted: ${Object.keys(repPhotosReady).length} / ${repPhotoVendors.length}`,
   )
 
   // 2nd call: the final SQL including coordinates, photo sizes and the representative photo
@@ -370,20 +370,20 @@ async function main() {
     `vendors/${vendorId}/representative-${representativePhotoStamp}-thumb.jpg`,
   ])
 
-  console.log('--- SQL 文の件数（テーブルごと） ---')
+  console.log('--- Number of SQL statements (per table) ---')
   for (const [table, count] of Object.entries(countsByTable)) {
     console.log(`  ${table}: ${count}`)
   }
-  console.log(`--- R2 に置くキー（${r2Keys.length + repPhotoR2Keys.length} 件） ---`)
+  console.log(`--- Keys to put to R2 (${r2Keys.length + repPhotoR2Keys.length}) ---`)
   for (const key of [...r2Keys, ...repPhotoR2Keys]) console.log(`  ${key}`)
-  console.log(`SQL ファイル: ${sqlPath}`)
+  console.log(`SQL file: ${sqlPath}`)
 
   if (dryRun) {
-    console.log('\n--dry-run のため、R2/D1 へは書き込みません。')
+    console.log('\n--dry-run: nothing is written to R2/D1.')
     return
   }
 
-  console.log(`\n${target === 'local' ? 'ローカル' : '本番'} R2 へ写真をアップロード中…`)
+  console.log(`\nUploading photos to ${target === 'local' ? 'local' : 'production'} R2…`)
   for (const p of photos) {
     const paths = photoPaths[p.photoId]
     if (!paths) continue
@@ -413,7 +413,9 @@ async function main() {
     ])
   }
 
-  console.log(`\n${target === 'local' ? 'ローカル' : '本番'} R2 へ代表者の写真をアップロード中…`)
+  console.log(
+    `\nUploading representative photos to ${target === 'local' ? 'local' : 'production'} R2…`,
+  )
   for (const { vendorId, displayPath, thumbPath } of Object.values(repPhotosReady)) {
     wrangler([
       'r2',
@@ -439,10 +441,10 @@ async function main() {
     ])
   }
 
-  console.log(`\n${target === 'local' ? 'ローカル' : '本番'} D1 へ SQL を実行中…`)
+  console.log(`\nExecuting the SQL on ${target === 'local' ? 'local' : 'production'} D1…`)
   wrangler(['d1', 'execute', DATABASE, targetFlag(target), '--file', sqlPath, '-y'])
 
-  console.log('\n--- 取り込み後の件数 ---')
+  console.log('\n--- Row counts after import ---')
   const counts = countPerTable(target)
   for (const [table, n] of Object.entries(counts)) {
     console.log(`  ${table}: ${n}`)

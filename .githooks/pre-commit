@@ -13,7 +13,7 @@
 
 node scripts/check-pii.mjs --staged || {
   echo ''
-  echo 'コミットを中止しました。実データは seed.local.json 経由でのみ入れます。'
-  echo '（意図して通す場合のみ: git commit --no-verify）'
+  echo 'Commit aborted. Real data goes in only through seed.local.json.'
+  echo '(Only when you mean it: git commit --no-verify)'
   exit 1
 }

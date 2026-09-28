@@ -1,168 +1,224 @@
-# sumai-log — エージェント向け指示
+# sumai-log — instructions for agents
 
-夫婦二人だけが使う住まい検討の記録アプリ。**リポジトリは public**、データは D1 / R2 にしか無い。
+A record app for a housing search, used only by one married couple. **The repository is public**; the data exists only in D1 / R2.
 
-## 絶対に守ること
+## Rules that must never be broken
 
-1. **PII をコミットしない。** 二人のメール・表示名・見学先の実データ・住所・座標を
-   コード／テスト／seed／コメント／ドキュメントに書かない。テストは `owner@example.com` `甲` `乙`
-   `テスト市` などの架空値。コミット前に `npm run check:pii`（照合元は gitignore 済みの `.dev.vars`）。
-   ただし `check:pii` が知っているのは `.dev.vars` の `ACCESS_ALLOWED_EMAILS`/`MEMBERS`
-   （メールと表示名）だけ。業者名・住所・座標などの実データはここでは検出できないので、
-   コミット前に人の目で確認する。
-2. **R2 バケットを公開設定にしない。** 配信は必ず認証後に Worker 経由でストリームする。
-3. **認証を迂回できる経路を足さない。** 判定は `src/lib/access.ts` に集約し、
-   `src/start.ts` のグローバルミドルウェアで全リクエストに適用する。fail closed。
-   例外: 静的アセット（クライアントバンドル・favicon・manifest・robots.txt）は Workers Assets
-   層が配信し `src/start.ts` を経由しない。Cloudflare Access の背後ではあるが、アプリ側
-   allowlist は通らない。写真のアップロード（`POST /api/photos`）と配信
-   （`GET /api/photos/<key>`）はこの例外に乗せず、`src/routes/api.photos.$.tsx` の
-   TanStack Start server route（＝ミドルウェアを通る経路）として実装している。この 2 つは
-   `api.photos.tsx`（完全一致）と `api.photos.$.tsx`（スプラット）に分けず、必ず 1 ファイル
-   にまとめること。このバージョンの TanStack Router はスプラット `$` を「0 文字にもマッチ
-   しうる」ものとして扱い、一致度が同点のとき子ノード（スプラット）を親の完全一致ノードより
-   優先するため、分けると `POST /api/photos` がスプラット側の GET ハンドラ（実装なし）に化けて
-   SSR フォールバックの 200 HTML に流れ、アップロードが無言で失敗する（実機で確認済み）。
-4. **秘密は `.dev.vars`（ローカル）と `wrangler secret`（本番）だけ。** `wrangler.jsonc` の `vars` に
-   メールを書かない。Keyway は `keyway pull -e development -f .dev.vars -y`（`keyway run` は wrangler に効かない）。
-5. **`src/lib/` は純粋関数のみ。** カバレッジ 100% ゲートの対象。
+1. **Do not commit PII.** Do not write the two users' e-mails, display names, real data of visited
+   places, addresses or coordinates into code / tests / seed / comments / documentation. Tests use
+   fictional values such as `owner@example.com` `甲` `乙` `テスト市`. Run `npm run check:pii` before
+   committing (the reference data is `.dev.vars`, which is gitignored).
+   However, the only words `check:pii` knows are `ACCESS_ALLOWED_EMAILS`/`MEMBERS` in `.dev.vars`
+   (e-mails and display names). Real data such as vendor names and addresses cannot be detected
+   here, so check with human eyes before committing.
+   Coordinates are detected by shape (`scripts/lib/pii.mjs`): a latitude and longitude inside
+   Japan with 5 or more decimal places fails the check, in CI too. A sample coordinate must be
+   made up or a public landmark, and listed in `ALLOWED_COORDINATES` with what it is. Coarser
+   values pass the check, so do not write a real location at any precision (a real one stayed in
+   a comment as a "sample" and the history had to be rewritten, 2026-09-27).
+2. **Do not make the R2 bucket public.** Delivery must always be streamed through the Worker after
+   authentication.
+3. **Do not add a path that can bypass authentication.** The decision is centralised in
+   `src/lib/access.ts` and applied to every request by the global middleware in `src/start.ts`.
+   Fail closed.
+   Exception: static assets (client bundle, favicon, manifest, robots.txt) are served by the
+   Workers Assets layer and do not go through `src/start.ts`. They are behind Cloudflare Access,
+   but they do not pass the app-side allowlist. Photo upload (`POST /api/photos`) and delivery
+   (`GET /api/photos/<key>`) are not put on this exception; they are implemented as a TanStack
+   Start server route in `src/routes/api.photos.$.tsx` (= a path that goes through the
+   middleware). These 2 must not be split into `api.photos.tsx` (exact match) and
+   `api.photos.$.tsx` (splat); always keep them in 1 file. This version of TanStack Router treats
+   the splat `$` as something that "can also match 0 characters" and, when the match score is
+   tied, prefers the child node (splat) over the parent exact-match node, so when they are split
+   `POST /api/photos` turns into the GET handler on the splat side (no implementation), flows
+   into the 200 HTML of the SSR fallback, and the upload fails silently (confirmed on a real
+   device).
+4. **Secrets live only in `.dev.vars` (local) and `wrangler secret` (production).** Do not write
+   e-mails into `vars` of `wrangler.jsonc`. For Keyway use
+   `keyway pull -e development -f .dev.vars -y` (`keyway run` does not work with wrangler).
+5. **`src/lib/` contains pure functions only.** It is the target of the 100% coverage gate.
 
-## 設計の約束
+## Design agreements
 
-- 副作用は `src/server/`、DB は `src/db/`、UI は `src/components/` と `src/routes/`
-- D1 アクセスは `src/server/repository/<domain>.ts`（candidates/places/events/visits/photos/
-  comments/settings/geocode/videos/tags/feed）にテーブル単位で分割。`src/server/repository.ts` は
-  `export * from './repository/index'` の再エクスポートのみで、既存の import パスは変えずに済む
-- 変更系 server function の wrapper（`createServerFn` で `getRequest` などを静的 import するもの）は
-  TanStack Start の Vite プラグインが用意する仮想モジュールに依存するため、素の workers テスト
-  （`vitest.workers.config.ts`、TanStack の Vite プラグイン無し）から import すると解決に失敗する。
-  D1 も要らない純粋な zod スキーマは `src/server/events.schema.ts` のように別ファイルへ切り出し、
-  `*.worker-test.ts` はそちらを直接 import してスキーマだけをテストする（`src/server/events.ts` は
-  同じ名前を re-export するだけで、公開 import パスは変えない）
-- 写真アップロード途中で失敗したときの R2 掃除は `src/server/storage.ts` の `cleanupFailedUpload`
-- 日付は TEXT の ISO-8601、金額は円の整数、面積は小数、id は text（`crypto.randomUUID()`）
-- スマホ優先。下タブ＋FAB＋全画面 Drawer。デスクトップは左ナビ。スマホのヘッダは「お知らせ」と
-  「…（その他）」の 2 つだけで、下タブに無い残りのページは `AppLayout.tsx` の `MoreMenu`（名前付き）に
-  入れる（無ラベルのアイコンを並べない）。詳細ページは `PageShell` の `back` に `BackButton` を渡して
-  親ページ（候補・記録・地図・用語集＝名詞）へ戻れるようにする。追加ボタン（FAB）の文言は
-  「〜を追加」「記録を書く」のように対象＋動詞で揃える。未登録の値は「—」を出さず行ごと消す
-  （SHIG 6・37・47・59・60。2026-09-25 の全体見直し）
-- 地図に出せない場所は「出せない理由」を画面に書く（空の枠を出さない）
-- 写真は端末で縮小してから送る（表示用 1600px・サムネ 400px の JPEG）。R2 は非公開バケットで、
-  配信は認証後に Worker 経由でストリームする。扱ってよいキーは `src/lib/photos.ts` の
-  `isManagedPhotoKey` を通ったものだけ
-- 業者画像（代表者の顔写真・ファビコン）の R2 キーは `vendors/{id}/…-{stamp}` の形でバージョン
-  を持たせる（`{stamp}` は差し替えるたびに変わる値）。見学写真（`photos/{visitId}/{photoId}-…`）
-  と違って業者側のキーは元々 `vendorId` だけから決定的だったため、差し替え後も同じ URL を
-  `cache-control: immutable` で長期キャッシュしてしまい、再アップロードしても古い画像が
-  出続ける不具合があった（鍵にバージョンを持たせることで解決する）
-- `vendors.favicon_source`（`'auto' | 'manual'`。既存行との後方互換のため nullable で、null は
-  `'auto'` 扱い）は favicon_key の由来を持つ。業者フォームの「サイトのアイコン」から手動
-  アップロード（`uploadVendorFaviconCore`）すると `'manual'` になり、以後の非 force の自動
-  取得（`refreshAllVendorFavicons` の既定呼び出し・`saveVendor` 保存時のインライン取得）は
-  この業者をスキップして上書きしない（Cloudflare からのアクセスを一律拒否するサーバー向けの
-  代替経路のため、自動取得に負けさせない）。設定画面の「取り直す」（`force: true`）はこの限り
-  でなく、手動アップロードした業者も対象に含める。削除（`deleteVendorFaviconObjects`）は
-  `favicon_key`/`favicon_source` を両方 NULL に戻す
-- 予定の日時（`startsAt`）は終日なら `YYYY-MM-DD`、時刻ありなら `YYYY-MM-DDTHH:MM:00+09:00`
-  （日本時間のオフセットを明示）。日付キーは先頭 10 文字（`src/lib/calendar.ts`）。Date
-  オブジェクトへ変換しない
-- `normalizeAddress`（住所の表記ゆれ吸収）と `normalizeSocialUrls`（SNS URL の正規化）は
-  `src/lib/`（`geocode.ts` / `social.ts`）と `scripts/lib/normalize.mjs`（`seed.mjs` が
-  import して使う）の両方に同じ実装がある。片方だけ変えない（seed 側は plain `.mjs` で
-  TS を import できないため、あえて重複させている）。一致は `src/lib/normalize-parity.test.ts`
-  が両実装に同じケースを流して固定している。直すときは両方直してこのテストを green に保つ
-- 業者の調査メモ（`vendors.research`、JSON。形は `src/lib/research.ts` の `VendorResearch`）は
-  `saveVendorResearch`（`src/server/research.ts`）だけが書く。業者フォーム（`vendorInput`）は
-  この列を持たないので、業者の他の項目を保存しても調査メモは消えない（`upsertVendor` は
-  渡されないキーを触らない）。比較表 `/candidates/compare` と業者詳細の「計画に対する目安」は
-  設定 `buildPlan`（`src/lib/research.ts` の `BuildPlan`: 階数・坪数レンジ・土地以外の予算）を
-  使う。土地の所在や資金の内訳は持たない（design.md §1）。調査内容そのものは実データなので
-  リポジトリに書かず、SQL を `seed.local/out/` に用意して所有者が流す（下の「本番 D1 への
-  一回きりの書き込み」と同じ）
-- 入力の快適さの約束（2026-09-24）: フォームの書きかけは `src/components/useFormDraft.ts` で端末の
-  localStorage に残す（鍵は `src/lib/drafts.ts` の `draftKey`。既存の行は開いた時点の updatedAt を
-  文脈に入れ、相手の保存後に古い下書きで上書きしない）。閉じるときに確認ダイアログは出さない。
-  同時編集は `src/server/repository/stale.ts`: 見学・動画・予定・業者の保存は `expectedUpdatedAt`
-  を受け、`WHERE updated_at = ?` で 0 行なら `{ conflict: true }` を返す（上書きしない）。保存
-  ボタンは `.form-actions`（Drawer の下端に固定）で包む。Enter で確定する欄は
-  `e.nativeEvent.isComposing` を見て、日本語入力の変換確定では動かさない
-- 記録の分析（`/analysis`）の集計は `src/lib/analysis.ts`（純粋関数）。`src/server/analysis.ts` が
-  D1 から読んで集計まで済ませ、画面には結果だけを返す。外部 API（LLM など）には送らない（所有者の
-  選択、2026-09-23）。言葉の区切りは `Intl.Segmenter('ja')`。月ごとのグラフの 2 色は styles.css の
-  `--sumai-series-*`（dataviz の検証済み。明暗で別の値）
-- 設定ページの「利用者」の「最後に使った日時」は settings テーブルの `lastSeen:<メール>`（ISO 8601。
-  キーは `src/lib/usage.ts` の `lastSeenKey`）。`src/start.ts` の認証ミドルウェアが `recordSeen`
-  （`src/server/activity.ts`）を呼び、`cloudflare:workers` の `waitUntil` で応答を待たせずに書く。
-  同じ人は `SEEN_INTERVAL_MS`（10 分）に 1 回だけ（isolate ごとのメモリで間引く）。Access のログイン
-  時刻ではない（セッションは約 1 ヶ月で、ログインの瞬間はアプリから見えない）。「環境」の使用量は
-  `src/server/repository/usage.ts`: D1 の大きさはクエリ結果の `meta.size_after`（`PRAGMA page_count`
-  は D1 で使えない）、R2 は `list` を最大 10 ページ。建築予定地（`homeAreas`）は画面から変えない
-  （読み取り専用。変えるなら `seed.local/out/` の SQL）
-- 区画シミュレーター（`/site`）の保存値は設定 `sitePlan`（`src/lib/sitePlan.ts` の `SitePlan`）。
-  土地を長方形で近似した寸法・区画・建物・法規の目安の数値だけを持ち、所在地・地番・座標は
-  持たない（コード・テスト・コミットメッセージにも書かない）。法規の数値（建ぺい率・容積率・
-  境界からの離れ・道路の幅員・準防火の有無・筆界）はすべて画面で変えられる「目安」で、確定値として
-  扱わない。判定の前提は神奈川県の県所管区域の住宅（`src/lib/sitePlan.ts` 冒頭のコメント）。
-  路地状部分は建築基準法 43 条の 2m だけで、県条例に「長さ 20m 超で 3m」のような上乗せは無い
-  （東京都安全条例と混同しない）。実際の土地の寸法・隣地（名前・位置・高さ）は `seed.local/out/`
-  の SQL で所有者が流す。日当たりの計算（`src/lib/sun.ts`）は真太陽時で、均時差・経度・大気差は入れない。
-  3D 表示は `src/lib/site3d.ts`（シーンの中身・純粋関数）と `src/components/site/SiteView3D.tsx`
-  （three.js の描画・値や視点が変わったときだけ描く）。`site.tsx` は `import.meta.env.SSR` のとき
-  3D を読み込まない（three.js を Worker のバンドルに入れない。入れると gzip で +250KiB）
-- 見た目のトークンは `src/theme.ts`（Mantine テーマ・配色）と `src/styles.css`（`--sumai-*` の
-  CSS 変数）に集約。コントラストは本文 4.5:1・UI 部品（ボーダー等）3:1 を満たすこと
-- 業者のお知らせ取得（`src/lib/news/`）は純粋関数のみ: `rss.ts`（RSS 2.0 の `<item>` 抽出）・
-  `htmlList.ts`（`<li>` お知らせ一覧の抽出）・`eventDate.ts`（タイトル/要約からイベント日程を
-  抽出）・`text.ts`（タグ除去・長さ制限）に加えて、`url.ts`（取得してよい URL かの判定。https
-  限定・ユーザー情報や非既定ポートを拒否・ローカル/内部ホストやリテラル IP を拒否。Workers の
-  `fetch` はそもそもプライベートネットワークへ経路を持たないため多層防御の一つ）と
-  `charset.ts`（`Content-Type` の `charset` → 本文先頭 2KB の `<meta charset>` sniff → 既定
-  `utf-8` の順で文字コードを判定。html-list の古いサイトは Shift_JIS 等を返しうる）
-- 外向き fetch（業者のお知らせ・業者サイトのファビコン/代表者写真・情報源の YouTube
-  チャンネルページ取得の 4 経路）は全て `src/server/safeFetch.ts` の
-  `fetchWithGuardedRedirects` を経由する。`redirect: 'manual'` で受けた 3xx の `Location` を
-  「今いる URL」基準で解決し、hop ごとに `isAllowedRemoteUrl`（`src/lib/news/url.ts`）を
-  再判定してから次の hop を fetch する（最大 3 hop。許可されない hop 先には fetch しない）。
-  新しく外向き fetch を足すときはここを通すこと（自前で `fetch` を直接呼ばない）
-- 実際に fetch するのは `src/server/newsFetcher.ts`。1 ソースあたり 10 秒タイムアウト
-  （`AbortSignal.timeout`）・1 MB 上限（`content-length` があれば先に弾き、無ければストリームを
-  数えながら超過時点で打ち切る）。業者ごとに try/catch で独立させ、1 社の失敗（想定内のエラーも
-  想定外の例外も）が他の業者の取得を止めない。取得結果の記録
-  （`src/server/repository/news.ts` の `markNewsFetched`）は成功/失敗どちらでも
-  `vendors.news_fetched_at`/`news_fetch_error` だけを更新し、**`vendors.updated_at` は
-  動かさない**（動かすと毎朝の自動取得のたびにホームの「最近の更新」フィードへ業者が
-  浮上してしまうため）
-- `src/server.ts` が Worker の自前エントリ（`wrangler.jsonc` の `main` はここを指す。
-  TanStack Start 既定の `@tanstack/react-start/server-entry` を `main` から直接指す構成では
-  ない）。`createServerEntry({ fetch: createStartHandler(defaultStreamHandler) })` の結果を
-  スプレッドして `fetch` はそのまま使い、`scheduled` だけを足して Cron
-  （`wrangler.jsonc` の `triggers.crons` = `"0 21 * * *"` = 06:00 JST）から
-  `fetchAllVendorNews` を呼ぶ。`scheduled` は `ctx.waitUntil` の中で実行し、その中で拾い
-  切れなかった例外も外へは投げない（投げても誰も拾わない）
-- `wrangler.jsonc` の `routes`（カスタムドメイン `sumai-log.app`）は、所有者がダッシュボードで
-  アタッチした実体を設定ファイル側にも反映したもの（ダッシュボードでの操作が先、設定ファイルは
-  後追いで正本を揃える）。`main`・`triggers`・`routes` のいずれかを変えたら `npm run build` の
-  後に `dist/server/wrangler.json` で反映されているか確認する
-- 本番 D1 への一回きりの書き込み（初期データ投入・業者の代表者名やお知らせ URL の設定など）は
-  Claude からは実行しない（本番書き込みは通らない）。SQL ファイルを `seed.local/out/`
-  （gitignore 済み。コミットしない）に用意し、所有者が
-  `npx wrangler d1 execute sumai-log --remote --file <path> -y` で実行する
+- Side effects go in `src/server/`, the DB in `src/db/`, the UI in `src/components/` and `src/routes/`
+- D1 access is split per table into `src/server/repository/<domain>.ts` (candidates/places/events/
+  visits/photos/comments/settings/geocode/videos/tags/feed). `src/server/repository.ts` is only a
+  re-export, `export * from './repository/index'`, so existing import paths do not have to change
+- The wrappers of mutating server functions (those that statically import `getRequest` etc. with
+  `createServerFn`) depend on the virtual modules provided by the Vite plugin of TanStack Start,
+  so importing them from the plain workers tests (`vitest.workers.config.ts`, without the
+  TanStack Vite plugin) fails to resolve. Pure zod schemas that do not need D1 either are
+  extracted into a separate file like `src/server/events.schema.ts`, and `*.worker-test.ts`
+  imports that file directly and tests only the schema (`src/server/events.ts` only re-exports
+  the same names, and the public import path does not change)
+- The R2 cleanup when a photo upload fails midway is `cleanupFailedUpload` in
+  `src/server/storage.ts`
+- Dates are TEXT in ISO-8601, amounts are integers in yen, areas are decimals, ids are text
+  (`crypto.randomUUID()`)
+- Mobile first. Bottom tabs + FAB + full-screen Drawer. Desktop uses a left navigation. The mobile
+  header has only 2 items, 「お知らせ」 (vendor news) and 「…（その他）」 (… (More)), and the
+  remaining pages that are not in the bottom tabs go into `MoreMenu` (with names) in
+  `AppLayout.tsx` (do not line up unlabelled icons). Detail pages pass `BackButton` to `back` of
+  `PageShell` so that the user can return to the parent page (「候補」 (Candidates), 「記録」
+  (Records), 「地図」 (Map), 「用語集」 (Glossary) = nouns). The wording of the add button (FAB) is
+  unified as object + verb, like 「〜を追加」 (Add …) and 「記録を書く」 (Write a record). For a
+  value that is not registered, do not show 「—」; remove the whole row
+  (SHIG 6, 37, 47, 59, 60. The overall review of 2026-09-25)
+- For a place that cannot be shown on the map, write "the reason it cannot be shown" on the screen
+  (do not show an empty frame)
+- Photos are downscaled on the device before being sent (JPEG, 1600px for display and 400px for
+  the thumbnail). R2 is a private bucket, and delivery is streamed through the Worker after
+  authentication. The only keys that may be handled are those that passed `isManagedPhotoKey` in
+  `src/lib/photos.ts`
+- The R2 keys of vendor images (the representative's portrait photo and the favicon) carry a
+  version in the form `vendors/{id}/…-{stamp}` (`{stamp}` is a value that changes on every
+  replacement). Unlike visit photos (`photos/{visitId}/{photoId}-…`), the vendor-side keys were
+  originally deterministic from `vendorId` alone, so the same URL kept being cached for a long
+  time with `cache-control: immutable` even after a replacement, and there was a bug where the
+  old image kept being shown even after re-uploading (solved by giving the key a version)
+- `vendors.favicon_source` (`'auto' | 'manual'`. Nullable for backward compatibility with existing
+  rows; null is treated as `'auto'`) holds the origin of favicon_key. A manual upload
+  (`uploadVendorFaviconCore`) from 「サイトのアイコン」 (Site icon) in the vendor form makes it
+  `'manual'`, and from then on the non-force automatic fetch (the default call of
+  `refreshAllVendorFavicons` and the inline fetch on save in `saveVendor`) skips this vendor and
+  does not overwrite it (it is the alternative path for servers that uniformly reject access
+  from Cloudflare, so it must not lose to the automatic fetch). 「取り直す」 (Fetch again) on the
+  settings screen (`force: true`) is not bound by this and also includes vendors with a manual
+  upload. Deletion (`deleteVendorFaviconObjects`) sets both `favicon_key`/`favicon_source` back
+  to NULL
+- The date and time of an event (`startsAt`) is `YYYY-MM-DD` when all-day and
+  `YYYY-MM-DDTHH:MM:00+09:00` when it has a time (the offset of Japan time is stated
+  explicitly). The date key is the first 10 characters (`src/lib/calendar.ts`). Do not convert to
+  a Date object
+- `normalizeAddress` (absorbs notation variants of addresses) and `normalizeSocialUrls`
+  (normalisation of SNS URLs) have the same implementation in both `src/lib/` (`geocode.ts` /
+  `social.ts`) and `scripts/lib/normalize.mjs` (imported and used by `seed.mjs`). Do not change
+  only one of them (the seed side is plain `.mjs` and cannot import TS, so the duplication is
+  deliberate). The match is pinned by `src/lib/normalize-parity.test.ts`, which runs the same
+  cases through both implementations. When fixing, fix both and keep this test green
+- The vendor research memo (`vendors.research`, JSON. The shape is `VendorResearch` in
+  `src/lib/research.ts`) is written only by `saveVendorResearch` (`src/server/research.ts`). The
+  vendor form (`vendorInput`) does not have this column, so saving other fields of the vendor
+  does not erase the research memo (`upsertVendor` does not touch keys that are not passed). The
+  comparison table `/candidates/compare` and 「計画に対する目安」 (Rough guide against the plan) in
+  the vendor detail use the setting `buildPlan` (`BuildPlan` in `src/lib/research.ts`: number of
+  floors, floor area range in tsubo, budget excluding land). It does not hold the location of the
+  land or the breakdown of the funds (design.md §1). The research content itself is real data, so
+  it is not written in the repository; the SQL is prepared in `seed.local/out/` and the owner
+  runs it (same as "one-off writes to the production D1" below)
+- Agreements on input comfort (2026-09-24): an unfinished form is kept in the localStorage of the
+  device by `src/components/useFormDraft.ts` (the key is `draftKey` in `src/lib/drafts.ts`. For
+  an existing row, the updatedAt at the time it was opened is put into the context, so that an
+  old draft does not overwrite after the other person saved). No confirmation dialog is shown
+  when closing. Concurrent editing is `src/server/repository/stale.ts`: saving a visit, video,
+  event or vendor receives `expectedUpdatedAt` and returns `{ conflict: true }` when
+  `WHERE updated_at = ?` matches 0 rows (it does not overwrite). The save button is wrapped in
+  `.form-actions` (fixed to the bottom edge of the Drawer). Fields that confirm with Enter look at
+  `e.nativeEvent.isComposing` and do not act on the conversion commit of Japanese input
+- The aggregation for the analysis of records (`/analysis`) is `src/lib/analysis.ts` (pure
+  functions). `src/server/analysis.ts` reads from D1 and finishes the aggregation, and returns
+  only the result to the screen. Nothing is sent to an external API (LLM etc.) (the owner's
+  choice, 2026-09-23). Word segmentation is `Intl.Segmenter('ja')`. The 2 colours of the monthly
+  chart are `--sumai-series-*` in styles.css (validated with dataviz. Different values for light
+  and dark)
+- 「最後に使った日時」 (Last used) under 「利用者」 (Users) on the settings page is `lastSeen:<email>`
+  in the settings table (ISO 8601. The key is `lastSeenKey` in `src/lib/usage.ts`). The
+  authentication middleware in `src/start.ts` calls `recordSeen` (`src/server/activity.ts`) and
+  writes with `waitUntil` of `cloudflare:workers` without making the response wait. The same
+  person is recorded only once per `SEEN_INTERVAL_MS` (10 minutes) (thinned out with per-isolate
+  memory). It is not the login time of Access (the session lasts about 1 month, and the moment of
+  login is not visible from the app). The usage under 「環境」 (Environment) is
+  `src/server/repository/usage.ts`: the size of D1 is `meta.size_after` of a query result
+  (`PRAGMA page_count` cannot be used on D1), and R2 is `list` for at most 10 pages. The planned
+  building site (`homeAreas`) is not changed from the screen (read-only. To change it, use SQL in
+  `seed.local/out/`)
+- The saved value of the site plan simulator (`/site`) is the setting `sitePlan` (`SitePlan` in
+  `src/lib/sitePlan.ts`). It holds only the dimensions of the land approximated as a rectangle,
+  the plots, the building and the numbers of the regulatory rough guides, and it does not hold
+  the location, the lot number or coordinates (do not write them in code, tests or commit
+  messages either). The regulatory numbers (building coverage ratio (建ぺい率), floor area ratio
+  (容積率), setback from the boundary (境界からの離れ), road width (道路の幅員), whether it is a
+  quasi-fire-prevention district (準防火), parcel boundary (筆界)) are all "rough guides" that can be
+  changed on the screen, and are not treated as confirmed values. The premise of the judgment is
+  a house in the area under the jurisdiction of Kanagawa Prefecture (the comment at the top of
+  `src/lib/sitePlan.ts`). The flagpole portion (路地状部分) is only the 2m of Article 43 of the
+  Building Standards Act (建築基準法), and the prefectural ordinance (県条例) has no additional
+  requirement like "3m when longer than 20m" (do not confuse it with the Tokyo Metropolitan
+  Building Safety Ordinance (東京都安全条例)). The actual dimensions of the land and the
+  neighbouring lots (name, position, height) are run by the owner with SQL in `seed.local/out/`.
+  The sunlight calculation (`src/lib/sun.ts`) uses true solar time (真太陽時) and does not include
+  the equation of time (均時差), the longitude or atmospheric refraction (大気差).
+  The 3D view is `src/lib/site3d.ts` (the content of the scene, pure functions) and
+  `src/components/site/SiteView3D.tsx` (rendering with three.js; draws only when a value or the
+  viewpoint changed). `site.tsx` does not load 3D when `import.meta.env.SSR` (do not put
+  three.js into the Worker bundle. Putting it in adds +250KiB gzipped)
+- Visual tokens are centralised in `src/theme.ts` (Mantine theme and colour scheme) and
+  `src/styles.css` (the `--sumai-*` CSS variables). Contrast must satisfy 4.5:1 for body text and
+  3:1 for UI parts (borders etc.)
+- Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (extraction of `<item>`
+  of RSS 2.0), `htmlList.ts` (extraction of a `<li>` news list), `eventDate.ts` (extraction of
+  the event date from the title/summary), `text.ts` (tag removal and length limit), and in
+  addition `url.ts` (decides whether a URL may be fetched. https only; rejects user info and
+  non-default ports; rejects local/internal hosts and literal IPs. `fetch` of Workers has no
+  route to private networks in the first place, so this is one layer of defence in depth) and
+  `charset.ts` (decides the character encoding in the order: `charset` of `Content-Type` → sniff
+  of `<meta charset>` in the first 2KB of the body → default `utf-8`. Old html-list sites can
+  return Shift_JIS etc.)
+- Outbound fetch (4 paths: vendor news, the favicon / representative photo of the vendor site,
+  and fetching the YouTube channel page of a source) all goes through
+  `fetchWithGuardedRedirects` in `src/server/safeFetch.ts`. It resolves the `Location` of a 3xx
+  received with `redirect: 'manual'` relative to "the current URL", and re-evaluates
+  `isAllowedRemoteUrl` (`src/lib/news/url.ts`) for every hop before fetching the next hop (at
+  most 3 hops. It does not fetch a hop destination that is not allowed).
+  When adding a new outbound fetch, route it through here (do not call `fetch` directly yourself)
+- What actually fetches is `src/server/newsFetcher.ts`. A 10 second timeout per source
+  (`AbortSignal.timeout`) and a 1 MB limit (when `content-length` exists it is rejected up
+  front; when it does not, the stream is counted and cut off at the moment it exceeds). Each
+  vendor is made independent with try/catch, and the failure of 1 vendor (expected errors as well
+  as unexpected exceptions) does not stop the fetch for other vendors. Recording the fetch result
+  (`markNewsFetched` in `src/server/repository/news.ts`) updates only
+  `vendors.news_fetched_at`/`news_fetch_error` on both success and failure, and **does not move
+  `vendors.updated_at`** (moving it would make the vendor surface in the 「最近の更新」 (Recent
+  updates) feed on the home screen on every automatic fetch each morning)
+- `src/server.ts` is the Worker's own entry (`main` in `wrangler.jsonc` points here. It is not a
+  configuration where `main` points directly at the TanStack Start default
+  `@tanstack/react-start/server-entry`). The result of
+  `createServerEntry({ fetch: createStartHandler(defaultStreamHandler) })` is spread, `fetch` is
+  used as it is, and only `scheduled` is added, which calls `fetchAllVendorNews` from Cron
+  (`triggers.crons` in `wrangler.jsonc` = `"0 21 * * *"` = 06:00 JST). `scheduled` runs inside
+  `ctx.waitUntil`, and an exception that could not be caught inside it is not thrown to the
+  outside either (nobody would catch it even if thrown)
+- `routes` in `wrangler.jsonc` (the custom domain `sumai-log.app`) reflects, on the configuration
+  file side as well, the entity that the owner attached in the dashboard (the operation in the
+  dashboard comes first, and the configuration file follows afterwards to align the source of
+  truth). When any of `main`, `triggers` or `routes` is changed, check in
+  `dist/server/wrangler.json` after `npm run build` that it is reflected
+- One-off writes to the production D1 (initial data load, setting a vendor's representative name
+  or news URL, etc.) are not executed from Claude (production writes do not go through). Prepare
+  the SQL file in `seed.local/out/` (gitignored. Do not commit it), and the owner executes it with
+  `npx wrangler d1 execute sumai-log --remote --file <path> -y`
 
-## スキーマを変えたら
+## When the schema changed
 
 ```bash
 npm run db:generate
 npm run db:migrate:local
-npm run cf-typegen   # バインディングや vars を増やしたとき
+npm run cf-typegen   # when bindings or vars were added
 ```
 
-## 完了の基準
+## Language
 
-`npm run format:check` `typecheck` `test:coverage` `test:server` `build` `check:pii` がすべて green。
-認証に触れたら拒否側（JWT なし／署名不正／allowlist 外／本番での dev 経路）で 403 を確認する。
+- Code, comments, test titles, log messages and CLI output of scripts are written in English.
+- Japanese is used only for text shown to the user in the app (UI strings, messages that reach the screen) and for content under `src/content/`.
+- When a comment must name a UI label, quote the Japanese label and add an English gloss.
+- Commit messages and PR descriptions follow the existing convention of this repository.
 
-## 参照
+## Completion criteria
 
-仕様: `docs/superpowers/specs/2026-09-15-sumai-log-design.md`
-業者のお知らせ取得の仕様: `docs/superpowers/specs/2026-09-16-vendor-news-design.md`
+`npm run format:check` `typecheck` `test:coverage` `test:server` `build` `check:pii` are all green.
+When authentication was touched, confirm 403 on the rejecting side (no JWT / invalid signature / outside the allowlist / the dev path in production).
+
+## References
+
+Spec: `docs/superpowers/specs/2026-09-15-sumai-log-design.md`
+Spec of vendor news fetching: `docs/superpowers/specs/2026-09-16-vendor-news-design.md`

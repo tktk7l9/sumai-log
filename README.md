@@ -114,18 +114,18 @@ npm run dev                      # http://localhost:3000
 
 ## よく使うコマンド
 
-| コマンド                          | 内容                                                   |
-| --------------------------------- | ------------------------------------------------------ |
-| `npm run dev`                     | 開発サーバー                                           |
-| `npm run typecheck`               | 型チェック                                             |
-| `npm run test:coverage`           | 純粋関数のテスト＋カバレッジ（`src/lib` は 100% 必須） |
-| `npm run test:server`             | 実 Workers ランタイム＋D1 に対するサーバー層のテスト   |
-| `npm run format` / `format:check` | Prettier 整形／整形チェック                            |
-| `npm run check:pii`               | 実データの混入チェック（照合元は `.dev.vars`）         |
-| `npm run db:generate`             | `src/db/schema.ts` からマイグレーション生成            |
-| `npm run db:migrate:local`        | ローカル D1 へ適用                                     |
-| `npm run db:migrate:remote`       | 本番 D1 へ適用                                         |
-| `npm run deploy`                  | ビルドしてデプロイ                                     |
+| コマンド                          | 内容                                                       |
+| --------------------------------- | ---------------------------------------------------------- |
+| `npm run dev`                     | 開発サーバー                                               |
+| `npm run typecheck`               | 型チェック                                                 |
+| `npm run test:coverage`           | 純粋関数のテスト＋カバレッジ（`src/lib` は 100% 必須）     |
+| `npm run test:server`             | 実 Workers ランタイム＋D1 に対するサーバー層のテスト       |
+| `npm run format` / `format:check` | Prettier 整形／整形チェック                                |
+| `npm run check:pii`               | 実データの混入チェック（語は `.dev.vars`・座標は形で検出） |
+| `npm run db:generate`             | `src/db/schema.ts` からマイグレーション生成                |
+| `npm run db:migrate:local`        | ローカル D1 へ適用                                         |
+| `npm run db:migrate:remote`       | 本番 D1 へ適用                                             |
+| `npm run deploy`                  | ビルドしてデプロイ                                         |
 
 ### メール受信のローカル確認
 
