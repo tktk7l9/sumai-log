@@ -7,11 +7,11 @@
     </linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="url(#bg)" />
-  <!-- 家: 屋根と煙突は少し落ち着いたクリーム、壁は明るいクリーム -->
+  <!-- House: the roof and chimney are a slightly muted cream, the walls a bright cream -->
   <rect x="41" y="17" width="5" height="10" rx="1" fill="#f1e4d4" />
   <polygon points="32,11 9,32 55,32" fill="#f1e4d4" />
   <rect x="16" y="29" width="32" height="24" rx="2.5" fill="#faf7f2" />
-  <!-- 記録: 家の中のチェックリスト（二人の記録） -->
+  <!-- Records: a checklist inside the house (the two people's records) -->
   <circle cx="23" cy="36.5" r="1.9" fill="#ca7654" />
   <path d="M28 36.5 H41" stroke="#ca7654" stroke-width="2.6" stroke-linecap="round" />
   <circle cx="23" cy="42.5" r="1.9" fill="#ca7654" />
