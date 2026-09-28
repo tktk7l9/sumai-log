@@ -107,6 +107,19 @@ function Page() {
   const [editingResearch, setEditingResearch] = useState(false)
   const pendingDeletes = usePendingDeletes()
   const spec = vendorSpecHalves(vendor)
+  // With nothing registered the facts card would be an empty frame; leave it out (SHIG 1)
+  const hasFacts = Boolean(
+    vendor.hq ||
+    vendor.representative ||
+    vendor.serviceAreas.length ||
+    Object.values(spec).some((v) => v !== null) ||
+    vendor.pricePerTsuboMin != null ||
+    vendor.pricePerTsuboMax != null ||
+    vendor.structure ||
+    vendor.websiteUrl ||
+    vendor.sourceUrl ||
+    vendor.newsEmailDomain,
+  )
   // Hidden at once while its deletion can still be undone
   const research = pendingDeletes.has(researchDeleteId(vendor.id)) ? null : vendor.research
 
@@ -159,84 +172,91 @@ function Page() {
         </Group>
       }
     >
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          {vendor.hq ? <Row label="本社" value={vendor.hq} /> : null}
-          {vendor.representative ? (
-            <Group justify="space-between" wrap="nowrap" align="center">
-              <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
-                代表者
-              </Text>
-              <Group gap="sm" wrap="nowrap" align="center">
-                {vendor.representativePhotoKey ? (
-                  <Avatar
-                    src={photoUrl(
-                      representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey),
-                    )}
-                    size={96}
-                    radius="50%"
-                    alt=""
-                  />
-                ) : null}
-                <Text size="sm" ta="right">
-                  {vendor.representative}
+      {hasFacts ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {vendor.hq ? <Row label="本社" value={vendor.hq} /> : null}
+            {vendor.representative ? (
+              <Group justify="space-between" wrap="nowrap" align="center">
+                <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
+                  代表者
                 </Text>
+                <Group gap="sm" wrap="nowrap" align="center">
+                  {vendor.representativePhotoKey ? (
+                    <Avatar
+                      src={photoUrl(
+                        representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey),
+                      )}
+                      size={96}
+                      radius="50%"
+                      alt=""
+                    />
+                  ) : null}
+                  <Text size="sm" ta="right">
+                    {vendor.representative}
+                  </Text>
+                </Group>
               </Group>
-            </Group>
-          ) : null}
-          {vendor.serviceAreas.length ? (
-            <Row label="施工エリア" value={vendor.serviceAreas.join('、')} />
-          ) : null}
-          <SpecRow
-            left={
-              spec.ua ? { label: <MetricLabel metric="ua" text="UA値" />, value: spec.ua } : null
-            }
-            right={spec.c ? { label: <MetricLabel metric="c" text="C値" />, value: spec.c } : null}
-          />
-          <SpecRow
-            left={
-              spec.seismic
-                ? { label: <MetricLabel metric="seismic" text="耐震等級" />, value: spec.seismic }
-                : null
-            }
-            right={
-              spec.longTerm
-                ? { label: <MetricLabel metric="longTerm" text="長期優良" />, value: spec.longTerm }
-                : null
-            }
-          />
-          {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
-            <Row
-              label="坪単価"
-              value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
-            />
-          ) : null}
-          {vendor.structure ? <Row label="構造" value={vendor.structure} /> : null}
-          {vendor.websiteUrl ? (
-            <Row
-              label="公式"
-              value={
-                <Anchor href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={14} aria-hidden /> 開く
-                </Anchor>
+            ) : null}
+            {vendor.serviceAreas.length ? (
+              <Row label="施工エリア" value={vendor.serviceAreas.join('、')} />
+            ) : null}
+            <SpecRow
+              left={
+                spec.ua ? { label: <MetricLabel metric="ua" text="UA値" />, value: spec.ua } : null
+              }
+              right={
+                spec.c ? { label: <MetricLabel metric="c" text="C値" />, value: spec.c } : null
               }
             />
-          ) : null}
-          {vendor.sourceUrl ? (
-            <Row
-              label="参照 URL"
-              value={
-                <Anchor href={vendor.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={14} aria-hidden /> 開く
-                </Anchor>
+            <SpecRow
+              left={
+                spec.seismic
+                  ? { label: <MetricLabel metric="seismic" text="耐震等級" />, value: spec.seismic }
+                  : null
+              }
+              right={
+                spec.longTerm
+                  ? {
+                      label: <MetricLabel metric="longTerm" text="長期優良" />,
+                      value: spec.longTerm,
+                    }
+                  : null
               }
             />
-          ) : null}
-          {vendor.newsEmailDomain ? (
-            <Row label="メール差出人" value={vendor.newsEmailDomain.split(',').join(', ')} />
-          ) : null}
-        </Stack>
-      </Card>
+            {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
+              <Row
+                label="坪単価"
+                value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
+              />
+            ) : null}
+            {vendor.structure ? <Row label="構造" value={vendor.structure} /> : null}
+            {vendor.websiteUrl ? (
+              <Row
+                label="公式"
+                value={
+                  <Anchor href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={14} aria-hidden /> 開く
+                  </Anchor>
+                }
+              />
+            ) : null}
+            {vendor.sourceUrl ? (
+              <Row
+                label="参照 URL"
+                value={
+                  <Anchor href={vendor.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={14} aria-hidden /> 開く
+                  </Anchor>
+                }
+              />
+            ) : null}
+            {vendor.newsEmailDomain ? (
+              <Row label="メール差出人" value={vendor.newsEmailDomain.split(',').join(', ')} />
+            ) : null}
+          </Stack>
+        </Card>
+      ) : null}
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
 
       {/* With a building plan (settings), show the building and total cost estimate at this vendor's price per tsubo */}
