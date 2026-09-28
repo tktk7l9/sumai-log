@@ -217,7 +217,7 @@ function Page() {
             label="タグ"
             value={tagValues}
             onChange={setTagValues}
-            placeholder="タグを入力して Enter"
+            placeholder="タグを追加"
             maxLength={30}
           />
           <Text size="xs" c="dimmed">
