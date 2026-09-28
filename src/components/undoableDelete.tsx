@@ -1,9 +1,10 @@
 import { Button, Group, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { type FocusEvent, type PointerEvent, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 
 import { UNDO_WINDOW_MS, createDeferredQueue } from '../lib/deferredDelete'
 import { type FetchLike, withKeepalive } from '../lib/keepalive'
+import { attentionHandlers, focusUndo } from './undoAttention'
 
 /**
  * Delete without a confirm dialog, with "元に戻す" (Undo) in the notification (SHIG 57, 54).
@@ -119,49 +120,29 @@ export function deleteWithUndo({
  * take the delete back at once (SHIG 54, 94)
  */
 function focusOnMount(button: HTMLButtonElement | null) {
-  button?.focus({ preventScroll: true })
+  if (!button) return
+  focusUndo(button, {
+    activeElement: () => document.activeElement,
+    onUserInput: (listener) => {
+      const events = ['keydown', 'pointerdown'] as const
+      events.forEach((type) => window.addEventListener(type, listener, true))
+      return () => events.forEach((type) => window.removeEventListener(type, listener, true))
+    },
+    setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+  })
 }
 
-/**
- * Pause the delete while a mouse is over the notification or keyboard focus is inside it, and
- * start a new window when both have left. Touch taps and the programmatic focus after a click
- * do not count (not :focus-visible), otherwise the delete would wait until the next tap
- * elsewhere
- */
+/** Pause the delete while the notification is hovered or keyboard-focused (SHIG 54) */
 function pauseWhileAttended(id: string) {
-  let hovered = false
-  let focused = false
-  const update = () => {
-    if (hovered || focused) queue.pause(id)
-    else queue.resume(id)
-  }
-  return {
-    onPointerEnter: (e: PointerEvent<HTMLElement>) => {
-      if (e.pointerType !== 'mouse') return
-      hovered = true
-      update()
-    },
-    onPointerLeave: (e: PointerEvent<HTMLElement>) => {
-      if (e.pointerType !== 'mouse') return
-      hovered = false
-      update()
-    },
-    onFocusCapture: (e: FocusEvent<HTMLElement>) => {
-      focused = isFocusVisible(e.target)
-      update()
-    },
-    onBlurCapture: (e: FocusEvent<HTMLElement>) => {
-      const next = e.relatedTarget
-      if (next instanceof Node && e.currentTarget.contains(next)) return
-      focused = false
-      update()
-    },
-  }
+  return attentionHandlers(
+    (attended) => (attended ? queue.pause(id) : queue.resume(id)),
+    isFocusVisible,
+  )
 }
 
-function isFocusVisible(el: Element): boolean {
+function isFocusVisible(el: unknown): boolean {
   try {
-    return el.matches(':focus-visible')
+    return el instanceof Element && el.matches(':focus-visible')
   } catch {
     return false
   }

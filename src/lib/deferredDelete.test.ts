@@ -229,7 +229,15 @@ describe('hidePendingOnHome', () => {
       { id: 'n1', vendorId: 'v1' },
       { id: 'n2', vendorId: 'v2' },
     ],
-    feed: [{ id: 'visit1' }, { id: 'v1' }, { id: 'c1' }],
+    feed: [
+      { id: 'visit1', href: { params: { id: 'visit1' } } },
+      { id: 'v1', href: { params: { id: 'v1' } } },
+      { id: 'c1', href: {} },
+      // A comment on vendor v1 and a photo of visit visit2: deleted with their parent
+      { id: 'c2', href: { params: { id: 'v1' } } },
+      { id: 'photo1', href: { params: { id: 'visit2' } } },
+      { id: 'c3', href: { params: { id: 'p9' } } },
+    ],
     other: 'kept',
   }
 
@@ -242,7 +250,12 @@ describe('hidePendingOnHome', () => {
     expect(out.agenda.map((e) => e.id)).toEqual(['e2'])
     expect(out.pending.map((e) => e.id)).toEqual(['e3'])
     expect(out.news.map((n) => n.id)).toEqual(['n2'])
-    expect(out.feed.map((f) => f.id)).toEqual(['visit1'])
+    expect(out.feed.map((f) => f.id)).toEqual(['visit1', 'photo1', 'c3'])
     expect(out.other).toBe('kept')
+  })
+
+  it('hides feed items that link to a pending parent (comments, photos)', () => {
+    const out = hidePendingOnHome(data, new Set(['visit2', 'p9']))
+    expect(out.feed.map((f) => f.id)).toEqual(['visit1', 'v1', 'c1', 'c2'])
   })
 })

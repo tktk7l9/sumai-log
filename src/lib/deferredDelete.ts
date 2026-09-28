@@ -106,14 +106,17 @@ export function createDeferredQueue(delayMs: number, timer: Timer) {
 /**
  * The home screen's data without what is being deleted, the same as the lists hide it:
  * events (agenda and "記録を書きませんか"), recent-feed items, and the vendor news of a vendor
- * being deleted. Returns the input as is when nothing is pending
+ * being deleted. A feed item whose link points at a pending id (a comment on a vendor, a photo
+ * of a visit) goes too: the server deletes it with its parent, so it would otherwise stay until
+ * the commit and then vanish, and lead to a page that is about to be gone.
+ * Returns the input as is when nothing is pending
  */
 export function hidePendingOnHome<
   T extends {
     agenda: readonly { id: string }[]
     pending: readonly { id: string }[]
     news: readonly { vendorId: string | null }[]
-    feed: readonly { id: string }[]
+    feed: readonly { id: string; href: { params?: Record<string, string> } }[]
   },
 >(data: T, pendingIds: ReadonlySet<string>): T {
   if (pendingIds.size === 0) return data
@@ -123,6 +126,8 @@ export function hidePendingOnHome<
     agenda: data.agenda.filter(keep),
     pending: data.pending.filter(keep),
     news: data.news.filter((n) => n.vendorId === null || !pendingIds.has(n.vendorId)),
-    feed: data.feed.filter(keep),
+    feed: data.feed.filter(
+      (f) => keep(f) && !(f.href.params?.id && pendingIds.has(f.href.params.id)),
+    ),
   }
 }

@@ -162,9 +162,10 @@ function Page() {
               非表示:
             </Text>
             {hiddenVendors.map((v) => (
+              // size sm = 28px tall; xs (23px) is under 7mm, the same as the button next to it (SHIG 78)
               <Chip
                 key={v.id}
-                size="xs"
+                size="sm"
                 checked={false}
                 onChange={() => unhide(v.id)}
                 aria-label={`${v.name} を表示する`}
