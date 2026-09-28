@@ -14,7 +14,14 @@ export type Timer = {
   clear: (handle: unknown) => void
 }
 
-type Entry = { handle: unknown; commit: () => Promise<unknown> } | { handle: null; commit: null }
+/**
+ * waiting: the timer runs. paused: the notification is hovered or focused, no timer.
+ * running: the commit is in flight, no longer cancellable
+ */
+type Entry =
+  | { state: 'waiting'; handle: unknown; commit: () => Promise<unknown> }
+  | { state: 'paused'; commit: () => Promise<unknown> }
+  | { state: 'running' }
 
 export function createDeferredQueue(delayMs: number, timer: Timer) {
   const entries = new Map<string, Entry>()
@@ -28,7 +35,7 @@ export function createDeferredQueue(delayMs: number, timer: Timer) {
 
   function run(id: string, commit: () => Promise<unknown>) {
     // Mark as in flight: still hidden, but no longer cancellable
-    entries.set(id, { handle: null, commit: null })
+    entries.set(id, { state: 'running' })
     void commit()
       .catch(() => {})
       .finally(() => {
@@ -42,15 +49,38 @@ export function createDeferredQueue(delayMs: number, timer: Timer) {
     schedule(id: string, commit: () => Promise<unknown>): boolean {
       if (entries.has(id)) return false
       const handle = timer.set(() => run(id, commit), delayMs)
-      entries.set(id, { handle, commit })
+      entries.set(id, { state: 'waiting', handle, commit })
       emit()
+      return true
+    },
+    /**
+     * Stop the clock while the user is looking at or has focused the notification (SHIG 54).
+     * The id stays hidden and undoable. Returns false when there is no running timer
+     */
+    pause(id: string): boolean {
+      const entry = entries.get(id)
+      if (!entry || entry.state !== 'waiting') return false
+      timer.clear(entry.handle)
+      entries.set(id, { state: 'paused', commit: entry.commit })
+      return true
+    },
+    /**
+     * Restart the clock with a whole new window (the same as Mantine's notifications do after a
+     * hover), so the user always gets the full time to decide. Returns false unless paused
+     */
+    resume(id: string): boolean {
+      const entry = entries.get(id)
+      if (!entry || entry.state !== 'paused') return false
+      const commit = entry.commit
+      const handle = timer.set(() => run(id, commit), delayMs)
+      entries.set(id, { state: 'waiting', handle, commit })
       return true
     },
     /** Undo. Returns false when there is nothing left to cancel */
     cancel(id: string): boolean {
       const entry = entries.get(id)
-      if (!entry || entry.commit === null) return false
-      timer.clear(entry.handle)
+      if (!entry || entry.state === 'running') return false
+      if (entry.state === 'waiting') timer.clear(entry.handle)
       entries.delete(id)
       emit()
       return true
@@ -58,8 +88,8 @@ export function createDeferredQueue(delayMs: number, timer: Timer) {
     /** Commit everything still waiting now (used when the page is being left) */
     flush() {
       for (const [id, entry] of [...entries]) {
-        if (entry.commit === null) continue
-        timer.clear(entry.handle)
+        if (entry.state === 'running') continue
+        if (entry.state === 'waiting') timer.clear(entry.handle)
         run(id, entry.commit)
       }
     },
@@ -70,5 +100,34 @@ export function createDeferredQueue(delayMs: number, timer: Timer) {
         listeners.delete(listener)
       }
     },
+  }
+}
+
+/**
+ * The home screen's data without what is being deleted, the same as the lists hide it:
+ * events (agenda and "記録を書きませんか"), recent-feed items, and the vendor news of a vendor
+ * being deleted. A feed item whose link points at a pending id (a comment on a vendor, a photo
+ * of a visit) goes too: the server deletes it with its parent, so it would otherwise stay until
+ * the commit and then vanish, and lead to a page that is about to be gone.
+ * Returns the input as is when nothing is pending
+ */
+export function hidePendingOnHome<
+  T extends {
+    agenda: readonly { id: string }[]
+    pending: readonly { id: string }[]
+    news: readonly { vendorId: string | null }[]
+    feed: readonly { id: string; href: { params?: Record<string, string> } }[]
+  },
+>(data: T, pendingIds: ReadonlySet<string>): T {
+  if (pendingIds.size === 0) return data
+  const keep = (item: { id: string }) => !pendingIds.has(item.id)
+  return {
+    ...data,
+    agenda: data.agenda.filter(keep),
+    pending: data.pending.filter(keep),
+    news: data.news.filter((n) => n.vendorId === null || !pendingIds.has(n.vendorId)),
+    feed: data.feed.filter(
+      (f) => keep(f) && !(f.href.params?.id && pendingIds.has(f.href.params.id)),
+    ),
   }
 }

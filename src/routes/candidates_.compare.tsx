@@ -162,9 +162,10 @@ function Page() {
               非表示:
             </Text>
             {hiddenVendors.map((v) => (
+              // size sm = 28px tall; xs (23px) is under 7mm, the same as the button next to it (SHIG 78)
               <Chip
                 key={v.id}
-                size="xs"
+                size="sm"
                 checked={false}
                 onChange={() => unhide(v.id)}
                 aria-label={`${v.name} を表示する`}
@@ -172,7 +173,8 @@ function Page() {
                 {v.name}
               </Chip>
             ))}
-            <Button variant="subtle" size="compact-xs" onClick={() => setHidden([])}>
+            {/* size xs = 30px tall; compact-xs (22px) is under 7mm (SHIG 78) */}
+            <Button variant="subtle" size="xs" onClick={() => setHidden([])}>
               すべて表示
             </Button>
           </Group>

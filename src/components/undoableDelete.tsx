@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 
 import { UNDO_WINDOW_MS, createDeferredQueue } from '../lib/deferredDelete'
 import { type FetchLike, withKeepalive } from '../lib/keepalive'
+import { attentionHandlers, focusUndo } from './undoAttention'
 
 /**
  * Delete without a confirm dialog, with "元に戻す" (Undo) in the notification (SHIG 57, 54).
@@ -81,11 +82,23 @@ export function deleteWithUndo({
   if (!scheduled) return
   notifications.show({
     id: notificationId,
-    autoClose: UNDO_WINDOW_MS,
+    // The queue owns the clock: the commit hides the notification, and hovering or focusing it
+    // pauses the queue's timer as well (SHIG 54). With Mantine's own autoClose the toast stayed
+    // while hovered but the delete still went through after UNDO_WINDOW_MS
+    autoClose: false,
+    ...pauseWhileAttended(id),
+    // Closed with its "×" while paused: the focused element is removed without a blur, so start
+    // the window again here (a no-op after undo or commit, when nothing is paused)
+    onClose: () => {
+      queue.resume(id)
+    },
+    // Tab from "元に戻す" (Undo) lands on the close button, which has no name of its own
+    closeButtonProps: { 'aria-label': '通知を閉じる' },
     message: (
       <Group justify="space-between" wrap="nowrap" gap="sm">
         <Text size="sm">{message}</Text>
         <Button
+          ref={focusOnMount}
           variant="subtle"
           size="sm"
           onClick={() => {
@@ -99,4 +112,38 @@ export function deleteWithUndo({
       </Group>
     ),
   })
+}
+
+/**
+ * The deleted element (a detail page's delete button, a list row) goes away, so focus would fall
+ * to <body>. Put it on "元に戻す" (Undo) instead, where a keyboard or screen-reader user can
+ * take the delete back at once (SHIG 54, 94)
+ */
+function focusOnMount(button: HTMLButtonElement | null) {
+  if (!button) return
+  focusUndo(button, {
+    activeElement: () => document.activeElement,
+    onUserInput: (listener) => {
+      const events = ['keydown', 'pointerdown'] as const
+      events.forEach((type) => window.addEventListener(type, listener, true))
+      return () => events.forEach((type) => window.removeEventListener(type, listener, true))
+    },
+    setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+  })
+}
+
+/** Pause the delete while the notification is hovered or keyboard-focused (SHIG 54) */
+function pauseWhileAttended(id: string) {
+  return attentionHandlers(
+    (attended) => (attended ? queue.pause(id) : queue.resume(id)),
+    isFocusVisible,
+  )
+}
+
+function isFocusVisible(el: unknown): boolean {
+  try {
+    return el instanceof Element && el.matches(':focus-visible')
+  } catch {
+    return false
+  }
 }

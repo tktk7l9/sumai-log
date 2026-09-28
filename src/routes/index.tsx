@@ -7,7 +7,9 @@ import { HomeAgenda } from '../components/home/HomeAgenda'
 import { HomeNews } from '../components/home/HomeNews'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
+import { usePendingDeletes } from '../components/undoableDelete'
 import { dateKey } from '../lib/calendar'
+import { hidePendingOnHome } from '../lib/deferredDelete'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
@@ -38,8 +40,11 @@ export const Route = createFileRoute('/')({
 })
 
 function Home() {
+  // Items whose deletion can still be undone are hidden here too, the same as in the lists
+  // (e.g. delete an event, then come home within the undo window)
+  const pendingDeletes = usePendingDeletes()
   const { pending, feed, members, agenda, agendaFrom, agendaTo, news, glossaryPick, nowIso } =
-    Route.useLoaderData()
+    hidePendingOnHome(Route.useLoaderData(), pendingDeletes)
   return (
     // The Stack of PageShell (24px) takes care of the gap between sections. Do not nest here
     <PageShell>
