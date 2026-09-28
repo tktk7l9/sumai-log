@@ -117,7 +117,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar className="appbar" p="xs">
+      {/* visibleFrom: on phones the collapsed navbar is only moved off screen, so its links
+          stayed in the Tab order as invisible stops before the page content (SHIG 42) */}
+      <AppShell.Navbar className="appbar" p="xs" visibleFrom="sm">
         {NAV_ITEMS.map(({ to, label, icon }) => {
           const Icon = ICONS[icon]
           const active = isNavItemActive(pathname, to)
@@ -180,7 +182,9 @@ function MoreMenu({ pathname }: { pathname: string }) {
   const items = HEADER_LINKS.filter(({ to }) => to !== '/news')
   const active = items.some(({ to }) => isNavItemActive(pathname, to))
   return (
-    <Menu position="bottom-end" shadow="md" width={200} withinPortal>
+    // Not portalled: rendered inside the header, the page links stay within the banner
+    // landmark instead of floating outside every landmark
+    <Menu position="bottom-end" shadow="md" width={200} withinPortal={false}>
       <Menu.Target>
         <ActionIcon
           variant={active ? 'light' : 'subtle'}

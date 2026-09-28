@@ -245,7 +245,7 @@ function Page() {
   // weekendDays paints both red, so Saturday that is not a holiday gets its own class
   function dayProps(key: string) {
     const name = holidayName(key)
-    if (name) return { style: { color: 'var(--mantine-color-red-6)' }, title: name }
+    if (name) return { className: 'is-holiday', title: name }
     return dayOfWeek(dateKey(key)) === 6 ? { className: 'is-saturday' } : {}
   }
 

@@ -1,4 +1,13 @@
-import { ActionIcon, Paper, SegmentedControl, Stack, Text, UnstyledButton } from '@mantine/core'
+import {
+  ActionIcon,
+  Paper,
+  SegmentedControl,
+  Stack,
+  Text,
+  Title,
+  UnstyledButton,
+  VisuallyHidden,
+} from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { LocateFixed } from 'lucide-react'
@@ -142,6 +151,11 @@ function Page() {
 
   return (
     <div className="map-page" style={{ position: 'relative' }}>
+      {/* The map fills the screen, so the page heading exists only for assistive technology
+          (same as PageShell's titleHidden) */}
+      <VisuallyHidden>
+        <Title order={1}>地図</Title>
+      </VisuallyHidden>
       <PlacesMapLazy
         markers={markers}
         focusId={sheetId}
