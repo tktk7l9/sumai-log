@@ -121,7 +121,9 @@ function Page() {
   const { plan: saved, buildPlan } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveSitePlan)
-  const [plan, setPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
+  // What the page opened with (the saved plan, or the initial values before the first save)
+  const [startPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
+  const [plan, setPlan] = useState<SitePlan>(startPlan)
   const [saving, setSaving] = useState(false)
   // Lot lines are entered as text such as "10.5, 20". Kept as text so a half-typed value is not erased
   const [lotText, setLotText] = useState(() => formatLotLines(plan.lotLines))
@@ -132,6 +134,8 @@ function Page() {
   const [view, setView] = useState<'2d' | '3d'>('2d')
   const sunNow = solarPosition(plan.latitude, SEASON_DECLINATION[season], hour)
   const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
+  // Changed by the user in this session (the initial values before the first save do not count)
+  const edited = JSON.stringify(saved ?? startPlan) !== JSON.stringify(plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
   // The range the section can move left and right (avoids the strip of the access lane to the
@@ -745,8 +749,20 @@ function Page() {
           </Accordion.Item>
         </Accordion>
 
-        <Group justify="space-between" align="center">
-          {dirty ? (
+        {/* While there are changes, the bar sticks to the bottom (above the tab bar) so saving is
+            next to the sliders being moved, not ~3,000px down on a phone (SHIG 30, 66). Before the
+            first save it says the values are the initial ones instead of 「未保存の変更」
+            (unsaved changes) that nobody made (SHIG 25, 42) */}
+        <Group
+          justify="space-between"
+          align="center"
+          className={edited ? 'site-save-bar is-sticky' : 'site-save-bar'}
+        >
+          {saved === null && !edited ? (
+            <Text size="xs" c="dimmed">
+              初期値（まだ保存していません）
+            </Text>
+          ) : dirty ? (
             <Badge variant="light" color="yellow">
               未保存の変更
             </Badge>
@@ -769,7 +785,7 @@ function Page() {
               </Button>
             ) : null}
             <Button onClick={handleSave} loading={saving} disabled={!dirty}>
-              保存
+              区画を保存
             </Button>
           </Group>
         </Group>

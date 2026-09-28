@@ -130,6 +130,18 @@ a:focus-visible {
  * the bottom padding of main would make the whole page scroll by that much (the map does
  * not use PageShell).
  */
+/* The save bar of /site. While there are changes it sticks above the bottom tabs (phones) or
+   the bottom of the window (desktop) so it stays next to what is being edited (SHIG 30, 66) */
+.site-save-bar.is-sticky {
+  position: sticky;
+  bottom: calc(var(--app-shell-footer-offset, 0rem) + env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  margin-inline: calc(var(--mantine-spacing-md) * -1);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background: var(--mantine-color-body);
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
 .fab-clearance {
   padding-bottom: 64px;
 }
