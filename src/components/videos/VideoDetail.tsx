@@ -51,8 +51,8 @@ export function VideoDetail({
     deleteWithUndo({
       id: video.id,
       message: '動画メモを削除しました',
-      commit: async () => {
-        await remove({ data: { id: video.id } })
+      commit: async (fetch) => {
+        await remove({ data: { id: video.id }, fetch })
         await router.invalidate()
       },
     })

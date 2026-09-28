@@ -47,8 +47,8 @@ function Page() {
       id: place.id,
       message: `「${place.name}」を削除しました`,
       failureMessage: '見学記録があるため消せません',
-      commit: async () => {
-        const result = await remove({ data: { id: place.id } })
+      commit: async (fetch) => {
+        const result = await remove({ data: { id: place.id }, fetch })
         await router.invalidate()
         return result.ok
       },

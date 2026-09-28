@@ -59,8 +59,8 @@ function Page() {
       message: `「${source.name}」を削除しました`,
       // ok: false means "it was already gone" (the other device deleted it first). The row is
       // gone either way, so it is not reported as a failure
-      commit: async () => {
-        await remove({ data: { id: source.id } })
+      commit: async (fetch) => {
+        await remove({ data: { id: source.id }, fetch })
         await router.invalidate()
       },
     })

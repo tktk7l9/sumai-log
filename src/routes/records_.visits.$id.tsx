@@ -66,8 +66,8 @@ function Page() {
     deleteWithUndo({
       id: visit.id,
       message: '見学記録を削除しました',
-      commit: async () => {
-        await removeVisit({ data: { id: visit.id } })
+      commit: async (fetch) => {
+        await removeVisit({ data: { id: visit.id }, fetch })
         await router.invalidate()
       },
     })
@@ -78,8 +78,8 @@ function Page() {
     deleteWithUndo({
       id: photo.id,
       message: '写真を削除しました',
-      commit: async () => {
-        await removePhoto({ data: { id: photo.id } })
+      commit: async (fetch) => {
+        await removePhoto({ data: { id: photo.id }, fetch })
         await router.invalidate()
       },
     })

@@ -48,8 +48,8 @@ function Page() {
     deleteWithUndo({
       id: property.id,
       message: `「${property.name}」を削除しました`,
-      commit: async () => {
-        await remove({ data: { id: property.id } })
+      commit: async (fetch) => {
+        await remove({ data: { id: property.id }, fetch })
         await router.invalidate()
       },
     })

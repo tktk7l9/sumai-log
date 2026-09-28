@@ -219,11 +219,12 @@ function Page() {
                               </Text>
                             </Group>
                           </Link>
-                          {/* A visible word next to the icon: an eye-off alone does not say what it does (SHIG 31, 34) */}
+                          {/* A visible word next to the icon: an eye-off alone does not say what it does
+                              (SHIG 31, 34). size xs = 30px tall, not compact-xs (22px, under 7mm; SHIG 78) */}
                           <Button
                             variant="subtle"
                             color="gray"
-                            size="compact-xs"
+                            size="xs"
                             aria-label={`${v.name} を比較から隠す`}
                             leftSection={<EyeOff size={14} aria-hidden />}
                             onClick={() => hide(v.id)}

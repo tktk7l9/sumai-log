@@ -72,8 +72,8 @@ export function CommentThread({
       id: c.id,
       message: 'コメントを削除しました',
       failureMessage: '自分のコメントだけ削除できます',
-      commit: async () => {
-        const { ok } = await remove({ data: { id: c.id } })
+      commit: async (fetch) => {
+        const { ok } = await remove({ data: { id: c.id }, fetch })
         await router.invalidate()
         return ok
       },
