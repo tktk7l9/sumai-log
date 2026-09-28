@@ -1,5 +1,4 @@
 import {
-  ActionIcon,
   Anchor,
   AspectRatio,
   Badge,
@@ -7,15 +6,13 @@ import {
   Card,
   Group,
   Image,
-  Modal,
   Stack,
   Text,
   Title,
 } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { ExternalLink, Pencil, Trash2 } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 
 import type { Comment, Video } from '../../db/schema'
@@ -24,7 +21,9 @@ import type { Member } from '../../lib/members'
 import { deleteVideo } from '../../server/videos'
 import { Row } from '../candidates/DetailRow'
 import { CommentThread } from '../comments/CommentThread'
+import { DeleteSection, EditButton } from '../DetailActions'
 import { FormDrawer } from '../FormDrawer'
+import { deleteWithUndo } from '../undoableDelete'
 import { BackButton, PageShell } from '../PageShell'
 import { VideoForm } from './VideoForm'
 
@@ -44,21 +43,20 @@ export function VideoDetail({
   members: Member[]
 }) {
   const navigate = useNavigate()
+  const router = useRouter()
   const remove = useServerFn(deleteVideo)
   const [editing, setEditing] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
-  async function handleDelete() {
-    setDeleting(true)
-    try {
-      await remove({ data: { id: video.id } })
-      notifications.show({ message: '動画メモを削除しました' })
-      navigate({ to: '/records', search: { tab: 'videos' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-      setDeleting(false)
-    }
+  function handleDelete() {
+    deleteWithUndo({
+      id: video.id,
+      message: '動画メモを削除しました',
+      commit: async (fetch) => {
+        await remove({ data: { id: video.id }, fetch })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/records', search: { tab: 'videos' } })
   }
 
   return (
@@ -72,17 +70,7 @@ export function VideoDetail({
       title={video.title}
       actions={
         <Group gap="xs">
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon
-            variant="default"
-            color="red"
-            aria-label="削除"
-            onClick={() => setConfirming(true)}
-          >
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -131,14 +119,16 @@ export function VideoDetail({
         </Group>
       ) : null}
 
-      <Stack gap={4}>
-        <Title order={2} size="h3">
-          学び
-        </Title>
-        <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
-          {video.takeaways || '—'}
-        </Text>
-      </Stack>
+      {video.takeaways?.trim() ? (
+        <Stack gap={4}>
+          <Title order={2} size="h3">
+            学び
+          </Title>
+          <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
+            {video.takeaways}
+          </Text>
+        </Stack>
+      ) : null}
 
       <CommentThread
         targetType="video"
@@ -148,6 +138,8 @@ export function VideoDetail({
         members={members}
       />
 
+      <DeleteSection label="この動画メモを削除" onDelete={handleDelete} />
+
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="動画メモを編集">
         <VideoForm
           initial={video}
@@ -156,20 +148,6 @@ export function VideoDetail({
           onCancel={() => setEditing(false)}
         />
       </FormDrawer>
-
-      <Modal opened={confirming} onClose={() => setConfirming(false)} title="削除の確認">
-        <Stack gap="md">
-          <Text size="sm">この動画メモとコメントを削除します。元に戻せません。</Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setConfirming(false)}>
-              キャンセル
-            </Button>
-            <Button color="red" loading={deleting} onClick={handleDelete}>
-              削除する
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </PageShell>
   )
 }

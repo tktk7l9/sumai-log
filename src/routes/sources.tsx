@@ -1,5 +1,4 @@
-import { Button, Chip, Group, Modal, Stack, Text, Title } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
+import { Chip, Group, Stack, Title } from '@mantine/core'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
@@ -8,6 +7,7 @@ import { EmptyState } from '../components/EmptyState'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
 import { PageShell } from '../components/PageShell'
+import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
 import { SourceForm } from '../components/sources/SourceForm'
 import { SourceRow } from '../components/sources/SourceRow'
 import { sourcesSearchSchema, type SourcesSearch } from '../components/sources/sourcesSearch'
@@ -15,6 +15,9 @@ import { SOURCE_GENRES } from '../content/sourceGenres'
 import type { Source } from '../db/schema'
 import { groupSourcesByGenre } from '../lib/sources'
 import { deleteSource, listSources, sourceFormOptions } from '../server/sources'
+
+/** Chip value for "no genre filter" (not a genre id) */
+const ALL = 'all'
 
 export const Route = createFileRoute('/sources')({
   component: Page,
@@ -34,10 +37,10 @@ function Page() {
 
   const [formOpened, setFormOpened] = useState(false)
   const [editing, setEditing] = useState<Source | null>(null)
-  const [deleting, setDeleting] = useState<Source | null>(null)
-  const [removing, setRemoving] = useState(false)
+  const pendingDeletes = usePendingDeletes()
 
-  const filtered = g ? sources.filter((s) => s.genre === g) : sources
+  const visible = sources.filter((s) => !pendingDeletes.has(s.id))
+  const filtered = g ? visible.filter((s) => s.genre === g) : visible
   const groups = groupSourcesByGenre(filtered)
 
   function openAdd() {
@@ -50,40 +53,39 @@ function Page() {
     setFormOpened(true)
   }
 
-  async function handleDelete() {
-    if (!deleting) return
-    setRemoving(true)
-    try {
-      const result = await remove({ data: { id: deleting.id } })
-      await router.invalidate()
-      // ok: false means "it was already gone" (the other device deleted it first, etc.). The row
-      // is gone either way, so the list side reaches the right state through router.invalidate().
-      // Only the wording changes
-      notifications.show({
-        message: result.ok ? '情報源を削除しました' : '既に削除されていました',
-        color: result.ok ? undefined : 'yellow',
-      })
-      setDeleting(null)
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    } finally {
-      setRemoving(false)
-    }
+  function handleDelete(source: Source) {
+    deleteWithUndo({
+      id: source.id,
+      message: `「${source.name}」を削除しました`,
+      // ok: false means "it was already gone" (the other device deleted it first). The row is
+      // gone either way, so it is not reported as a failure
+      commit: async (fetch) => {
+        await remove({ data: { id: source.id }, fetch })
+        await router.invalidate()
+      },
+    })
   }
 
   return (
     <PageShell title="情報収集" description="家づくりの情報源をジャンルごとに" fab>
       <Stack gap="lg">
+        {/* 「すべて」 (All) first, the same as the candidates filter (SHIG 6) */}
         <Chip.Group
-          value={g ?? null}
+          value={g ?? ALL}
           onChange={(v) =>
             navigate({
-              search: (s) => ({ ...s, g: (v as SourcesSearch['g']) || undefined }),
+              search: (s) => ({
+                ...s,
+                g: v === ALL ? undefined : (v as SourcesSearch['g']) || undefined,
+              }),
               replace: true,
             })
           }
         >
           <Group gap={6}>
+            <Chip value={ALL} size="xs">
+              すべて
+            </Chip>
             {SOURCE_GENRES.map((genre) => (
               <Chip key={genre.id} value={genre.id} size="xs">
                 {genre.label}
@@ -112,7 +114,7 @@ function Page() {
                       source={source}
                       vendorName={source.vendorName}
                       onEdit={() => openEdit(source)}
-                      onDelete={() => setDeleting(source)}
+                      onDelete={() => handleDelete(source)}
                     />
                   ))}
                 </Stack>
@@ -135,22 +137,6 @@ function Page() {
           onCancel={() => setFormOpened(false)}
         />
       </FormDrawer>
-
-      <Modal opened={deleting !== null} onClose={() => setDeleting(null)} title="削除の確認">
-        <Stack gap="md">
-          <Text size="sm">
-            {deleting ? `「${deleting.name}」を削除します。元に戻せません。` : ''}
-          </Text>
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setDeleting(null)}>
-              キャンセル
-            </Button>
-            <Button color="red" loading={removing} onClick={handleDelete}>
-              削除する
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
     </PageShell>
   )
 }

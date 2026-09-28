@@ -121,7 +121,7 @@ export function BuildPlanCard({ plan }: { plan: BuildPlan | null }) {
                 区画シミュレーターで配置を試す
               </Button>
               <Button type="submit" loading={saving}>
-                保存
+                建築計画を保存
               </Button>
             </Group>
           </Stack>

@@ -64,10 +64,14 @@ export function RouteErrorState({ error }: { error: unknown }) {
   )
 }
 
-/** When a nonexistent URL is opened. */
-export function RouteNotFoundState() {
+/**
+ * When a nonexistent URL is opened. Detail routes pass `back` (a <BackButton> to their list)
+ * so that an item the other person deleted still leaves a way back to the list (SHIG 55, 59, 60).
+ */
+export function RouteNotFoundState({ back }: { back?: React.ReactNode } = {}) {
   return (
     <Stack gap="lg" p="md">
+      {back}
       <Stack gap={4}>
         <Title order={1}>見つかりません</Title>
         <Text c="dimmed" size="sm">

@@ -130,6 +130,18 @@ a:focus-visible {
  * the bottom padding of main would make the whole page scroll by that much (the map does
  * not use PageShell).
  */
+/* The save bar of /site. While there are changes it sticks above the bottom tabs (phones) or
+   the bottom of the window (desktop) so it stays next to what is being edited (SHIG 30, 66) */
+.site-save-bar.is-sticky {
+  position: sticky;
+  bottom: calc(var(--app-shell-footer-offset, 0rem) + env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  margin-inline: calc(var(--mantine-spacing-md) * -1);
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background: var(--mantine-color-body);
+  border-top: 1px solid var(--mantine-color-default-border);
+}
+
 .fab-clearance {
   padding-bottom: 64px;
 }
@@ -162,6 +174,12 @@ a:focus-visible {
 .places-map {
   width: 100%;
   height: 100%;
+}
+.places-map-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
 }
 /* The content of AdvancedMarker. The bottom center sits on the coordinates, so the pin tip
    is aligned there */
@@ -241,6 +259,18 @@ a:focus-visible {
     font-size: var(--mantine-font-size-xs);
     width: calc(1.375rem * var(--mantine-scale));
   }
+}
+
+/*
+ * Saturday in blue, Sunday / holidays in red, as on Japanese calendars (SHIG 71). Mantine's
+ * weekendDays paints both weekend days red; calendar.tsx puts `is-saturday` on Saturdays that
+ * are not holidays. blue-7 / blue-3 keep 4.5:1 on the light / dark surfaces.
+ */
+.mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
+  color: var(--mantine-color-blue-7);
+}
+[data-mantine-color-scheme='dark'] .mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
+  color: var(--mantine-color-blue-3);
 }
 
 /*

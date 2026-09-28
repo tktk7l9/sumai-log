@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { EmptyState } from '../components/EmptyState'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
+import { usePendingDeletes } from '../components/undoableDelete'
 import { PageShell } from '../components/PageShell'
 import { PropertyCard } from '../components/candidates/PropertyCard'
 import { PropertyForm } from '../components/candidates/PropertyForm'
@@ -44,7 +45,11 @@ export const Route = createFileRoute('/candidates')({
 })
 
 function Page() {
-  const { vendors, properties, homeAreas } = Route.useLoaderData()
+  const { vendors: loadedVendors, properties: loadedProperties, homeAreas } = Route.useLoaderData()
+  // Rows whose deletion can still be undone are hidden at once
+  const pendingDeletes = usePendingDeletes()
+  const vendors = loadedVendors.filter((v) => !pendingDeletes.has(v.id))
+  const properties = loadedProperties.filter((p) => !pendingDeletes.has(p.id))
   const { tab, status } = Route.useSearch()
   const navigate = useNavigate({ from: '/candidates' })
   const [opened, setOpened] = useState(false)
@@ -152,7 +157,7 @@ function Page() {
         label={tab === 'vendors' ? '業者を追加' : '物件を追加'}
         onClick={() => setOpened(true)}
       />
-      <FormDrawer opened={opened} onClose={() => setOpened(false)} title="追加">
+      <FormDrawer opened={opened} onClose={() => setOpened(false)} title="候補を追加">
         <CandidateAddForm
           initialKind={tab}
           homeAreas={homeAreas}
@@ -168,13 +173,12 @@ function Page() {
 }
 
 /**
- * The contents of the "追加" (Add) drawer. A SegmentedControl for detached house (vendor) /
+ * The contents of the "候補を追加" (Add candidate) drawer. A SegmentedControl for detached house (vendor) /
  * condominium (property) sits on top, and one of the two forms is shown below (owner's request:
  * unify "業者を追加" (Add vendor) and "物件を追加" (Add property) into "追加", and let the form
- * side choose the kind). Switching rebuilds the whole form through `key`, which plainly
- * satisfies "reset the input state of the other one". An attempt to switch while typing gets
- * a confirmation in between (only when dirty). Whether it is dirty is reported each time by
- * the form on display (VendorForm / PropertyForm) through `onDirtyChange`.
+ * side choose the kind). Switching rebuilds the whole form through `key`. No confirmation:
+ * each kind keeps its own draft on the device (useFormDraft), so switching back restores what
+ * was typed (SHIG 57, 7; the drafts agreement of 2026-09-24).
  */
 function CandidateAddForm({
   initialKind,
@@ -186,14 +190,6 @@ function CandidateAddForm({
   onSaved: (kind: CandidateKind, id: string) => void
 }) {
   const [kind, setKind] = useState<CandidateKind>(initialKind)
-  const [dirty, setDirty] = useState(false)
-
-  function handleKindChange(next: string) {
-    if (next === kind) return
-    if (dirty && !window.confirm('入力中の内容は破棄されます。切り替えますか？')) return
-    setKind(next as CandidateKind)
-    setDirty(false)
-  }
 
   return (
     <Stack gap="md">
@@ -201,7 +197,7 @@ function CandidateAddForm({
         fullWidth
         aria-label="追加する種別"
         value={kind}
-        onChange={handleKindChange}
+        onChange={(next) => setKind(next as CandidateKind)}
         data={[
           { value: 'vendors', label: '戸建て（業者）' },
           { value: 'properties', label: 'マンション（物件）' },
@@ -213,15 +209,9 @@ function CandidateAddForm({
           vendor={null}
           homeAreas={homeAreas}
           onSaved={(id) => onSaved('vendors', id)}
-          onDirtyChange={setDirty}
         />
       ) : (
-        <PropertyForm
-          key="property"
-          property={null}
-          onSaved={(id) => onSaved('properties', id)}
-          onDirtyChange={setDirty}
-        />
+        <PropertyForm key="property" property={null} onSaved={(id) => onSaved('properties', id)} />
       )}
     </Stack>
   )

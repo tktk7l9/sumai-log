@@ -32,9 +32,16 @@ describe('groupSourcesByGenre', () => {
     expect(groups[0]?.items.map((i) => i.name)).toEqual(['あいう', 'いろは'])
   })
 
-  it('ignores an unknown genre id (does not crash on data someone forgot to fix)', () => {
-    const items: FakeSource[] = [{ genre: 'unknown', sortOrder: 0, name: 'X' }]
-    expect(groupSourcesByGenre(items)).toEqual([])
+  it('puts an unknown genre id under a trailing "その他" group instead of dropping it (SHIG 38)', () => {
+    const items: FakeSource[] = [
+      { genre: 'unknown', sortOrder: 0, name: 'X' },
+      { genre: 'money', sortOrder: 0, name: 'M' },
+      { genre: 'legacy', sortOrder: 0, name: 'A' },
+    ]
+    const groups = groupSourcesByGenre(items)
+    expect(groups.map((g) => g.genre.id)).toEqual(['money', 'other'])
+    expect(groups[1]?.genre.label).toBe('その他')
+    expect(groups[1]?.items.map((i) => i.name)).toEqual(['A', 'X'])
   })
 
   it('returns empty for empty input', () => {

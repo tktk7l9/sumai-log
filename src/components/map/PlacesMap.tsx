@@ -1,5 +1,5 @@
 import { importLibrary, setOptions } from '@googlemaps/js-api-loader'
-import { Text, useComputedColorScheme } from '@mantine/core'
+import { Button, Stack, Text, useComputedColorScheme } from '@mantine/core'
 import { useEffect, useRef, useState } from 'react'
 
 import { boundsOf, type MapMarker } from '../../lib/mapMarkers'
@@ -62,6 +62,7 @@ export function PlacesMap({
   apiKey,
   mapId,
   gesture = 'greedy',
+  onShowList,
 }: {
   markers: MapMarker[]
   focusId?: string | null
@@ -75,6 +76,8 @@ export function PlacesMap({
   /** 'cooperative' is for a small map embedded in a page (the map does not steal
    * one-finger scrolling) */
   gesture?: 'greedy' | 'cooperative'
+  /** When given, the fallback offers 「一覧で見る」 (View as list) as the way on (SHIG 55) */
+  onShowList?: () => void
 }) {
   const elRef = useRef<HTMLDivElement>(null)
   const gmRef = useRef<Gm | null>(null)
@@ -196,12 +199,21 @@ export function PlacesMap({
 
   if (!apiKey || failed) {
     return (
-      <div className="places-map sunken" role="region" aria-label="場所の地図">
-        <Text size="sm" p="md">
-          {failed
-            ? 'Google マップを読み込めませんでした。通信状況か API キーの制限（リファラー）を確認してください。場所は「一覧」からも見られます。'
-            : 'Google マップの API キーが未設定です（README「Google マップ」の手順で設定）。'}
-        </Text>
+      // Centred in the frame, not at the top left where the floating panels of /map cover it
+      // (SHIG 55, 59; "never show an empty frame")
+      <div className="places-map places-map-fallback sunken" role="region" aria-label="場所の地図">
+        <Stack gap="sm" align="center" maw={360} p="md">
+          <Text size="sm" ta="center">
+            {failed
+              ? 'Google マップを読み込めませんでした。通信状況か API キーの制限（リファラー）を確認してください。場所は「一覧」からも見られます。'
+              : 'Google マップの API キーが未設定です（README「Google マップ」の手順で設定）。'}
+          </Text>
+          {onShowList ? (
+            <Button variant="default" onClick={onShowList}>
+              一覧で見る
+            </Button>
+          ) : null}
+        </Stack>
       </div>
     )
   }

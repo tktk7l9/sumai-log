@@ -1,3 +1,4 @@
+import { notFound } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
@@ -42,7 +43,7 @@ export const getPlace = createServerFn()
   .handler(async ({ data }) => {
     const db = getDb()
     const [place] = await db.select().from(places).where(eq(places.id, data.id)).limit(1)
-    if (!place) throw new Response('Not Found', { status: 404 })
+    if (!place) throw notFound()
     const [vendor] = place.vendorId
       ? await db.select().from(vendors).where(eq(vendors.id, place.vendorId)).limit(1)
       : []

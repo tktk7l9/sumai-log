@@ -17,6 +17,8 @@ import {
 } from '../../lib/research'
 import { saveVendorResearch } from '../../server/research'
 import { draftKey } from '../../lib/drafts'
+import { DeleteSection } from '../DetailActions'
+import { cancelPendingDelete, deleteWithUndo, researchDeleteId } from '../undoableDelete'
 import { DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 
@@ -62,6 +64,8 @@ export function ResearchForm({
 
   async function submit(values: VendorResearch) {
     setSaving(true)
+    // A memo written again right after deleting the old one: the late delete must not wipe it
+    cancelPendingDelete(researchDeleteId(vendorId))
     try {
       await save({ data: { id: vendorId, research: values } })
       await router.invalidate()
@@ -77,20 +81,17 @@ export function ResearchForm({
     }
   }
 
-  async function remove() {
-    if (!window.confirm('調査メモを削除します。業者の他の情報は残ります。')) return
-    setSaving(true)
-    try {
-      await save({ data: { id: vendorId, research: null } })
-      await router.invalidate()
-      notifications.show({ message: '調査メモを削除しました' })
-      draft.clear()
-      onSaved()
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    } finally {
-      setSaving(false)
-    }
+  function remove() {
+    draft.clear()
+    onSaved()
+    deleteWithUndo({
+      id: researchDeleteId(vendorId),
+      message: '調査メモを削除しました',
+      commit: async (fetch) => {
+        await save({ data: { id: vendorId, research: null }, fetch })
+        await router.invalidate()
+      },
+    })
   }
 
   return (
@@ -223,14 +224,11 @@ export function ResearchForm({
 
         <div className="form-actions">
           <Button type="submit" loading={saving} fullWidth>
-            保存
+            調査メモを保存
           </Button>
         </div>
-        {research ? (
-          <Button color="red" variant="light" fullWidth onClick={remove} loading={saving}>
-            調査メモを削除
-          </Button>
-        ) : null}
+        {/* Kept apart from the save button above (SHIG 16, 78) */}
+        {research ? <DeleteSection label="調査メモを削除" onDelete={remove} /> : null}
       </Stack>
     </form>
   )

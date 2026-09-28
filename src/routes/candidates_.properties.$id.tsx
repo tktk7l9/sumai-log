@@ -1,12 +1,14 @@
-import { ActionIcon, Anchor, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Anchor, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { ExternalLink, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, MapPin, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PropertyForm } from '../components/candidates/PropertyForm'
@@ -17,10 +19,14 @@ import { formatSqm, formatYen } from '../lib/format'
 import { deleteProperty, getProperty } from '../server/candidates'
 import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/candidates_/properties/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, targets, commentData] = await Promise.all([
       getProperty({ data: { id: params.id } }),
       listLinkTargets(),
@@ -33,19 +39,21 @@ export const Route = createFileRoute('/candidates_/properties/$id')({
 function Page() {
   const { property, places, targets, comments, me, members } = Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
   const remove = useServerFn(deleteProperty)
   const [editing, setEditing] = useState(false)
   const [addingPlace, setAddingPlace] = useState(false)
 
-  async function handleDelete() {
-    if (!window.confirm(`「${property.name}」を削除します。場所・予定・記録は残ります。`)) return
-    try {
-      await remove({ data: { id: property.id } })
-      notifications.show({ message: '物件を削除しました' })
-      navigate({ to: '/candidates', search: { tab: 'properties' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDelete() {
+    deleteWithUndo({
+      id: property.id,
+      message: `「${property.name}」を削除しました`,
+      commit: async (fetch) => {
+        await remove({ data: { id: property.id }, fetch })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/candidates', search: { tab: 'properties' } })
   }
 
   const stationValue =
@@ -71,12 +79,7 @@ function Page() {
       actions={
         <Group gap="xs">
           <StatusBadge status={property.status} />
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDelete}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -154,6 +157,8 @@ function Page() {
         members={members}
       />
 
+      <DeleteSection label="この物件を削除" onDelete={handleDelete} />
+
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="物件を編集">
         <PropertyForm property={property} onSaved={() => setEditing(false)} />
       </FormDrawer>
@@ -166,5 +171,18 @@ function Page() {
         />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to={'/candidates'} search={{ tab: 'properties' }} />}
+        />
+      }
+    />
   )
 }

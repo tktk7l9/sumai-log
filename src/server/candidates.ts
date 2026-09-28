@@ -1,3 +1,4 @@
+import { notFound } from '@tanstack/react-router'
 import { createServerFn } from '@tanstack/react-start'
 import { asc, eq } from 'drizzle-orm'
 
@@ -52,7 +53,7 @@ export const getVendor = createServerFn()
   .handler(async ({ data }) => {
     const db = getDb()
     const [vendor] = await db.select().from(vendors).where(eq(vendors.id, data.id)).limit(1)
-    if (!vendor) throw new Response('Not Found', { status: 404 })
+    if (!vendor) throw notFound()
     const [placeRows, homeAreas] = await Promise.all([
       db.select().from(places).where(eq(places.vendorId, data.id)).orderBy(asc(places.name)),
       readHomeAreas(db),
@@ -114,7 +115,7 @@ export const getProperty = createServerFn()
   .handler(async ({ data }) => {
     const db = getDb()
     const [property] = await db.select().from(properties).where(eq(properties.id, data.id)).limit(1)
-    if (!property) throw new Response('Not Found', { status: 404 })
+    if (!property) throw notFound()
     const placeRows = await db.select().from(places).where(eq(places.propertyId, data.id))
     return { property, places: placeRows }
   })

@@ -6,8 +6,7 @@ import { CountBars } from '../components/analysis/CountBars'
 import { MonthlyChart } from '../components/analysis/MonthlyChart'
 import { StatusBadge } from '../components/candidates/StatusBadge'
 import { PageShell } from '../components/PageShell'
-import { ATTENDEES_LABEL } from '../db/schema'
-import type { Gap, Who } from '../lib/analysis'
+import type { Gap } from '../lib/analysis'
 import { formatDateSlash } from '../lib/calendar'
 import type { CandidateStatus } from '../lib/status'
 import { getAnalysis } from '../server/analysis'
@@ -224,12 +223,9 @@ function Page() {
           </Section>
         </SimpleGrid>
 
-        <Section title="誰が行った・見たか">
-          <Stack gap={4}>
-            <WhoLine label="見学" counts={a.who.visits} />
-            <WhoLine label="動画" counts={a.who.videos} />
-          </Stack>
-        </Section>
+        {/* "誰が行った・見たか" (who went / watched) was removed: the attendee and watchedBy
+            inputs were dropped (44f10df), so every record counted as 「二人」 (both) and the card
+            said nothing (SHIG 28, 1) */}
       </Stack>
     </PageShell>
   )
@@ -321,16 +317,5 @@ function GapList({
         </Text>
       ) : null}
     </Stack>
-  )
-}
-
-function WhoLine({ label, counts }: { label: string; counts: Record<Who, number> }) {
-  return (
-    <Text size="sm">
-      <Text span fw={600}>
-        {label}
-      </Text>
-      ：{(Object.keys(counts) as Who[]).map((k) => `${ATTENDEES_LABEL[k]} ${counts[k]}`).join('・')}
-    </Text>
   )
 }

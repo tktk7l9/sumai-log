@@ -1,7 +1,7 @@
-import { Button, Group, Stack, Text } from '@mantine/core'
+import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { Schedule } from '@mantine/schedule'
+import { AgendaView, Schedule } from '@mantine/schedule'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -10,13 +10,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 
 import { EventForm } from '../components/calendar/EventForm'
+import { DeleteSection } from '../components/DetailActions'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
 import { NewsEventDrawer } from '../components/news/NewsEventDrawer'
 import { PageShell } from '../components/PageShell'
+import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
 import { extractErrorMessage } from '../lib/formError'
-import { dateKey, formatDateSlash, formatDateWithWeekday } from '../lib/calendar'
-import { holidayName } from '../lib/holidays'
+import { dateKey, formatDateSlash, formatDateWithWeekday, formatMonthSlash } from '../lib/calendar'
+import { dayOfWeek, holidayName } from '../lib/holidays'
 import { planEventDefaults } from '../lib/news/planDefaults'
 import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../lib/scheduleLabels'
@@ -68,6 +70,13 @@ export const Route = createFileRoute('/calendar')({
     return { ...range, targets, places, date, newsEvents: news.news, planNews }
   },
 })
+
+/** The last day of the month of `key` ('YYYY-MM-DD') */
+function monthEnd(key: string): string {
+  return dayjs(`${key.slice(0, 7)}-01T00:00:00`)
+    .endOf('month')
+    .format('YYYY-MM-DD')
+}
 
 function todayKeyJst(): string {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000)
@@ -128,9 +137,16 @@ function Page() {
   // Finished events drop the colour of their kind and turn grey (toScheduleEvents), and vendor
   // news whose dates have passed set payload.past to dim the text colour (renderEventBody below).
   // Owner's request (2026-09-21)
+  const pendingDeletes = usePendingDeletes()
   const scheduleEvents = useMemo<ScheduleEventData<CalendarPayload>[]>(
-    () => [...toScheduleEvents(events, nowIso), ...newsToScheduleEvents(newsEvents, todayKey)],
-    [events, newsEvents, nowIso, todayKey],
+    () => [
+      ...toScheduleEvents(
+        events.filter((e) => !pendingDeletes.has(e.id)),
+        nowIso,
+      ),
+      ...newsToScheduleEvents(newsEvents, todayKey),
+    ],
+    [events, newsEvents, nowIso, todayKey, pendingDeletes],
   )
   const selected = d ?? date
   const newsDrawerNews = newsDrawerNewsId
@@ -161,16 +177,21 @@ function Page() {
     setNewsDrawerNewsId(payload.newsId)
   }
 
-  async function handleDelete(e: EventWithLinks) {
-    if (!window.confirm(`「${e.title}」を削除します。見学記録は残ります。`)) return
-    try {
-      await remove({ data: { id: e.id } })
-      await router.invalidate()
-      setEditing(null)
-      notifications.show({ message: '予定を削除しました' })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDelete(e: EventWithLinks) {
+    setEditing(null)
+    deleteWithUndo({
+      id: e.id,
+      message: `「${e.title}」を削除しました`,
+      commit: async (fetch) => {
+        await remove({ data: { id: e.id }, fetch })
+        await router.invalidate()
+      },
+    })
+  }
+
+  function goToday() {
+    const key = todayKey
+    navigate({ search: (s) => ({ ...s, m: key.slice(0, 7), d: key }), replace: true })
   }
 
   /**
@@ -220,14 +241,23 @@ function Page() {
     )
   }
 
+  // Japanese calendars colour Saturday blue and Sunday / holidays red (SHIG 71). Mantine's
+  // weekendDays paints both red, so Saturday that is not a holiday gets its own class
   function dayProps(key: string) {
     const name = holidayName(key)
-    return name ? { style: { color: 'var(--mantine-color-red-6)' }, title: name } : {}
+    if (name) return { style: { color: 'var(--mantine-color-red-6)' }, title: name }
+    return dayOfWeek(dateKey(key)) === 6 ? { className: 'is-saturday' } : {}
   }
 
   return (
     <PageShell title="予定" titleHidden fab>
       <Stack gap="md">
+        {/* The Schedule header drops "今日" (Today) at phone width; offer it here (SHIG 42) */}
+        {isMobile ? (
+          <Button variant="default" size="xs" onClick={goToday} style={{ alignSelf: 'flex-end' }}>
+            今日
+          </Button>
+        ) : null}
         <Schedule
           date={date}
           onDateChange={(next) => {
@@ -273,6 +303,26 @@ function Page() {
             headerFormat: (d) => formatDateWithWeekday(dateKey(d)),
           }}
         />
+        {/* At phone width the month grid can show only 2-3 characters of a title, so the month
+            is also listed below with full titles (SHIG 28). The grid itself stays, as the
+            owner asked for the same views as on PC (2026-09-16) */}
+        {isMobile && view === 'month' ? (
+          <Stack gap="xs">
+            <Title order={2} size="h4">
+              {formatMonthSlash(selected.slice(0, 7))} の予定
+            </Title>
+            <AgendaView
+              rangeStart={`${selected.slice(0, 7)}-01`}
+              rangeEnd={monthEnd(selected)}
+              events={scheduleEvents}
+              locale="ja"
+              labels={SCHEDULE_LABELS_JA}
+              dateHeaderFormat={(d) => formatDateWithWeekday(dateKey(d))}
+              styles={{ agendaViewHeader: { display: 'none' } }}
+              onEventClick={handleEventClick}
+            />
+          </Stack>
+        ) : null}
         <Group gap="sm" wrap="wrap">
           <Group gap={6} wrap="nowrap">
             <span
@@ -352,9 +402,7 @@ function Page() {
               places={places}
               onSaved={() => setEditing(null)}
             />
-            <Button color="red" variant="light" fullWidth onClick={() => handleDelete(editing)}>
-              削除
-            </Button>
+            <DeleteSection label="この予定を削除" onDelete={() => handleDelete(editing)} />
           </Stack>
         ) : null}
       </FormDrawer>

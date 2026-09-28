@@ -34,6 +34,15 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stopped = useRef(false)
   const initialRef = useRef(initial)
+  const latest = useRef(form.values)
+  const pending = useRef(false)
+
+  function writeDraft(k: string, values: T) {
+    writeStorage(
+      k,
+      sameValues(values, initialRef.current) ? null : serializeDraft(values, Date.now()),
+    )
+  }
 
   // Read the draft only once, on open
   useEffect(() => {
@@ -50,17 +59,26 @@ export function useFormDraft<T>(form: DraftForm<T>, key: string, initial: T) {
     if (stopped.current) return
     if (timer.current) clearTimeout(timer.current)
     const values = form.values
+    latest.current = values
+    pending.current = true
     timer.current = setTimeout(() => {
+      pending.current = false
       if (stopped.current) return
-      writeStorage(
-        key,
-        sameValues(values, initialRef.current) ? null : serializeDraft(values, Date.now()),
-      )
+      writeDraft(key, values)
     }, WRITE_DELAY)
     return () => {
       if (timer.current) clearTimeout(timer.current)
     }
   }, [form.values, key])
+
+  // Unmounting within WRITE_DELAY (e.g. switching 戸建て/マンション (house/condo) in the add
+  // drawer) must not lose the last keystrokes: write what is still waiting
+  useEffect(
+    () => () => {
+      if (pending.current && !stopped.current) writeDraft(key, latest.current)
+    },
+    [key],
+  )
 
   /** When saved: remove the draft and stop writing from then on */
   const clear = useCallback(() => {

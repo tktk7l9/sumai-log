@@ -332,7 +332,7 @@ export function VideoForm({
               continueRef.current = false
             }}
           >
-            保存
+            動画メモを保存
           </Button>
         </Group>
       </Stack>

@@ -1,23 +1,14 @@
-import {
-  ActionIcon,
-  Anchor,
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Anchor, Avatar, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { ExternalLink, MapPin, NotebookPen, Plus } from 'lucide-react'
+import { Fragment, useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
+import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo, researchDeleteId, usePendingDeletes } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { StatusBadge } from '../components/candidates/StatusBadge'
@@ -30,6 +21,7 @@ import { ResearchSection } from '../components/research/ResearchSection'
 import { PLACE_KIND_LABEL, VENDOR_KIND_LABEL } from '../db/schema'
 import { resolveAffiliations } from '../lib/affiliations'
 import { formatTsubo } from '../lib/format'
+import { vendorSpecHalves } from '../lib/vendorSpecs'
 import { termIdForMetric } from '../lib/glossary'
 import { photoUrl, representativeThumbKeyFromDisplayKey } from '../lib/photos'
 import { deleteVendor, getVendor } from '../server/candidates'
@@ -37,6 +29,34 @@ import { listCommentsFor } from '../server/comments'
 import { listLinkTargets } from '../server/places'
 import { getBuildPlan } from '../server/research'
 import { getHomeAreas } from '../server/settings'
+
+type SpecHalf = { label: React.ReactNode; value: string } | null
+
+/** A combined "A / B" spec row that shows only the halves that are registered and nothing at
+ * all when both are missing (SHIG 1, 37) */
+function SpecRow({ left, right }: { left: SpecHalf; right: SpecHalf }) {
+  const halves = [left, right].filter((h): h is NonNullable<SpecHalf> => h !== null)
+  if (halves.length === 0) return null
+  return (
+    <Row
+      label={
+        <Group component="span" gap={4} wrap="nowrap">
+          {halves.map((h, i) => (
+            <Fragment key={i}>
+              {i > 0 ? (
+                <Text span size="sm" c="dimmed">
+                  /
+                </Text>
+              ) : null}
+              {h.label}
+            </Fragment>
+          ))}
+        </Group>
+      }
+      value={halves.map((h) => h.value).join(' / ')}
+    />
+  )
+}
 
 /** The "view in the glossary" link attached to a DetailRow label. The headword itself becomes the link */
 function MetricLabel({
@@ -57,10 +77,14 @@ function MetricLabel({
     </Link>
   )
 }
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/candidates_/vendors/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, homeAreas, targets, commentData, buildPlan] = await Promise.all([
       getVendor({ data: { id: params.id } }),
       getHomeAreas(),
@@ -76,20 +100,39 @@ function Page() {
   const { vendor, places, coversHome, homeAreas, targets, comments, me, members, buildPlan } =
     Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
   const remove = useServerFn(deleteVendor)
   const [editing, setEditing] = useState(false)
   const [addingPlace, setAddingPlace] = useState(false)
   const [editingResearch, setEditingResearch] = useState(false)
+  const pendingDeletes = usePendingDeletes()
+  const spec = vendorSpecHalves(vendor)
+  // With nothing registered the facts card would be an empty frame; leave it out (SHIG 1)
+  const hasFacts = Boolean(
+    vendor.hq ||
+    vendor.representative ||
+    vendor.serviceAreas.length ||
+    Object.values(spec).some((v) => v !== null) ||
+    vendor.pricePerTsuboMin != null ||
+    vendor.pricePerTsuboMax != null ||
+    vendor.structure ||
+    vendor.websiteUrl ||
+    vendor.sourceUrl ||
+    vendor.newsEmailDomain,
+  )
+  // Hidden at once while its deletion can still be undone
+  const research = pendingDeletes.has(researchDeleteId(vendor.id)) ? null : vendor.research
 
-  async function handleDelete() {
-    if (!window.confirm(`「${vendor.name}」を削除します。場所・予定・記録は残ります。`)) return
-    try {
-      await remove({ data: { id: vendor.id } })
-      notifications.show({ message: '業者を削除しました' })
-      navigate({ to: '/candidates', search: { tab: 'vendors' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDelete() {
+    deleteWithUndo({
+      id: vendor.id,
+      message: `「${vendor.name}」を削除しました`,
+      commit: async (fetch) => {
+        await remove({ data: { id: vendor.id }, fetch })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/candidates', search: { tab: 'vendors' } })
   }
 
   return (
@@ -123,101 +166,97 @@ function Page() {
               建築予定地が施工エリア内
             </Badge>
           ) : null}
-          <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="md" />
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDelete}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          {/* The website is the 「公式」 (Official) row below; only SNS icons here (SHIG 31) */}
+          <VendorLinks websiteUrl={null} socialUrls={vendor.socialUrls} size="md" />
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          <Row label="本社" value={vendor.hq} />
-          {vendor.representative ? (
-            <Group justify="space-between" wrap="nowrap" align="center">
-              <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
-                代表者
-              </Text>
-              <Group gap="sm" wrap="nowrap" align="center">
-                {vendor.representativePhotoKey ? (
-                  <Avatar
-                    src={photoUrl(
-                      representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey),
-                    )}
-                    size={96}
-                    radius="50%"
-                    alt=""
-                  />
-                ) : null}
-                <Text size="sm" ta="right">
-                  {vendor.representative}
+      {hasFacts ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {vendor.hq ? <Row label="本社" value={vendor.hq} /> : null}
+            {vendor.representative ? (
+              <Group justify="space-between" wrap="nowrap" align="center">
+                <Text size="sm" c="dimmed" style={{ flexShrink: 0 }}>
+                  代表者
                 </Text>
+                <Group gap="sm" wrap="nowrap" align="center">
+                  {vendor.representativePhotoKey ? (
+                    <Avatar
+                      src={photoUrl(
+                        representativeThumbKeyFromDisplayKey(vendor.representativePhotoKey),
+                      )}
+                      size={96}
+                      radius="50%"
+                      alt=""
+                    />
+                  ) : null}
+                  <Text size="sm" ta="right">
+                    {vendor.representative}
+                  </Text>
+                </Group>
               </Group>
-            </Group>
-          ) : null}
-          <Row
-            label="施工エリア"
-            value={vendor.serviceAreas.length ? vendor.serviceAreas.join('、') : '未登録'}
-          />
-          <Row
-            label={
-              <Group component="span" gap={4} wrap="nowrap">
-                <MetricLabel metric="ua" text="UA値" />
-                <Text span size="sm" c="dimmed">
-                  /
-                </Text>
-                <MetricLabel metric="c" text="C値" />
-              </Group>
-            }
-            value={`${vendor.uaValue ?? '—'} / ${vendor.cValuePublished ? '実測公開' : '非公開'}`}
-          />
-          <Row
-            label={
-              <Group component="span" gap={4} wrap="nowrap">
-                <MetricLabel metric="seismic" text="耐震等級" />
-                <Text span size="sm" c="dimmed">
-                  /
-                </Text>
-                <MetricLabel metric="longTerm" text="長期優良" />
-              </Group>
-            }
-            value={`${vendor.seismicGrade ?? '—'} / ${vendor.longTermCertified ? '対応' : '—'}`}
-          />
-          {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
-            <Row
-              label="坪単価"
-              value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
-            />
-          ) : null}
-          {vendor.structure ? <Row label="構造" value={vendor.structure} /> : null}
-          {vendor.websiteUrl ? (
-            <Row
-              label="公式"
-              value={
-                <Anchor href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={14} aria-hidden /> 開く
-                </Anchor>
+            ) : null}
+            {vendor.serviceAreas.length ? (
+              <Row label="施工エリア" value={vendor.serviceAreas.join('、')} />
+            ) : null}
+            <SpecRow
+              left={
+                spec.ua ? { label: <MetricLabel metric="ua" text="UA値" />, value: spec.ua } : null
+              }
+              right={
+                spec.c ? { label: <MetricLabel metric="c" text="C値" />, value: spec.c } : null
               }
             />
-          ) : null}
-          {vendor.sourceUrl ? (
-            <Row
-              label="参照 URL"
-              value={
-                <Anchor href={vendor.sourceUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={14} aria-hidden /> 開く
-                </Anchor>
+            <SpecRow
+              left={
+                spec.seismic
+                  ? { label: <MetricLabel metric="seismic" text="耐震等級" />, value: spec.seismic }
+                  : null
+              }
+              right={
+                spec.longTerm
+                  ? {
+                      label: <MetricLabel metric="longTerm" text="長期優良" />,
+                      value: spec.longTerm,
+                    }
+                  : null
               }
             />
-          ) : null}
-          {vendor.newsEmailDomain ? (
-            <Row label="メール差出人" value={vendor.newsEmailDomain.split(',').join(', ')} />
-          ) : null}
-        </Stack>
-      </Card>
+            {vendor.pricePerTsuboMin != null || vendor.pricePerTsuboMax != null ? (
+              <Row
+                label="坪単価"
+                value={formatTsubo(vendor.pricePerTsuboMin, vendor.pricePerTsuboMax)}
+              />
+            ) : null}
+            {vendor.structure ? <Row label="構造" value={vendor.structure} /> : null}
+            {vendor.websiteUrl ? (
+              <Row
+                label="公式"
+                value={
+                  <Anchor href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={14} aria-hidden /> 開く
+                  </Anchor>
+                }
+              />
+            ) : null}
+            {vendor.sourceUrl ? (
+              <Row
+                label="参照 URL"
+                value={
+                  <Anchor href={vendor.sourceUrl} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink size={14} aria-hidden /> 開く
+                  </Anchor>
+                }
+              />
+            ) : null}
+            {vendor.newsEmailDomain ? (
+              <Row label="メール差出人" value={vendor.newsEmailDomain.split(',').join(', ')} />
+            ) : null}
+          </Stack>
+        </Card>
+      ) : null}
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
 
       {/* With a building plan (settings), show the building and total cost estimate at this vendor's price per tsubo */}
@@ -240,11 +279,11 @@ function Page() {
             leftSection={<NotebookPen size={14} aria-hidden />}
             onClick={() => setEditingResearch(true)}
           >
-            {vendor.research ? '編集' : '書く'}
+            {research ? '編集' : '書く'}
           </Button>
         </Group>
-        {vendor.research ? (
-          <ResearchSection research={vendor.research} />
+        {research ? (
+          <ResearchSection research={research} />
         ) : (
           <Text size="sm" c="dimmed">
             まだ調べたことを書いていません。特徴・性能・価格・保証・平屋の実績などをまとめると、比較表に並びます。
@@ -344,6 +383,8 @@ function Page() {
         members={members}
       />
 
+      <DeleteSection label="この業者を削除" onDelete={handleDelete} />
+
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="業者を編集">
         <VendorForm vendor={vendor} homeAreas={homeAreas} onSaved={() => setEditing(false)} />
       </FormDrawer>
@@ -355,7 +396,7 @@ function Page() {
         {editingResearch ? (
           <ResearchForm
             vendorId={vendor.id}
-            research={vendor.research ?? null}
+            research={research ?? null}
             onSaved={() => setEditingResearch(false)}
           />
         ) : null}
@@ -369,5 +410,18 @@ function Page() {
         />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="候補"
+          renderLink={(p) => <Link {...p} to={'/candidates'} search={{ tab: 'vendors' }} />}
+        />
+      }
+    />
   )
 }

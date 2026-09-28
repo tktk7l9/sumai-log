@@ -1,13 +1,15 @@
-import { ActionIcon, Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { NextActionsChecklist } from '../components/visits/NextActionsChecklist'
+import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PhotoGrid } from '../components/visits/PhotoGrid'
@@ -15,6 +17,7 @@ import { PhotoUploader } from '../components/visits/PhotoUploader'
 import { VisitForm } from '../components/visits/VisitForm'
 import type { Photo } from '../db/schema'
 import { formatDateWithWeekday } from '../lib/calendar'
+import { visitSummary } from '../lib/visitSummary'
 import { listCommentsFor } from '../server/comments'
 import {
   deletePhoto,
@@ -23,10 +26,14 @@ import {
   reorderPhotos,
   visitFormOptions,
 } from '../server/visits'
+import { isIdLike } from '../lib/ids'
 
 export const Route = createFileRoute('/records_/visits/$id')({
   component: Page,
+  notFoundComponent: NotFound,
   loader: async ({ params }) => {
+    // A malformed id can never exist; answer with the in-app 404 instead of a validator 500
+    if (!isIdLike(params.id)) throw notFound()
     const [detail, options, commentData] = await Promise.all([
       getVisit({ data: { id: params.id } }),
       visitFormOptions(),
@@ -53,26 +60,29 @@ function Page() {
   const reorder = useServerFn(reorderPhotos)
   const [editing, setEditing] = useState(false)
 
-  async function handleDeleteVisit() {
-    if (!window.confirm('見学記録と写真を削除します')) return
-    try {
-      await removeVisit({ data: { id: visit.id } })
-      notifications.show({ message: '見学記録を削除しました' })
-      navigate({ to: '/records', search: { tab: 'visits' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  const pendingDeletes = usePendingDeletes()
+
+  function handleDeleteVisit() {
+    deleteWithUndo({
+      id: visit.id,
+      message: '見学記録を削除しました',
+      commit: async (fetch) => {
+        await removeVisit({ data: { id: visit.id }, fetch })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/records', search: { tab: 'visits' } })
   }
 
-  async function handleDeletePhoto(photo: Photo) {
-    if (!window.confirm('この写真を削除します')) return
-    try {
-      await removePhoto({ data: { id: photo.id } })
-      await router.invalidate()
-      notifications.show({ message: '写真を削除しました' })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDeletePhoto(photo: Photo) {
+    deleteWithUndo({
+      id: photo.id,
+      message: '写真を削除しました',
+      commit: async (fetch) => {
+        await removePhoto({ data: { id: photo.id }, fetch })
+        await router.invalidate()
+      },
+    })
   }
 
   async function handleReorderPhotos(photoIds: string[]) {
@@ -92,15 +102,18 @@ function Page() {
           renderLink={(p) => <Link {...p} to="/records" search={{ tab: 'visits' }} />}
         />
       }
-      title={formatDateWithWeekday(visit.visitedOn)}
+      title={
+        visitSummary({
+          placeName: place?.name ?? null,
+          vendorName: vendor?.name ?? null,
+          propertyName: property?.name ?? null,
+          good: null,
+        }).title
+      }
+      description={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDeleteVisit}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -140,13 +153,14 @@ function Page() {
         </Stack>
       </Card>
 
-      {BLOCKS.map((b) => (
+      {/* Blocks left empty are not shown as 「—」 (SHIG 1, 37) */}
+      {BLOCKS.filter((b) => visit[b.key]?.trim()).map((b) => (
         <Stack key={b.key} gap={4}>
           <Title order={2} size="h3">
             {b.label}
           </Title>
           <Text className="breakable" style={{ whiteSpace: 'pre-wrap' }}>
-            {visit[b.key] || '—'}
+            {visit[b.key]}
           </Text>
         </Stack>
       ))}
@@ -160,7 +174,11 @@ function Page() {
       <Stack gap="xs">
         <Title order={2}>写真</Title>
         <PhotoUploader visitId={visit.id} onUploaded={() => router.invalidate()} />
-        <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onReorder={handleReorderPhotos} />
+        <PhotoGrid
+          photos={photos.filter((p) => !pendingDeletes.has(p.id))}
+          onDelete={handleDeletePhoto}
+          onReorder={handleReorderPhotos}
+        />
       </Stack>
 
       <CommentThread
@@ -171,9 +189,24 @@ function Page() {
         members={members}
       />
 
+      <DeleteSection label="この見学記録を削除" onDelete={handleDeleteVisit} />
+
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="見学記録を編集">
         <VisitForm visit={visit} options={options} onSaved={() => setEditing(false)} />
       </FormDrawer>
     </PageShell>
+  )
+}
+
+function NotFound() {
+  return (
+    <RouteNotFoundState
+      back={
+        <BackButton
+          label="記録"
+          renderLink={(p) => <Link {...p} to={'/records'} search={{ tab: 'visits' }} />}
+        />
+      }
+    />
   )
 }

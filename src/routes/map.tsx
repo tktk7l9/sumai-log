@@ -12,6 +12,7 @@ import { PlaceList } from '../components/map/PlaceList'
 import { PlaceSheet } from '../components/map/PlaceSheet'
 import { PlacesMapLazy } from '../components/map/PlacesMapLazy'
 import { PlaceForm } from '../components/places/PlaceForm'
+import { usePendingDeletes } from '../components/undoableDelete'
 import { toMarkers } from '../lib/mapMarkers'
 import { getMapConfig } from '../server/mapConfig'
 import { listLinkTargets, listPlaces } from '../server/places'
@@ -50,7 +51,13 @@ const VIEW_DATA = [
 ]
 
 function Page() {
-  const { places, targets, mapConfig } = Route.useLoaderData()
+  const { places: loadedPlaces, targets, mapConfig } = Route.useLoaderData()
+  // Places whose deletion can still be undone are hidden at once
+  const pendingDeletes = usePendingDeletes()
+  const places = useMemo(
+    () => loadedPlaces.filter((p) => !pendingDeletes.has(p.id)),
+    [loadedPlaces, pendingDeletes],
+  )
   const view = Route.useSearch().view ?? 'map'
   const navigate = useNavigate({ from: '/map' })
   const router = useRouter()
@@ -142,6 +149,7 @@ function Page() {
         onSelect={setSheetId}
         apiKey={mapConfig.apiKey}
         mapId={mapConfig.mapId}
+        onShowList={() => setView('list')}
       />
 
       <Stack gap={6} style={{ position: 'absolute', top: 8, left: 8, right: 56, zIndex: 1000 }}>
