@@ -1,13 +1,16 @@
 /**
- * 業者のサイトのファビコン取得・代表者の顔写真（URL 取り込み・削除）の実処理。
- * newsFetcher.ts と同じ理由でファイルを分けている: createServerFn でラップしていない
- * 素の関数だけを置くことで、
- *  1. vendorImagesFetcher.worker-test.ts から直接呼べる（No Start context の制約を受けない）
- *  2. クライアントバンドルへ R2/fetch まわりのサーバー専用コードが漏れない
- *     （vendorImages.ts に createServerFn ラッパーと同居させると、クライアントから
- *     import した際に本ファイルの import（storage.ts の `cloudflare:workers` 等）が
- *     ビルドに巻き込まれて解決できずビルドが失敗する。実際に踏んだ）
- * createServerFn のラッパーは vendorImages.ts 側に置く。
+ * The actual work of fetching the favicon of a vendor's site and of the representative's
+ * face photo (import from URL, delete).
+ * The file is split for the same reason as newsFetcher.ts: by placing only plain functions
+ * that are not wrapped in createServerFn,
+ *  1. they can be called directly from vendorImagesFetcher.worker-test.ts (not subject to
+ *     the No Start context restriction)
+ *  2. server-only code around R2/fetch does not leak into the client bundle
+ *     (if it lived together with the createServerFn wrappers in vendorImages.ts, then on
+ *     import from the client the imports of this file (`cloudflare:workers` in storage.ts
+ *     etc.) get pulled into the build, cannot be resolved, and the build fails. We actually
+ *     hit this)
+ * The createServerFn wrappers live on the vendorImages.ts side.
  */
 
 import type { Db } from '../db/client'
@@ -39,38 +42,44 @@ const ERROR_MESSAGE_MAX = 200
 const NO_ICON_FOUND_ERROR = 'アイコンが見つかりませんでした'
 const NOT_AN_IMAGE_ERROR = '画像ファイルではありません（JPEG/PNG/WebP のみ）'
 export const VENDOR_NOT_FOUND_ERROR = '業者が見つかりません'
-/** 手動アップロードの上限（design 通り 512KB）。自動取得の ICON_MAX_BYTES と値は同じだが、
- * 「サイトから取得するアイコン」と「フォームからアップロードされたファイル」は別の予算
- * として意図的に定数を分けている（将来どちらかだけ変えたくなったときに独立して変えられる）。 */
+/** Upper limit for manual upload (512KB, as in the design). The value is the same as
+ * ICON_MAX_BYTES of the automatic fetch, but the constants are split on purpose because
+ * "an icon fetched from the site" and "a file uploaded from the form" are separate budgets
+ * (if we want to change only one of them in the future, they can change independently). */
 export const FAVICON_UPLOAD_MAX_BYTES = 512_000
 export const FAVICON_UPLOAD_TOO_LARGE_ERROR = `画像が大きすぎます（上限 ${FAVICON_UPLOAD_MAX_BYTES / 1000}KB）`
 export const FAVICON_UPLOAD_WRONG_TYPE_ERROR =
   '画像ファイルではありません（PNG/JPEG/WebP/ICO のみ）'
-/** pickFaviconCandidates が返す配列は最大 6 件（宣言 5 + favicon.ico の保険）だが、
- * 呼び出し側でも明示的に切って外向き fetch 数（HTML 1 + アイコン最大 6 = 最大 7）を保証する。 */
+/** The array returned by pickFaviconCandidates has at most 6 entries (5 declared + the
+ * favicon.ico fallback), but the caller also cuts it explicitly to guarantee the number of
+ * outbound fetches (HTML 1 + icons at most 6 = at most 7). */
 const MAX_FAVICON_CANDIDATES_TO_TRY = 6
-/** 設定画面「アイコンを取得」からの呼び出しは、この既定の予算をそのまま使う */
+/** Calls from "アイコンを取得" (fetch icons) on the settings screen use this default budget as is */
 const DEFAULT_FAVICON_BUDGET: Required<FaviconFetchBudget> = {
   htmlTimeoutMs: HTML_TIMEOUT_MS,
   iconTimeoutMs: ICON_TIMEOUT_MS,
   maxCandidates: MAX_FAVICON_CANDIDATES_TO_TRY,
 }
 /**
- * saveVendor（candidates.ts）が保存のたびに inline で待つ分だけの、うんと短い予算。
- * HTML 4s + 候補最大 2 件 × 2s = 最悪 8s。保存を長時間ブロックしないための上限で、
- * ここで見つからなくても設定画面の「アイコンを取得」（既定の予算）が拾える。
- * （リダイレクトが hop ごとにこの秒数を使うため、hop が続く極端なケースでは
- * 合計がこれを超えうるが、通常の 0〜1 hop では合計 ≤8s に収まる）
+ * A much shorter budget, only for what saveVendor (candidates.ts) waits for inline on every
+ * save. HTML 4s + at most 2 candidates x 2s = 8s at worst. It is a limit so that saving is
+ * not blocked for a long time; even if nothing is found here, "アイコンを取得" on the
+ * settings screen (the default budget) can pick it up.
+ * (Redirects use this many seconds per hop, so in extreme cases with consecutive hops the
+ * total can exceed this, but with the usual 0-1 hops the total stays ≤8s)
  */
 export const SAVE_FAVICON_BUDGET: FaviconFetchBudget = {
   htmlTimeoutMs: 4_000,
   iconTimeoutMs: 2_000,
   maxCandidates: 2,
 }
-/** 設定画面「アイコンを取得」/「取り直す」1 回の呼び出しで処理する業者数の上限。
- * 業者 1 件で最悪 HTML 1 回 + 候補最大 6 回 = 7 回の外向き fetch（:142 で保証）を
- * 直列に行うため、無制限に回すとサブリクエスト数・応答時間の両方が業者数に比例して
- * 際限なく伸びる。超えたぶんは remaining で返し、UI から「もう一度押す」で続きを処理する。 */
+/** Upper limit on the number of vendors processed by one call of "アイコンを取得" /
+ * "取り直す" (fetch again) on the settings screen.
+ * One vendor does at worst HTML 1 time + candidates at most 6 times = 7 outbound fetches
+ * (guaranteed at :142) in series, so running without a limit makes both the number of
+ * subrequests and the response time grow without bound in proportion to the number of
+ * vendors. The excess is returned as remaining, and the UI processes the rest by
+ * "pressing once more". */
 const MAX_VENDORS_PER_REFRESH_CALL = 10
 
 function errorMessage(e: unknown): string {
@@ -79,10 +88,10 @@ function errorMessage(e: unknown): string {
 }
 
 /**
- * レスポンス本文をバイト列のまま読む。newsFetcher.ts の readCappedBytes と同じ方針
- * （content-length があれば先に弾く、無ければストリームを数えながら打ち切る）だが、
- * favicon/代表者写真は上限がソースによって異なる（HTML 1MB・アイコン 512KB・写真 5MB）ため
- * maxBytes を引数で受ける。
+ * Reads the response body as raw bytes. Same policy as readCappedBytes in newsFetcher.ts
+ * (reject up front if there is a content-length, otherwise count the stream and cut it
+ * off), but for favicon/representative photo the limit differs by source (HTML 1MB, icon
+ * 512KB, photo 5MB), so maxBytes is taken as an argument.
  */
 async function readCapped(response: Response, maxBytes: number): Promise<Uint8Array | null> {
   const contentLength = response.headers.get('content-length')
@@ -119,11 +128,12 @@ async function readCapped(response: Response, maxBytes: number): Promise<Uint8Ar
 type CappedFetchResult = { bytes: Uint8Array; finalUrl: string }
 
 /**
- * `fetchWithGuardedRedirects`（safeFetch.ts。newsFetcher.ts と共有）でリダイレクトを
- * 許可された hop だけ追いつつ取得し、readCapped で上限まで読む。呼び出し元は
- * `url` 自体が isAllowedRemoteUrl を通っていることを先に確認しておくこと
- * （このリダイレクト追従は「2 hop 目以降」だけを見るため。1 hop 目 = url 自体の
- * 許可判定は呼び出し元の責務。newsFetcher.ts の fetchCandidates と同じ分担）。
+ * Fetches with `fetchWithGuardedRedirects` (safeFetch.ts, shared with newsFetcher.ts),
+ * following redirects only through allowed hops, and reads up to the limit with readCapped.
+ * The caller must confirm beforehand that `url` itself passes isAllowedRemoteUrl
+ * (because this redirect following looks only at "the 2nd hop onward". The 1st hop = the
+ * allow check of url itself is the caller's responsibility. Same division as
+ * fetchCandidates in newsFetcher.ts).
  */
 async function fetchCapped(
   url: string,
@@ -149,8 +159,8 @@ async function fetchCapped(
 
 export type FaviconFetchResult = { ok: true; key: string } | { ok: false; error: string }
 
-/** fetchFaviconForVendor の呼び出し元ごとに変える外向き fetch の予算。省略した項目は
- * 既定の予算（設定画面「アイコンを取得」と同じ、フル）を使う。 */
+/** Outbound fetch budget that changes per caller of fetchFaviconForVendor. Omitted items
+ * use the default budget (the same as "アイコンを取得" on the settings screen, full). */
 export type FaviconFetchBudget = {
   htmlTimeoutMs?: number
   iconTimeoutMs?: number
@@ -158,11 +168,13 @@ export type FaviconFetchBudget = {
 }
 
 /**
- * 1 業者ぶんファビコンを取得して R2 に置き、favicon_key を更新する。
- * 例外は投げない（design 通り）。候補を順に試し、画像として sniff できた最初の 1 件を使う。
- * 鍵には stamp（base36 の Date.now()）を挟むので、差し替えのたびに新しい URL になる
- * （配信は immutable キャッシュなので、同じ URL のままだと差し替えが反映されない）。
- * 前の favicon_key（差し替え前の値）は必ず削除する（stamp が違えば常に別キーになるため）。
+ * Fetches the favicon for 1 vendor, puts it in R2, and updates favicon_key.
+ * Does not throw (as in the design). Tries the candidates in order and uses the first one
+ * that can be sniffed as an image.
+ * The key includes a stamp (Date.now() in base36), so every replacement gets a new URL
+ * (serving uses an immutable cache, so with the same URL the replacement would not show).
+ * The previous favicon_key (the value before replacement) is always deleted (because a
+ * different stamp always makes a different key).
  */
 export async function fetchFaviconForVendor(
   db: Db,
@@ -171,9 +183,10 @@ export async function fetchFaviconForVendor(
   fetchImpl: typeof fetch = fetch,
   bucket: R2Bucket = getPhotosBucket(),
   budget: FaviconFetchBudget = {},
-  // stamp 生成用。既定は実時計（Date.now）。テストで「差し替えたら鍵が変わる」ことを
-  // 検証するとき、同一ミリ秒内に 2 回呼ぶと実時計では偶然同じ stamp になりうるため、
-  // 注入できるようにしてある（fetchImpl/bucket と同じ DI の流儀）。
+  // For generating the stamp. The default is the real clock (Date.now). When a test verifies
+  // that "the key changes on replacement", calling twice within the same millisecond can
+  // give the same stamp by chance with the real clock, so it is injectable (same DI style
+  // as fetchImpl/bucket).
   now: () => number = Date.now,
 ): Promise<FaviconFetchResult> {
   const htmlTimeoutMs = budget.htmlTimeoutMs ?? DEFAULT_FAVICON_BUDGET.htmlTimeoutMs
@@ -184,8 +197,9 @@ export async function fetchFaviconForVendor(
 
     const htmlResult = await fetchCapped(websiteUrl, fetchImpl, htmlTimeoutMs, HTML_MAX_BYTES)
     const html = htmlResult ? new TextDecoder('utf-8').decode(htmlResult.bytes) : ''
-    // 相対 href は実際に本文を返した最終的な URL（リダイレクト後）基準で解決する
-    // （newsFetcher.ts の finalUrl と同じ理由）。取得自体に失敗したら websiteUrl のまま。
+    // Relative hrefs are resolved against the final URL that actually returned the body
+    // (after redirects) (same reason as finalUrl in newsFetcher.ts). If the fetch itself
+    // failed, websiteUrl is used as is.
     const candidates = pickFaviconCandidates(html, htmlResult?.finalUrl ?? websiteUrl)
 
     for (const candidateUrl of candidates.slice(0, maxCandidates)) {
@@ -219,16 +233,18 @@ export type RefreshFaviconResult = {
 
 export type RefreshAllFaviconsResult = {
   results: RefreshFaviconResult[]
-  /** 今回の呼び出しで実際に処理した件数 */
+  /** Number actually processed in this call */
   processed: number
-  /** 対象のうち今回処理しなかった件数。0 より大きければ「もう一度押す」で続きを処理できる */
+  /** Number of targets not processed this time. If greater than 0, "pressing once more"
+   * processes the rest */
   remaining: number
 }
 
 /**
- * favicon_key に埋め込まれた stamp（`favicon-{stamp}.<ext>`）から取得時刻（ミリ秒）を読む。
- * 未取得（null）・旧形式（stamp 無し）はどちらも「最も古い」＝最優先で扱う
- * （refreshAllVendorFavicons の oldest-first 判定用。取得時刻を別列で持たずに済む）。
+ * Reads the fetch time (milliseconds) from the stamp embedded in favicon_key
+ * (`favicon-{stamp}.<ext>`). Not yet fetched (null) and the old format (no stamp) are both
+ * treated as "the oldest" = top priority (for the oldest-first decision of
+ * refreshAllVendorFavicons. This avoids holding the fetch time in a separate column).
  */
 function faviconStampMs(faviconKey: string | null): number {
   if (!faviconKey) return 0
@@ -239,25 +255,27 @@ function faviconStampMs(faviconKey: string | null): number {
 }
 
 /**
- * website_url がある業者を対象にファビコンを取得する。`force` が false なら
- * 既に favicon_key がある業者は対象外（design 通り）。1 社の失敗は次の業者を止めない。
+ * Fetches favicons for vendors that have a website_url. If `force` is false, vendors that
+ * already have a favicon_key are excluded (as in the design). A failure of 1 vendor does
+ * not stop the next vendor.
  *
- * `force` が false のときは `favicon_source = 'manual'`（業者フォームからの手動アップロード）
- * の業者も対象外にする: 手動アップロードは常に favicon_key を持つため、実際には
- * 「favicon_key が無い業者だけ」というだけで既に除外されているが、由来を明示的に見て
- * 除外することで「たまたま key が無いから除外されている」という偶然の防御ではなく
- * 意図した仕様として自己文書化する。`force` が true（「取り直す」）のときは手動アップロード
- * も対象に含める（design 通り: 手動アップロードは自動更新から保護されるが、明示的な
- * 「取り直す」操作までは止めない）。
+ * When `force` is false, vendors with `favicon_source = 'manual'` (manual upload from the
+ * vendor form) are also excluded: a manual upload always has a favicon_key, so in practice
+ * they are already excluded just by "only vendors without a favicon_key", but excluding
+ * them by looking at the source explicitly self-documents this as the intended spec, not
+ * an accidental defense of "excluded because it happens to have no key". When `force` is
+ * true ("取り直す"), manual uploads are also included (as in the design: manual uploads are
+ * protected from automatic updates, but an explicit "取り直す" operation is not stopped).
  *
- * 1 回の呼び出しで処理するのは最大 MAX_VENDORS_PER_REFRESH_CALL（10）社まで
- * （業者 1 件で最悪 7 回の外向き fetch を直列に行うため、無制限だと応答時間・
- * サブリクエスト数が業者数に比例して際限なく伸びる）。`force` が false のときは
- * 対象がそもそも「未取得」だけなので処理順は先着順、`force` が true（取り直す）
- * のときは favicon_key の stamp が古い（＝最後に取得してから時間が経っている、
- * または未取得の）業者から優先する。処理しきれなかった分は `remaining` で返し、
- * 設定画面から「もう一度押す」ことで続きを拾える（次回はその 10 社の stamp が
- * 新しくなっているので、自然に次の 10 社へ順番が回る）。
+ * One call processes at most MAX_VENDORS_PER_REFRESH_CALL (10) vendors
+ * (one vendor does at worst 7 outbound fetches in series, so without a limit the response
+ * time and the number of subrequests grow without bound in proportion to the number of
+ * vendors). When `force` is false the targets are only "not yet fetched" in the first
+ * place, so the processing order is first come first served; when `force` is true (fetch
+ * again), vendors whose favicon_key stamp is old (= time has passed since the last fetch,
+ * or not yet fetched) come first. What could not be processed is returned as `remaining`,
+ * and "pressing once more" from the settings screen picks up the rest (next time the
+ * stamps of those 10 vendors are newer, so the turn naturally moves on to the next 10).
  */
 export async function refreshAllVendorFavicons(
   db: Db,
@@ -291,10 +309,11 @@ export async function refreshAllVendorFavicons(
 export type ImportPhotoResult = { ok: true; key: string } | { ok: false; error: string }
 
 /**
- * 代表者の顔写真を URL から取り込む。サーバー（Workers）側に Canvas が無いため
- * 縮小はできない: 取得した元のバイト列をそのまま display/thumb 両方の R2 キーへ置く
- * （design の既知の限界。フォームからのアップロードは端末側 Canvas で縮小する）。
- * JPEG/PNG/WebP のみ許可（sniffImageType）。5MB 上限（MAX_IMPORTED_PHOTO_BYTES）。
+ * Imports the representative's face photo from a URL. The server (Workers) side has no
+ * Canvas, so it cannot downscale: the original fetched bytes are put as is under both the
+ * display and thumb R2 keys (a known limitation in the design. Uploads from the form are
+ * downscaled with Canvas on the device).
+ * Only JPEG/PNG/WebP are allowed (sniffImageType). 5MB limit (MAX_IMPORTED_PHOTO_BYTES).
  */
 export async function importRepresentativePhotoFromUrlCore(
   db: Db,
@@ -302,12 +321,13 @@ export async function importRepresentativePhotoFromUrlCore(
   url: string,
   fetchImpl: typeof fetch = fetch,
   bucket: R2Bucket = getPhotosBucket(),
-  // stamp 生成用。既定は実時計（fetchFaviconForVendor と同じ DI の理由）。
+  // For generating the stamp. The default is the real clock (same DI reason as
+  // fetchFaviconForVendor).
   now: () => number = Date.now,
 ): Promise<ImportPhotoResult> {
   try {
-    // R2 へ書く前に業者の実在を確認する（存在しない id に書くと孤児オブジェクトが残る。
-    // api.vendor-photos.$vendorId.tsx のアップロード経路と同じ判定）
+    // Confirm the vendor exists before writing to R2 (writing for a non-existent id leaves
+    // orphan objects. Same check as the upload path in api.vendor-photos.$vendorId.tsx)
     if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
     if (!isAllowedRemoteUrl(url)) return { ok: false, error: 'URL が許可されていません' }
 
@@ -342,8 +362,9 @@ export async function importRepresentativePhotoFromUrlCore(
 export type DeletePhotoResult = { ok: true } | { ok: false; error: string }
 
 /**
- * representative_photo_key を消し、R2 の display/thumb オブジェクトも消す。
- * 業者が実在しない id には何もしない（存在確認は importRepresentativePhotoFromUrlCore と同じ理由）。
+ * Clears representative_photo_key and also deletes the display/thumb objects in R2.
+ * Does nothing for an id whose vendor does not exist (the existence check has the same
+ * reason as importRepresentativePhotoFromUrlCore).
  */
 export async function deleteRepresentativePhotoObjects(
   db: Db,
@@ -352,8 +373,8 @@ export async function deleteRepresentativePhotoObjects(
 ): Promise<DeletePhotoResult> {
   try {
     if (!(await vendorExists(db, vendorId))) return { ok: false, error: VENDOR_NOT_FOUND_ERROR }
-    // 消す対象のキーは vendorId だけからは分からない（stamp を含むため）。
-    // 差し替え前の値として DB に保存されている実際のキーを読んでから消す。
+    // The key to delete cannot be known from vendorId alone (because it includes the stamp).
+    // Read the actual key stored in the DB as the pre-replacement value, then delete.
     const previousKey = await setVendorRepresentativePhotoKey(db, vendorId, null)
     if (previousKey) {
       const previousThumbKey = representativeThumbKeyFromDisplayKey(previousKey)
@@ -368,24 +389,27 @@ export async function deleteRepresentativePhotoObjects(
 export type UploadFaviconResult = { ok: true; key: string } | { ok: false; error: string }
 
 /**
- * サイトのアイコンを業者フォームから手動アップロードする（design 背景: Cloudflare からの
- * アクセスを一律拒否するサーバーがあり、自動取得（fetchFaviconForVendor）が届かないため）。
- * アップロード経路（src/routes/api.vendor-favicon.$vendorId.tsx）は multipart を
- * パースして bytes を取り出すだけで、検証・R2 書き込み・DB 更新はここに集約する
- * （vendorImagesFetcher.worker-test.ts から HTTP 層を経由せず直接テストできるように。
- * ファイル分割の理由はファイル先頭のコメント参照）。
+ * Manually uploads the site icon from the vendor form (design background: some servers
+ * reject all access from Cloudflare, so the automatic fetch (fetchFaviconForVendor) cannot
+ * reach them).
+ * The upload path (src/routes/api.vendor-favicon.$vendorId.tsx) only parses the multipart
+ * and takes out the bytes; validation, the R2 write and the DB update are gathered here
+ * (so that vendorImagesFetcher.worker-test.ts can test directly without going through the
+ * HTTP layer. See the comment at the top of the file for why the files are split).
  *
- * 許可する画像形式は自動取得と同じ（sniffFaviconType。SVG は含めない — stored XSS 対策は
- * src/lib/favicon.ts のコメント参照）。favicon_source を 'manual' にすることで、以後
- * 非 force の自動更新（refreshAllVendorFavicons・saveVendor 保存時のインライン取得）から
- * 除外される（「取り直す」= force はこの限りでない）。
+ * The allowed image formats are the same as the automatic fetch (sniffFaviconType. SVG is
+ * not included — for the stored XSS protection see the comment in src/lib/favicon.ts).
+ * Setting favicon_source to 'manual' excludes the vendor from later non-force automatic
+ * updates (refreshAllVendorFavicons, the inline fetch when saveVendor saves) ("取り直す" =
+ * force is not subject to this).
  */
 export async function uploadVendorFaviconCore(
   db: Db,
   vendorId: string,
   bytes: Uint8Array,
   bucket: R2Bucket = getPhotosBucket(),
-  // stamp 生成用。既定は実時計（fetchFaviconForVendor と同じ DI の理由）。
+  // For generating the stamp. The default is the real clock (same DI reason as
+  // fetchFaviconForVendor).
   now: () => number = Date.now,
 ): Promise<UploadFaviconResult> {
   try {
@@ -412,9 +436,11 @@ export async function uploadVendorFaviconCore(
 export type DeleteFaviconResult = { ok: true } | { ok: false; error: string }
 
 /**
- * favicon_key / favicon_source を両方 NULL にし、R2 のファビコンオブジェクトも消す
- * （業者フォームの「削除」ボタン用。自動取得・手動アップロードのどちらのキーでも同じ扱い）。
- * 業者が実在しない id には何もしない（存在確認は deleteRepresentativePhotoObjects と同じ理由）。
+ * Sets both favicon_key / favicon_source to NULL and also deletes the favicon object in R2
+ * (for the "削除" (delete) button in the vendor form. Keys from the automatic fetch and
+ * from manual upload are treated the same).
+ * Does nothing for an id whose vendor does not exist (the existence check has the same
+ * reason as deleteRepresentativePhotoObjects).
  */
 export async function deleteVendorFaviconObjects(
   db: Db,

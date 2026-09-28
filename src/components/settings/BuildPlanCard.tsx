@@ -26,9 +26,11 @@ type Values = {
 }
 
 /**
- * 設定の「建築計画」。階数・延床の坪数レンジ・土地以外の総予算だけを持つ
- * （土地や資金の一次情報はアプリの外。design.md §1）。比較表と業者詳細の
- * 「計画に対する目安」がこれを使う。
+ * "建築計画" (Build plan) in settings. Holds only the number of floors, the tsubo range of
+ * the total floor area, and the total budget excluding land
+ * (primary information about the land and funds lives outside the app. design.md §1).
+ * "計画に対する目安" (Estimate against the plan) in the comparison table and the vendor
+ * detail uses this.
  */
 export function BuildPlanCard({ plan }: { plan: BuildPlan | null }) {
   const router = useRouter()

@@ -1,7 +1,8 @@
 /**
- * 二人が同じ記録を同時に編集したとき、後から保存した方が黙って上書きしないための仕組み。
- * フォームは開いた時点の updated_at を expectedUpdatedAt として送り、更新は
- * `WHERE id = ? AND updated_at = ?` で行う。0 行なら相手が先に更新（または削除）している。
+ * A mechanism so that when the two people edit the same record at the same time, the one
+ * who saves later does not silently overwrite. The form sends the updated_at from when it
+ * was opened as expectedUpdatedAt, and the update is done with
+ * `WHERE id = ? AND updated_at = ?`. 0 rows means the other person updated (or deleted) it first.
  */
 export class StaleWriteError extends Error {
   constructor() {
@@ -10,14 +11,14 @@ export class StaleWriteError extends Error {
   }
 }
 
-/** 更新が 0 行で、かつ期待する更新日時が渡されていれば StaleWriteError */
+/** StaleWriteError if the update hit 0 rows and an expected update time was passed */
 export function assertUpdated(rows: unknown[], expectedUpdatedAt: string | null | undefined): void {
   if (expectedUpdatedAt && rows.length === 0) throw new StaleWriteError()
 }
 
 export type SaveResult = { id: string; conflict: false } | { id: null; conflict: true }
 
-/** 保存を実行し、競合なら { conflict: true } を返す（それ以外の例外はそのまま投げる） */
+/** Runs the save and returns { conflict: true } on a conflict (any other exception is rethrown as is) */
 export async function saveOrConflict(run: () => Promise<string>): Promise<SaveResult> {
   try {
     return { id: await run(), conflict: false }

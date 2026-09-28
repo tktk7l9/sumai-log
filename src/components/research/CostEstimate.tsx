@@ -19,9 +19,10 @@ const VERDICT_COLOR: Record<BudgetVerdict, string> = {
 }
 
 /**
- * 「建築計画に対する目安」。坪単価×計画の坪数で本体、本体÷0.7 で総額を出す
- * （src/lib/research.ts の estimateCost）。坪単価が無ければ「坪単価が未登録」と書く
- * （空の枠を出さない）。
+ * "建築計画に対する目安" (Estimate against the build plan). The building cost is price per
+ * tsubo × planned tsubo, and the total is building cost ÷ 0.7
+ * (estimateCost in src/lib/research.ts). Without a price per tsubo it writes
+ * "坪単価が未登録" (Price per tsubo not registered) (no empty frame is shown).
  */
 export function CostEstimate({
   vendor,
@@ -30,7 +31,7 @@ export function CostEstimate({
 }: {
   vendor: { pricePerTsuboMin: number | null; pricePerTsuboMax: number | null }
   plan: BuildPlan
-  /** 比較表のセル用: 1 行に詰めて出す */
+  /** For a cell of the comparison table: packed into 1 line */
   compact?: boolean
 }) {
   const estimate = estimateCost(vendor, plan)

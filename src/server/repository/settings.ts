@@ -30,12 +30,12 @@ export async function readHomeAreas(db: Db): Promise<string[]> {
   }
 }
 
-/** 利用者の「最後に使った日時」（ISO 8601）。キーは `lastSeen:<メール>`（src/lib/usage.ts） */
+/** A user's "最後に使った日時" (last used at), ISO 8601. Key `lastSeen:<email>` (src/lib/usage.ts) */
 export async function writeLastSeen(db: Db, email: string, at: string): Promise<void> {
   await writeSetting(db, lastSeenKey(email), at)
 }
 
-/** メール（小文字）→ 最後に使った日時。記録の無い人は含まれない */
+/** Email (lowercase) -> last used at. People with no record are not included */
 export async function readLastSeen(db: Db): Promise<Record<string, string>> {
   const rows = await db
     .select({ key: settings.key, value: settings.value })

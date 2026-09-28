@@ -8,7 +8,8 @@ import type { Member } from '../../lib/members'
 import { EmptyState } from '../EmptyState'
 import { MemberChip } from '../MemberChip'
 
-/** テキストの中の対象名だけをリンクにする。下線付きで「押せる」ことが分かるようにする */
+/** Only the target name inside the text becomes a link. Underlined so that it reads as
+ * "pressable". */
 const linkStyle = {
   color: 'var(--mantine-color-blue-7)',
   textDecoration: 'underline',
@@ -16,8 +17,9 @@ const linkStyle = {
   fontWeight: 600,
 } as const
 
-/** id 1 個をパスパラメータに取る詳細ページ。visit/vendor/property/place/video と、
- * comment がそれらのどれかを対象にした場合の遷移先で共有する。 */
+/** Detail pages that take a single id as the path parameter. Shared by
+ * visit/vendor/property/place/video and by the destination of a comment that targets one
+ * of them. */
 type IdRouteTo =
   | '/records/visits/$id'
   | '/candidates/vendors/$id'
@@ -61,17 +63,18 @@ function IdLink({ to, id, children }: { to: IdRouteTo; id: string; children: Rea
 }
 
 /**
- * kind で網羅的に分岐する（末尾の never 代入により、FeedKind が増えて分岐漏れが
- * 出るとここで typecheck が落ちる）。comment だけは対象の種別が固定でない
- * （src/server/repository/feed.ts の targetHref 参照）ため、その中でだけ
- * href.to を見て振り分ける。想定外の href.to（対象の種別が増えて未対応になった等）は
- * 誤ったページへ飛ばさないよう、リンクにせずプレーンテキストとして表示する。
+ * Branches exhaustively on kind (because of the never assignment at the end, typecheck
+ * fails here when FeedKind grows and a branch is missing). Only comment has no fixed
+ * target type (see targetHref in src/server/repository/feed.ts), so only inside it the
+ * branch looks at href.to. An unexpected href.to (for example a new target type that is
+ * not handled yet) is shown as plain text instead of a link, so that it never jumps to a
+ * wrong page.
  */
 function FeedRowLink({ item, children }: { item: FeedItem; children: React.ReactNode }) {
   switch (item.kind) {
     case 'visit':
     case 'photo':
-      // photo の href は自分が属する見学記録の詳細ページを指す
+      // The href of a photo points to the detail page of the visit record it belongs to
       return (
         <IdLink to="/records/visits/$id" id={item.href.params?.id ?? ''}>
           {children}
@@ -102,8 +105,8 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
         </IdLink>
       )
     case 'event': {
-      // calendar は m（表示月）が無いと今月にフォールバックし、他の月の予定は
-      // 選択状態で表示されない（HomeAgenda と同じく d から m を導く）
+      // Without m (the displayed month) calendar falls back to the current month, and an
+      // event in another month is not shown as selected (derive m from d, as in HomeAgenda)
       const d = item.href.search?.d ?? ''
       return (
         <Link to="/calendar" search={{ m: d.slice(0, 7), d }} style={linkStyle}>
@@ -112,7 +115,7 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
       )
     }
     case 'source':
-      // 情報源には詳細ページが無いため、一覧（/sources）へのリンクにする
+      // Sources have no detail page, so link to the list (/sources)
       return (
         <Link to="/sources" style={linkStyle}>
           {children}
@@ -174,8 +177,9 @@ export function RecentFeed({ items, members }: { items: FeedItem[]; members: Mem
                         {formatJstTime(item.at)}
                       </Text>
                       <div style={{ flexShrink: 0, paddingTop: 2 }}>
-                        {/* アイコンの隣の名前は出さない（所有者の要望）。誰が書いたかは
-                            丸の色と title/aria-label（読み上げ・ホバー）に残す */}
+                        {/* Do not show the name next to the icon (owner's request). Who wrote
+                            it stays in the circle color and title/aria-label (screen
+                            reader, hover) */}
                         <MemberChip email={item.by} members={members} iconOnly />
                       </div>
                       <Text size="sm" style={{ flex: 1, minWidth: 0 }}>

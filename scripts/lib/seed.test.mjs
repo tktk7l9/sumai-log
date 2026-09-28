@@ -12,72 +12,74 @@ import {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
-test('slugToId は UUID 形式の文字列を返す', () => {
+test('slugToId returns a string in UUID format', () => {
   assert.match(slugToId('vendor:acme-koumuten'), UUID_RE)
 })
 
-test('slugToId は同じ slug から常に同じ id を返す（冪等取り込みの前提）', () => {
+test('slugToId always returns the same id for the same slug (the premise of idempotent import)', () => {
   assert.equal(slugToId('vendor:acme-koumuten'), slugToId('vendor:acme-koumuten'))
 })
 
-test('slugToId は異なる slug から異なる id を返す', () => {
+test('slugToId returns different ids for different slugs', () => {
   assert.notEqual(slugToId('vendor:acme-koumuten'), slugToId('vendor:other-koumuten'))
 })
 
-test("sqlString は文字列中の ' を '' にエスケープする", () => {
+test("sqlString escapes ' in a string as ''", () => {
   assert.equal(sqlString("O'Reilly's House"), "'O''Reilly''s House'")
 })
 
-test('sqlString は null/undefined を NULL にする', () => {
+test('sqlString turns null/undefined into NULL', () => {
   assert.equal(sqlString(null), 'NULL')
   assert.equal(sqlString(undefined), 'NULL')
 })
 
-test('sqlString は真偽値を 0/1 にする', () => {
+test('sqlString turns booleans into 0/1', () => {
   assert.equal(sqlString(true), '1')
   assert.equal(sqlString(false), '0')
 })
 
-test('sqlString は数値をそのまま出す（クォートしない）', () => {
+test('sqlString emits numbers as is (not quoted)', () => {
   assert.equal(sqlString(42), '42')
   assert.equal(sqlString(1.5), '1.5')
 })
 
-test('normalizeAddress は 全角数字/丁目番号 を 半角ハイフン区切りに正規化する', () => {
+test('normalizeAddress normalizes full-width digits / chome-ban-go notation to half-width hyphen separators', () => {
   assert.equal(normalizeAddress('架空市架空町1丁目2番3号'), '架空市架空町1-2-3')
   assert.equal(normalizeAddress('架空市架空町1丁目2番'), '架空市架空町1-2')
 })
 
-test('normalizeAddress は全角数字と空白を正規化する', () => {
+test('normalizeAddress normalizes full-width digits and whitespace', () => {
   assert.equal(normalizeAddress('架空市 架空町１丁目２番３号'), '架空市架空町1-2-3')
 })
 
-test('normalizeAddress はダッシュ類を半角ハイフンに揃える', () => {
+test('normalizeAddress unifies dash-like characters to the half-width hyphen', () => {
   assert.equal(normalizeAddress('架空市架空町1－2－3'), '架空市架空町1-2-3')
   assert.equal(normalizeAddress('架空市架空町1ー2ー3'), '架空市架空町1-2-3')
 })
 
-test('normalizeAddress は null/undefined/空文字をそのまま返す', () => {
+test('normalizeAddress returns null/undefined/empty string as is', () => {
   assert.equal(normalizeAddress(null), null)
   assert.equal(normalizeAddress(undefined), undefined)
   assert.equal(normalizeAddress(''), '')
 })
 
-// 以下 3 件は src/lib/geocode.ts の normalizeAddress.test.ts と同じケース。
-// geocode_cache のキーがアプリ本体と一致し続けることを保証するため、挙動を丸ごと揃える。
-test('normalizeAddress: 全角英数を半角に、空白を除き、丁目・番地の表記ゆれを揃える（src/lib/geocode.ts と同じ挙動）', () => {
+// The following 3 are the same cases as normalizeAddress.test.ts of src/lib/geocode.ts.
+// The behavior is matched entirely, to guarantee that geocode_cache keys keep matching the app
+// itself.
+test('normalizeAddress: folds full-width alphanumerics to half-width, removes whitespace, and unifies chome/banchi notation variants (same behavior as src/lib/geocode.ts)', () => {
   assert.equal(normalizeAddress(' 仮想県 テスト市 １－２－３ '), '仮想県テスト市1-2-3')
   assert.equal(normalizeAddress('仮想県テスト市1丁目2番3号'), '仮想県テスト市1-2-3')
   assert.equal(normalizeAddress('仮想県テスト市1丁目'), '仮想県テスト市1丁目')
 })
 
-test('normalizeAddress: 「号」「地」が省略された表記も丁目番地表記に揃える', () => {
+test('normalizeAddress: notation that omits the trailing go (of ban-go) or chi (of banchi) is also unified to the chome-banchi form', () => {
   assert.equal(normalizeAddress('架空町1丁目2番3'), '架空町1-2-3')
   assert.equal(normalizeAddress('架空町1丁目2番地'), '架空町1-2')
 })
 
-// normalizeSocialUrls も src/lib/social.ts と同じ挙動にする（trim・空/非 http 除外・重複除去・最大 10 件）。
-test('normalizeSocialUrls: 空白除去・空と非 http を除外・重複除去・10 件まで（src/lib/social.ts と同じ挙動）', () => {
+// normalizeSocialUrls also behaves the same as src/lib/social.ts (trim, exclude empty/non-http,
+// drop duplicates, at most 10 entries).
+test('normalizeSocialUrls: trims whitespace, excludes empty and non-http, drops duplicates, up to 10 entries (same behavior as src/lib/social.ts)', () => {
   assert.deepEqual(
     normalizeSocialUrls([
       ' https://www.instagram.com/example/ ',
@@ -94,13 +96,13 @@ test('normalizeSocialUrls: 空白除去・空と非 http を除外・重複除�
   )
 })
 
-test('normalizeSocialUrls: 未指定（undefined/null）は空配列を返す', () => {
+test('normalizeSocialUrls: unspecified (undefined/null) returns an empty array', () => {
   assert.deepEqual(normalizeSocialUrls(undefined), [])
   assert.deepEqual(normalizeSocialUrls(null), [])
 })
 
-// parseGsiResponse も src/lib/geocode.ts と同じ判定（範囲チェック込み）にする。
-test('parseGsiResponse: 先頭の Feature の座標（[lng, lat]）と title を返す', () => {
+// parseGsiResponse also makes the same judgment as src/lib/geocode.ts (including the range check).
+test('parseGsiResponse: returns the coordinates ([lng, lat]) and title of the first Feature', () => {
   const json = [
     {
       geometry: { type: 'Point', coordinates: [139.5, 35.5] },
@@ -111,7 +113,7 @@ test('parseGsiResponse: 先頭の Feature の座標（[lng, lat]）と title を
   assert.deepEqual(parseGsiResponse(json), { lat: 35.5, lng: 139.5, title: '仮想県テスト市' })
 })
 
-test('parseGsiResponse: title が無ければ null にする', () => {
+test('parseGsiResponse: title becomes null when missing', () => {
   assert.deepEqual(parseGsiResponse([{ geometry: { coordinates: [139.5, 35.5] } }]), {
     lat: 35.5,
     lng: 139.5,
@@ -119,14 +121,14 @@ test('parseGsiResponse: title が無ければ null にする', () => {
   })
 })
 
-test('parseGsiResponse: 空配列・配列でない・座標が数値でない・範囲外は null', () => {
+test('parseGsiResponse: empty array, non-array, non-numeric coordinates, and out of range give null', () => {
   assert.equal(parseGsiResponse([]), null)
   assert.equal(parseGsiResponse({}), null)
   assert.equal(parseGsiResponse(null), null)
   assert.equal(parseGsiResponse([{ geometry: { coordinates: ['a', 'b'] } }]), null)
   assert.equal(parseGsiResponse([{ geometry: { coordinates: [139.5] } }]), null)
-  assert.equal(parseGsiResponse([{ geometry: { coordinates: [200, 35] } }]), null) // lng 範囲外
-  assert.equal(parseGsiResponse([{ geometry: { coordinates: [139.5, 95] } }]), null) // lat 範囲外
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: [200, 35] } }]), null) // lng out of range
+  assert.equal(parseGsiResponse([{ geometry: { coordinates: [139.5, 95] } }]), null) // lat out of range
 })
 
 function fictionalSeed(overrides = {}) {
@@ -211,7 +213,7 @@ function fictionalSeed(overrides = {}) {
   }
 }
 
-test('buildStatements: settings の INSERT ... ON CONFLICT(key) DO UPDATE 文が含まれる', () => {
+test('buildStatements: includes the INSERT ... ON CONFLICT(key) DO UPDATE statement for settings', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO settings'))
   assert.ok(stmt, 'settings statement が見つからない')
@@ -222,9 +224,10 @@ test('buildStatements: settings の INSERT ... ON CONFLICT(key) DO UPDATE 文が
   assert.match(stmt, /\["架空市"\]/)
 })
 
-test('buildStatements: vendors/places/events/visits/videos は INSERT ... ON CONFLICT(id) DO UPDATE 文が生成される（OR REPLACE は使わない）', () => {
+test('buildStatements: vendors/places/events/visits/videos produce INSERT ... ON CONFLICT(id) DO UPDATE statements (OR REPLACE is not used)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
-  // settings だけ主キーが key なので別テストで見る。ここでは id が主キーのテーブルだけ見る。
+  // Only settings has key as its primary key, so it is checked in another test. Here only
+  // tables whose primary key is id are checked.
   const idKeyedStatements = sql.filter((s) => !s.includes('INTO settings'))
   assert.ok(idKeyedStatements.some((s) => s.includes('INTO vendors')))
   assert.ok(idKeyedStatements.some((s) => s.includes('INTO places')))
@@ -238,7 +241,7 @@ test('buildStatements: vendors/places/events/visits/videos は INSERT ... ON CON
   }
 })
 
-test('buildStatements: vendors の ON CONFLICT DO UPDATE は created_by/created_at を更新対象から除く（他の列は更新する）', () => {
+test('buildStatements: ON CONFLICT DO UPDATE of vendors excludes created_by/created_at from the update (other columns are updated)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
@@ -248,13 +251,13 @@ test('buildStatements: vendors の ON CONFLICT DO UPDATE は created_by/created_
   assert.match(vendorStmt, /updated_at = excluded\.updated_at/)
 })
 
-test('buildStatements: created_by に actorEmail が入る', () => {
+test('buildStatements: actorEmail goes into created_by', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors'))
   assert.match(vendorStmt, /'owner@example\.com'/)
 })
 
-test('buildStatements: serviceAreas/tags は JSON 文字列としてシリアライズされる', () => {
+test('buildStatements: serviceAreas/tags are serialized as JSON strings', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorStmt, 'vendor-a の statement が見つからない')
@@ -263,7 +266,7 @@ test('buildStatements: serviceAreas/tags は JSON 文字列としてシリアラ
   assert.match(videoStmt, /\["タグ1","タグ2"\]/)
 })
 
-test('buildStatements: vendor の socialUrls は JSON 文字列になり、無指定なら空配列になる', () => {
+test('buildStatements: socialUrls of a vendor becomes a JSON string, and an empty array when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
@@ -276,7 +279,7 @@ test('buildStatements: vendor の socialUrls は JSON 文字列になり、無�
   assert.match(vendorBStmt, /'\[\]'/)
 })
 
-test('buildStatements: vendor の newsUrl/newsSource が指定されれば vendors INSERT に入る', () => {
+test('buildStatements: newsUrl/newsSource of a vendor go into the vendors INSERT when specified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
@@ -284,16 +287,17 @@ test('buildStatements: vendor の newsUrl/newsSource が指定されれば vendo
   assert.match(vendorAStmt, /'rss'/)
 })
 
-test('buildStatements: vendor の newsUrl/newsSource が未指定なら NULL になる', () => {
+test('buildStatements: newsUrl/newsSource of a vendor become NULL when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
-  // social_urls の直後（news_url, news_source の列位置）に NULL, NULL が並ぶ。
-  // representative_photo_key は representativePhotoReady に無いので列ごと出ない（Finding 3 参照）
+  // Right after social_urls (the column positions of news_url, news_source) come NULL, NULL.
+  // representative_photo_key is not in representativePhotoReady, so the whole column is
+  // not emitted (see Finding 3)
   assert.match(vendorBStmt, /'\[\]', NULL, NULL, 'owner@example\.com'/)
 })
 
-test('buildStatements: newsSource に html-list を指定できる', () => {
+test('buildStatements: html-list can be specified as newsSource', () => {
   const seed = fictionalSeed()
   seed.vendors[1].newsUrl = 'https://www.example-koumuten.co.jp/'
   seed.vendors[1].newsSource = 'html-list'
@@ -302,13 +306,13 @@ test('buildStatements: newsSource に html-list を指定できる', () => {
   assert.match(vendorBStmt, /'html-list'/)
 })
 
-test('buildStatements: newsSource が rss/html-list 以外なら例外（slug と値を含む）', () => {
+test('buildStatements: throws when newsSource is other than rss/html-list (includes the slug and value)', () => {
   const seed = fictionalSeed()
   seed.vendors[0].newsSource = 'atom'
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /vendor-a.*atom/s)
 })
 
-test('buildStatements: vendor の representative/affiliations が指定されれば vendors INSERT に入る', () => {
+test('buildStatements: representative/affiliations of a vendor go into the vendors INSERT when specified', () => {
   const seed = fictionalSeed()
   seed.vendors[0].representative = '山田太郎'
   seed.vendors[0].affiliations = ['iedukuri100', 'miratsugu']
@@ -319,7 +323,7 @@ test('buildStatements: vendor の representative/affiliations が指定されれ
   assert.match(vendorAStmt, /\["iedukuri100","miratsugu"\]/)
 })
 
-test('buildStatements: vendor の representative/affiliations が未指定なら NULL / 空配列になる', () => {
+test('buildStatements: representative/affiliations of a vendor become NULL / empty array when unspecified', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
@@ -327,7 +331,7 @@ test('buildStatements: vendor の representative/affiliations が未指定なら
   assert.match(vendorBStmt, /NULL, NULL, '\[\]', '\[\]'/)
 })
 
-test('buildStatements: affiliations に未知の id が混ざると例外（slug と値を含む）', () => {
+test('buildStatements: throws when affiliations contains an unknown id (includes the slug and value)', () => {
   const seed = fictionalSeed()
   seed.vendors[0].affiliations = ['iedukuri100', 'no-such-group']
   assert.throws(
@@ -336,7 +340,7 @@ test('buildStatements: affiliations に未知の id が混ざると例外（slug
   )
 })
 
-test('buildStatements: vendor の affiliationLinks が指定されれば vendors INSERT に JSON で入る', () => {
+test('buildStatements: affiliationLinks of a vendor goes into the vendors INSERT as JSON when specified', () => {
   const seed = fictionalSeed()
   seed.vendors[0].affiliationLinks = {
     'kouzou-cram': { url: 'https://kouzou-cram.com/partnermap/example/', note: '構造 ★★★' },
@@ -350,7 +354,7 @@ test('buildStatements: vendor の affiliationLinks が指定されれば vendors
   )
 })
 
-test('buildStatements: affiliationLinks が未指定なら空オブジェクトになる（許容する）', () => {
+test('buildStatements: affiliationLinks becomes an empty object when unspecified (allowed)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
   assert.ok(vendorBStmt, 'vendor-b の statement が見つからない')
@@ -358,7 +362,7 @@ test('buildStatements: affiliationLinks が未指定なら空オブジェクト�
   assert.match(vendorBStmt, /'\[\]', '\{\}'/)
 })
 
-test('buildStatements: affiliationLinks に未知の id が混ざると例外（slug と値を含む）', () => {
+test('buildStatements: throws when affiliationLinks contains an unknown id (includes the slug and value)', () => {
   const seed = fictionalSeed()
   seed.vendors[0].affiliationLinks = { 'no-such-group': { url: 'https://example.com/' } }
   assert.throws(
@@ -367,7 +371,7 @@ test('buildStatements: affiliationLinks に未知の id が混ざると例外（
   )
 })
 
-test('buildStatements: affiliationLinks.url が https:// で始まらないと例外', () => {
+test('buildStatements: throws when affiliationLinks.url does not start with https://', () => {
   const seed = fictionalSeed()
   seed.vendors[0].affiliationLinks = { 'kouzou-cram': { url: 'http://example.com/' } }
   assert.throws(
@@ -376,7 +380,7 @@ test('buildStatements: affiliationLinks.url が https:// で始まらないと�
   )
 })
 
-test('buildStatements: affiliationLinks.note が 60 字を超えると例外', () => {
+test('buildStatements: throws when affiliationLinks.note exceeds 60 characters', () => {
   const seed = fictionalSeed()
   seed.vendors[0].affiliationLinks = {
     'kouzou-cram': { url: 'https://example.com/', note: 'あ'.repeat(61) },
@@ -387,9 +391,9 @@ test('buildStatements: affiliationLinks.note が 60 字を超えると例外', (
   )
 })
 
-test('buildStatements: representativePhotoReady に slug が入っていれば representative_photo_key が stamp 入りで入る（vendorId + stamp から決まる key）', () => {
+test('buildStatements: when the slug is in representativePhotoReady, representative_photo_key is set with a stamp (a key determined from vendorId + stamp)', () => {
   const seed = fictionalSeed()
-  // now を固定すると stamp（= new Date(now).getTime().toString(36)）も決定的になる
+  // Fixing now makes the stamp (= new Date(now).getTime().toString(36)) deterministic too
   const now = '2026-01-01T00:00:00.000Z'
   const { sql } = buildStatements(seed, {
     actorEmail: 'owner@example.com',
@@ -406,7 +410,7 @@ test('buildStatements: representativePhotoReady に slug が入っていれば r
   )
 })
 
-test('buildStatements: representativePhotoReady のキーは now が違えば違う stamp になる（差し替えのたびに URL が変わる）', () => {
+test('buildStatements: the key for representativePhotoReady gets a different stamp when now differs (the URL changes on every replacement)', () => {
   const seed = fictionalSeed()
   const first = buildStatements(seed, {
     actorEmail: 'owner@example.com',
@@ -421,20 +425,22 @@ test('buildStatements: representativePhotoReady のキーは now が違えば違
   assert.notEqual(first, second)
 })
 
-test('buildStatements: representativePhotoReady に無い vendor は representative_photo_key が NULL のまま（未指定の既定も同じ）', () => {
+test('buildStatements: for a vendor not in representativePhotoReady, representative_photo_key stays NULL (same for the default when unspecified)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   assert.ok(vendorAStmt, 'vendor-a の statement が見つからない')
   assert.doesNotMatch(vendorAStmt, /representative-display\.jpg/)
 })
 
-// Finding 3 の回帰防止: representativePhoto を持たない（= representativePhotoReady に無い）
-// vendor を再取り込みしても、フォーム経由で既に付いている representative_photo_key を
-// NULL に巻き戻してはいけない（favicon_key と同じ「seed が触らない列」の扱い）。
-// upsertStatement は row に無い列を UPDATE SET にも出さないので、INSERT 文そのものに
-// `representative_photo_key` という語が一切現れないことを確認すれば「列ごと省略されている
-// （= 値を明示的に null で上書きしていない）」ことを厳密に検証できる。
-test('buildStatements: representativePhoto が無い vendor の INSERT 文に representative_photo_key 列自体が出ない（再取込で列を NULL に巻き戻さない）', () => {
+// Regression guard for Finding 3: re-importing a vendor that has no representativePhoto
+// (= not in representativePhotoReady) must not roll back to NULL a representative_photo_key
+// that was already set through the form (treated as a "column seed does not touch", same
+// as favicon_key).
+// upsertStatement does not emit columns missing from row in UPDATE SET either, so checking
+// that the word `representative_photo_key` never appears in the INSERT statement itself
+// strictly verifies that "the whole column is omitted (= the value is not explicitly
+// overwritten with null)".
+test('buildStatements: the INSERT statement of a vendor without representativePhoto does not contain the representative_photo_key column itself (re-import does not roll the column back to NULL)', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const vendorAStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空工務店A'))
   const vendorBStmt = sql.find((s) => s.includes('INTO vendors') && s.includes('架空ハウス'))
@@ -444,7 +450,7 @@ test('buildStatements: representativePhoto が無い vendor の INSERT 文に re
   assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
 
-test('buildStatements: representativePhotoReady に slug が入っている vendor だけ、その INSERT/UPDATE 文に representative_photo_key 列が出る', () => {
+test('buildStatements: only a vendor whose slug is in representativePhotoReady has the representative_photo_key column in its INSERT/UPDATE statement', () => {
   const seed = fictionalSeed()
   const { sql } = buildStatements(seed, {
     actorEmail: 'owner@example.com',
@@ -458,7 +464,7 @@ test('buildStatements: representativePhotoReady に slug が入っている vend
   assert.doesNotMatch(vendorBStmt, /representative_photo_key/)
 })
 
-test("buildStatements: 名前に ' が入っていてもエスケープされる", () => {
+test("buildStatements: a name containing ' is still escaped", () => {
   const seed = fictionalSeed()
   seed.vendors[0].name = "架空's工務店"
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
@@ -466,31 +472,31 @@ test("buildStatements: 名前に ' が入っていてもエスケープされる
   assert.ok(vendorStmt, 'エスケープされた名前を含む文が見つからない')
 })
 
-test('buildStatements: vendor が存在しない slug を参照するとエラー（slug を含む）', () => {
+test('buildStatements: error when vendor refers to a nonexistent slug (includes the slug)', () => {
   const seed = fictionalSeed()
   seed.places[0].vendor = 'no-such-vendor'
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-vendor/)
 })
 
-test('buildStatements: place が存在しない slug を参照するとエラー（slug を含む）', () => {
+test('buildStatements: error when place refers to a nonexistent slug (includes the slug)', () => {
   const seed = fictionalSeed()
   seed.events[0].place = 'no-such-place'
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-place/)
 })
 
-test('buildStatements: visit が存在しない place slug を参照するとエラー', () => {
+test('buildStatements: error when a visit refers to a nonexistent place slug', () => {
   const seed = fictionalSeed()
   seed.visits[0].place = 'no-such-place'
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-place/)
 })
 
-test('buildStatements: visit が存在しない event slug を参照するとエラー', () => {
+test('buildStatements: error when a visit refers to a nonexistent event slug', () => {
   const seed = fictionalSeed()
   seed.visits[0].event = 'no-such-event'
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-event/)
 })
 
-test('buildStatements: photos は visit ごとに src 配列の並び順で sortOrder 0,1,… になる', () => {
+test('buildStatements: photos get sortOrder 0,1,... in the order of the src array per visit', () => {
   const { photos } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const own = photos.filter((p) => p.visitSlug === 'visit-a')
   assert.equal(own.length, 2)
@@ -500,7 +506,7 @@ test('buildStatements: photos は visit ごとに src 配列の並び順で sort
   assert.equal(own[1].src, 'seed.local/photos/fake-2.HEIC')
 })
 
-test('buildStatements: photos の id/キーは決定的（photoId は slugToId(visitSlug + ":" + basename)）', () => {
+test('buildStatements: ids/keys of photos are deterministic (photoId is slugToId(visitSlug + ":" + basename))', () => {
   const { photos } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const p0 = photos.find((p) => p.src === 'seed.local/photos/fake-1.HEIC')
   assert.equal(p0.photoId, slugToId('visit-a:fake-1.HEIC'))
@@ -508,13 +514,13 @@ test('buildStatements: photos の id/キーは決定的（photoId は slugToId(v
   assert.match(p0.thumbKey, /^photos\/[0-9a-f-]{36}\/[0-9a-f-]{36}-thumb\.jpg$/)
 })
 
-test('buildStatements: photoSizes が無い写真の SQL は省略される（sql には出ない）', () => {
+test('buildStatements: SQL for photos without photoSizes is omitted (not emitted in sql)', () => {
   const { sql, photos } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   assert.ok(photos.length > 0)
   assert.ok(!sql.some((s) => s.includes('INTO photos')))
 })
 
-test('buildStatements: photoSizes を渡すと該当写真の photos INSERT 文が実寸込みで出る', () => {
+test('buildStatements: passing photoSizes emits the photos INSERT statement of those photos with the actual size', () => {
   const seed = fictionalSeed()
   const first = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const photoSizes = Object.fromEntries(
@@ -526,7 +532,7 @@ test('buildStatements: photoSizes を渡すと該当写真の photos INSERT 文�
   assert.ok(photoStmts.every((s) => s.includes('1600') && s.includes('1200')))
 })
 
-test('buildStatements: coords を渡すと places の lat/lng/geocode_source が入る', () => {
+test('buildStatements: passing coords sets lat/lng/geocode_source of places', () => {
   const seed = fictionalSeed()
   const coords = { 'place-a': { lat: 35.1, lng: 139.4 } }
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com', coords })
@@ -536,14 +542,15 @@ test('buildStatements: coords を渡すと places の lat/lng/geocode_source が
   assert.match(placeStmt, /'gsi'/)
 })
 
-test('buildStatements: coords が無い place の lat/lng は NULL', () => {
+test('buildStatements: lat/lng of a place without coords are NULL', () => {
   const { sql } = buildStatements(fictionalSeed(), { actorEmail: 'owner@example.com' })
   const placeStmt = sql.find((s) => s.includes('INTO places'))
-  // lat, lng の並びで NULL, NULL が出ることを確認（列順は places テーブル定義に依存）
+  // Check that NULL, NULL appear at the lat, lng positions (the column order depends on
+  // the places table definition)
   assert.match(placeStmt, /NULL/)
 })
 
-test('buildStatements: now を渡すと created_at/updated_at に使われる', () => {
+test('buildStatements: passing now uses it for created_at/updated_at', () => {
   const { sql } = buildStatements(fictionalSeed(), {
     actorEmail: 'owner@example.com',
     now: '2026-01-01T00:00:00.000Z',
@@ -572,9 +579,10 @@ function fictionalSource(overrides = {}) {
   }
 }
 
-// url が自然キー（brief のレビュー指摘どおり）: フォームから先に同じ URL の行が
-// 別 id で作られていても、再取り込みが「別行の追加」にならず「その行の上書き」になる。
-test('buildStatements: sources は url を自然キーに INSERT ... ON CONFLICT(url) DO UPDATE 文が生成される（id ではない）', () => {
+// url is the natural key (as pointed out in the review of the brief): even when a row with
+// the same URL was created from the form first with a different id, re-importing becomes
+// "overwriting that row", not "adding another row".
+test('buildStatements: sources produce INSERT ... ON CONFLICT(url) DO UPDATE statements with url as the natural key (not id)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource()] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
@@ -586,7 +594,7 @@ test('buildStatements: sources は url を自然キーに INSERT ... ON CONFLICT
   assert.match(stmt, /架空チャンネル/)
 })
 
-test('buildStatements: sources の ON CONFLICT(url) DO UPDATE は id も更新対象に含む（所有者が手で足した行の id を seed の決定的な id に揃える）', () => {
+test('buildStatements: ON CONFLICT(url) DO UPDATE of sources also updates id (aligns the id of a row the owner added by hand to the deterministic id of seed)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource()] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
@@ -595,26 +603,26 @@ test('buildStatements: sources の ON CONFLICT(url) DO UPDATE は id も更新�
   assert.doesNotMatch(stmt, /created_at = excluded\.created_at/)
 })
 
-test('buildStatements: source の id は slugToId("source:" + slug) で決まる（冪等）', () => {
+test('buildStatements: the id of a source is determined by slugToId("source:" + slug) (idempotent)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ slug: 'yt-example' })] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
   assert.match(stmt, new RegExp(slugToId('source:yt-example')))
 })
 
-test('buildStatements: source の vendorSlug が指定されれば vendor_id が解決される', () => {
+test('buildStatements: vendor_id is resolved when vendorSlug of a source is specified', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ vendorSlug: 'vendor-a' })] })
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
   assert.match(stmt, new RegExp(slugToId('vendor:vendor-a')))
 })
 
-test('buildStatements: source の vendorSlug が存在しない slug を参照するとエラー（slug を含む）', () => {
+test('buildStatements: error when vendorSlug of a source refers to a nonexistent slug (includes the slug)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ vendorSlug: 'no-such-vendor' })] })
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /no-such-vendor/)
 })
 
-test('buildStatements: source の kind を省略すると URL から自動判定される（YouTube チャンネル URL → youtube）', () => {
+test('buildStatements: omitting kind of a source auto-detects it from the URL (YouTube channel URL -> youtube)', () => {
   const seed = fictionalSeed({
     sources: [fictionalSource({ kind: undefined, url: 'https://www.youtube.com/@example-house' })],
   })
@@ -623,7 +631,7 @@ test('buildStatements: source の kind を省略すると URL から自動判定
   assert.match(stmt, /'youtube'/)
 })
 
-test('buildStatements: source の kind を省略し URL が YouTube チャンネルの形でなければ site になる', () => {
+test('buildStatements: omitting kind of a source gives site when the URL is not in the shape of a YouTube channel', () => {
   const seed = fictionalSeed({
     sources: [fictionalSource({ kind: undefined, url: 'https://example.com/blog' })],
   })
@@ -632,7 +640,7 @@ test('buildStatements: source の kind を省略し URL が YouTube チャンネ
   assert.match(stmt, /'site'/)
 })
 
-test('buildStatements: source の genre が未知なら例外（slug と値を含む）', () => {
+test('buildStatements: throws when genre of a source is unknown (includes the slug and value)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ genre: 'no-such-genre' })] })
   assert.throws(
     () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
@@ -640,7 +648,7 @@ test('buildStatements: source の genre が未知なら例外（slug と値を�
   )
 })
 
-test('buildStatements: source の kind が未知なら例外（slug と値を含む）', () => {
+test('buildStatements: throws when kind of a source is unknown (includes the slug and value)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ kind: 'podcast' })] })
   assert.throws(
     () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
@@ -648,21 +656,22 @@ test('buildStatements: source の kind が未知なら例外（slug と値を含
   )
 })
 
-test('buildStatements: source の url が https:// で始まらなければ例外', () => {
+test('buildStatements: throws when url of a source does not start with https://', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ url: 'http://example.com' })] })
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /https:\/\//)
 })
 
-test('buildStatements: source の avatarUrl が https:// で始まらなければ例外', () => {
+test('buildStatements: throws when avatarUrl of a source does not start with https://', () => {
   const seed = fictionalSeed({
     sources: [fictionalSource({ avatarUrl: 'http://yt3.ggpht.com/fake' })],
   })
   assert.throws(() => buildStatements(seed, { actorEmail: 'owner@example.com' }), /avatarUrl/)
 })
 
-// zod 側（sources.schema.ts の isAllowedAvatarUrl）と同じホスト許可リストを seed でも見る
-// （brief のレビュー指摘: 2 つの入口で規則がずれていた）
-test('buildStatements: source の avatarUrl が許可ホスト外なら例外（slug と値を含む）', () => {
+// seed also checks the same host allowlist as the zod side (isAllowedAvatarUrl in
+// sources.schema.ts)
+// (pointed out in the review of the brief: the rules differed between the 2 entry points)
+test('buildStatements: throws when avatarUrl of a source is outside the allowed hosts (includes the slug and value)', () => {
   const seed = fictionalSeed({
     sources: [fictionalSource({ avatarUrl: 'https://evil.example/a.jpg' })],
   })
@@ -672,7 +681,7 @@ test('buildStatements: source の avatarUrl が許可ホスト外なら例外（
   )
 })
 
-test('buildStatements: source の avatarUrl は yt3.ggpht.com / i.ytimg.com も許可する', () => {
+test('buildStatements: avatarUrl of a source also allows yt3.ggpht.com / i.ytimg.com', () => {
   for (const avatarUrl of [
     'https://yt3.ggpht.com/fake=s900',
     'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
@@ -682,7 +691,7 @@ test('buildStatements: source の avatarUrl は yt3.ggpht.com / i.ytimg.com も�
   }
 })
 
-test('buildStatements: source の affiliation が未知なら例外（slug と値を含む）', () => {
+test('buildStatements: throws when affiliation of a source is unknown (includes the slug and value)', () => {
   const seed = fictionalSeed({ sources: [fictionalSource({ affiliation: 'no-such-affiliation' })] })
   assert.throws(
     () => buildStatements(seed, { actorEmail: 'owner@example.com' }),
@@ -690,14 +699,14 @@ test('buildStatements: source の affiliation が未知なら例外（slug と�
   )
 })
 
-test('buildStatements: source の affiliation（構造塾マップ含む既知の id）は許可される', () => {
+test('buildStatements: affiliation of a source (known ids, including the Kouzou-juku map) is allowed', () => {
   for (const affiliation of ['iedukuri100', 'miratsugu', 'kouzou-cram']) {
     const seed = fictionalSeed({ sources: [fictionalSource({ affiliation })] })
     assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))
   }
 })
 
-test('buildStatements: source の handle/channelId/description/avatarUrl/affiliation 未指定は NULL になる', () => {
+test('buildStatements: unspecified handle/channelId/description/avatarUrl/affiliation of a source become NULL', () => {
   const seed = fictionalSeed({
     sources: [
       {
@@ -712,13 +721,13 @@ test('buildStatements: source の handle/channelId/description/avatarUrl/affilia
   const { sql } = buildStatements(seed, { actorEmail: 'owner@example.com' })
   const stmt = sql.find((s) => s.includes('INTO sources'))
   assert.match(stmt, /最小構成チャンネル/)
-  // 6 個の NULL（handle, channel_id, description, avatar_url, vendor_id, affiliation）が
-  // 少なくとも入っていることだけ緩く確認する（列順に依存しすぎない）
+  // Loosely check only that at least 6 NULLs (handle, channel_id, description, avatar_url,
+  // vendor_id, affiliation) are present (without depending too much on column order)
   const nullCount = (stmt.match(/NULL/g) ?? []).length
   assert.ok(nullCount >= 6, `NULL の数が想定より少ない: ${nullCount}`)
 })
 
-test('sources が無い seed（sources キー自体が無い）でも buildStatements は例外にならない', () => {
+test('buildStatements does not throw even for a seed without sources (the sources key itself is missing)', () => {
   const seed = fictionalSeed()
   delete seed.sources
   assert.doesNotThrow(() => buildStatements(seed, { actorEmail: 'owner@example.com' }))

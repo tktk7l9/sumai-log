@@ -1,22 +1,23 @@
 /**
- * 見学記録の「次にやること」をチェックリストとして扱う（純粋関数）。保存形式は今までどおり
- * 1 行 1 項目のテキストで、済んだ行は先頭に「済 」を付ける（分析ページもこの印で数える）。
+ * Handles "次にやること" (Next actions) of a visit record as a checklist (pure functions). The
+ * stored format is unchanged: text with 1 item per line, and a done line gets "済 " (done) at
+ * its head (the analysis page also counts by this mark).
  */
 
-/** 済んだ行の印。「済」「完了」「✓」「✔」「[x]」で始まる行を済みとみなす */
+/** Mark of a done line. A line starting with "済", "完了", "✓", "✔" or "[x]" is taken as done */
 export const DONE_PREFIX = /^(済|完了|✓|✔|\[x\])\s*/iu
 
-/** 行頭の箇条書きの印（「・」「-」「*」「□」「1.」など） */
+/** Bullet mark at the head of a line ("・", "-", "*", "□", "1." etc.) */
 const BULLET = /^([・\-*□☐]|\d+[.)．])\s*/u
 
 export type ActionItem = {
-  /** 元のテキストの何行目か */
+  /** Line number in the original text */
   line: number
   text: string
   done: boolean
 }
 
-/** テキストを項目に分ける。空行と、印だけで中身の無い行は項目にしない */
+/** Splits text into items. Empty lines, and lines with only a mark and no content, are skipped */
 export function parseActions(text: string | null | undefined): ActionItem[] {
   return (text ?? '')
     .split(/\r?\n/u)
@@ -29,7 +30,10 @@ export function parseActions(text: string | null | undefined): ActionItem[] {
     .filter((a) => a.text !== '')
 }
 
-/** 指定の行の済／未済を切り替えた新しいテキスト。済にするときは「済 」を付け、戻すときは外す */
+/**
+ * New text with done / not done toggled for the given line. Adds "済 " when marking done and
+ * removes it when reverting
+ */
 export function toggleAction(text: string, line: number): string {
   const lines = text.split(/\r?\n/u)
   const raw = lines[line]
@@ -39,7 +43,7 @@ export function toggleAction(text: string, line: number): string {
   return lines.join('\n')
 }
 
-/** 末尾に項目を足した新しいテキスト。空の項目は足さない */
+/** New text with the item appended at the end. An empty item is not appended */
 export function appendAction(text: string | null | undefined, item: string): string {
   const body = item.trim()
   const base = (text ?? '').replace(/\s+$/u, '')

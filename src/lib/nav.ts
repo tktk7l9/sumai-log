@@ -1,5 +1,6 @@
 /**
- * ナビゲーションの選択状態。'/' だけは前方一致だと常に一致してしまうため完全一致にする。
+ * Selected state of the navigation. Only '/' uses an exact match, because a prefix match would
+ * always match it.
  */
 export function isNavItemActive(pathname: string, to: string): boolean {
   if (to === '/') return pathname === '/'
@@ -7,8 +8,8 @@ export function isNavItemActive(pathname: string, to: string): boolean {
 }
 
 /**
- * 下タブ（スマホ）と左ナビ（デスクトップ）で共有するタブ定義。
- * 「設定」はタブに含めず、ヘッダの個別リンクとして扱う（AppLayout 側）。
+ * Tab definitions shared by the bottom tabs (phone) and the left nav (desktop).
+ * "設定" (Settings) is not a tab; it is a separate link in the header (on the AppLayout side).
  */
 export const NAV_ITEMS = [
   { to: '/', label: 'ホーム', icon: 'home' },

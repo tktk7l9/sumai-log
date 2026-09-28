@@ -9,10 +9,12 @@ import { appendAction, parseActions, toggleAction } from '../../lib/nextActions'
 import { saveVisitNextActions } from '../../server/visits'
 
 /**
- * 見学記録の「次にやること」をチェックリストで扱う。タップで済／未済を切り替えてその場で
- * 保存し（編集画面を開かない）、下の欄から Enter で続けて足せる。保存は 1 件ずつ順番に
- * 送り、返ってきた更新日時を次の保存の基準にする（続けて押しても相手の更新と取り違えない）。
- * 相手が先に書き換えていたら上書きせず、読み直す
+ * Handles "次にやること" (Next actions) of a visit record as a checklist. A tap toggles
+ * done / not done and saves on the spot (without opening the edit screen), and more items
+ * can be added one after another with Enter from the field below. Saves are sent one at a
+ * time in order, and the returned update time becomes the base of the next save (pressing
+ * in succession is not mistaken for the other person's update).
+ * When the other person has rewritten it first, it does not overwrite; it reloads
  */
 export function NextActionsChecklist({
   visitId,
@@ -30,10 +32,11 @@ export function NextActionsChecklist({
   const base = useRef(updatedAt)
   const queue = useRef<Promise<void>>(Promise.resolve())
   const pending = useRef(0)
-  // 競合で読み直したら、それより前に積んだ保存は捨てる
+  // After reloading because of a conflict, drop the saves queued before it
   const generation = useRef(0)
 
-  // 読み直しなどで外から新しい値が来たら合わせる（自分の保存待ちが無いときだけ）
+  // When a new value arrives from outside, e.g. after a reload, follow it (only when none
+  // of our own saves are pending)
   useEffect(() => {
     if (pending.current === 0) {
       setText(nextActions ?? '')
@@ -129,7 +132,7 @@ export function NextActionsChecklist({
         maxLength={200}
         enterKeyHint="enter"
         onKeyDown={(e) => {
-          // 日本語入力の変換を確定する Enter では足さない
+          // Do not add on the Enter that confirms a Japanese IME conversion
           if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
             e.preventDefault()
             add()

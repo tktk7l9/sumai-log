@@ -8,8 +8,9 @@ import { nowJstIso } from './events'
 import { listAllEvents, listVideosWithLinks, listVisitsWithLinks } from './repository'
 
 /**
- * 記録の分析（/analysis）。D1 から見学・動画・業者・予定・コメントを読み、集計は
- * src/lib/analysis.ts の純粋関数で行う。画面には集計結果だけを返す（本文を丸ごと送らない）
+ * Analysis of the records (/analysis). Reads visits, videos, vendors, events and comments from
+ * D1, and aggregates with the pure functions in src/lib/analysis.ts. Only the aggregated
+ * result is returned to the screen (the full bodies are not sent)
  */
 export const getAnalysis = createServerFn().handler(async () => {
   const db = getDb()

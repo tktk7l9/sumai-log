@@ -1,14 +1,15 @@
 /**
- * createServerFn の validator（zod）失敗から日本語のメッセージを取り出す。
+ * Extracts a Japanese message from a createServerFn validator (zod) failure.
  *
- * TanStack Start の createServerFn は validator（zod）が失敗すると、クライアント側で
- * 受け取る Error#message が issues 配列の JSON 文字列になる。zod の既定メッセージは
- * 英語（例: "Too big: expected string to have <=30 characters"）なので、フィールド名と
- * code（too_big / too_small / invalid_type / invalid_value）から具体的な日本語の文に
- * 言い換える。サーバー側が明示的に日本語で投げたメッセージ（例:「タグは 1 つ以上
- * 必要です」）はそのまま使う。issues 配列として読めない・フィールドが未知の場合は
- * 汎用の「保存できませんでした」にフォールバックする（1 つの広いメッセージで済ませない
- * ための最終手段）。
+ * When the validator (zod) of TanStack Start's createServerFn fails, the Error#message
+ * received on the client is a JSON string of the issues array. zod's default messages are
+ * English (e.g. "Too big: expected string to have <=30 characters"), so they are rephrased
+ * into a concrete Japanese sentence from the field name and the code (too_big / too_small /
+ * invalid_type / invalid_value). A message the server explicitly threw in Japanese (e.g.
+ * "タグは 1 つ以上必要です" (At least 1 tag is required)) is used as is. When it cannot be
+ * read as an issues array or the field is unknown, fall back to the generic
+ * "保存できませんでした" (Could not save) (a last resort, so that one broad message is not
+ * used for everything).
  */
 
 const JAPANESE_CHAR = /[぀-ヿ㐀-鿿]/
@@ -23,7 +24,7 @@ type RawIssue = {
   message?: unknown
 }
 
-/** フィールドごと・code ごとの言い換え。ここに無い組み合わせは DEFAULT_MESSAGE */
+/** Rephrasing per field and per code. A combination not listed here gets DEFAULT_MESSAGE */
 const FIELD_CODE_MESSAGE: Partial<Record<string, Partial<Record<ZodIssueCode, string>>>> = {
   url: {
     too_small: 'URL は必須です',
@@ -40,7 +41,8 @@ const FIELD_CODE_MESSAGE: Partial<Record<string, Partial<Record<ZodIssueCode, st
     too_small: 'タグは 1〜30 文字、最大 10 個です',
     too_big: 'タグは 1〜30 文字、最大 10 個です',
   },
-  // 設定画面のタグ一覧（src/server/tags.ts の names: 1〜30 文字 × 最大 100 個）
+  // The tag list on the settings screen (names in src/server/tags.ts: 1-30 characters x at
+  // most 100 items)
   names: {
     too_small: 'タグは 1〜30 文字で入力してください',
     too_big: 'タグは 1〜30 文字、最大 100 個です',
@@ -66,7 +68,7 @@ function firstIssue(error: unknown): RawIssue | null {
     const issues = JSON.parse(error.message) as unknown
     if (Array.isArray(issues) && issues.length > 0) return issues[0] as RawIssue
   } catch {
-    // JSON でなければ issues 配列としては読めない（プレーンな Error）
+    // If it is not JSON it cannot be read as an issues array (a plain Error)
   }
   return null
 }
@@ -79,7 +81,10 @@ function pathHead(path: unknown): string | null {
 
 export type FormError = { message: string; path: string | null }
 
-/** メッセージと対象フィールド（Mantine の form.setFieldError にそのまま渡せる）を返す */
+/**
+ * Returns the message and the target field (can be passed as is to Mantine's
+ * form.setFieldError)
+ */
 export function extractFormError(error: unknown): FormError {
   const issue = firstIssue(error)
   if (!issue) {
@@ -96,7 +101,7 @@ export function extractFormError(error: unknown): FormError {
   return { message: mapped ?? DEFAULT_MESSAGE, path }
 }
 
-/** Notification 表示など、メッセージ文字列だけで足りるとき */
+/** For when the message string alone is enough, such as showing a Notification */
 export function extractErrorMessage(error: unknown): string {
   return extractFormError(error).message
 }

@@ -1,4 +1,7 @@
-/** 候補（業者・物件）の表示用フォーマッタ。金額は円の整数で受け取り、万円単位に丸めて表示する */
+/**
+ * Display formatters for candidates (vendors, properties). Amounts arrive as integer yen and
+ * are shown rounded to units of 10,000 yen
+ */
 
 export function formatYen(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'

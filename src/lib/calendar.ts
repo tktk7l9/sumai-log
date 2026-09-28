@@ -1,9 +1,10 @@
 import { dayOfWeek } from './holidays'
 
 /**
- * 予定の日時表現。DB には TEXT で、終日は 'YYYY-MM-DD'、時刻ありは
- * 'YYYY-MM-DDTHH:MM:00+09:00'（日本時間のオフセットを明示）で入る。
- * 日付キーは先頭 10 文字。Date オブジェクトに変換しない（タイムゾーンで壊れる）。
+ * Date-time representation of events. Stored in the DB as TEXT: all-day is 'YYYY-MM-DD',
+ * timed is 'YYYY-MM-DDTHH:MM:00+09:00' (the Japan time offset is explicit).
+ * The date key is the first 10 characters. Never converted to a Date object (time zones
+ * break it).
  */
 
 export function dateKey(startsAt: string): string {
@@ -13,10 +14,11 @@ export function dateKey(startsAt: string): string {
 export const WEEKDAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
 
 /**
- * 日付の表示は全て `/` 区切りに統一する（所有者の要望）。'YYYY-MM-DD' を
- * 'YYYY/MM/DD' に直すだけの単一の実装。ハイフン区切りでない・形が合わない文字列は
- * そのまま返す（他の formatXxx と同じフォールバック方針）。dateKey/検索パラメータ/
- * DB の値は触らない（あくまで表示のときにこれを通す）。
+ * All date display is unified to `/` separators (owner's request). A single
+ * implementation that only turns 'YYYY-MM-DD' into 'YYYY/MM/DD'. A string that is not
+ * hyphen-separated or has a different shape is returned as is (the same fallback policy
+ * as the other formatXxx). dateKey, search parameters and DB values are not touched (this
+ * is applied only at display time).
  */
 export function formatDateSlash(key: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key)
@@ -24,7 +26,7 @@ export function formatDateSlash(key: string): string {
   return `${m[1]}/${m[2]}/${m[3]}`
 }
 
-/** 'YYYY-MM-DD' を '2026/09/20（日）' に直す。読めない文字列はそのまま返す。 */
+/** Turns 'YYYY-MM-DD' into '2026/09/20（日）'. An unreadable string is returned as is. */
 export function formatDateWithWeekday(key: string): string {
   const day = dayOfWeek(key)
   if (day === null) return key
@@ -32,9 +34,10 @@ export function formatDateWithWeekday(key: string): string {
 }
 
 /**
- * 'YYYY-MM-DD' を '2026/09/12(土)' に直す（EventBadge・「行く」ボタン用）。日付は全て
- * YYYY/MM/DD にそろえる（所有者の要望、2026-09-23）。formatDateWithWeekday と違い、バッジに
- * 収まるよう曜日の括弧を半角にする。読めない文字列はそのまま返す。
+ * Turns 'YYYY-MM-DD' into '2026/09/12(土)' (for EventBadge and the "行く" (Go) button).
+ * All dates are aligned to YYYY/MM/DD (owner's request, 2026-09-23). Unlike
+ * formatDateWithWeekday, the parentheses of the weekday are half-width so that it fits in
+ * a badge. An unreadable string is returned as is.
  */
 export function formatShortDateWithWeekday(key: string): string {
   const day = dayOfWeek(key)
@@ -42,16 +45,16 @@ export function formatShortDateWithWeekday(key: string): string {
   return `${formatDateSlash(key)}(${WEEKDAY_LABELS[day]})`
 }
 
-/** 'YYYY-MM' を '2026/09' に直す（月の見出し用）。形が合わなければそのまま返す */
+/** Turns 'YYYY-MM' into '2026/09' (for month headings). Returned as is when the shape differs */
 export function formatMonthSlash(month: string): string {
   const m = /^(\d{4})-(\d{2})$/.exec(month)
   return m ? `${m[1]}/${m[2]}` : month
 }
 
 /**
- * 業者のお知らせのイベントバッジ文言。「見学会 2026/09/12(土)」（単日）／
- * 「見学会 2026/09/12(土)〜2026/09/13(日)」（複数日）。eventKind か eventStart が無ければ
- * イベントとして扱わない（null）。
+ * Event badge text of vendor news. "見学会 2026/09/12(土)" (Open house, Sat; single day) /
+ * "見学会 2026/09/12(土)〜2026/09/13(日)" (Sat to Sun; multiple days). Without eventKind
+ * or eventStart it is not treated as an event (null).
  */
 export function formatEventBadge(
   eventKind: string | null,
@@ -65,11 +68,13 @@ export function formatEventBadge(
 }
 
 /**
- * 既に並んでいる配列を、日付キーが変わるかどうかに関わらず同じキーでまとめる
- * （groupByDay と違って開始順には並べ替えない）。呼び出し側が既に望む順で渡す前提
- * （例: ホームのフィードの新しい順）。日内の順序も items の並びをそのまま保つ。
- * feed.ts の groupFeedByDay（フィード）が使う実装（お知らせは AgendaView 化に伴い
- * NewsAgenda / groupNewsByDate に移った。日付見出しは NewsAgenda が持つ）。
+ * Groups an already ordered array by the same key, regardless of whether the date key
+ * changes (unlike groupByDay it does not sort by start). It assumes the caller already
+ * passes the desired order (e.g. newest first for the home feed). The order within a day
+ * also keeps the order of items as is.
+ * The implementation used by groupFeedByDay in feed.ts (the feed) (vendor news moved to
+ * NewsAgenda / groupNewsByDate when it became an AgendaView. NewsAgenda holds the date
+ * headings).
  */
 export function groupByDayKeepOrder<T>(
   items: readonly T[],
@@ -107,7 +112,7 @@ function daysInMonth(year: number, month1to12: number): number {
   return new Date(Date.UTC(year, month1to12, 0)).getUTCDate()
 }
 
-/** 'YYYY-MM-DD' に days 日足した 'YYYY-MM-DD' を返す（負数も可） */
+/** Returns 'YYYY-MM-DD' plus days days as 'YYYY-MM-DD' (negative numbers allowed) */
 export function addDays(key: string, days: number): string {
   const [year, month, day] = key.split('-').map(Number)
   const d = new Date(Date.UTC(year, month - 1, day + days))
@@ -123,7 +128,8 @@ export function monthKeys(year: number, month1to12: number): string[] {
   return keys
 }
 
-/** 終日('YYYY-MM-DD')は同じ日の時刻ありより前に並ぶ（文字列比較でそうなる） */
+/** All-day ('YYYY-MM-DD') sorts before a timed one on the same day (string comparison
+ * gives that) */
 export function compareStartsAt(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }

@@ -7,8 +7,8 @@ export const db = drizzle(env.DB, { schema })
 export const actor = 'owner@example.com'
 
 /**
- * 全テーブルを空にする。db/schema.ts の全テーブルを網羅すること
- * （後続タスクのテストがクリーンな状態から始められるように）。
+ * Empties all tables. Must cover every table in db/schema.ts
+ * (so that the tests of later tasks can start from a clean state).
  */
 export async function reset() {
   for (const t of [

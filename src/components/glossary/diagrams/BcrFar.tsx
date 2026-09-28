@@ -1,6 +1,10 @@
 import { Figure, Label } from './Figure'
 
-/** 敷地に対する建築面積（1階の塗り）と、2階分の延床（点線の積み上げ）。建ぺい率60%/容積率200% */
+/**
+ * The building area relative to the site (the fill of the 1st floor) and the total floor area
+ * including the 2nd floor (stacked dotted lines). Building coverage ratio 60% / floor area ratio
+ * 200%
+ */
 export function BcrFarDiagram() {
   return (
     <Figure label="敷地に対する建築面積（塗りつぶし、建ぺい率60%）と、2階分の延床面積（点線の積み上げ、容積率200%）">

@@ -15,7 +15,10 @@ import {
   recentVisits,
 } from './repository'
 
-/** ホームの「最近の更新」。各系統から 10 件ずつ集め、時系列で limit 件に絞る */
+/**
+ * "最近の更新" (Recent updates) on the home page. Collects 10 items from each kind and narrows
+ * them to limit items in chronological order
+ */
 export const recentFeed = createServerFn()
   .validator(z.object({ limit: z.number().int().min(1).max(100).optional() }).optional())
   .handler(async ({ data }): Promise<FeedItem[]> => {

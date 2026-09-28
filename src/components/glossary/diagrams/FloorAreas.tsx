@@ -1,9 +1,13 @@
 import { Figure, Label } from './Figure'
 
 /**
- * 平面図で「建築面積(外周)」「延床(各階の合計)」「施工面積(バルコニー・玄関ポーチも足す)」を色分け。
- * バルコニー・玄関ポーチは幅が狭く 12px のラベルが入らないため、外に引き出し線で書いた。
- * 本体（延床の塗り＋建築面積の太い外周線）と、加算分（施工面積、別の色・破線）を見分けられるようにした。
+ * On a floor plan, color-codes "building area (outer perimeter)", "total floor area (sum
+ * of all floors)" and "construction area (also adds the balcony and entrance porch)".
+ * The balcony and entrance porch are narrow and a 12px label does not fit, so they are
+ * written outside with leader lines.
+ * The main body (the fill of the total floor area + the thick perimeter line of the
+ * building area) and the added part (construction area, another color, dashed line) can
+ * be told apart.
  */
 export function FloorAreasDiagram() {
   return (

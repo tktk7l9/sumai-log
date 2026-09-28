@@ -11,7 +11,7 @@ const base = {
 }
 
 describe('planEventDefaults', () => {
-  it('業者名+見出し・開始日・業者・URL をメモに', () => {
+  it('vendor name + headline, start date, vendor, and the URL as the note', () => {
     expect(planEventDefaults(base)).toEqual({
       title: 'テスト工務店 完成見学会のご案内',
       date: '2026-09-27',
@@ -19,13 +19,13 @@ describe('planEventDefaults', () => {
       note: 'https://example.com/news/1',
     })
   })
-  it('メール由来はメモを空にする', () => {
+  it('leaves the note empty for news that came from mail', () => {
     expect(planEventDefaults({ ...base, url: 'mail:<a@b>' })?.note).toBeNull()
   })
-  it('日程が無ければ null', () => {
+  it('null when there are no event dates', () => {
     expect(planEventDefaults({ ...base, eventStart: null })).toBeNull()
   })
-  it('タイトルは上限で切る', () => {
+  it('cuts the title at the limit', () => {
     const long = planEventDefaults({ ...base, title: 'あ'.repeat(300) })
     expect(long?.title.length).toBe(PLAN_TITLE_MAX)
   })

@@ -16,7 +16,7 @@ import {
 beforeEach(reset)
 
 describe('visits', () => {
-  it('一覧は新しい順で場所名・写真数・先頭サムネが付き、削除で R2 キーを返す', async () => {
+  it('the list is newest first with the place name, photo count and first thumbnail, and deletion returns the R2 keys', async () => {
     const placeId = await upsertPlace(db, { name: 'テスト会場', kind: 'open_house' }, actor)
     const older = await upsertVisit(
       db,
@@ -65,7 +65,7 @@ describe('visits', () => {
     expect(await db.select().from(photos)).toHaveLength(0)
   })
 
-  it('詳細は関連と写真をまとめて返し、無ければ null', async () => {
+  it('the detail returns the relations and photos together, or null if none', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '甲工務店', kind: 'koumuten', serviceAreas: [] },
@@ -84,7 +84,7 @@ describe('visits', () => {
     expect(await getVisitDetail(db, crypto.randomUUID())).toBeNull()
   })
 
-  it('hasVisits は見学記録の有無を返す', async () => {
+  it('hasVisits returns whether visit records exist', async () => {
     const placeId = await upsertPlace(db, { name: 'テスト展示場2', kind: 'showroom' }, actor)
     expect(await hasVisits(db, placeId)).toBe(false)
     await db

@@ -1,8 +1,9 @@
 /**
- * 情報源（/sources）のジャンル。ここは **データだけ**（関数を置かない。解決・グルーピングは
- * `src/lib/sources.ts`）。affiliations.ts と同じ構成。
+ * Genres of the sources (/sources). This file holds **data only** (no functions.
+ * Resolution and grouping are in `src/lib/sources.ts`). Same structure as affiliations.ts.
  *
- * 配列の並び順がそのまま一覧の表示順になる（0 件のジャンルは一覧側で隠す）。
+ * The array order is the display order of the list as is (genres with 0 items are hidden
+ * on the list side).
  */
 export type SourceGenre = {
   id:
@@ -15,7 +16,7 @@ export type SourceGenre = {
     | 'money'
     | 'energy'
     | 'owners'
-  /** 表示名 */
+  /** Display name */
   label: string
 }
 

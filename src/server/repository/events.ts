@@ -29,7 +29,7 @@ export async function upsertEvent(db: Db, input: EventInput, actorEmail: string)
   return id
 }
 
-/** 予定を消す。見学記録の eventId は FK の SET NULL で外れる（記録は残る） */
+/** Deletes an event. eventId on visit records is detached by the FK's SET NULL (the record remains) */
 export async function deleteEvent(db: Db, id: string): Promise<void> {
   await db.delete(events).where(eq(events.id, id))
 }

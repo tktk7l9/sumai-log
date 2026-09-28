@@ -59,7 +59,7 @@ export function PlaceForm({
         v && !parseCoordinate(v) ? '座標の形式が読めません（例: 35.123456, 139.123456）' : null,
     },
   })
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(
     form,
     draftKey(

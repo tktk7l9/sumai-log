@@ -1,7 +1,8 @@
 /**
- * RSS が無い業者向け：お知らせページの `<ul><li>` 一覧を候補に変換する
- * （design.md §1 の RSS の無い工務店のように「YYYY年M月D日」＋タイトル＋相対リンクだけの
- * 素朴な一覧を想定）。外部 HTML パーサは使わず正規表現だけで抜く。
+ * For vendors without RSS: turns the `<ul><li>` list of a news page into candidates
+ * (assumes a plain list of only "YYYY年M月D日" + title + relative link, like the builder
+ * without RSS in design.md §1). No external HTML parser is used; extraction is done with
+ * regular expressions only.
  */
 
 import type { NewsCandidate } from './rss'
@@ -11,13 +12,13 @@ const TITLE_MAX = 200
 
 const LI_PATTERN = /<li\b[^>]*>([\s\S]*?)<\/li>/gi
 
-// 「YYYY年M月D日」「YYYY.MM.DD」「YYYY/M/D」のいずれか。leftmost の一致を採る。
+// One of "YYYY年M月D日", "YYYY.MM.DD", "YYYY/M/D". The leftmost match is taken.
 const DATE_PATTERN =
   /(\d{4})年(\d{1,2})月(\d{1,2})日|(\d{4})\.(\d{1,2})\.(\d{1,2})|(\d{4})\/(\d{1,2})\/(\d{1,2})/
 
 type DateMatch = { start: number; end: number; publishedOn: string }
 
-/** stripTags 済みのテキストから最初の日付表記を探す。無ければ null。 */
+/** Finds the first date notation in text already passed through stripTags. null when absent. */
 function findDate(text: string): DateMatch | null {
   const match = DATE_PATTERN.exec(text)
   if (!match) return null
@@ -38,15 +39,15 @@ function findDate(text: string): DateMatch | null {
 
 const HREF_PATTERN = /<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1/i
 
-/** li の生 HTML から最初の `<a href="…">` の値を取り出す。無ければ null。 */
+/** Takes the value of the first `<a href="…">` from the raw HTML of a li. null when absent. */
 function findHref(block: string): string | null {
   const match = HREF_PATTERN.exec(block)
   return match ? match[2] : null
 }
 
 /**
- * href を baseUrl で絶対化する。属性値中のエンティティ（`?id=1&amp;p=2` 等）を
- * 解決してから URL を組み立てる。解決に失敗する・http(s) 以外なら null。
+ * Makes href absolute with baseUrl. Entities in the attribute value (`?id=1&amp;p=2` etc.) are
+ * resolved before the URL is built. null when resolving fails or it is not http(s).
  */
 function resolveHttpUrl(href: string, baseUrl: string): string | null {
   try {
@@ -59,11 +60,11 @@ function resolveHttpUrl(href: string, baseUrl: string): string | null {
 }
 
 /**
- * `<li>` 要素ごとに、最初の `<a href>` と最初の日付表記を取り出して候補にする。
- * href が無い・http(s) に解決できない・日付表記が無い li は捨てる。
- * タイトルは stripTags 済みのテキストから日付表記を取り除いたもの（200 字まで）。
- * summary は常に null（一覧ページに本文の抜粋は無いため）。入力が
- * MAX_INPUT_LENGTH を超える場合は空配列。
+ * For each `<li>` element, takes the first `<a href>` and the first date notation and makes a
+ * candidate. A li with no href, one that cannot resolve to http(s), or no date notation is
+ * dropped. The title is the text passed through stripTags with the date notation removed (up
+ * to 200 chars). summary is always null (a list page has no excerpt of the body). When the
+ * input is longer than MAX_INPUT_LENGTH the result is an empty array.
  */
 export function parseHtmlList(html: string, baseUrl: string): NewsCandidate[] {
   if (html.length > MAX_INPUT_LENGTH) return []

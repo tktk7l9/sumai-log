@@ -1,13 +1,14 @@
 /**
- * お知らせの「行く」で開く予定フォームの初期値（所有者の要望、2026-09-20: 即作成せず
- * フォームで確認してから保存する）。タイトルは「業者名 見出し」、日付は判定した開始日、
- * メモは元記事の URL（メール由来は URL が無いので空）。
+ * Initial values of the event form opened by "行く" (Go) on a vendor news item (owner's
+ * request, 2026-09-20: do not create at once; confirm in the form, then save). The title is
+ * "vendor name headline", the date is the detected start date, and the note is the URL of the
+ * original article (empty for news from mail, which has no URL).
  */
 
 import { isMailNews } from '../mail/toNews'
 import { truncate } from './text'
 
-/** 予定のタイトル上限（events.schema.ts の eventInput と同じ） */
+/** Title limit of an event (same as eventInput in events.schema.ts) */
 export const PLAN_TITLE_MAX = 200
 
 export type PlanEventDefaults = {

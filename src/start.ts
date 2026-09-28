@@ -6,11 +6,11 @@ import { recordSeen } from './server/activity'
 import { requireUser } from './server/auth'
 
 /**
- * 全リクエスト（SSR・server function・server route）の入口で認証を強制する。
- * 個別のルートで付け忘れが起きないよう、必ずグローバルミドルウェアで行う。
+ * Enforces authentication at the entry of every request (SSR, server function, server route).
+ * Always done in the global middleware so that no individual route can forget to add it.
  *
- * 変更系は先に Origin を見る。Access の Cookie が別サイトから送られても、
- * 同じ Origin からしか通さない。そのあと認証を強制する。
+ * Mutations check the Origin first. Even if the Access cookie is sent from another site,
+ * only requests from the same Origin pass. Authentication is enforced after that.
  */
 const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   if (
@@ -27,15 +27,16 @@ const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   }
 
   const user = await requireUser(request)
-  // 認証を通った人の「最後に使った日時」を残す（応答は待たせない・間引きあり）
+  // Record the "last used" time of the person who passed authentication (does not delay the
+  // response; throttled)
   recordSeen(user.email)
   try {
     const result = await next({ context: { user } })
     applySecurityHeaders(result.response.headers)
     return result
   } catch (e) {
-    // ルートハンドラが throw new Response(...)（404 など）で抜けると、通常の
-    // return と違ってここを通らずセキュリティヘッダが付かずに配信されてしまう。
+    // When a route handler exits with throw new Response(...) (404 etc.), unlike a normal
+    // return it does not pass through here and is served without the security headers.
     if (e instanceof Response) {
       applySecurityHeaders(e.headers)
       throw e

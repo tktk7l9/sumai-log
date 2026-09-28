@@ -9,14 +9,15 @@ const SERIES = [
 ] as const
 
 /**
- * 月ごとの見学・動画の件数（縦棒を 2 本ずつ並べる）。色は検証済みの 2 色（styles.css の
- * --sumai-series-*）で、凡例と棒の上の数値を必ず添える。棒にカーソル・指を当てると
- * その月の内訳を出し、「表で見る」で同じ数を表にできる
+ * Counts of visits and videos per month (vertical bars, 2 per month). The colors are the
+ * 2 validated colors (--sumai-series-* in styles.css), and a legend and the numbers above
+ * the bars are always added. Hovering or touching a bar shows the breakdown of that month,
+ * and "表で見る" (View as table) shows the same numbers as a table
  */
 export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
   const [active, setActive] = useState<string | null>(null)
   const [asTable, setAsTable] = useState(false)
-  // 横に長いときは最新の月（右端）が見えるところから始める
+  // When it is wide, start where the latest month (right end) is visible
   const scrollRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = scrollRef.current
@@ -107,7 +108,7 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
                     onPointerEnter={() => setActive(r.month)}
                     onClick={() => setActive(r.month)}
                   >
-                    {/* 当たり判定は棒より広く取る */}
+                    {/* The hit area is wider than the bars */}
                     <rect
                       x={i * slot}
                       y={0}
@@ -164,7 +165,7 @@ export function MonthlyChart({ rows }: { rows: MonthRow[] }) {
   )
 }
 
-/** 'YYYY-MM' を 'YYYY/MM' に（日付の表示は / 区切りにそろえる） */
+/** Turn 'YYYY-MM' into 'YYYY/MM' (dates are displayed with / as the separator) */
 function monthLabel(month: string): string {
   return month.replace('-', '/')
 }

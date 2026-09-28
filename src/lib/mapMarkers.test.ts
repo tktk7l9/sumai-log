@@ -17,7 +17,7 @@ const base = {
 } as const
 
 describe('toMarkers', () => {
-  it('座標のある場所だけをマーカーにし、業者名を subtitle にする', () => {
+  it('turns only places with coordinates into markers and uses the vendor name as subtitle', () => {
     const rows = [
       { ...base, id: 'a', name: 'A', lat: 35, lng: 139, vendorName: '甲工務店', visited: true },
       { ...base, id: 'b', name: 'B', lat: null, lng: null, vendorName: null, visited: false },
@@ -27,7 +27,7 @@ describe('toMarkers', () => {
     ])
   })
 
-  it('業者名が無ければ物件名を subtitle にする', () => {
+  it('uses the property name as subtitle when there is no vendor name', () => {
     const rows = [
       {
         ...base,
@@ -45,7 +45,7 @@ describe('toMarkers', () => {
     ])
   })
 
-  it('業者名も物件名も無ければ subtitle を付けない', () => {
+  it('adds no subtitle when there is neither a vendor name nor a property name', () => {
     const rows = [
       { ...base, id: 'd', name: 'D', lat: 35, lng: 139, vendorName: null, visited: false },
     ]
@@ -53,7 +53,7 @@ describe('toMarkers', () => {
   })
 })
 describe('boundsOf', () => {
-  it('全マーカーを含む矩形。0 件は null、1 件は点', () => {
+  it('rectangle containing all markers. 0 markers give null, 1 marker gives a point', () => {
     expect(boundsOf([])).toBeNull()
     expect(boundsOf([{ id: 'a', name: 'A', lat: 35, lng: 139, visited: false }])).toEqual([
       [35, 139],

@@ -6,8 +6,9 @@ import { parseBuildPlan, type BuildPlan, type VendorResearch } from '../../lib/r
 import { readSetting, writeSetting } from './settings'
 
 /**
- * 調査メモを差し替える（null で消す）。人が書く内容なので updated_at も動かし、
- * ホームの「最近の更新」に業者として浮上させる（自動取得の markNewsFetched とは逆の方針）。
+ * Replaces the research memo (null clears it). It is content written by a person, so
+ * updated_at is touched too and the vendor surfaces in the home "最近の更新" (Recent updates)
+ * (the opposite policy from markNewsFetched of the automatic fetch).
  */
 export async function setVendorResearch(
   db: Db,
@@ -20,7 +21,7 @@ export async function setVendorResearch(
     .where(eq(vendors.id, id))
 }
 
-/** 設定 `buildPlan`。未設定・壊れていれば null */
+/** The setting `buildPlan`. null if not set or broken */
 export async function readBuildPlan(db: Db): Promise<BuildPlan | null> {
   return parseBuildPlan(await readSetting(db, 'buildPlan'))
 }

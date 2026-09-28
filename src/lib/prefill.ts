@@ -1,9 +1,9 @@
 import { dateKey } from './calendar'
 
 /**
- * VisitForm の `defaults` に渡す、見学記録フォームの prefill 対象フィールド。
- * VisitForm 自体の内部型（server/visits.ts の VisitInput 由来）はもっと広い
- * （attendees・good・concerns 等も持つ）が、prefill で埋めるのはこの 5 つだけ。
+ * The fields of the visit record form that are prefilled, passed to `defaults` of VisitForm.
+ * The internal type of VisitForm itself (derived from VisitInput in server/visits.ts) is
+ * wider (it also has attendees, good, concerns and so on), but prefill fills only these 5.
  */
 export type VisitFormValues = {
   eventId: string
@@ -21,17 +21,19 @@ type PrefillEvent = {
 }
 
 /**
- * 予定タブの「記録を書く」（/records?fromEvent=...）から来たときの、見学記録
- * フォームの初期値を組み立てる。`src/routes/records.tsx` から切り出した純関数。
+ * Builds the initial values of the visit record form when the user arrives from
+ * "記録を書く" (Write a record) on the events tab (/records?fromEvent=...). A pure function
+ * extracted from `src/routes/records.tsx`.
  *
- * event が無ければ（予定を指定していない、または 404 で読めなかった）undefined を
- * 返し、フォームは通常の空初期値のまま開く。
+ * Without an event (no event was specified, or it could not be read because of a 404) it
+ * returns undefined, and the form opens with the usual empty initial values.
  *
- * 場所・業者・物件が未設定の予定では、それぞれ明示的に null を返す（`undefined` を
- * 返さない）。Mantine の useForm は初期値に無いキーを後から setFieldValue しても
- * 追跡しないため、ここで `?? undefined` にすると保存できなくなる実バグがあった
- * （P2-R8: 予定からの「記録を書く」で未設定の紐づけが undefined になり保存できない）。
- * 直すときはこの `?? null` を崩さないこと。
+ * For an event with no place, vendor or property, it returns an explicit null for each
+ * (it does not return `undefined`). Mantine's useForm does not track a key that is missing
+ * from the initial values even if setFieldValue is called on it later, so using
+ * `?? undefined` here caused a real bug where saving became impossible
+ * (P2-R8: with "記録を書く" from an event, unset links became undefined and saving failed).
+ * When you fix something here, do not break this `?? null`.
  */
 export function buildVisitPrefill(
   search: { eventId?: string },

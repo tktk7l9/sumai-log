@@ -16,18 +16,19 @@ export { assignMailInput, mailIdInput }
 const RECENT_LIMIT = 20
 const UNASSIGNED_LIMIT = 200
 
-/** 設定「メール取込」カード用 */
+/** For the "メール取込" (Mail import) card in settings */
 export const listMailImport = createServerFn().handler(async () => {
   const db = getDb()
   const [unassigned, recent] = await Promise.all([
     listInboundMails(db, { status: 'unassigned', limit: UNASSIGNED_LIMIT }),
     listInboundMails(db, { limit: RECENT_LIMIT }),
   ])
-  // 転送先アドレスは secret（設計 §7）。未設定なら null を返して画面に「未設定」と出す
+  // The forwarding address is a secret (design §7). When unset, return null and the screen
+  // shows "未設定" (Not set)
   return { inboxAddress: env.MAIL_INBOX_ADDRESS || null, unassigned, recent }
 })
 
-/** 未割当メールに業者を選んで取り込む */
+/** Imports an unassigned mail after a vendor is chosen for it */
 export const assignMail = createServerFn({ method: 'POST' })
   .validator(assignMailInput)
   .handler(async ({ data }) => {
@@ -46,7 +47,7 @@ export const deleteMail = createServerFn({ method: 'POST' })
     return { ok: true as const }
   })
 
-/** お知らせのドロワーでメール本文を表示する */
+/** Shows the mail body in the vendor news drawer */
 export const getMailBody = createServerFn()
   .validator(mailIdInput)
   .handler(async ({ data }) => ({ body: await getInboundMailBody(getDb(), data.id) }))

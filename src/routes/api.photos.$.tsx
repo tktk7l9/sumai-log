@@ -27,25 +27,25 @@ function notFound() {
 const MAX_UPLOAD_CONTENT_LENGTH = 6 * 1024 * 1024
 
 /**
- * 写真のアップロード（POST /api/photos）と配信（GET /api/photos/<key>）。
+ * Photo upload (POST /api/photos) and delivery (GET /api/photos/<key>).
  *
- * 本来は別ファイル（`api.photos.tsx` + `api.photos.$.tsx`）に分けたかったが、
- * このバージョンの TanStack Router は `$` スプラットを「0 文字にもマッチしうる」
- * ものとして扱い、しかも一致度が同点のときは子ノード（スプラット）を親の
- * 完全一致ノードより優先する（`isFrameMoreSpecific` の depth タイブレーク）。
- * その結果、`/api/photos` への POST がスプラット側の GET ハンドラの読み取り
- * （ハンドラなし）に化けて SSR フォールバックへ流れ、200 の HTML が返って
- * アップロードが無言で失敗する（実機で確認済み: `POST /api/photos` に
- * ハンドラ側の console.log が一度も出ない）。`/api/photos` という完全一致
- * ルートを別途登録しないことでこの衝突自体を無くし、1 ファイルで
- * POST と GET の両方を扱う。認証は src/start.ts のグローバルミドルウェアが
- * 適用済み。
+ * The original intent was to split this into separate files (`api.photos.tsx` +
+ * `api.photos.$.tsx`), but this version of TanStack Router treats the `$` splat as
+ * something that "can also match 0 characters", and when the match score is tied it
+ * prefers the child node (the splat) over the parent exact-match node (the depth
+ * tiebreak in `isFrameMoreSpecific`). As a result, a POST to `/api/photos` turns into
+ * a lookup of the GET handler on the splat side (no handler), flows into the SSR
+ * fallback, returns 200 HTML, and the upload fails silently (confirmed on a real
+ * device: the console.log on the handler side never appears for `POST /api/photos`).
+ * Not registering a separate exact-match route named `/api/photos` removes the
+ * collision itself, and 1 file handles both POST and GET. Authentication is already
+ * applied by the global middleware in src/start.ts.
  */
 export const Route = createFileRoute('/api/photos/$')({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        // アップロード URL は `/api/photos` ちょうど。スプラットに何か付いていたら別物
+        // The upload URL is exactly `/api/photos`. Anything in the splat means a different thing
         if (params._splat) return notFound()
 
         const contentLength = Number(request.headers.get('content-length'))
@@ -101,10 +101,10 @@ export const Route = createFileRoute('/api/photos/$')({
         return json(200, { id: photoId, ...keys })
       },
       GET: async ({ params, request }) => {
-        // 見学の写真は R2 キーが常に `photos/` で始まる一方、splat には photoUrl が
-        // 剥がした分だけしか乗らない（下の isManagedPhotoKey コメント参照）。業者の
-        // 代表者写真・ファビコンは `vendors/` キーをそのまま URL に使っている
-        // （photoUrl は `photos/` だけを剥がすので、`vendors/` はそのまま splat に乗る）。
+        // The R2 key of a visit photo always starts with `photos/`, while the splat carries
+        // only what is left after photoUrl strips it (see the isManagedPhotoKey comment below).
+        // The vendor representative photo and favicon use the `vendors/` key as is in the URL
+        // (photoUrl strips only `photos/`, so `vendors/` arrives in the splat unchanged).
         const splat = params._splat ?? ''
         const key = splat.startsWith('vendors/') ? splat : `photos/${splat}`
         if (!isManagedPhotoKey(key)) return notFound()

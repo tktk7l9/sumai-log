@@ -1,13 +1,15 @@
 /**
- * 用語集の図解が共有する土台。
- * - `Figure`: `viewBox="0 0 320 240"` の <svg> と矢印マーカー（<defs>）を用意する
- * - `Arrow` / `Label`: 各図が個別に <line>/<text> を書かないための共通部品
+ * The base shared by the glossary diagrams.
+ * - `Figure`: provides the <svg> with `viewBox="0 0 320 240"` and the arrow markers (<defs>)
+ * - `Arrow` / `Label`: shared parts so that each diagram does not write <line>/<text> itself
  *
- * 色は `currentColor`（線・文字）と、テーマの CSS 変数（塗りのみ・半透明）に限る。
- * hex や rgb() は使わない＝ダーク/ライトどちらの文字色にも自動で追従する。
+ * Colors are limited to `currentColor` (lines, text) and the theme's CSS variables (fills
+ * only, semi-transparent).
+ * hex and rgb() are not used = it follows the text color of both dark and light automatically.
  *
- * 文字は全図共通で 12〜14px（`Label` の `size` 型で強制）。200 高だと 12px 未満まで
- * 詰めないと収まらない図があったため、viewBox の高さを 240 に統一した（幅 320 は変えない）。
+ * Text is 12 to 14px in all diagrams (enforced by the `size` type of `Label`). With a height
+ * of 200, some diagrams did not fit unless text was squeezed below 12px, so the viewBox
+ * height was unified to 240 (the width 320 is unchanged).
  */
 
 import { createContext, useContext, useId } from 'react'
@@ -18,7 +20,10 @@ type MarkerUrls = Record<ArrowVariant, string>
 
 const ArrowMarkerContext = createContext<MarkerUrls>({ thin: 'url(#arrow)', thick: 'url(#arrow)' })
 
-/** Figure が <defs> に置いた矢印マーカーの `url(#…)` を返す。矢印を出さない図では使わない */
+/**
+ * Returns the `url(#…)` of the arrow marker that Figure put in <defs>. Not used in diagrams without
+ * arrows
+ */
 export function useArrowMarker(variant: ArrowVariant = 'thin'): string {
   return useContext(ArrowMarkerContext)[variant]
 }
@@ -40,9 +45,10 @@ function ArrowMarker({ id }: { id: string }) {
 }
 
 export function Figure({ label, children }: { label: string; children: ReactNode }) {
-  // 複数の図が同じページに並んでも <marker id> が衝突しないよう useId で作る。
-  // useId() の形式は React の版で変わる（18 は ":r0:"、19 は "_R_1_"）ので、
-  // URL フラグメントとして安全なように ':' を落としておく。
+  // Built with useId so that <marker id> does not collide even when several diagrams are
+  // on the same page.
+  // The format of useId() changes with the React version (18 is ":r0:", 19 is "_R_1_"),
+  // so ':' is dropped to make it safe as a URL fragment.
   const rawId = useId().replace(/:/g, '')
   const markerIds: Record<ArrowVariant, string> = {
     thin: `glossary-arrow-${rawId}`,
@@ -78,7 +84,10 @@ export function Figure({ label, children }: { label: string; children: ReactNode
   )
 }
 
-/** 熱・風・寸法などの矢印。`width` が 3 以上なら太い矢じるしを使う。`double` で両端矢印 */
+/**
+ * Arrows for heat, wind, dimensions, etc. When `width` is 3 or more, the thick arrowhead is used.
+ * `double` gives arrows on both ends
+ */
 export function Arrow({
   x1,
   y1,
@@ -112,8 +121,9 @@ export function Arrow({
 }
 
 /**
- * 日本語ラベル用の <text>。塗りは currentColor、線は引かない。
- * `size` は 12〜14 に固定（グローバル制約「文字は font-size 12〜14」を型で強制する）。
+ * <text> for Japanese labels. The fill is currentColor, with no stroke.
+ * `size` is fixed to 12 to 14 (the type enforces the global constraint "text is font-size
+ * 12 to 14").
  */
 export function Label({
   x,

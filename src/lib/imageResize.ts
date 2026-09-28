@@ -1,4 +1,7 @@
-/** 写真アップロードの寸法計算だけを扱う純粋関数。Canvas/Blob 側は PhotoUploader に置く */
+/**
+ * Pure function that handles only the dimension calculation for photo upload. The Canvas/Blob
+ * side lives in PhotoUploader
+ */
 export function fitWithin(
   width: number,
   height: number,

@@ -38,7 +38,7 @@ import { listLinkTargets } from '../server/places'
 import { getBuildPlan } from '../server/research'
 import { getHomeAreas } from '../server/settings'
 
-/** DetailRow のラベルに添える「用語集で見る」リンク。見出し語自体をリンクにする */
+/** The "view in the glossary" link attached to a DetailRow label. The headword itself becomes the link */
 function MetricLabel({
   metric,
   text,
@@ -220,7 +220,7 @@ function Page() {
       </Card>
       {vendor.features ? <Text style={{ whiteSpace: 'pre-wrap' }}>{vendor.features}</Text> : null}
 
-      {/* 建築計画（設定）があれば、この業者の坪単価で本体・総額の目安を出す */}
+      {/* With a building plan (settings), show the building and total cost estimate at this vendor's price per tsubo */}
       {buildPlan ? (
         <Card withBorder padding="md">
           <Stack gap="xs">
@@ -230,7 +230,7 @@ function Page() {
         </Card>
       ) : null}
 
-      {/* 調査メモ。無ければ「書く」ボタンだけ出す（比較表 /candidates/compare の元にもなる） */}
+      {/* Research notes. When absent only the "書く" (Write) button is shown (they also feed the comparison table /candidates/compare) */}
       <Stack gap="xs">
         <Group justify="space-between" align="center">
           <Title order={2}>調査メモ</Title>

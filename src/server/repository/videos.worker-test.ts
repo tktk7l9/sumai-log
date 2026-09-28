@@ -18,7 +18,7 @@ const baseVideo = (overrides: Partial<VideoSeed> = {}): VideoSeed => ({
 })
 
 describe('videos', () => {
-  it('新規作成は createdBy を記録し、更新では保たれる', async () => {
+  it('create records createdBy, and update keeps it', async () => {
     const id = await upsertVideo(db, baseVideo({ title: 'A' }), actor)
     await upsertVideo(db, baseVideo({ id, title: 'B' }), 'partner@example.com')
     const [row] = await db.select().from(videos).where(eq(videos.id, id))
@@ -26,7 +26,7 @@ describe('videos', () => {
     expect(row.createdBy).toBe(actor)
   })
 
-  it('削除でコメントも消える', async () => {
+  it('deletion deletes comments too', async () => {
     const id = await upsertVideo(db, baseVideo(), actor)
     await db.insert(comments).values({
       id: crypto.randomUUID(),
@@ -41,7 +41,7 @@ describe('videos', () => {
     expect(await db.select().from(comments)).toHaveLength(0)
   })
 
-  it('一覧は watchedOn desc, createdAt desc で業者名が付く（未観了は最後）', async () => {
+  it('the list is watchedOn desc, createdAt desc and carries the vendor name (unwatched come last)', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '乙建設', kind: 'koumuten', serviceAreas: [] },
@@ -58,7 +58,7 @@ describe('videos', () => {
     ])
   })
 
-  it('詳細は業者を含み、無ければ null。無い id は null', async () => {
+  it('the detail includes the vendor, or null if none. A missing id is null', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '甲工務店', kind: 'koumuten', serviceAreas: [] },

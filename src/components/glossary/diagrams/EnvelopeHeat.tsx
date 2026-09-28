@@ -1,6 +1,9 @@
 import { Arrow, Figure, Label } from './Figure'
 
-/** 断面（屋根・壁・床・窓）から外へ逃げる熱。窓の矢印だけ太くして「窓が最も逃げる」を示す */
+/**
+ * Heat escaping outward from the cross section (roof, walls, floor, windows). Only the window arrow
+ * is thick, to show "windows lose the most"
+ */
 export function EnvelopeHeatDiagram() {
   return (
     <Figure label="家の断面図。屋根・壁・床・窓から熱が外へ逃げる矢印。窓の矢印が最も太い。UA値は矢印の合計を外皮面積で割った値">

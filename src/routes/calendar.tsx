@@ -26,19 +26,20 @@ import { listLinkTargets, listPlaces } from '../server/places'
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 
 const search = z.object({
-  // 表示中の月 'YYYY-MM'。無ければ今月
+  // The month on display, 'YYYY-MM'. The current month when absent
   m: z
     .string()
     .regex(/^\d{4}-\d{2}$/)
     .optional(),
-  // 選択日 'YYYY-MM-DD'
+  // The selected day, 'YYYY-MM-DD'
   d: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
-  // 表示ビュー。年表示はヘッダーから選べても URL には持たせない
+  // The view on display. The year view can be picked from the header but is not kept in the URL
   v: z.enum(['day', 'week', 'month']).optional(),
-  // お知らせの「行く」から来たとき: そのお知らせを初期値にした予定フォームを開く
+  // When arriving from "行く" (Go) on a vendor news item: open the event form with that news
+  // item as the initial values
   plan: z.string().uuid().optional(),
 })
 
@@ -47,7 +48,7 @@ export const Route = createFileRoute('/calendar')({
   validateSearch: (s) => search.parse(s),
   loaderDeps: ({ search }) => ({ m: search.m, d: search.d, v: search.v, plan: search.plan }),
   loader: async ({ deps }) => {
-    // サーバー側で「今日」を決める（クライアントの時計に依らない）
+    // Decide "today" on the server (independent of the client clock)
     const date = deps.d ?? (deps.m ? `${deps.m}-01` : todayKeyJst())
     const view = deps.v ?? 'month'
     const { from, to } = visibleRange(date, view)
@@ -55,13 +56,15 @@ export const Route = createFileRoute('/calendar')({
       listEventsBetween({ data: { from, to } }),
       listLinkTargets(),
       listPlaces(),
-      // 情報レイヤー用。月をまたいではみ出す表示範囲（visibleRange）と同じ from/to で取る
-      // （月単位で区切ると、月表示が前後にはみ出す週ぶんの情報が漏れる）
+      // For the information layer. Fetch with the same from/to as the display range that spills
+      // across months (visibleRange) (cutting by month would miss the information for the weeks
+      // where the month view spills over before and after)
       newsEventsBetween({ data: { from, to } }),
       deps.plan ? getVendorNews({ data: { id: deps.plan } }).then((r) => r.news) : null,
     ])
-    // range には listEventsBetween が返す nowIso / todayKey（サーバーが決めた「今」）も
-    // 入っている。終わった予定・終わった日程のお知らせの色を落とす基準に使う
+    // range also contains nowIso / todayKey returned by listEventsBetween (the "now" decided by
+    // the server). Used as the reference for dimming finished events and vendor news whose dates
+    // have passed
     return { ...range, targets, places, date, newsEvents: news.news, planNews }
   },
 })
@@ -74,19 +77,19 @@ function todayKeyJst(): string {
 }
 
 /**
- * ビューが実際に描画しうる範囲を取る。週表示は月をまたぐことがあるので、
- * 「表示月だけ」ではなく実際の日付範囲を直接計算する。
+ * Returns the range the view can actually render. The week view can span months, so
+ * this computes the actual date range directly instead of "only the displayed month".
  */
 function visibleRange(date: string, view: 'day' | 'week' | 'month'): { from: string; to: string } {
   const base = dayjs(`${date}T00:00:00`)
   if (view === 'day') return { from: date, to: date }
   if (view === 'week') {
-    // 月曜始まり
+    // Weeks start on Monday
     const mondayOffset = (base.day() + 6) % 7
     const start = base.subtract(mondayOffset, 'day')
     return { from: start.format('YYYY-MM-DD'), to: start.add(6, 'day').format('YYYY-MM-DD') }
   }
-  // 月表示は前後の週がはみ出すぶんも少し広めに取る
+  // The month view takes a slightly wider range to cover the weeks that spill over before and after
   const start = base.startOf('month').subtract(7, 'day')
   const end = base.endOf('month').add(7, 'day')
   return { from: start.format('YYYY-MM-DD'), to: end.format('YYYY-MM-DD') }
@@ -102,28 +105,29 @@ function Page() {
   const linkNews = useServerFn(linkNewsToEvent)
   const [editing, setEditing] = useState<EventWithLinks | null>(null)
   const [creating, setCreating] = useState(false)
-  // 情報レイヤーのドロワーは id だけ持つ（news 自体は loader データから毎回引き直す）。
-  // こうしておくと「行く」後の router.invalidate() で newsEvents が更新されたとき、
-  // 同じドロワーを開いたまま plannedEventId 付きの最新の news に自然と切り替わり、
-  // ボタンが「行く」→「予定を見る」に変わる。
+  // The information layer drawer holds only the id (the news itself is looked up again from
+  // the loader data every time). This way, when newsEvents is refreshed by router.invalidate()
+  // after "行く", the same drawer stays open and naturally switches to the latest news with
+  // plannedEventId, and the button changes from "行く" to "予定を見る" (View event).
   const [newsDrawerNewsId, setNewsDrawerNewsId] = useState<string | null>(null)
-  // 'year' は URL に持たせない（v の search スキーマに無い）ので、ヘッダーから
-  // 選ばれても表示だけローカル state で切り替える
+  // 'year' is not kept in the URL (it is not in the search schema of v), so even when it is
+  // picked from the header only the display is switched, through local state
   const [view, setView] = useState<ScheduleViewLevel>(v ?? 'month')
-  // モバイルは月表示の1セルの高さを詰める必要がある（所有者の報告、2026-09-16。
-  // styles.css の該当コメント参照）。1日あたりの表示イベント数を 2→1 に減らすと
-  // Mantine 自身が `--month-view-max-events` を連動して下げ、高さも詰まる
-  // （CSS 側でこの変数を直接上書きしないのは、実際に描画するイベント数と
-  // ズレるため）。デスクトップ（sm 以上）は既定の 2 のまま
+  // On mobile the height of 1 cell of the month view has to be tightened (owner's report,
+  // 2026-09-16. See the matching comment in styles.css). Reducing the number of events shown
+  // per day from 2 to 1 makes Mantine itself lower `--month-view-max-events` accordingly, and
+  // the height tightens too (the CSS side does not override this variable directly because it
+  // would drift from the number of events actually rendered). Desktop (sm and up) keeps the
+  // default of 2
   const isMobile = useMediaQuery('(max-width: 47.99em)', true)
 
   useEffect(() => {
     setView(v ?? 'month')
   }, [v])
 
-  // 終わった予定は種別の色を捨ててグレーにし（toScheduleEvents）、終わった日程の
-  // お知らせは payload.past を立てて文字色を落とす（下の renderEventBody）。
-  // 所有者の要望（2026-09-21）
+  // Finished events drop the colour of their kind and turn grey (toScheduleEvents), and vendor
+  // news whose dates have passed set payload.past to dim the text colour (renderEventBody below).
+  // Owner's request (2026-09-21)
   const scheduleEvents = useMemo<ScheduleEventData<CalendarPayload>[]>(
     () => [...toScheduleEvents(events, nowIso), ...newsToScheduleEvents(newsEvents, todayKey)],
     [events, newsEvents, nowIso, todayKey],
@@ -134,8 +138,8 @@ function Page() {
     : null
 
   function navigateToDay(next: string) {
-    // Schedule のコールバックは型上 'YYYY-MM-DD' だが実際は 'YYYY-MM-DD HH:mm:ss' で来るため、
-    // 日付部分だけ取り出してから search に入れる（そのまま入れると validateSearch で落ちる）
+    // The Schedule callback is typed as 'YYYY-MM-DD' but actually arrives as 'YYYY-MM-DD HH:mm:ss',
+    // so take only the date part before putting it into search (as is, validateSearch fails)
     navigate({ search: (s) => ({ ...s, d: dateKey(next) }), replace: true })
   }
 
@@ -169,13 +173,17 @@ function Page() {
     }
   }
 
-  /** お知らせドロワーの「行く」。即作成せず ?plan= を付けて初期値入りの予定フォームを開く */
+  /**
+   * "行く" in the vendor news drawer. Does not create at once; adds ?plan= and opens the event
+   * form filled with the initial values
+   */
   function handlePlanVisit(news: NewsEventRow) {
     setNewsDrawerNewsId(null)
     navigate({ search: (s) => ({ ...s, plan: news.id }), replace: true })
   }
 
-  // 「行く」から来た予定フォーム（?plan=）。初期値は planEventDefaults。閉じたら plan を外す
+  // The event form reached from "行く" (?plan=). Initial values come from planEventDefaults.
+  // plan is removed on close
   const planDefaults = planNews ? planEventDefaults(planNews) : null
   function closePlan() {
     navigate({ search: (s) => ({ ...s, plan: undefined }), replace: true })
@@ -191,7 +199,10 @@ function Page() {
     closePlan()
   }
 
-  /** お知らせドロワーの「予定を見る」（既に「行く」済み）。自分の予定の編集ドロワーへ */
+  /**
+   * "予定を見る" in the vendor news drawer ("行く" already done). Goes to the edit drawer of
+   * the couple's own event
+   */
   function handleViewPlannedEvent(news: NewsEventRow) {
     setNewsDrawerNewsId(null)
     const found = news.plannedEventId ? events.find((e) => e.id === news.plannedEventId) : undefined
@@ -199,7 +210,7 @@ function Page() {
     else if (news.eventStart) navigateToDay(news.eventStart)
   }
 
-  /** 予定の中身。終わったものは文字色を落とす（背景の色は color が決める） */
+  /** The body of an event. Finished ones get a dimmed text colour (color decides the background) */
   function renderEventBody(event: ScheduleEventData) {
     const payload = event.payload as CalendarPayload | undefined
     return (
@@ -227,10 +238,11 @@ function Page() {
           onViewChange={handleViewChange}
           events={scheduleEvents}
           labels={SCHEDULE_LABELS_JA}
-          // モバイルも PC と同じビュー（月/週/日）にする（所有者の要望、2026-09-16）。
-          // 'responsive' だとスマホ幅で MobileMonthView に切り替わり PC と見た目が変わって
-          // いた。layout="default" なら常に monthViewProps 等の通常ビューを使うので、
-          // 'responsive' 専用の mobileMonthViewProps は不要（渡しても使われない）
+          // Mobile uses the same views as PC (month/week/day) (owner's request, 2026-09-16).
+          // With 'responsive' it switched to MobileMonthView at phone width and looked different
+          // from PC. With layout="default" the normal views such as monthViewProps are always
+          // used, so mobileMonthViewProps, which is only for 'responsive', is not needed (it is
+          // not used even when passed)
           layout="default"
           mode="default"
           onDayClick={(next) => navigateToDay(next)}
@@ -242,14 +254,14 @@ function Page() {
             highlightToday: true,
             getDayProps: dayProps,
             maxEventsPerDay: isMobile ? 1 : 2,
-            // 見出しの日付は全て YYYY/MM/DD にそろえる（所有者の要望、2026-09-23）。月は YYYY/MM
+            // All heading dates are unified to YYYY/MM/DD (owner's request, 2026-09-23). Months use YYYY/MM
             monthYearSelectProps: { labelFormat: 'YYYY/MM' },
           }}
           weekViewProps={{
             startTime: '07:00:00',
             endTime: '22:00:00',
             intervalMinutes: 30,
-            // 既定は「9月 21 – 9月 27, 2026」
+            // The default is "9月 21 – 9月 27, 2026"
             renderWeekLabel: ({ weekStart, weekEnd }) =>
               `${formatDateSlash(weekStart)} – ${formatDateSlash(weekEnd)}`,
           }}
@@ -257,7 +269,7 @@ function Page() {
             startTime: '07:00:00',
             endTime: '22:00:00',
             intervalMinutes: 30,
-            // 既定は「9月 23, 2026」
+            // The default is "9月 23, 2026"
             headerFormat: (d) => formatDateWithWeekday(dateKey(d)),
           }}
         />

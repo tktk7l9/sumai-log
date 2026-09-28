@@ -11,7 +11,7 @@ export type PendingEvent = {
 
 const RECORDABLE = new Set(['visit', 'viewing'])
 
-/** 終わった見学/内覧で、まだ見学記録が無いもの。新しい順 */
+/** Finished visits / viewings that have no visit record yet. Newest first */
 export function pendingVisitEvents<T extends PendingEvent>(
   events: readonly T[],
   recordedEventIds: ReadonlySet<string>,

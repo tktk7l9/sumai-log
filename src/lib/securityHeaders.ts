@@ -1,13 +1,13 @@
 /**
- * 全レスポンスに付けるブラウザ向けの防御ヘッダ。
+ * Defensive headers for the browser, attached to every response.
  *
- * Cloudflare Access の内側でも、クリックジャッキングや MIME スニッフィングは
- * アプリ側で止める。CSP は Vite / Mantine のインラインを壊さない範囲に留める
- * （`frame-ancestors` と `object-src` と `base-uri` だけ。`img-src`/`connect-src` は
- * 地図タブの Google マップ（タイル・フォント・スプライトは maps.googleapis.com と
- * maps.gstatic.com、ベクタータイルは connect-src 経由）と動画サムネイル・情報源
- * （YouTube チャンネル）のアバターのために追加）。
- * `geolocation=(self)` は地図タブの「現在地」ボタンのために許可する。
+ * Even behind Cloudflare Access, the app itself stops clickjacking and MIME sniffing.
+ * The CSP stays within a range that does not break the inline code of Vite / Mantine
+ * (only `frame-ancestors`, `object-src` and `base-uri`. `img-src`/`connect-src` were added
+ * for Google Maps on the map tab (tiles, fonts and sprites come from maps.googleapis.com
+ * and maps.gstatic.com, vector tiles go through connect-src) and for video thumbnails and
+ * the avatars of sources (YouTube channels)).
+ * `geolocation=(self)` is allowed for the "現在地" (Current location) button on the map tab.
  */
 
 export const SECURITY_HEADERS = {
@@ -20,7 +20,7 @@ export const SECURITY_HEADERS = {
     "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; img-src 'self' data: blob: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://maps.googleapis.com",
 } as const
 
-/** 既存の Headers に上書きで載せる。 */
+/** Sets them on an existing Headers, overwriting. */
 export function applySecurityHeaders(headers: Headers): Headers {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     headers.set(name, value)
@@ -28,7 +28,7 @@ export function applySecurityHeaders(headers: Headers): Headers {
   return headers
 }
 
-/** `new Response` の headers に混ぜる用。 */
+/** For mixing into the headers of `new Response`. */
 export function securityHeadersInit(extra?: HeadersInit): Headers {
   const headers = new Headers(extra)
   return applySecurityHeaders(headers)

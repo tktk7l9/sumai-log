@@ -1,23 +1,39 @@
 /**
- * 区画シミュレーター（/site）の純粋関数。
+ * Pure functions for the site plan simulator (/site).
  *
- * 大きな土地（長方形で近似）の一部を自分たちの敷地として切り出し、そこに平屋を置いたときの
- * 面積・接道・建ぺい率などを確かめる。座標はメートルで、原点は「道路側の左端」。
- *   x: 間口方向（左→右）
- *   y: 奥行方向（道路→奥）。区画の y は「道路から区画の手前側の辺までの距離」
- * 画面では道路を下に描く（y が大きいほど上＝奥）。
+ * Cuts out part of a large piece of land (approximated as a rectangle) as our own site, and
+ * checks the area, road frontage (接道), building coverage ratio (建ぺい率) and so on when
+ * a single-story house is placed there. Coordinates are in meters, and the origin is "the
+ * left end on the road side".
+ *   x: along the frontage (left -> right)
+ *   y: along the depth (road -> rear). The y of the section is "the distance from the road
+ *      to the near edge of the section"
+ * On screen the road is drawn at the bottom (a larger y is higher up = further to the rear).
  *
- * 保存するのは寸法の数値だけで、所在地・地番・座標は持たない（design.md §1。土地の一次情報は
- * アプリの外に置く）。法規の数値（建ぺい率・容積率・境界からの離れ・道路の幅員）はどれも
- * 画面で変えられる「目安」で、実際の値は役所の窓口で確かめる前提。
+ * Only the dimension numbers are saved, and no location, lot number or coordinates are held
+ * (design.md §1. Primary information about the land is kept outside the app). The legal
+ * numbers (building coverage ratio, floor area ratio (容積率), setback from the boundary
+ * (境界からの離れ), road width (幅員)) are all "rough guides" that can be changed on screen,
+ * and the actual values are assumed to be confirmed at the counter of the local government
+ * office.
  *
- * 判定が前提にしている法令（神奈川県の県所管区域の住宅＝平屋・延べ 1,000㎡ 以下）:
- *   - 接道: 建築基準法 43 条の 2m。神奈川県建築基準条例には、東京都安全条例のような
- *     「路地状部分の長さに応じて幅を広げる」規定は無い（延べ 1,000㎡ 超の 6m は住宅では効かない）
- *   - 容積率: 前面道路の幅員が 12m 未満なら 幅員×0.4（住居系）と指定容積率の小さい方（法 52 条 2 項）
- *   - 準防火地域: 隣地境界線から 3m・道路中心線から 3m 以内（1 階）が延焼のおそれのある部分
- *     （法 2 条 6 号）。そこにかかる外壁の開口部は防火設備にする（法 61 条）
- *   - 境界からの離れ: 外壁の後退距離の指定が無い地域では、民法 234 条の 50cm が目安
+ * Laws that the checks assume (a house in the area of Kanagawa Prefecture administered by
+ * the prefecture itself (県所管区域) = single-story, total floor area 1,000㎡ or less):
+ *   - Road frontage: the 2m of article 43 of the Building Standards Act (建築基準法). The
+ *     Kanagawa Prefecture Building Standards Ordinance (神奈川県建築基準条例) has no rule
+ *     like the one in the Tokyo safety ordinance (東京都安全条例) that "widens the width
+ *     according to the length of the flag-lot access strip (路地状部分)" (the 6m for a total
+ *     floor area over 1,000㎡ does not apply to a house)
+ *   - Floor area ratio: when the width of the front road is less than 12m, the smaller of
+ *     width x 0.4 (residential zones) and the designated floor area ratio (指定容積率)
+ *     (article 52 paragraph 2 of the Act)
+ *   - Quasi-fire-prevention district (準防火地域): within 3m of the adjacent land boundary
+ *     line and within 3m of the road center line (1st floor) is the part at risk of fire
+ *     spread (延焼のおそれのある部分) (article 2 item 6 of the Act). Openings in exterior
+ *     walls that fall in it must be fire-protection equipment (防火設備) (article 61 of the
+ *     Act)
+ *   - Setback from the boundary: in areas with no designated exterior wall setback distance
+ *     (外壁の後退距離), the 50cm of article 234 of the Civil Code (民法) is the rough guide
  */
 
 import { FLOORS_LABEL, type BuildPlan } from './research'
@@ -30,7 +46,7 @@ import {
   type Season,
 } from './sun'
 
-/** 1 坪 = 400/121 ㎡（約 3.3058） */
+/** 1 tsubo = 400/121 ㎡ (about 3.3058) */
 export const M2_PER_TSUBO = 400 / 121
 
 export function tsuboToM2(tsubo: number): number {
@@ -41,15 +57,17 @@ export function m2ToTsubo(m2: number): number {
   return m2 / M2_PER_TSUBO
 }
 
-/** 道路が土地のどちら側にあるか（画面では常に下に描く） */
+/** Which side of the land the road is on (on screen it is always drawn at the bottom) */
 export const ROAD_SIDES = ['S', 'N', 'E', 'W'] as const
 export type RoadSide = (typeof ROAD_SIDES)[number]
 export const ROAD_SIDE_LABEL: Record<RoadSide, string> = { S: '南', N: '北', E: '東', W: '西' }
 
 /**
- * 隣地・周りの建物（土地の座標の長方形。土地の外に置く）。building は高さを持ち、日当たりの
- * 計算で影を落とす（高さ 0 は「不明」で、図には描くが計算には入れない）。open は駐車場・校庭・
- * 畑など建物の無い土地、construction は建設中（高さは建ったあとの見込み）
+ * Adjacent land and surrounding buildings (rectangles in land coordinates. Placed outside
+ * the land). building has a height and casts a shadow in the sunlight calculation (height 0
+ * means "unknown", and it is drawn in the figure but left out of the calculation). open is
+ * land without a building such as a parking lot, a schoolyard or a field, and construction
+ * is under construction (the height is the expected one after it is built)
  */
 export const NEIGHBOR_KINDS = ['building', 'construction', 'open'] as const
 export type NeighborKind = (typeof NEIGHBOR_KINDS)[number]
@@ -65,7 +83,7 @@ export type Neighbor = {
   y: number
   width: number
   depth: number
-  /** 高さ（m）。0 は不明 */
+  /** Height (m). 0 means unknown */
   height: number
 }
 export const NEIGHBOR_LABEL_MAX = 40
@@ -73,63 +91,76 @@ export const NEIGHBORS_MAX = 20
 
 export const FLOORS = [1, 2] as const satisfies readonly BuildPlan['floors'][]
 export type Floors = BuildPlan['floors']
-/** 階数ごとの建物の高さの目安（m）。切り替えたときの初期値 */
+/** Rough building height per number of floors (m). The initial value when switching */
 export const DEFAULT_BUILDING_HEIGHT: Record<Floors, number> = { 1: 4.5, 2: 7.5 }
 
 export type SitePlan = {
   version: 1
-  /** 土地全体（長方形で近似）の間口・奥行（m） */
+  /** Frontage and depth (m) of the whole land (approximated as a rectangle) */
   landWidth: number
   landDepth: number
   roadSide: RoadSide
-  /** 区画（自分たちの敷地の本体部分）。奥行は targetTsubo と幅から決まる */
+  /** The section (the main part of our own site). The depth follows from targetTsubo and
+   * the width */
   targetTsubo: number
   sectionWidth: number
   sectionX: number
   sectionY: number
-  /** 区画が道路に接しないとき、道路から区画までの通路（路地状部分）の幅と、区画のどちらの辺に付けるか */
+  /** When the section does not touch the road, the width of the passage from the road to
+   * the section (the flag-lot access strip), and which edge of the section it attaches to */
   flagWidth: number
   flagSide: 'left' | 'right'
   /**
-   * 残りの土地（月極駐車場など）へ道路から入るための通路。区画の奥に土地が残るとき、
-   * 土地の左右どちらかの端に道路から奥まで幅 accessWidth の帯を空け、区画はそこに
-   * かからないようにする（道路に面する辺が 1 つしかない土地で、手前に区画を取っても
-   * 奥を使い続けるため）。通路は残りの土地の一部（自分たちの敷地ではない）
+   * The passage for entering the remaining land (a monthly parking lot and so on) from the
+   * road. When land remains behind the section, a strip of width accessWidth is left open
+   * at the left or right end of the land from the road to the rear, and the section is kept
+   * from overlapping it (so that, on land with only 1 edge facing the road, the rear can
+   * keep being used even when the section is taken at the front). The passage is part of
+   * the remaining land (not our own site)
    */
   parkingAccess: boolean
   accessWidth: number
   accessSide: 'left' | 'right'
-  /** 建物の階数（1 = 平屋、2 = 2 階建て。2 階建ては 1 階と 2 階が同じ広さの総 2 階として見る） */
+  /** Number of floors of the building (1 = single-story, 2 = two-story. A two-story house is
+   * viewed as a full two-story where the 1st and 2nd floors have the same area) */
   floors: Floors
   /**
-   * 建物。buildingTsubo は延床面積の坪数で、外形（建築面積）は延床÷階数。奥行は外形と幅から
-   * 決まる。位置は区画の左手前からの距離
+   * The building. buildingTsubo is the total floor area in tsubo, and the footprint
+   * (building area) is total floor area / number of floors. The depth follows from the
+   * footprint and the width. The position is the distance from the near left corner of the
+   * section
    */
   buildingTsubo: number
   buildingWidth: number
   buildingX: number
   buildingY: number
-  /** 法規の目安 */
+  /** Rough guides for the legal limits */
   coverageRatio: number
   floorAreaRatio: number
-  /** 建物と区画の境界の距離の目安（外壁後退の指定が無ければ民法 234 条の 0.5m） */
+  /** Rough guide for the distance between the building and the section boundary (the 0.5m
+   * of article 234 of the Civil Code when no exterior wall setback (外壁後退) is designated) */
   setback: number
-  /** 前面道路の幅員（m）。容積率の道路幅員制限・道路中心線からの延焼ライン・南の空きに使う */
+  /** Width of the front road (m). Used for the road-width limit on the floor area ratio, the
+   * fire-spread line (延焼ライン) from the road center line, and the open space to the south */
   roadWidth: number
-  /** 準防火地域か（延焼のおそれのある部分を図と判定に出す） */
+  /** Whether it is a quasi-fire-prevention district (shows the part at risk of fire spread
+   * in the figure and in the checks) */
   quasiFireZone: boolean
-  /** 土地の中の筆界（左端からの距離 m）。2 筆以上を 1 つの土地として扱うとき */
+  /** Parcel boundaries (筆界) inside the land (distance from the left end, m). For when 2 or
+   * more parcels are treated as 1 piece of land */
   lotLines: number[]
   /**
-   * 道路側の実際の向きの、方角（roadSide）からのずれ（度、時計回りが +）。街区が斜めの土地で、
-   * 例えば道路側が真南より東へ 10° 振れていれば -10（南 180° → 170°）
+   * The deviation of the actual direction of the road side from the compass direction
+   * (roadSide) (degrees, clockwise is +). On land in a block laid out at an angle, for
+   * example, when the road side is rotated 10° toward the east from due south it is -10
+   * (south 180° -> 170°)
    */
   facingOffset: number
-  /** 緯度（度）。日当たりの計算に使う */
+  /** Latitude (degrees). Used for the sunlight calculation */
   latitude: number
-  /** 自分たちの平屋の高さ（m、影を描くため） */
+  /** Height of our own single-story house (m, for drawing the shadow) */
   buildingHeight: number
-  /** 隣地・周りの建物 */
+  /** Adjacent land and surrounding buildings */
   neighbors: Neighbor[]
 }
 
@@ -196,7 +227,8 @@ function isNeighbor(v: unknown): v is Neighbor {
   return (['x', 'y', 'width', 'depth', 'height'] as const).every((k) => Number.isFinite(v[k]))
 }
 
-/** 設定 `sitePlan` の JSON を読む。形が違えば null（画面は既定値で始める） */
+/** Reads the JSON of the setting `sitePlan`. null when the shape is wrong (the screen starts
+ * with the defaults) */
 export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
   if (!raw) return null
   let parsed: unknown
@@ -206,8 +238,9 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
     return null
   }
   if (!isRecord(parsed) || parsed.version !== 1) return null
-  // 駐車場への通路（parkingAccess 以下）と道路の幅員・準防火・筆界は後から足した項目。
-  // 保存済みの古い値に無ければ既定値で補う
+  // The passage to the parking lot (parkingAccess and below), the road width, the
+  // quasi-fire-prevention flag and the parcel boundaries are items added later.
+  // When an old saved value lacks them, fill them in with the defaults
   const data: Record<string, unknown> = {
     parkingAccess: DEFAULT_SITE_PLAN.parkingAccess,
     accessWidth: DEFAULT_SITE_PLAN.accessWidth,
@@ -240,7 +273,7 @@ export function parseSitePlan(raw: string | null | undefined): SitePlan | null {
   return normalizePlan(data as unknown as SitePlan)
 }
 
-/** 0.1 m 単位に丸める（ドラッグで出る細かい端数を持たない） */
+/** Rounds to units of 0.1 m (does not keep the fine fractions that dragging produces) */
 export function round1(v: number): number {
   return Math.round(v * 10) / 10
 }
@@ -249,33 +282,39 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), Math.max(min, max))
 }
 
-/** 区画の奥行（m）。目標面積÷幅。土地の奥行を超えない */
+/** Depth of the section (m). Target area / width. Does not exceed the depth of the land */
 export function sectionDepth(plan: SitePlan): number {
   return Math.min(tsuboToM2(plan.targetTsubo) / plan.sectionWidth, plan.landDepth)
 }
 
-/** 建物の外形の面積（建築面積、㎡）。延床÷階数（総 2 階として見る） */
+/** Area of the building footprint (building area, ㎡). Total floor area / number of floors
+ * (viewed as a full two-story) */
 export function buildingFootprint(plan: SitePlan): number {
   return tsuboToM2(plan.buildingTsubo) / plan.floors
 }
 
-/** 建物の奥行（m）。外形の面積÷幅 */
+/** Depth of the building (m). Footprint area / width */
 export function buildingDepth(plan: SitePlan): number {
   return buildingFootprint(plan) / plan.buildingWidth
 }
 
-/** 図やラベルに出す建物の呼び名（「平屋 35坪」「2 階建て 35坪」） */
+/** The name of the building shown in figures and labels ("平屋 35坪" (single-story, 35
+ * tsubo), "2 階建て 35坪" (two-story, 35 tsubo)) */
 export function buildingLabel(plan: SitePlan): string {
   return `${FLOORS_LABEL[plan.floors]} ${plan.buildingTsubo}坪`
 }
 
 /**
- * 値を土地・区画の中に収める。区画の幅は土地の間口まで、区画は土地の中、建物は区画の中
- * （外壁後退は「収める」対象にせず、判定で知らせる）。路地状部分の幅は区画の幅まで。
+ * Fits the values inside the land and the section. The section width goes up to the
+ * frontage of the land, the section stays inside the land, and the building stays inside
+ * the section (the exterior wall setback is not something to "fit", and is reported by the
+ * checks). The width of the flag-lot access strip goes up to the section width.
  *
- * 駐車場への通路（parkingAccess）が有効で区画の奥に土地が残るときは、土地の端の通路の帯を
- * 避けるよう区画の幅と左右の位置を詰める。幅を詰めると奥行が伸びるので、奥行を求め直して
- * から道路からの距離を収め直す（詰めた幅はそのまま残し、勝手に広げ直さない）。
+ * When the passage to the parking lot (parkingAccess) is enabled and land remains behind
+ * the section, the section width and its left-right position are tightened to avoid the
+ * strip of the passage at the end of the land. Tightening the width lengthens the depth, so
+ * the depth is recomputed and then the distance from the road is fitted again (the
+ * tightened width is kept as is, and is not widened again on its own).
  */
 export function normalizePlan(plan: SitePlan): SitePlan {
   const landWidth = Math.max(plan.landWidth, 1)
@@ -283,7 +322,7 @@ export function normalizePlan(plan: SitePlan): SitePlan {
   const accessWidth = clamp(plan.accessWidth, 0, landWidth - 1)
   let sectionWidth = clamp(plan.sectionWidth, 1, landWidth)
   const roadWidth = clamp(plan.roadWidth, 0, 50)
-  // 筆界は土地の内側だけを、左から順に重複なく持つ
+  // Keep only the parcel boundaries inside the land, in order from the left, without duplicates
   const lotLines = [...new Set(plan.lotLines.map(round1))]
     .filter((v) => v > 0 && v < landWidth)
     .sort((a, b) => a - b)
@@ -335,7 +374,8 @@ export function sectionRect(plan: SitePlan): Rect {
   return { x: plan.sectionX, y: plan.sectionY, width: plan.sectionWidth, depth: sectionDepth(plan) }
 }
 
-/** 路地状部分（道路→区画の通路）。区画が道路に接していれば null */
+/** The flag-lot access strip (the passage from the road to the section). null when the
+ * section touches the road */
 export function flagRect(plan: SitePlan): Rect | null {
   if (plan.sectionY <= 0 || plan.flagWidth <= 0) return null
   const x =
@@ -344,8 +384,9 @@ export function flagRect(plan: SitePlan): Rect | null {
 }
 
 /**
- * 残りの土地（駐車場）への通路。道路から区画の奥の端まで、土地の左右どちらかの端に取る。
- * 通路が無効、または区画の奥に土地が残らない（区画が土地の奥まで届く）なら null
+ * The passage to the remaining land (the parking lot). Taken at the left or right end of the
+ * land, from the road to the rear edge of the section. null when the passage is disabled,
+ * or when no land remains behind the section (the section reaches the rear of the land)
  */
 export function accessRect(plan: SitePlan): Rect | null {
   if (!plan.parkingAccess || plan.accessWidth <= 0) return null
@@ -355,10 +396,11 @@ export function accessRect(plan: SitePlan): Rect | null {
   return { x, y: 0, width: plan.accessWidth, depth: reach }
 }
 
-/** 駐車台数の概算に使う 1 台あたりの面積（㎡。区画 2.5×5m に通路の取り分を足した目安） */
+/** Area per car used for the rough estimate of the number of parking spaces (㎡. A rough
+ * guide that adds a share of the aisle to a 2.5x5m space) */
 export const PARKING_M2_PER_CAR = 30
 
-/** 建物の外形（土地の座標系） */
+/** The building footprint (in the land coordinate system) */
 export function buildingRect(plan: SitePlan): Rect {
   return {
     x: plan.sectionX + plan.buildingX,
@@ -368,27 +410,34 @@ export function buildingRect(plan: SitePlan): Rect {
   }
 }
 
-/** 敷地が道路に接する長さの下限（m）。建築基準法 43 条 */
+/** Minimum length (m) over which the site must touch the road. Article 43 of the Building
+ * Standards Act */
 export const MIN_FRONTAGE = 2
 
-/** 車 1 台が通れる通路の幅の目安（m）。法の下限（2m）では車が入らない */
+/** Rough guide for the width of a passage that 1 car can pass through (m). A car cannot
+ * enter at the legal minimum (2m) */
 export const CAR_LANE_WIDTH = 3
 
-/** 延焼のおそれのある部分の距離（m、1 階）。隣地境界線・道路中心線から（建築基準法 2 条 6 号） */
+/** Distance of the part at risk of fire spread (m, 1st floor). Measured from the adjacent
+ * land boundary line and the road center line (article 2 item 6 of the Building Standards
+ * Act) */
 export const FIRE_SPREAD_DISTANCE = 3
-/** 同じく 2 階以上（m） */
+/** The same for the 2nd floor and above (m) */
 export const FIRE_SPREAD_DISTANCE_UPPER = 5
 
 /**
- * 前面道路の幅員による容積率の上限（%）。幅員 12m 未満なら 幅員×0.4（住居系の用途地域）で、
- * 指定容積率との小さい方が効く（建築基準法 52 条 2 項）
+ * The upper limit of the floor area ratio due to the width of the front road (%). When the
+ * width is less than 12m it is width x 0.4 (residential use districts), and the smaller of
+ * it and the designated floor area ratio applies (article 52 paragraph 2 of the Building
+ * Standards Act)
  */
 export function effectiveFloorAreaRatio(plan: SitePlan): number {
   if (plan.roadWidth >= 12) return plan.floorAreaRatio
   return Math.min(plan.floorAreaRatio, Math.round(plan.roadWidth * 40))
 }
 
-/** 区画の手前・奥・左・右が、それぞれどの方角か（道路の方角から決まる。画面の北の向きと揃える） */
+/** Which compass direction the front, rear, left and right of the section each face
+ * (follows from the direction of the road. Kept consistent with north on screen) */
 export function sideDirections(roadSide: RoadSide): {
   front: string
   back: string
@@ -404,9 +453,12 @@ export function sideDirections(roadSide: RoadSide): {
 }
 
 /**
- * 延焼ライン（区画の座標、区画の左手前が原点）。この長方形の外側が延焼のおそれのある部分。
- * 区画が道路に接していれば手前は道路中心線から 3m（＝境界から 3m−幅員/2）、接していなければ
- * 手前も隣地境界線として 3m。左右・奥は隣地（残りの土地も分けたあとは別の敷地）として 3m
+ * The fire-spread line (section coordinates, the origin is the near left corner of the
+ * section). Outside this rectangle is the part at risk of fire spread. When the section
+ * touches the road, the front is 3m from the road center line (= 3m - road width/2 from the
+ * boundary), and when it does not, the front is also 3m as an adjacent land boundary line.
+ * The left, right and rear are 3m as adjacent land (the remaining land is also a separate
+ * site after the split)
  */
 export function fireSafeRect(plan: SitePlan, distance: number = FIRE_SPREAD_DISTANCE): Rect {
   const sDepth = sectionDepth(plan)
@@ -419,7 +471,8 @@ export function fireSafeRect(plan: SitePlan, distance: number = FIRE_SPREAD_DIST
   }
 }
 
-/** 筆界の入力（「10.5, 20」「10.5、20」など）を数値の並びに。読めない片は捨てる */
+/** Turns the parcel boundary input ("10.5, 20", "10.5、20" and so on) into a list of numbers.
+ * Pieces that cannot be read are dropped */
 export function parseLotLines(text: string): number[] {
   return text
     .split(/[,、，\s]+/)
@@ -433,8 +486,10 @@ export function formatLotLines(lines: number[]): string {
 }
 
 /**
- * 区画がどの筆にかかるか。筆は左から 0 始まりの番号。筆界は道路から奥へまっすぐ通る前提で、
- * 路地状部分は区画の幅の中にあるので区画の左右の範囲だけを見ればよい
+ * Which parcels the section overlaps. Parcels are numbered from the left starting at 0.
+ * Parcel boundaries are assumed to run straight from the road to the rear, and the flag-lot
+ * access strip lies within the section width, so only the left-right range of the section
+ * needs to be looked at
  */
 export function lotsTouched(plan: SitePlan): number[] {
   const edges = [0, ...plan.lotLines, plan.landWidth]
@@ -446,7 +501,8 @@ export function lotsTouched(plan: SitePlan): number[] {
   return touched
 }
 
-/** 区画内で、建物の南側に取れる空き（m）。道路の方角で「南」が画面のどちらかが変わる */
+/** The open space (m) available on the south side of the building within the section. Which
+ * way "south" is on screen depends on the direction of the road */
 export function southGap(plan: SitePlan): number {
   const sDepth = sectionDepth(plan)
   const bDepth = buildingDepth(plan)
@@ -462,47 +518,53 @@ export function southGap(plan: SitePlan): number {
   }
 }
 
-/** 画面上の北の向き（度。0 = 上、時計回り）。道路を下に描くための回転 */
+/** The direction of north on screen (degrees. 0 = up, clockwise). The rotation for drawing
+ * the road at the bottom */
 export function northAngle(roadSide: RoadSide): number {
   return { S: 0, N: 180, E: 90, W: 270 }[roadSide]
 }
 
-/** 土地の +x（右）と +y（奥）の方位（度、北 0・時計回り）。道路の方角と実際の向きのずれから */
+/** The azimuths of +x (right) and +y (rear) of the land (degrees, north 0, clockwise). From
+ * the direction of the road and the deviation of the actual direction */
 export function landAxes(plan: SitePlan): { rightAz: number; backAz: number } {
   const front = { S: 180, N: 0, E: 90, W: 270 }[plan.roadSide] + plan.facingOffset
   const backAz = (front + 180 + 360) % 360
   return { rightAz: (backAz + 90) % 360, backAz }
 }
 
-/** 日当たりの計算に入れる周りの建物（高さが分かっているもの） */
+/** The surrounding buildings included in the sunlight calculation (those with a known height) */
 export function shadingBoxes(plan: SitePlan): (Box & { label: string })[] {
   return plan.neighbors
     .filter((n) => n.kind !== 'open' && n.height > 0)
     .map(({ label, x, y, width, depth, height }) => ({ label, x, y, width, depth, height }))
 }
 
-/** 日照を見る時間帯（真太陽時）と刻み（時間） */
+/** The time window (true solar time) and the step (hours) for looking at sunlight */
 export const SUN_START = 8
 export const SUN_END = 16
 const SUN_STEP = 1 / 6
-/** 窓の高さの目安（m、掃き出し窓の中ほど） */
+/** Rough window height (m, around the middle of a floor-to-ceiling sliding window) */
 const WINDOW_Z = 1
 
 export type SunReport = {
-  /** 南を向く外壁の方角（'南' 以外になるのは土地が大きく振れているとき） */
+  /** The compass direction of the exterior wall facing south (it becomes something other
+   * than '南' when the land is rotated a lot) */
   wall: string
-  /** 外壁の上の 5 点の日照時間（時間） */
+  /** Sunlight hours at 5 points on the exterior wall (hours) */
   hours: number[]
   average: number
   min: number
-  /** 影を落とした建物ごとの、5 点平均で遮った時間（時間）。長い順 */
+  /** For each building that cast a shadow, the time it blocked, averaged over the 5 points
+   * (hours). Longest first */
   blockers: { label: string; hours: number }[]
 }
 
 /**
- * 平屋の外壁のうち最も南を向く面に、指定の季節の 8〜16 時（真太陽時）に日が当たる時間。
- * 外壁の 5 点（両端を少し内側に）を窓の高さで見て、周りの建物に遮られるか・太陽が外壁の
- * 裏に回っているかを 10 分刻みで数える
+ * The time the sun hits the most south-facing face of the exterior walls of the
+ * single-story house, from 8 to 16 o'clock (true solar time) in the given season. Looks at
+ * 5 points on the exterior wall (both ends slightly inward) at window height, and counts in
+ * 10 minute steps whether they are blocked by the surrounding buildings and whether the sun
+ * has gone behind the exterior wall
  */
 export function sunOnSouthWall(plan: SitePlan, season: Season = 'winter'): SunReport {
   const { rightAz, backAz } = landAxes(plan)
@@ -547,7 +609,8 @@ export function sunOnSouthWall(plan: SitePlan, season: Season = 'winter'): SunRe
   }
 }
 
-/** 冬至に南の外壁へ日が当たってほしい時間の目安（時間） */
+/** Rough guide for how long the sun should hit the south exterior wall on the winter
+ * solstice (hours) */
 export const WINTER_SUN_TARGET = 4
 
 export type CheckStatus = 'ok' | 'warn' | 'ng'
@@ -563,11 +626,12 @@ export type SiteEvaluation = {
   coverageUsed: number
   floorAreaUsed: number
   southGap: number
-  /** 前面道路の幅員を効かせた容積率の上限（%） */
+  /** The upper limit of the floor area ratio with the width of the front road applied (%) */
   floorAreaLimit: number
-  /** 冬至の南の外壁の日照 */
+  /** Sunlight on the south exterior wall on the winter solstice */
   winterSun: SunReport
-  /** 駐車場への通路の面積（残りの土地に含む）。通路が無ければ 0 */
+  /** Area of the passage to the parking lot (included in the remaining land). 0 when there
+   * is no passage */
   accessArea: number
   checks: SiteCheck[]
 }
@@ -576,7 +640,7 @@ function fmt(v: number, digits = 1): string {
   return v.toLocaleString('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 })
 }
 
-/** 面積・率を出し、確かめたい点を ok / warn / ng で並べる */
+/** Computes the areas and ratios, and lists the points to check as ok / warn / ng */
 export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const section = sectionRect(plan)
   const flag = flagRect(plan)
@@ -591,7 +655,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const gap = southGap(plan)
   const checks: SiteCheck[] = []
 
-  // 1. 目標の面積が取れているか（土地の奥行が足りないと区画が縮む）
+  // 1. Whether the target area is secured (the section shrinks when the land is not deep enough)
   const targetArea = tsuboToM2(plan.targetTsubo)
   checks.push(
     sectionArea + 0.01 >= targetArea
@@ -609,7 +673,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
         },
   )
 
-  // 2. 接道（建築基準法: 敷地が道路に 2m 以上接する）
+  // 2. Road frontage (Building Standards Act: the site touches the road over 2m or more)
   if (!flag) {
     if (plan.sectionY > 0) {
       checks.push({
@@ -652,7 +716,8 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 3. 残りの土地が道路に接し続けるか（手前を全部使うと奥の土地が無接道になる）
+  // 3. Whether the remaining land keeps touching the road (using the whole front leaves the
+  // rear land with no road frontage)
   const usedFrontage = plan.sectionY <= 0 ? plan.sectionWidth : flag ? flag.width : 0
   const remainingFrontage = plan.landWidth - usedFrontage
   checks.push(
@@ -673,7 +738,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
           },
   )
 
-  // 3b. 残りの土地（駐車場）への通路
+  // 3b. The passage to the remaining land (the parking lot)
   const access = accessRect(plan)
   const accessArea = access ? access.width * access.depth : 0
   if (plan.parkingAccess) {
@@ -696,7 +761,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 4. 建ぺい率・容積率
+  // 4. Building coverage ratio and floor area ratio
   checks.push({
     id: 'coverage',
     status: coverageUsed <= plan.coverageRatio ? 'ok' : 'ng',
@@ -714,7 +779,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
         : `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%）`,
   })
 
-  // 5. 外壁後退（建物と区画の境界の距離）
+  // 5. Exterior wall setback (the distance between the building and the section boundary)
   const bDepth = buildingDepth(plan)
   const minEdge = Math.min(
     plan.buildingX,
@@ -729,7 +794,8 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上）`,
   })
 
-  // 5b. 準防火地域: 延焼のおそれのある部分にかかる外壁
+  // 5b. Quasi-fire-prevention district: exterior walls that fall in the part at risk of fire
+  // spread
   if (plan.quasiFireZone) {
     const dir = sideDirections(plan.roadSide)
     const sidesWithin = (distance: number) => {
@@ -768,7 +834,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 5c. 筆界（2 筆以上の土地から区画を取るとき）
+  // 5c. Parcel boundaries (when the section is taken from land of 2 or more parcels)
   if (plan.lotLines.length > 0) {
     const lots = lotsTouched(plan)
     const names = lots.map((i) => `左から ${i + 1} 筆目`).join('・')
@@ -789,7 +855,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 5d. 冬至の日照（周りの建物の影を入れて）
+  // 5d. Sunlight on the winter solstice (including the shadows of the surrounding buildings)
   const winterSun = sunOnSouthWall(plan, 'winter')
   const fmtH = (h: number) => `${fmt(h)}時間`
   const blockers = winterSun.blockers
@@ -807,7 +873,8 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
       `${WINTER_SUN_TARGET}時間以上が目安`,
   })
 
-  // 6. 南側の空き（平屋の日当たりの目安）。区画の南が道路なら、道路の幅員も空きとして数える
+  // 6. Open space on the south side (a rough guide for the sunlight of a single-story
+  // house). When the south of the section is the road, the road width also counts as open space
   const southIsRoad = plan.roadSide === 'S' && plan.sectionY <= 0
   const openSouth = southIsRoad ? gap + plan.roadWidth : gap
   checks.push({
@@ -836,26 +903,28 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   }
 }
 
-/** 区画を道路側（手前）に寄せる */
+/** Moves the section to the road side (the front) */
 export function moveSectionToFront(plan: SitePlan): SitePlan {
   return normalizePlan({ ...plan, sectionY: 0 })
 }
 
-/** 区画を奥（道路の反対側）に寄せる */
+/** Moves the section to the rear (the side opposite the road) */
 export function moveSectionToBack(plan: SitePlan): SitePlan {
   return normalizePlan({ ...plan, sectionY: plan.landDepth })
 }
 
 /**
- * 建物を「南側の空きが最大」になる位置に置く（区画内で南と反対側に寄せ、外壁後退ぶんだけ離す）。
- * 左右（南北と直交する方向）は区画の中央。
+ * Places the building where "the open space on the south side is largest" (moves it to the
+ * side opposite south within the section, and keeps it away by the exterior wall setback).
+ * Left-right (the direction perpendicular to north-south) is the center of the section.
  */
 export function placeBuildingNorth(plan: SitePlan): SitePlan {
   const sDepth = sectionDepth(plan)
   const bDepth = buildingDepth(plan)
   const centerX = (plan.sectionWidth - plan.buildingWidth) / 2
   const centerY = (sDepth - bDepth) / 2
-  // 奥側の位置は 0.1m 単位へ切り捨てる（四捨五入だと境界からの離れを割り込むことがある）
+  // The far-side position is rounded down to units of 0.1m (rounding to nearest can cut into
+  // the setback from the boundary)
   const floor1 = (v: number) => Math.floor(v * 10 + 1e-9) / 10
   const farX = floor1(plan.sectionWidth - plan.buildingWidth - plan.setback)
   const farY = floor1(sDepth - bDepth - plan.setback)

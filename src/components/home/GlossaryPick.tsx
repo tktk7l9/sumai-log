@@ -4,7 +4,8 @@ import { BookOpen } from 'lucide-react'
 
 import type { GlossaryPick as GlossaryPickRow } from '../../server/glossary'
 
-/** ホームの「用語集から」。開くたびにランダムに 1 語。押すと用語集の詳細へ */
+/** "用語集から" (From the glossary) on the home page. One random term each time it opens.
+ * Pressing it goes to the glossary detail. */
 export function GlossaryPick({ term }: { term: GlossaryPickRow | null }) {
   if (!term) return null
   return (

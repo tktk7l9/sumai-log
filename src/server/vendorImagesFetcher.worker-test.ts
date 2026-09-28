@@ -20,7 +20,7 @@ async function makeVendor(name: string, overrides: Record<string, unknown> = {})
   return upsertVendor(db, { name, kind: 'koumuten', serviceAreas: [], ...overrides }, actor)
 }
 
-/** put(key, bytes, opts) / delete(keys) だけを記録するフェイク R2。実際のベンダーサイトは一切叩かない。 */
+/** Fake R2 that only records put(key, bytes, opts) / delete(keys). Never hits a real vendor site. */
 function fakeBucket() {
   const objects = new Map<string, { body: Uint8Array; contentType?: string }>()
   const put = vi.fn(
@@ -47,10 +47,12 @@ function fakeFetch(build: (url: string) => Response | null): typeof fetch {
 }
 
 /**
- * `content-length` ヘッダを付けずに合計 `totalBytes` を小分けのチャンクで流す Response を作る。
- * readCapped（vendorImagesFetcher.ts）は content-length が無いとき、チャンクを読みながら
- * 合計を数えて上限超過時点で打ち切る。相手が Content-Length を出さない／詐称する場合の
- * 防御はこの経路でしか検証できない（content-length ヘッダ経由の上限テストとは別物）。
+ * Builds a Response that streams a total of `totalBytes` in small chunks without a
+ * `content-length` header. When there is no content-length, readCapped
+ * (vendorImagesFetcher.ts) counts the total while reading chunks and cuts off at the point
+ * the limit is exceeded. The defense for when the other side sends no Content-Length or
+ * lies about it can be verified only through this path (it is a different thing from the
+ * limit test via the content-length header).
  */
 function streamedResponse(totalBytes: number, chunkSize = 64 * 1024): Response {
   let sent = 0
@@ -72,8 +74,9 @@ const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a
 const ICO_BYTES = new Uint8Array([0x00, 0x00, 0x01, 0x00, 1, 0])
 const HTML_WITH_ICON = '<html><head><link rel="icon" href="/icon.png"></head></html>'
 
-// 鍵に stamp（base36 の Date.now()）が挟まるようになった（immutable キャッシュ対策）ので、
-// 完全一致ではなく形だけを見る。asymmetric matcher として toEqual に直接埋め込める。
+// The key now includes a stamp (Date.now() in base36) (to deal with the immutable cache),
+// so look only at the shape, not an exact match. It can be embedded directly in toEqual as
+// an asymmetric matcher.
 function faviconKeyMatching(vendorId: string, ext: string) {
   return expect.stringMatching(new RegExp(`^vendors/${vendorId}/favicon-[0-9a-z]+\\.${ext}$`))
 }
@@ -84,7 +87,7 @@ function representativeDisplayKeyMatching(vendorId: string) {
 }
 
 describe('fetchFaviconForVendor', () => {
-  it('HTML の <link rel="icon"> を辿って画像を R2 に置き、favicon_key を更新する', async () => {
+  it('follows <link rel="icon"> in the HTML, puts the image in R2, and updates favicon_key', async () => {
     const vendorId = await makeVendor('テスト工務店')
     const { bucket, objects } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -109,11 +112,11 @@ describe('fetchFaviconForVendor', () => {
 
     const [row] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(row.faviconKey).toBe(result.key)
-    // 自動取得は favicon_source を 'auto' にする（手動アップロードと区別するため）
+    // The automatic fetch sets favicon_source to 'auto' (to tell it apart from manual upload)
     expect(row.faviconSource).toBe('auto')
   })
 
-  it('candidate が画像として sniff できなければ次を試し、全滅なら失敗を返す', async () => {
+  it('tries the next candidate when one cannot be sniffed as an image, and returns failure when all fail', async () => {
     const vendorId = await makeVendor('テスト工務店2')
     const { bucket } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -136,7 +139,7 @@ describe('fetchFaviconForVendor', () => {
     expect(result).toEqual({ ok: false, error: 'アイコンが見つかりませんでした' })
   })
 
-  it('許可されない URL（SSRF 対策）は fetch を呼ばずに失敗を返す', async () => {
+  it('returns failure without calling fetch for a disallowed URL (SSRF protection)', async () => {
     const vendorId = await makeVendor('内部URL業者')
     const { bucket } = fakeBucket()
     let called = false
@@ -156,7 +159,7 @@ describe('fetchFaviconForVendor', () => {
     expect(result).toEqual({ ok: false, error: 'URL が許可されていません' })
   })
 
-  it('トップページの取得自体に失敗しても favicon.ico の保険を試す', async () => {
+  it('tries the favicon.ico fallback even when fetching the top page itself fails', async () => {
     const vendorId = await makeVendor('HTML取得失敗業者')
     const { bucket, objects } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -178,11 +181,12 @@ describe('fetchFaviconForVendor', () => {
     expect(objects.get(result.key)?.contentType).toBe('image/x-icon')
   })
 
-  it('拡張子が変わっても・同じ拡張子でも、差し替えたら前の favicon オブジェクトを消す（鍵は毎回 stamp が違う）', async () => {
+  it('deletes the previous favicon object on replacement, whether the extension changes or stays the same (the key has a different stamp every time)', async () => {
     const vendorId = await makeVendor('拡張子変更業者')
     const { bucket, deletedKeys } = fakeBucket()
-    // 2 回とも同じミリ秒内に呼ぶと実時計では偶然同じ stamp になりうるので、
-    // カウンタを注入して stamp が必ず違う値になるようにする（fetchFaviconForVendor の now 引数）
+    // Calling both times within the same millisecond can give the same stamp by chance with
+    // the real clock, so inject a counter to make the stamp always differ (the now argument
+    // of fetchFaviconForVendor)
     let clock = 1_700_000_000_000
     const now = () => clock++
     const firstFetch = fakeFetch((url) => {
@@ -226,7 +230,7 @@ describe('fetchFaviconForVendor', () => {
     expect(deletedKeys).toContain(first.key)
   })
 
-  it('予期しない例外が飛んでも投げ直さず失敗を返す', async () => {
+  it('returns failure without rethrowing even when an unexpected exception is thrown', async () => {
     const vendorId = await makeVendor('例外業者')
     const throwingBucket = {
       put: vi.fn(async () => {
@@ -251,13 +255,13 @@ describe('fetchFaviconForVendor', () => {
     expect(result).toEqual({ ok: false, error: 'R2 put failed' })
   })
 
-  it('許可されないホストへのリダイレクト（HTML 取得中）はそのホストへ fetch されず、favicon.ico の保険へフォールバックする', async () => {
+  it('does not fetch a disallowed host on a redirect to it (while fetching the HTML) and falls back to the favicon.ico fallback', async () => {
     const vendorId = await makeVendor('リダイレクトSSRF業者')
     const { bucket } = fakeBucket()
     let blockedHostFetched = false
     const fetchImpl = (async (url: string | URL) => {
       if (String(url) === 'https://vendor.example.com/') {
-        // 内部 IP リテラルへ誘導しようとするリダイレクト
+        // A redirect that tries to lead to an internal IP literal
         return new Response(null, { status: 302, headers: { Location: 'https://192.168.1.1/' } })
       }
       if (String(url) === 'https://vendor.example.com/favicon.ico') {
@@ -275,12 +279,12 @@ describe('fetchFaviconForVendor', () => {
       bucket,
     )
     expect(blockedHostFetched).toBe(false)
-    // HTML 取得は失敗扱い（html=''）になるが、favicon.ico の保険は
-    // pickFaviconCandidates('', websiteUrl) からも常に得られるので取得自体は成功する
+    // The HTML fetch is treated as failed (html=''), but the favicon.ico fallback is always
+    // obtained from pickFaviconCandidates('', websiteUrl) too, so the fetch itself succeeds
     expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'ico') })
   })
 
-  it('許可されたホストへのリダイレクト（HTML 取得中）は追従して候補を拾える', async () => {
+  it('follows a redirect to an allowed host (while fetching the HTML) and picks up the candidates', async () => {
     const vendorId = await makeVendor('許可リダイレクト業者')
     const { bucket } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -292,7 +296,7 @@ describe('fetchFaviconForVendor', () => {
       }
       if (url === 'https://www.vendor.example.com/')
         return new Response(HTML_WITH_ICON, { status: 200 })
-      // 相対 href（/icon.png）はリダイレクト後の finalUrl 基準で解決される
+      // The relative href (/icon.png) is resolved against the finalUrl after the redirect
       if (url === 'https://www.vendor.example.com/icon.png')
         return new Response(PNG_BYTES, { status: 200 })
       return null
@@ -308,11 +312,11 @@ describe('fetchFaviconForVendor', () => {
     expect(result).toEqual({ ok: true, key: faviconKeyMatching(vendorId, 'png') })
   })
 
-  it('候補が 6 件を超える HTML でも外向き fetch は HTML 1 回 + 候補最大 6 回 = 最大 7 回に収まる', async () => {
+  it('keeps outbound fetches within HTML 1 time + candidates at most 6 times = at most 7 times even for HTML with more than 6 candidates', async () => {
     const vendorId = await makeVendor('候補大量業者')
     const { bucket } = fakeBucket()
-    // rel=icon を 10 個宣言（全部 sizes 無し = 同順位。favicon.ico の保険を含めても
-    // pickFaviconCandidates は上位 5 件 + 保険の最大 6 件までしか返さない）
+    // Declare 10 rel=icon (all without sizes = same rank. Even including the favicon.ico
+    // fallback, pickFaviconCandidates returns only the top 5 + the fallback, at most 6)
     const htmlWithManyIcons = Array.from(
       { length: 10 },
       (_, i) => `<link rel="icon" href="/icon-${i}.png">`,
@@ -326,7 +330,8 @@ describe('fetchFaviconForVendor', () => {
         return new Response(htmlWithManyIcons, { status: 200 })
       }
       requestedCandidateUrls.push(u)
-      // 候補・保険とも全部「画像として使えない」ことにして、最後まで（=上限まで）試させる
+      // Make every candidate and the fallback "unusable as an image" so that it tries to the
+      // end (= up to the limit)
       return new Response('not an image', { status: 200 })
     }) as typeof fetch
 
@@ -338,23 +343,23 @@ describe('fetchFaviconForVendor', () => {
       bucket,
     )
     expect(result).toEqual({ ok: false, error: 'アイコンが見つかりませんでした' })
-    // HTML 1 回 + 候補 6 回（宣言 5 + favicon.ico の保険）= 最大 7 回
+    // HTML 1 time + candidates 6 times (5 declared + the favicon.ico fallback) = at most 7 times
     expect(fetchCount).toBeLessThanOrEqual(7)
     expect(requestedCandidateUrls.length).toBeLessThanOrEqual(6)
-    // 10 個宣言したうち、後半（icon-5〜icon-9）は上限に切られて一度も fetch されない
+    // Of the 10 declared, the latter half (icon-5 to icon-9) is cut by the limit and never fetched
     expect(requestedCandidateUrls).not.toContain('https://vendor.example.com/icon-9.png')
   })
 
-  it('HTML 取得が content-length 無しで 1MB を超えるストリームなら打ち切り、favicon.ico の保険にフォールバックする', async () => {
+  it('cuts off the HTML fetch when it is a stream over 1MB without content-length, and falls back to the favicon.ico fallback', async () => {
     const vendorId = await makeVendor('HTML上限ストリーム業者')
     const { bucket, objects } = fakeBucket()
     let declaredCandidateFetched = false
     const fetchImpl = (async (url: string | URL) => {
       const u = String(url)
       if (u === 'https://vendor.example.com/') {
-        // HTML_MAX_BYTES（1_000_000）を超える量を content-length 無しで流す。
-        // 中身がどんな HTML であっても、打ち切られれば html='' 扱いになり、
-        // 宣言された候補（後述の icon.png）は一度も fetch されないはず
+        // Stream more than HTML_MAX_BYTES (1_000_000) without content-length.
+        // Whatever HTML the content is, once cut off it is treated as html='', and
+        // the declared candidate (icon.png, below) should never be fetched
         return streamedResponse(1_000_001)
       }
       if (u === 'https://vendor.example.com/favicon.ico') {
@@ -377,14 +382,14 @@ describe('fetchFaviconForVendor', () => {
     expect(declaredCandidateFetched).toBe(false)
   })
 
-  it('favicon 候補が content-length 無しで 512KB を超えるストリームなら破棄し、次の候補（保険）を試す', async () => {
+  it('discards a favicon candidate when it is a stream over 512KB without content-length, and tries the next candidate (the fallback)', async () => {
     const vendorId = await makeVendor('favicon上限ストリーム業者')
     const { bucket } = fakeBucket()
     const fetchImpl = (async (url: string | URL) => {
       const u = String(url)
       if (u === 'https://vendor.example.com/') return new Response(HTML_WITH_ICON, { status: 200 })
       if (u === 'https://vendor.example.com/icon.png') {
-        // ICON_MAX_BYTES（512_000）を超える量を content-length 無しで流す
+        // Stream more than ICON_MAX_BYTES (512_000) without content-length
         return streamedResponse(512_001)
       }
       if (u === 'https://vendor.example.com/favicon.ico') {
@@ -405,7 +410,7 @@ describe('fetchFaviconForVendor', () => {
 })
 
 describe('refreshAllVendorFavicons', () => {
-  it('force=false なら favicon_key が無い業者だけを対象にする', async () => {
+  it('targets only vendors without a favicon_key when force=false', async () => {
     const withFavicon = await makeVendor('取得済み業者', {
       websiteUrl: 'https://has-favicon.example.com/',
       faviconKey: 'vendors/existing/favicon.png',
@@ -440,7 +445,7 @@ describe('refreshAllVendorFavicons', () => {
     expect(withFavicon).toBeTruthy()
   })
 
-  it('force=true なら favicon_key が既にある業者も対象にする（取り直す）', async () => {
+  it('also targets vendors that already have a favicon_key when force=true (fetch again)', async () => {
     const vendorId = await makeVendor('取り直し業者', {
       websiteUrl: 'https://vendor.example.com/',
       faviconKey: 'vendors/old/favicon.png',
@@ -460,7 +465,7 @@ describe('refreshAllVendorFavicons', () => {
     ])
   })
 
-  it('website_url が無い業者は対象外、1 社の失敗は他の業者を止めない', async () => {
+  it('excludes vendors without a website_url, and a failure of 1 vendor does not stop the others', async () => {
     await makeVendor('サイト無し業者')
     const failing = await makeVendor('失敗業者', { websiteUrl: 'https://fail.example.com/' })
     const ok = await makeVendor('成功業者', { websiteUrl: 'https://ok.example.com/' })
@@ -485,8 +490,8 @@ describe('refreshAllVendorFavicons', () => {
     })
   })
 
-  it('1 回の呼び出しでは最大 10 社までしか処理せず、残りは remaining で返す', async () => {
-    // 未取得の業者を 12 社作る（force=false）
+  it('processes at most 10 vendors in one call and returns the rest as remaining', async () => {
+    // Create 12 vendors that are not yet fetched (force=false)
     const vendorIds: string[] = []
     for (let i = 0; i < 12; i++) {
       vendorIds.push(
@@ -512,12 +517,12 @@ describe('refreshAllVendorFavicons', () => {
     expect(processed).toBe(10)
     expect(results).toHaveLength(10)
     expect(remaining).toBe(2)
-    // 処理した 10 社はすべて元の 12 社のうちのどれか
+    // Each of the 10 processed vendors is one of the original 12
     for (const r of results) expect(vendorIds).toContain(r.vendorId)
   })
 
-  it('force=true では favicon_key の stamp が古い（未取得含む）業者から優先する（oldest-first）', async () => {
-    // 先に 3 社をまとめて「取得済み」にし、stamp（取得時刻）に差を付ける
+  it('prioritizes vendors whose favicon_key stamp is old (including not yet fetched) when force=true (oldest-first)', async () => {
+    // First make the 3 vendors "already fetched" together, with different stamps (fetch times)
     const older = await makeVendor('古い業者', {
       websiteUrl: 'https://older.example.com/',
       faviconKey: `vendors/dummy/favicon-${(Date.now() - 100_000).toString(36)}.png`,
@@ -543,7 +548,7 @@ describe('refreshAllVendorFavicons', () => {
 
     const { results } = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
     expect(results).toHaveLength(3)
-    // 未取得・最も古い取得済みの順で先に処理される
+    // Processed first in the order: not yet fetched, then the oldest already fetched
     expect(order).toEqual([
       'https://never.example.com/',
       'https://older.example.com/',
@@ -554,7 +559,7 @@ describe('refreshAllVendorFavicons', () => {
     expect(newer).toBeTruthy()
   })
 
-  it('force=false は favicon_source=manual の業者を対象にしない（手動アップロードは自動更新で上書きしない）', async () => {
+  it('does not target vendors with favicon_source=manual when force=false (automatic updates do not overwrite a manual upload)', async () => {
     const manualVendor = await makeVendor('手動アイコン業者', {
       websiteUrl: 'https://manual.example.com/',
       faviconKey: 'vendors/manual/favicon-abc.png',
@@ -568,7 +573,7 @@ describe('refreshAllVendorFavicons', () => {
       if (url === 'https://auto.example.com/') return new Response(HTML_WITH_ICON, { status: 200 })
       if (url === 'https://auto.example.com/icon.png')
         return new Response(PNG_BYTES, { status: 200 })
-      // manual.example.com への fetch はここまで来ないはず（来たら候補にされている）
+      // A fetch to manual.example.com should never get here (if it does, it was made a target)
       return new Response('', { status: 404 })
     })
 
@@ -577,13 +582,13 @@ describe('refreshAllVendorFavicons', () => {
     expect(ids).toContain(autoVendor)
     expect(ids).not.toContain(manualVendor)
 
-    // 手動アップロードした favicon_key/favicon_source はそのまま残る
+    // The manually uploaded favicon_key/favicon_source stay as they are
     const [row] = await db.select().from(vendors).where(eq(vendors.id, manualVendor))
     expect(row.faviconKey).toBe('vendors/manual/favicon-abc.png')
     expect(row.faviconSource).toBe('manual')
   })
 
-  it('force=true は favicon_source=manual の業者も対象にする（「取り直す」は上書きを許す）', async () => {
+  it('also targets vendors with favicon_source=manual when force=true ("取り直す" (fetch again) allows overwriting)', async () => {
     const manualVendor = await makeVendor('取り直し対象手動業者', {
       websiteUrl: 'https://manual2.example.com/',
       faviconKey: 'vendors/manual/favicon-old.png',
@@ -601,13 +606,13 @@ describe('refreshAllVendorFavicons', () => {
     const { results } = await refreshAllVendorFavicons(db, { force: true }, fetchImpl, bucket)
     expect(results.map((r) => r.vendorId)).toContain(manualVendor)
     const [row] = await db.select().from(vendors).where(eq(vendors.id, manualVendor))
-    // force で再取得できたので favicon_source は 'auto' に戻る
+    // It was fetched again with force, so favicon_source goes back to 'auto'
     expect(row.faviconSource).toBe('auto')
   })
 })
 
 describe('importRepresentativePhotoFromUrlCore', () => {
-  it('JPEG/PNG/WebP を display/thumb 両方の R2 キーへ同じバイト列で置き、representative_photo_key を更新する', async () => {
+  it('puts JPEG/PNG/WebP under both the display and thumb R2 keys with the same bytes, and updates representative_photo_key', async () => {
     const vendorId = await makeVendor('写真取り込み業者')
     const { bucket, objects } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -634,11 +639,11 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     expect(row.representativePhotoKey).toBe(result.key)
   })
 
-  it('差し替えると前の display/thumb オブジェクトを消す（鍵は毎回 stamp が違うので孤児になりうる）', async () => {
+  it('deletes the previous display/thumb objects on replacement (the key has a different stamp every time, so they could become orphans)', async () => {
     const vendorId = await makeVendor('写真差し替え業者')
     const { bucket, deletedKeys } = fakeBucket()
-    // 2 回とも同じミリ秒内に呼ぶと実時計では偶然同じ stamp になりうるので、
-    // カウンタを注入して stamp が必ず違う値になるようにする
+    // Calling both times within the same millisecond can give the same stamp by chance with
+    // the real clock, so inject a counter to make the stamp always differ
     let clock = 1_700_000_000_000
     const now = () => clock++
     const fetchImpl = fakeFetch((url) => {
@@ -673,7 +678,7 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     )
   })
 
-  it('許可されない URL（SSRF 対策）は fetch を呼ばずに失敗を返す', async () => {
+  it('returns failure without calling fetch for a disallowed URL (SSRF protection)', async () => {
     const vendorId = await makeVendor('内部URL業者2')
     const { bucket } = fakeBucket()
     let called = false
@@ -693,7 +698,7 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     expect(result).toEqual({ ok: false, error: 'URL が許可されていません' })
   })
 
-  it('業者が存在しない id には fetch も R2 put も行わず失敗を返す（孤児オブジェクト対策）', async () => {
+  it('returns failure without fetch or R2 put for an id whose vendor does not exist (prevents orphan objects)', async () => {
     const { bucket, put } = fakeBucket()
     const nonExistentId = '99999999-9999-9999-9999-999999999999'
     let fetchCalled = false
@@ -714,7 +719,7 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
-  it('画像として sniff できなければ失敗を返す', async () => {
+  it('returns failure when it cannot be sniffed as an image', async () => {
     const vendorId = await makeVendor('非画像業者')
     const { bucket } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -734,7 +739,7 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     expect(result).toEqual({ ok: false, error: '画像ファイルではありません（JPEG/PNG/WebP のみ）' })
   })
 
-  it('5MB を超えるレスポンス（content-length）は取得を打ち切って失敗を返す', async () => {
+  it('cuts off the fetch and returns failure for a response over 5MB (content-length)', async () => {
     const vendorId = await makeVendor('巨大画像業者')
     const { bucket } = fakeBucket()
     const fetchImpl = fakeFetch((url) => {
@@ -760,12 +765,12 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     })
   })
 
-  it('content-length 無しで 5MB を超えるストリームは打ち切って失敗を返す（詐称・無申告への防御）', async () => {
+  it('cuts off a stream over 5MB without content-length and returns failure (defense against a false or missing declaration)', async () => {
     const vendorId = await makeVendor('巨大画像ストリーム業者')
     const { bucket } = fakeBucket()
     const fetchImpl = (async (url: string | URL) => {
       if (String(url) === 'https://vendor.example.com/huge-stream.jpg') {
-        // MAX_IMPORTED_PHOTO_BYTES（5MB）を超える量を content-length 無しで流す
+        // Stream more than MAX_IMPORTED_PHOTO_BYTES (5MB) without content-length
         return streamedResponse(5 * 1024 * 1024 + 1)
       }
       return new Response('', { status: 404 })
@@ -784,7 +789,7 @@ describe('importRepresentativePhotoFromUrlCore', () => {
     })
   })
 
-  it('fetch 自体が例外を投げても失敗を返す（投げ直さない）', async () => {
+  it('returns failure even when fetch itself throws (does not rethrow)', async () => {
     const vendorId = await makeVendor('例外業者2')
     const { bucket } = fakeBucket()
     const fetchImpl = (async () => {
@@ -806,9 +811,10 @@ describe('importRepresentativePhotoFromUrlCore', () => {
 })
 
 describe('deleteRepresentativePhotoObjects', () => {
-  it('representative_photo_key を null にし、DB に保存されている実際の display/thumb キーを消す（新形式）', async () => {
-    // vendorId だけからは stamp 込みの現在のキーを再現できないので、DB に保存された
-    // 実際の値（stamp 入り）を読んでから消すことを検証する（vendorId ベースの決め打ちではない）
+  it('sets representative_photo_key to null and deletes the actual display/thumb keys stored in the DB (new format)', async () => {
+    // The current key including the stamp cannot be reproduced from vendorId alone, so verify
+    // that it reads the actual value stored in the DB (with the stamp) and then deletes (not
+    // a hard-coded key based on vendorId)
     const vendorId = await makeVendor('削除対象業者')
     const storedKey = `vendors/${vendorId}/representative-1abc2d-display.jpg`
     await db
@@ -827,7 +833,7 @@ describe('deleteRepresentativePhotoObjects', () => {
     )
   })
 
-  it('旧形式（stamp 無し）のキーが保存されていても、その実際のキーを消す', async () => {
+  it('deletes the actual key even when a key in the old format (no stamp) is stored', async () => {
     const vendorId = await makeVendor('削除対象業者（旧形式）')
     const storedKey = `vendors/${vendorId}/representative-display.jpg`
     await db
@@ -844,7 +850,7 @@ describe('deleteRepresentativePhotoObjects', () => {
     )
   })
 
-  it('representative_photo_key が無い業者には R2 delete を呼ばない（消すものが無い）', async () => {
+  it('does not call R2 delete for a vendor without a representative_photo_key (nothing to delete)', async () => {
     const vendorId = await makeVendor('写真なし業者')
     const { bucket, del } = fakeBucket()
 
@@ -854,7 +860,7 @@ describe('deleteRepresentativePhotoObjects', () => {
     expect(del).not.toHaveBeenCalled()
   })
 
-  it('業者が存在しない id には何もしない（R2 delete を呼ばずに失敗を返す）', async () => {
+  it('does nothing for an id whose vendor does not exist (returns failure without calling R2 delete)', async () => {
     const { bucket, del } = fakeBucket()
     const nonExistentId = '99999999-9999-9999-9999-999999999999'
 
@@ -866,7 +872,7 @@ describe('deleteRepresentativePhotoObjects', () => {
 })
 
 describe('uploadVendorFaviconCore', () => {
-  it('PNG をアップロードして favicon_key を更新し、favicon_source を manual にする', async () => {
+  it('uploads a PNG, updates favicon_key, and sets favicon_source to manual', async () => {
     const vendorId = await makeVendor('手動アップロード業者')
     const { bucket, objects } = fakeBucket()
 
@@ -880,7 +886,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(row.faviconSource).toBe('manual')
   })
 
-  it('ICO もアップロードできる', async () => {
+  it('can also upload an ICO', async () => {
     const vendorId = await makeVendor('ICOアップロード業者')
     const { bucket, objects } = fakeBucket()
 
@@ -890,7 +896,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(objects.get(result.key)?.contentType).toBe('image/x-icon')
   })
 
-  it('512KB を超えるバイト列は R2 put を呼ばずに失敗を返す', async () => {
+  it('returns failure without calling R2 put for bytes over 512KB', async () => {
     const vendorId = await makeVendor('大きすぎアップロード業者')
     const { bucket, put } = fakeBucket()
     const big = new Uint8Array(512_001)
@@ -904,7 +910,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
-  it('画像として sniff できない（SVG/テキスト）は R2 put を呼ばずに失敗を返す', async () => {
+  it('returns failure without calling R2 put for what cannot be sniffed as an image (SVG/text)', async () => {
     const vendorId = await makeVendor('SVGアップロード業者')
     const { bucket, put } = fakeBucket()
     const svgLike = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
@@ -917,7 +923,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
-  it('業者が存在しない id には R2 put を行わず失敗を返す（孤児オブジェクト対策）', async () => {
+  it('returns failure without R2 put for an id whose vendor does not exist (prevents orphan objects)', async () => {
     const { bucket, put } = fakeBucket()
     const nonExistentId = '99999999-9999-9999-9999-999999999999'
 
@@ -926,7 +932,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(put).not.toHaveBeenCalled()
   })
 
-  it('差し替えると前の favicon オブジェクトを消す（鍵は毎回 stamp が違う）', async () => {
+  it('deletes the previous favicon object on replacement (the key has a different stamp every time)', async () => {
     const vendorId = await makeVendor('favicon差し替え業者')
     const { bucket, deletedKeys } = fakeBucket()
     let clock = 1_700_000_000_000
@@ -941,7 +947,7 @@ describe('uploadVendorFaviconCore', () => {
     expect(deletedKeys).toContain(first.key)
   })
 
-  it('予期しない例外が飛んでも投げ直さず失敗を返す', async () => {
+  it('returns failure without rethrowing even when an unexpected exception is thrown', async () => {
     const vendorId = await makeVendor('アップロード例外業者')
     const throwingBucket = {
       put: vi.fn(async () => {
@@ -955,7 +961,7 @@ describe('uploadVendorFaviconCore', () => {
 })
 
 describe('deleteVendorFaviconObjects', () => {
-  it('favicon_key/favicon_source を両方 NULL にし、R2 のファビコンオブジェクトを消す', async () => {
+  it('sets both favicon_key/favicon_source to NULL and deletes the favicon object in R2', async () => {
     const vendorId = await makeVendor('favicon削除業者')
     const storedKey = `vendors/${vendorId}/favicon-1abc2d.png`
     await db
@@ -973,7 +979,7 @@ describe('deleteVendorFaviconObjects', () => {
     expect(deletedKeys).toContain(storedKey)
   })
 
-  it('favicon_key が無い業者には R2 delete を呼ばない（消すものが無い）', async () => {
+  it('does not call R2 delete for a vendor without a favicon_key (nothing to delete)', async () => {
     const vendorId = await makeVendor('favicon無し業者')
     const { bucket, del } = fakeBucket()
 
@@ -983,7 +989,7 @@ describe('deleteVendorFaviconObjects', () => {
     expect(del).not.toHaveBeenCalled()
   })
 
-  it('業者が存在しない id には何もしない（R2 delete を呼ばずに失敗を返す）', async () => {
+  it('does nothing for an id whose vendor does not exist (returns failure without calling R2 delete)', async () => {
     const { bucket, del } = fakeBucket()
     const nonExistentId = '99999999-9999-9999-9999-999999999999'
 

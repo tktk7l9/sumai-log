@@ -8,8 +8,8 @@ import { resolveSourceCore } from './sourcesFetcher'
 import { resolveSourceInput, sourceInput } from './sources.schema'
 import { idInput } from './zod'
 
-// sourceInput は sources.schema.ts から（テストの都合で分離した理由はそちら参照）。
-// 公開する import パス（'./sources' から sourceInput/SourceInput を取れる）は変えない。
+// sourceInput comes from sources.schema.ts (see there for why it was split for the tests).
+// The public import path (sourceInput/SourceInput can be taken from './sources') does not change.
 export { sourceInput }
 export type { SourceInput } from './sources.schema'
 
@@ -21,21 +21,22 @@ export const saveSource = createServerFn({ method: 'POST' })
     id: await upsertSource(getDb(), data, await currentActorEmail()),
   }))
 
-/** 行が既に無ければ ok: false（deletePhoto と同じパターン。videos.ts の deleteVideo と
- * 違い、こちらは対象の有無を呼び出し元へ返す） */
+/** ok: false if the row is already gone (same pattern as deletePhoto. Unlike deleteVideo
+ * in videos.ts, this one tells the caller whether the target existed) */
 export const deleteSource = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }) => ({ ok: (await deleteSourceRow(getDb(), data.id)) !== null }))
 
-/** フォームの「取得」ボタン。YouTube チャンネル URL だけを対象にする
- * （sourcesFetcher.ts 参照）。実処理は createServerFn の外（素の関数）に置いてあり、
- * ここはラップするだけ */
+/** The "取得" (Fetch) button of the form. Targets only YouTube channel URLs
+ * (see sourcesFetcher.ts). The real work lives outside createServerFn (a plain function),
+ * and this only wraps it */
 export const resolveSource = createServerFn({ method: 'POST' })
   .validator(resolveSourceInput)
   .handler(async ({ data }) => resolveSourceCore(data.url))
 
-/** フォームの選択肢: 候補の会社（業者）一覧。候補フォームと同じ listLinkTargets を使う
- * （properties も一緒に返るが sourceFormOptions では使わない。videoFormOptions と同じ形） */
+/** Form options: the list of candidate companies (vendors). Uses the same listLinkTargets
+ * as the candidate form (properties are returned together but sourceFormOptions does not
+ * use them. Same shape as videoFormOptions) */
 export const sourceFormOptions = createServerFn().handler(async () => {
   const targets = await listLinkTargets()
   return { vendors: targets.vendors }

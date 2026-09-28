@@ -4,7 +4,8 @@ import { z } from 'zod'
 import { getDb } from '../db/client'
 import { listTags, replaceTags, seedDefaultTags } from './repository'
 
-/** 設定タブのタグ編集・動画フォームの候補で使う。初回アクセスで既定タグを仕込む */
+/** Used by the tag editor in the settings tab and by the suggestions in the video form.
+ * Seeds the default tags on first access */
 export const listTagNames = createServerFn().handler(async () => {
   const db = getDb()
   await seedDefaultTags(db)
@@ -13,8 +14,8 @@ export const listTagNames = createServerFn().handler(async () => {
 })
 
 export const tagsInput = z.object({
-  // 0 件を許すと次回アクセスで seedDefaultTags が再発火してしまう（「全部消したい」を
-  // UI からは表現できないようにする）
+  // Allowing 0 entries would make seedDefaultTags fire again on the next access (so the UI
+  // cannot express "delete them all")
   names: z.array(z.string().trim().min(1).max(30)).min(1, 'タグは 1 つ以上必要です').max(100),
 })
 

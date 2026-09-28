@@ -23,10 +23,11 @@ export const optionalUrl = z
   .refine((v) => v === null || /^https?:\/\//.test(v), 'URL は http(s):// で始めてください')
 
 /**
- * 業者のお知らせ URL（取得先。fetch する対象）。design.md §5 の方針どおり https のみ
- * 許可（http は不可）。さらに isAllowedNewsUrl（src/lib/news/url.ts）で SSRF 対策の
- * ホスト名チェックも通す（IP リテラル・localhost・内部向けドメイン等は拒否）。
- * フォーム側で早めに弾く（実際の fetch 前の多層防御の一枚目）。
+ * Vendor news URL (the source; the target of the fetch). As the policy in design.md §5
+ * says, only https is allowed (http is not). It also goes through the hostname check for
+ * SSRF protection in isAllowedNewsUrl (src/lib/news/url.ts) (IP literals, localhost,
+ * internal-facing domains etc. are rejected). The form rejects early (the first layer of
+ * the defense in depth before the actual fetch).
  */
 export const optionalHttpsUrl = z
   .string()
@@ -37,7 +38,7 @@ export const optionalHttpsUrl = z
   .refine((v) => v === null || /^https:\/\//.test(v), 'URL は https:// で始めてください')
   .refine((v) => v === null || isAllowedNewsUrl(v), 'URL が許可されていません')
 
-/** Mantine の NumberInput は空欄で '' を emit する。境界で null に直す */
+/** Mantine's NumberInput emits '' when empty. Convert it to null at the boundary */
 export const numberOrEmpty = <T extends z.ZodNumber>(schema: T) =>
   z
     .union([schema, z.literal('')])

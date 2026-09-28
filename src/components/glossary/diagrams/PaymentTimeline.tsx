@@ -8,7 +8,10 @@ const MILESTONES: { label: string; x: number; pay?: string }[] = [
   { label: '引渡し', x: 300, pay: '最終金' },
 ]
 
-/** 契約→着工→上棟→完成→引渡しの線上に支払いと、つなぎ融資の期間 */
+/**
+ * Payments on the line of contract -> construction start -> framing completion -> completion ->
+ * handover, and the bridge loan period
+ */
 export function PaymentTimelineDiagram() {
   return (
     <Figure label="契約から着工・上棟・完成・引渡しまでの流れと、契約金・着工金・中間金・最終金の支払時期、つなぎ融資の期間">

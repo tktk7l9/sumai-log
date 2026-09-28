@@ -1,43 +1,47 @@
 /**
- * 受信メールがどの経路で来たかを決める（設計 2026-09-19 §3-3）。
+ * Decides which route an inbound mail came through (design 2026-09-19 §3-3).
  *
- * 信頼モデル: 認可は **エンベロープ送信者**（Cloudflare Email Routing が SMTP の
- * `MAIL FROM` から渡す。`ForwardableEmailMessage.from` / `InboundMessage.from`）だけで行う。
- * `From:` ヘッダも `X-Forwarded-For` ヘッダもメール本文の一部（postal-mime が解析した
- * `ParsedMail`）であり、転送先アドレスを知っていれば誰でも書ける＝攻撃者が偽装できる。
+ * Trust model: authorization uses only the **envelope sender** (passed by Cloudflare Email
+ * Routing from the SMTP `MAIL FROM`; `ForwardableEmailMessage.from` / `InboundMessage.from`).
+ * Both the `From:` header and the `X-Forwarded-For` header are part of the mail body (the
+ * `ParsedMail` parsed by postal-mime), and anyone who knows the forwarding address can write
+ * them = an attacker can spoof them.
  *
- * ただし「エンベロープ送信者なら偽装できない」わけではない。Email Routing は
- * **送信ドメインの DMARC ポリシーに従って認証失敗メールを拒否する**。つまり
- * 保護の強さは送信ドメイン側の設定次第で:
- *   - `google.com` は `p=reject` なので、`forwarding-noreply@google.com` を騙る
- *     メールは Routing が弾く＝**system 経路は保護される**。
- *   - `gmail.com` は `p=none` なので、エンベロープを `owner@gmail.com` に偽装した
- *     メールは SPF に失敗しても拒否されず **Routing を通り得る**。
- * エンベロープ送信者はヘッダより強い判定だが、完全ではない。最悪ケースは偽の
- * 「お知らせ」が 1 行入ること（本文はテキストとして描画するのでリンクは押せない）。
+ * That does not mean the envelope sender cannot be spoofed. Email Routing
+ * **rejects mail that fails authentication according to the sending domain's DMARC policy**.
+ * So the strength of the protection depends on the sending domain's settings:
+ *   - `google.com` is `p=reject`, so Routing drops mail that impersonates
+ *     `forwarding-noreply@google.com` = **the system route is protected**.
+ *   - `gmail.com` is `p=none`, so mail whose envelope is spoofed as `owner@gmail.com`
+ *     is not rejected even when SPF fails and **can pass Routing**.
+ * The envelope sender is a stronger check than the headers, but not a complete one. The worst
+ * case is one fake vendor news row being stored (the body is rendered as text, so links cannot
+ * be clicked).
  *
- * 緩和策: 転送先アドレスを推測できないもの（secret `MAIL_INBOX_ADDRESS`。
- * 例 `news-xxxxxxxx@sumai-log.app`）にして、偽装の前提条件を「攻撃者がその
- * アドレスを知っていること」まで引き上げる。
- * follow-up: Cloudflare が付ける `Authentication-Results` / ARC（`d=google.com`）を
- * 検証して自動転送を厳密に認証する（実メールでヘッダを確認してから）。
+ * Mitigation: make the forwarding address unguessable (secret `MAIL_INBOX_ADDRESS`,
+ * e.g. `news-xxxxxxxx@sumai-log.app`), which raises the precondition for spoofing to
+ * "the attacker knows that address".
+ * follow-up: verify the `Authentication-Results` / ARC (`d=google.com`) that Cloudflare adds
+ * and authenticate auto-forwarding strictly (after checking the headers on real mail).
  *
- * Gmail の自動転送はエンベロープ送信者を書き換える（plus-addressing）:
- *   owner@example.com が転送先アドレス宛のフィルタで自動転送すると、エンベロープは
- *   `owner+caf_=news-xxxxxxxx=sumai-log.app@gmail.com` になる（`From:` ヘッダは業者のまま）。
- *   `normalizeEnvelopeAddress` で `+タグ` を落として `owner@example.com` に戻してから
- *   許可リストと比較する。
- * 手動転送（「転送」機能）はエンベロープ送信者が本人のアドレスそのもの（`From:` ヘッダも
- * 同じ）で、元メールは本文の転送ブロックの中に入っている。
+ * Gmail auto-forwarding rewrites the envelope sender (plus-addressing):
+ *   when owner@example.com auto-forwards through a filter to the forwarding address, the
+ *   envelope becomes `owner+caf_=news-xxxxxxxx=sumai-log.app@gmail.com` (the `From:` header
+ *   stays the vendor's). `normalizeEnvelopeAddress` drops the `+tag` to restore
+ *   `owner@example.com` before comparing with the allowlist.
+ * For a manual forward (the "Forward" feature) the envelope sender is the member's own address
+ * (the `From:` header is the same), and the original mail is inside the forwarded block of the
+ * body.
  *
- * ヘッダ（`From:` と `X-Forwarded-For`）は認可には使わない。使うのは「自動転送か手動転送か」
- * という *見た目の判定*（`From:` が許可リストに入っているかどうかで、元メールが業者からの
- * ものか本人が書いたものかを見分ける）だけ。`forwardedFor` は情報用に `ParsedMail` に残す。
+ * The headers (`From:` and `X-Forwarded-For`) are not used for authorization. They are used
+ * only for the *cosmetic decision* of "auto-forward or manual forward" (whether `From:` is in
+ * the allowlist tells a mail from a vendor apart from one the member wrote). `forwardedFor`
+ * stays in `ParsedMail` for information.
  */
 
 import type { ParsedMail } from './parse'
 
-/** Gmail が「転送先アドレスの確認」を送ってくる差出人（From ヘッダ。偽装され得る） */
+/** Sender Gmail uses for the forwarding address confirmation (From header; can be spoofed) */
 export const GMAIL_FORWARDING_NOTICE = 'forwarding-noreply@google.com'
 
 export type RouteResult =
@@ -47,10 +51,10 @@ export type RouteResult =
   | { kind: 'rejected'; reason: string }
 
 /**
- * アドレスを **最初の `@`** でローカル部とドメインに分ける。`@` が無ければ null。
- * 分け方を 1 か所に集める（`normalizeEnvelopeAddress` と `classifyRoute` が別々の
- * 数え方をすると、`x@evil.example@google.com` のようなアドレスで「正規化に使った
- * ドメイン」と「信頼判定に使うドメイン」がずれる）。
+ * Splits an address into local part and domain at the **first `@`**. null when there is no `@`.
+ * Keeps the splitting in one place (if `normalizeEnvelopeAddress` and `classifyRoute` counted
+ * differently, an address like `x@evil.example@google.com` would make "the domain used for
+ * normalization" and "the domain used for the trust decision" diverge).
  */
 function splitAddress(addr: string): { local: string; domain: string } | null {
   const at = addr.indexOf('@')
@@ -59,9 +63,9 @@ function splitAddress(addr: string): { local: string; domain: string } | null {
 }
 
 /**
- * エンベロープ送信者を正規化する: 小文字化・前後空白除去・`<>` を外す・
- * ローカル部の `+タグ` を除去する（Gmail の plus-addressing / 自動転送の書き換えを戻す）。
- * 空入力（前後空白除去後）は `''`。
+ * Normalizes the envelope sender: lowercase, trim whitespace, strip `<>`, and
+ * remove the `+tag` of the local part (undoes Gmail plus-addressing / the auto-forward rewrite).
+ * Empty input (after trimming) gives `''`.
  */
 export function normalizeEnvelopeAddress(raw: string): string {
   const trimmed = raw.trim()
@@ -82,9 +86,9 @@ export function classifyRoute(
   envelopeFrom: string,
 ): RouteResult {
   const envelope = normalizeEnvelopeAddress(envelopeFrom)
-  // ドメインは normalizeEnvelopeAddress と同じ「最初の `@`」で取る。`@` が無い／
-  // ドメイン側にもう一つ `@` がある（`x@evil.example@google.com`）ような壊れた
-  // エンベロープは、どこをドメインと見るかで判定が変わってしまうので信頼しない。
+  // Take the domain at the "first `@`", same as normalizeEnvelopeAddress. A broken envelope
+  // with no `@`, or with another `@` in the domain part (`x@evil.example@google.com`), is not
+  // trusted, because the decision would change with which part is taken as the domain.
   const parts = splitAddress(envelope)
   const envelopeDomain = parts && !parts.domain.includes('@') ? parts.domain : null
 
@@ -99,9 +103,9 @@ export function classifyRoute(
     return { kind: 'rejected', reason: 'envelope sender not allowed' }
   }
 
-  // ここから先は認可済み（envelope が許可リストに入っている）。From ヘッダは
-  // 「自動転送（業者のメールそのもの）」か「手動転送（本人が書いた／転送した）」かという
-  // 見た目の判定にだけ使う。
+  // From here on the mail is authorized (the envelope is in the allowlist). The From header is
+  // used only for the cosmetic decision between "auto-forward (the vendor's mail itself)" and
+  // "manual forward (written / forwarded by the member)".
   return allowlist.includes(mail.from)
     ? { kind: 'manual', forwardedBy: envelope }
     : { kind: 'auto', forwardedBy: envelope }

@@ -8,11 +8,14 @@ import { measureD1, measureR2, type D1Usage, type R2Usage } from './repository/u
 
 export type ResourceUsage = {
   d1: D1Usage | null
-  /** R2 の PHOTOS バインディングが無ければ null */
+  /** null if there is no R2 PHOTOS binding */
   r2: R2Usage | null
 }
 
-/** 計測に失敗しても設定ページ自体は開けるようにする（使用量の欄だけ「取れません」になる） */
+/**
+ * Lets the settings page itself open even if measuring fails (only the usage fields
+ * become "取れません" (unavailable))
+ */
 async function measureUsage(): Promise<ResourceUsage> {
   const [d1, r2] = await Promise.all([
     measureD1(env.DB).catch(() => null),
@@ -30,7 +33,10 @@ export const getSettings = createServerFn().handler(async () => {
     measureUsage(),
   ])
   return {
-    /** 建築予定地の市区町村（候補の施工エリアと照合）。画面からは変えない（読み取り専用） */
+    /**
+     * Municipalities of the planned building site (matched against the service areas of
+     * candidates). Not changed from the screen (read-only)
+     */
     homeAreas,
     actorEmail,
     members: allMembers(),

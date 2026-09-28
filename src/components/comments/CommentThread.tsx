@@ -30,13 +30,13 @@ export function CommentThread({
   const remove = useServerFn(deleteComment)
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
-  // 書きかけのコメントは記録ごとに端末へ残す（ページを離れても消えない）
+  // An unfinished comment is kept on the device per record (it survives leaving the page)
   const key = draftKey('comment', targetId, targetType)
   useEffect(() => {
     try {
       setBody(parseDraft<string>(window.localStorage.getItem(key), Date.now()) ?? '')
     } catch {
-      // 読めなくても入力はできる
+      // Input still works even if it cannot be read
     }
   }, [key])
   function changeBody(next: string) {
@@ -45,7 +45,7 @@ export function CommentThread({
       if (next.trim() === '') window.localStorage.removeItem(key)
       else window.localStorage.setItem(key, serializeDraft(next, Date.now()))
     } catch {
-      // 書けなくても入力はできる
+      // Input still works even if it cannot be written
     }
   }
 
@@ -96,8 +96,8 @@ export function CommentThread({
               <Stack gap={4} style={{ minWidth: 0 }}>
                 <Group gap="xs">
                   <MemberChip email={c.createdBy} members={members} />
-                  {/* createdAt は D1 の datetime('now')（UTC, 'YYYY-MM-DD HH:MM:SS'）。
-                      formatJst が UTC として読み、JST に直して表示する。 */}
+                  {/* createdAt is D1's datetime('now') (UTC, 'YYYY-MM-DD HH:MM:SS').
+                      formatJst reads it as UTC and displays it converted to JST. */}
                   <Text size="xs" c="dimmed">
                     {formatJst(c.createdAt)}
                   </Text>
@@ -127,7 +127,7 @@ export function CommentThread({
         value={body}
         onChange={(e) => changeBody(e.currentTarget.value)}
         onKeyDown={(e) => {
-          // ⌘/Ctrl + Enter で送信（日本語入力の変換中は送らない）。Enter だけなら改行
+          // ⌘/Ctrl + Enter submits (not during Japanese IME composition). Enter alone is a newline
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
             e.preventDefault()
             void submit()

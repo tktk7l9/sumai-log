@@ -1,16 +1,18 @@
 /**
- * 業者のお知らせ／サイトアイコン取得の失敗理由を、設定画面向けの文言に変換する純粋関数。
+ * Pure function that turns the failure reason of fetching vendor news / a site icon into wording
+ * for the settings page.
  *
- * 一部の業者サイトは Cloudflare の IP レンジからのアクセスを一律拒否する（実機で確認済み:
- * Apache の WAF が User-Agent に関係なく 403 を返す）。この場合エラーは newsFetcher.ts の
- * `readCappedBytes` 呼び出し元が残す `HTTP ${response.status}`（例: `HTTP 403`）という形に
- * なる。これは「取得の実装が悪い」のではなく「サイト側が Cloudflare を拒否している」ため、
- * ユーザーにはその通りに伝える（自動取得できない事実を隠さない）。
+ * Some vendor sites refuse all access from Cloudflare's IP ranges (confirmed on a real site:
+ * an Apache WAF returns 403 regardless of User-Agent). In that case the error has the form
+ * `HTTP ${response.status}` (e.g. `HTTP 403`) left by the caller of `readCappedBytes` in
+ * newsFetcher.ts. This is not "the fetch implementation is bad" but "the site refuses
+ * Cloudflare", so tell the user exactly that (do not hide the fact that auto-fetch is
+ * impossible).
  */
 
-/** Cloudflare からのアクセスを拒否している可能性が高い HTTP ステータス。
- * 403: Forbidden（最も一般的な WAF 拒否）。401: Unauthorized（一部の WAF が返す）。
- * 451: Unavailable For Legal Reasons（地域/ネットワーク単位のブロックで稀に使われる）。 */
+/** HTTP statuses that most likely mean access from Cloudflare is refused.
+ * 403: Forbidden (the most common WAF refusal). 401: Unauthorized (returned by some WAFs).
+ * 451: Unavailable For Legal Reasons (rarely used for region/network level blocks). */
 const BLOCKED_STATUSES = new Set(['401', '403', '451'])
 
 const HTTP_STATUS_ERROR = /^HTTP (\d{3})$/
@@ -21,11 +23,12 @@ const BLOCKED_HINT =
 export type FetchErrorDescription = { label: string; hint?: string }
 
 /**
- * `error`（vendors.news_fetch_error 等に保存された文字列）を表示用の label/hint に変換する。
- * `HTTP 403` のような形（newsFetcher.ts が残す）を Cloudflare 拒否と判定し、率直な文言に
- * 言い換える。それ以外の理由（タイムアウト・パース失敗等）はそのまま label に使う。
- * `error` が null（未取得・直近は成功）のときは空文字の label を返す（呼び出し側は
- * `error` が truthy のときだけ呼ぶ想定だが、null を渡しても例外にはしない）。
+ * Turns `error` (the string stored in vendors.news_fetch_error etc.) into a label/hint for
+ * display. A form like `HTTP 403` (left by newsFetcher.ts) is judged as Cloudflare being
+ * refused and reworded frankly. Other reasons (timeout, parse failure, etc.) are used as the
+ * label as is. When `error` is null (never fetched, or the latest fetch succeeded) an
+ * empty-string label is returned (callers are expected to call this only when `error` is
+ * truthy, but passing null does not throw).
  */
 export function describeFetchError(error: string | null): FetchErrorDescription {
   if (!error) return { label: '' }

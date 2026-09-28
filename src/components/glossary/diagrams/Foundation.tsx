@@ -1,9 +1,10 @@
 import { Figure, Label } from './Figure'
 
 /**
- * ベタ基礎＝面で支える（切れ目のない塗りつぶし）、布基礎＝線で支える
- * （壁の下だけの帯状の footing、footing 同士の間は塗りなし）という
- * 「面 vs 線」の対比が見えるように塗りの有無で描き分けた。
+ * Mat foundation = supports with a surface (a continuous fill), strip foundation =
+ * supports with lines (band-shaped footings only under the walls, no fill between the
+ * footings). They are drawn differently by the presence of a fill so that this
+ * "surface vs line" contrast is visible.
  */
 export function FoundationDiagram() {
   return (
@@ -13,8 +14,8 @@ export function FoundationDiagram() {
         地面
       </Label>
 
-      {/* ベタ基礎: 切れ目のない塗り（面）。2つの <rect> を重ねると境界に
-          継ぎ目の線が浮くため、土台と立ち上がりを 1 本の <path> にしている */}
+      {/* Mat foundation: a continuous fill (surface). Overlapping 2 <rect>s shows a seam
+          line at the boundary, so the base and the rising part are 1 <path> */}
       <path
         d="M30 170 L30 155 L70 155 L70 115 L110 115 L110 155 L150 155 L150 170 Z"
         fill="var(--mantine-color-clay-3)"
@@ -24,7 +25,7 @@ export function FoundationDiagram() {
         ベタ基礎（面で支える）
       </Label>
 
-      {/* 布基礎: 壁の下だけの帯（線）、footing の間は塗りなし */}
+      {/* Strip foundation: bands only under the walls (lines), no fill between the footings */}
       <rect x={170} y={155} width={35} height={15} fill="none" />
       <rect x={180} y={115} width={15} height={40} fill="none" />
       <rect x={245} y={155} width={35} height={15} fill="none" />

@@ -5,13 +5,13 @@ import { isTrustedMutation } from './csrf'
 const APP = 'https://sumai-log.example.workers.dev/settings'
 
 describe('isTrustedMutation', () => {
-  it('GET / HEAD / OPTIONS は Origin 無しでも通す', () => {
+  it('lets GET / HEAD / OPTIONS through even without Origin', () => {
     expect(isTrustedMutation({ method: 'GET', origin: null, requestUrl: APP })).toBe(true)
     expect(isTrustedMutation({ method: 'head', origin: null, requestUrl: APP })).toBe(true)
     expect(isTrustedMutation({ method: 'OPTIONS', origin: null, requestUrl: APP })).toBe(true)
   })
 
-  it('同じ Origin からの POST は通す', () => {
+  it('lets a POST from the same Origin through', () => {
     expect(
       isTrustedMutation({
         method: 'POST',
@@ -21,7 +21,7 @@ describe('isTrustedMutation', () => {
     ).toBe(true)
   })
 
-  it('別 Origin・未設定・壊れた値は拒否する', () => {
+  it('rejects a different Origin, a missing one and a broken value', () => {
     expect(
       isTrustedMutation({
         method: 'POST',
@@ -44,7 +44,7 @@ describe('isTrustedMutation', () => {
     ).toBe(false)
   })
 
-  it('http と https の取り違えは通さない', () => {
+  it('does not let an http / https mix-up through', () => {
     expect(
       isTrustedMutation({
         method: 'POST',

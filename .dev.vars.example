@@ -1,29 +1,33 @@
-# ローカル開発用。`.dev.vars` にコピーして使う（gitignore 済み）。
-# Keyway を使う場合: keyway pull -e development -f .dev.vars -y
+# For local development. Copy to `.dev.vars` to use it (already gitignored).
+# With Keyway: keyway pull -e development -f .dev.vars -y
 #
-# ローカルには Cloudflare Access が無いため、ENVIRONMENT=development のときだけ
-# DEV_IDENTITY_EMAIL を認証済み利用者として扱う。本番では必ず無効。
+# There is no Cloudflare Access locally, so DEV_IDENTITY_EMAIL is treated as the
+# authenticated user only when ENVIRONMENT=development. Always disabled in production.
 
 ENVIRONMENT=development
 DEV_IDENTITY_EMAIL=owner@example.com
 ACCESS_ALLOWED_EMAILS=owner@example.com,partner@example.com
-# email:表示名:Mantineの色名 をカンマ区切り
+# email:display name:Mantine color name, comma separated
 MEMBERS=owner@example.com:甲:teal,partner@example.com:乙:pink
 
-# 本番でのみ使う値（ローカルでは空でよい）
+# Values used only in production (may stay empty locally)
 ACCESS_TEAM_DOMAIN=
 ACCESS_POLICY_AUD=
 
-# Google マップ（地図タブ）。Maps JavaScript API のキー（HTTP リファラー制限つき・README「Google マップ」）。
-# 空なら地図の代わりに案内文が出る。Map ID は省略可（省略時は Google のサンプル用 DEMO_MAP_ID）
+# Google Maps (map tab). Maps JavaScript API key (with HTTP referrer restriction; see the
+# README section "Google マップ" (Google Maps)).
+# If empty, a guidance message is shown instead of the map. Map ID is optional (when omitted,
+# Google's sample DEMO_MAP_ID is used)
 GOOGLE_MAPS_API_KEY=
 GOOGLE_MAPS_MAP_ID=
 
-# メール取込（設計 2026-09-19 §7）の転送先アドレス。**secret** にする
-# （推測できないアドレスであること自体が偽装への緩和策。public リポジトリに置かない）。
-# ランダムな local part を推奨、例 news-a1b2c3d4@sumai-log.app
-# 本番は `printf '%s' '<そのアドレス>' | npx wrangler secret put MAIL_INBOX_ADDRESS`。
-# 空なら設定ページに「未設定」と出るだけで、受信そのものには影響しない。
-# メール取込を受理する転送元の Gmail（ログインの許可リストに加えて認める。カンマ区切り）
+# Forwarding destination address for mail import (design 2026-09-19 §7). Make it a **secret**
+# (an unguessable address is itself a mitigation against spoofing. Do not put it in the
+# public repository).
+# A random local part is recommended, e.g. news-a1b2c3d4@sumai-log.app
+# In production: `printf '%s' '<that address>' | npx wrangler secret put MAIL_INBOX_ADDRESS`.
+# If empty, the settings page only shows "未設定" (Not set); receiving itself is not affected.
+# Forwarding-source Gmail addresses accepted for mail import (allowed in addition to the
+# login allowlist. Comma separated)
 MAIL_ALLOWED_SENDERS=
 MAIL_INBOX_ADDRESS=

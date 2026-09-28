@@ -14,14 +14,14 @@ import {
 import { securityHeadersInit } from '../lib/securityHeaders'
 
 /**
- * Cloudflare Access 認証のバインディング依存部分。
- * 判定ロジック本体は src/lib/access.ts にあり、ここは env と JWKS 取得の接続のみ。
+ * The binding-dependent part of Cloudflare Access authentication.
+ * The decision logic itself is in src/lib/access.ts; this file only wires env and the JWKS fetch.
  */
 
 let cachedKeySet: JWTVerifyGetKey | null = null
 let cachedKeySetIssuer: string | null = null
 
-/** チームドメインごとに JWKS を 1 度だけ作る（jose 側でキャッシュされる）。 */
+/** Creates the JWKS only once per team domain (cached on the jose side). */
 function getKeySet(issuer: string): JWTVerifyGetKey {
   if (!cachedKeySet || cachedKeySetIssuer !== issuer) {
     cachedKeySet = createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`))
@@ -42,12 +42,13 @@ function readConfig() {
 }
 
 /**
- * リクエストの認証を行う。
+ * Authenticates the request.
  *
- * 本番: Cloudflare Access が付与する Cf-Access-Jwt-Assertion を検証する。
- * ローカル: Access を通らないため DEV_IDENTITY_EMAIL で代替する。
- *   ただし ENVIRONMENT が development / test のときに限る（.dev.vars で明示的に指定する）。
- *   wrangler.jsonc の既定は production なので、設定漏れは自動的に拒否側に倒れる。
+ * Production: verifies the Cf-Access-Jwt-Assertion attached by Cloudflare Access.
+ * Local: requests do not pass through Access, so DEV_IDENTITY_EMAIL substitutes for it.
+ *   Only when ENVIRONMENT is development / test (set explicitly in .dev.vars).
+ *   The default in wrangler.jsonc is production, so a missing setting automatically falls to
+ *   the deny side.
  */
 export async function authenticateRequest(request: Request): Promise<AuthResult> {
   const config = readConfig()
@@ -61,8 +62,8 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
     })
   }
 
-  // JWKS の URL 組み立て前に設定を確かめる。issuer が空のまま new URL() を
-  // 呼ぶと同期的に throw し、403 ではなく 500 になってしまう。
+  // Check the configuration before building the JWKS URL. Calling new URL() with an empty
+  // issuer throws synchronously and results in 500 instead of 403.
   if (!config.issuer || !config.audience) {
     return { ok: false, reason: 'misconfigured' }
   }
@@ -76,7 +77,7 @@ export async function authenticateRequest(request: Request): Promise<AuthResult>
   })
 }
 
-/** 認証済み利用者を返す。失敗したら 403 の Response を throw する。 */
+/** Returns the authenticated user. On failure throws a 403 Response. */
 export async function requireUser(request: Request): Promise<Identity> {
   const result = await authenticateRequest(request)
   if (!result.ok) {

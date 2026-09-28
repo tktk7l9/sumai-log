@@ -18,7 +18,7 @@ import { actor, db, reset } from './test-helpers'
 beforeEach(reset)
 
 describe('inbound_mails', () => {
-  it('テーブルと列がある', async () => {
+  it('the table and columns exist', async () => {
     const { results } = await env.DB.prepare('PRAGMA table_info(inbound_mails)').all()
     const names = results.map((r) => (r as { name: string }).name)
     expect(names).toEqual(
@@ -53,7 +53,7 @@ function row(over: Partial<Parameters<typeof insertInboundMail>[1]> = {}) {
 }
 
 describe('insertInboundMail', () => {
-  it('入り、同じ message_id は created=false で既存 id を返す', async () => {
+  it('inserts, and the same message_id returns the existing id with created=false', async () => {
     const a = await insertInboundMail(db, row())
     const b = await insertInboundMail(db, row({ subject: '別件名' }))
     expect(a.created).toBe(true)
@@ -64,7 +64,7 @@ describe('insertInboundMail', () => {
     expect(rows[0].subject).toBe('完成見学会のご案内')
   })
 
-  it('既存行が reject 済みなら existingStatus は rejected', async () => {
+  it('existingStatus is rejected when the existing row is already rejected', async () => {
     await insertInboundMail(
       db,
       row({
@@ -81,7 +81,7 @@ describe('insertInboundMail', () => {
 })
 
 describe('reviveRejectedInboundMail', () => {
-  it('reject 行を新しい内容で上書きし unassigned に戻す。news_id には触れない', async () => {
+  it('overwrites a reject row with the new content and puts it back to unassigned. Does not touch news_id', async () => {
     const { id } = await insertInboundMail(
       db,
       row({
@@ -111,7 +111,7 @@ describe('reviveRejectedInboundMail', () => {
 })
 
 describe('importMailAsNews', () => {
-  it('お知らせ行を作って imported にし、日程も付く', async () => {
+  it('creates a vendor news row, sets imported, and attaches the schedule too', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: 'テスト工務店', kind: 'koumuten', serviceAreas: [] },
@@ -130,7 +130,7 @@ describe('importMailAsNews', () => {
     expect(mail.vendorId).toBe(vendorId)
     expect(mail.newsId).toBe(newsId)
   })
-  it('2 回目は url 重複で作らず newsId は最初のまま', async () => {
+  it('the 2nd time does not create one because of the duplicate url, and newsId stays the first one', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: 'テスト工務店', kind: 'koumuten', serviceAreas: [] },
@@ -145,7 +145,7 @@ describe('importMailAsNews', () => {
 })
 
 describe('listInboundMails / getInboundMailBody / deleteInboundMail / cleanupInboundMails', () => {
-  it('新しい順・status 絞り込み・本文取得・削除', async () => {
+  it('newest first, status filter, body fetch, delete', async () => {
     await insertInboundMail(db, row({ messageId: '<a>', receivedAt: '2026-09-01T00:00:00.000Z' }))
     const { id: b } = await insertInboundMail(
       db,
@@ -164,7 +164,7 @@ describe('listInboundMails / getInboundMailBody / deleteInboundMail / cleanupInb
     await deleteInboundMail(db, b)
     expect(await listInboundMails(db, { limit: 10 })).toHaveLength(1)
   })
-  it('掃除は rejected/system の古い行だけ消す', async () => {
+  it('cleanup deletes only old rejected/system rows', async () => {
     await insertInboundMail(
       db,
       row({ messageId: '<old-rej>', receivedAt: '2026-01-01T00:00:00.000Z', status: 'rejected' }),

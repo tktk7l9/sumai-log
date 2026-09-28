@@ -36,7 +36,7 @@ export const Route = createFileRoute('/records_/visits/$id')({
   },
 })
 
-// 「次にやること」は下のチェックリスト（NextActionsChecklist）で出す
+// "次にやること" (Next actions) is shown by the checklist below (NextActionsChecklist)
 const BLOCKS: { key: 'good' | 'concerns' | 'qa'; label: string }[] = [
   { key: 'good', label: '良かった点' },
   { key: 'concerns', label: '気になった点' },

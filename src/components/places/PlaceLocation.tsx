@@ -5,7 +5,7 @@ import type { Place } from '../../db/schema'
 import { PlacesMapLazy } from '../map/PlacesMapLazy'
 import type { MapConfig } from '../../server/mapConfig'
 
-/** 詳細ページの地図枠。座標があれば PlacesMapLazy に 1 件だけピンを出す */
+/** The map frame of the detail page. With coordinates, shows a single pin in PlacesMapLazy */
 export function PlaceLocation({
   place,
   visited,
@@ -18,7 +18,8 @@ export function PlaceLocation({
   if (place.lat == null || place.lng == null) {
     return (
       <Card withBorder padding="md" className="sunken">
-        {/* 沈めた面の上なので、文字は dimmed に落とさず本文色のまま置く（空状態と同じ理由） */}
+        {/* This is on a sunken surface, so the text stays in the body color instead of
+            dimmed (same reason as the empty state) */}
         <Group gap={8} wrap="nowrap">
           <MapPinOff size={16} aria-hidden />
           <Text size="sm">

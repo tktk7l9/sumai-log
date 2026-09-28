@@ -11,9 +11,9 @@ import {
 import { extractEvent } from '../../lib/news/eventDate'
 
 /**
- * insertNewsIfNew に渡す1件分。id・first_seen_at・created_at・updated_at はここで
- * 生成するので呼び出し側は意識しない。planned_event_id は「行く」のときだけ
- * linkPlannedEvent で更新するので、新着取り込みの入力には含めない。
+ * One item passed to insertNewsIfNew. id, first_seen_at, created_at and updated_at are
+ * generated here, so the caller does not care about them. planned_event_id is updated by
+ * linkPlannedEvent only on "行く" (Go), so it is not part of the input for importing new items.
  */
 export type NewNews = Omit<
   NewVendorNews,
@@ -21,20 +21,20 @@ export type NewNews = Omit<
 >
 
 /**
- * 1 回の INSERT に含める行数。1 行あたり 9 個のバインドパラメータ
- * （id・vendorId・url・title・summary・publishedOn・eventStart・eventEnd・eventKind）
- * を使うため、D1 の 1 クエリあたりのバインドパラメータ上限（100）を踏まえて
- * 9 × 10 = 90 に収まるよう 10 件ずつに分ける。RSS フィードは 1 回の取得で
- * 十数件を超えることがあるため、分けずに 1 文で INSERT すると壊れた項目が無くても
- * このパラメータ上限だけで INSERT 全体が失敗しうる。
+ * The number of rows in 1 INSERT. Each row uses 9 bind parameters
+ * (id, vendorId, url, title, summary, publishedOn, eventStart, eventEnd, eventKind),
+ * so given D1's limit of bind parameters per query (100), rows are split into groups
+ * of 10 to fit in 9 × 10 = 90. An RSS feed can exceed a dozen or so items in 1 fetch,
+ * so an unsplit INSERT in 1 statement can fail as a whole on this parameter limit alone,
+ * even when no item is broken.
  */
 const INSERT_CHUNK_SIZE = 10
 
 /**
- * 新着だけ INSERT する。url が既にあれば何もしない（タイトル等の更新は追わない。
- * design.md §2 の方針どおり）。戻り値は実際に追加できた件数（全チャンクの合計）。
- * `onConflictDoNothing` はチャンクをまたいでも同じキー（url）で効くので、
- * 分割しても冪等性（2 回目は 0 件）は変わらない。
+ * INSERTs only new items. Does nothing if the url already exists (updates to the title
+ * etc. are not tracked, per the policy in design.md §2). The return value is the number
+ * actually added (the total over all chunks). `onConflictDoNothing` works on the same key
+ * (url) across chunks too, so splitting does not change idempotency (0 items the 2nd time).
  */
 export async function insertNewsIfNew(db: Db, rows: NewNews[]): Promise<number> {
   if (rows.length === 0) return 0
@@ -52,8 +52,9 @@ export async function insertNewsIfNew(db: Db, rows: NewNews[]): Promise<number> 
 }
 
 /**
- * `from`/`to`（どちらも published_on との比較、境界含む）は /news の月ごとのアジェンダ
- * （fix round 1）向け。どちらも省略すれば従来どおり期間を絞らない（ホームの最新 N 件など）。
+ * `from`/`to` (both compared with published_on, bounds inclusive) are for the monthly
+ * agenda of /news (fix round 1). If both are omitted, the period is not narrowed, as
+ * before (the latest N items on the home, etc.).
  */
 export async function listNews(
   db: Db,
@@ -76,8 +77,9 @@ export async function listNews(
 }
 
 /**
- * カレンダーの情報レイヤー用。期間 [from, to] と重なる、イベント判定済みのお知らせを返す
- * （event_start/event_end が null の行は比較が NULL になるため自動的に外れる）。
+ * For the information layer of the calendar. Returns vendor news judged to be events that
+ * overlap the period [from, to] (rows whose event_start/event_end are null drop out
+ * automatically because the comparison becomes NULL).
  */
 export async function listNewsEventsBetween(
   db: Db,
@@ -93,10 +95,10 @@ export async function listNewsEventsBetween(
   return rows.map((r) => ({ ...r.news, vendorName: r.vendorName }))
 }
 
-/** カレンダーの情報レイヤー・/news・ホームのブロックで共通に使う「業者名付きお知らせ」の型 */
+/** The "vendor news with vendor name" type shared by the calendar info layer, /news and the home block */
 export type NewsEventRow = Awaited<ReturnType<typeof listNewsEventsBetween>>[number]
 
-/** newsUrl が設定されている業者（= 取得対象）だけを返す。設定ページの一覧・cron の対象探索用 */
+/** Only vendors with newsUrl set (= fetch targets). For the settings page list and cron target lookup */
 export async function listNewsSources(
   db: Db,
 ): Promise<
@@ -117,9 +119,10 @@ export async function listNewsSources(
 }
 
 /**
- * 取得結果を記録する。成功時は error に null を渡す（前回のエラーが消える）。
- * vendors.updated_at は動かさない — 毎朝の自動取得のたびに「最近の更新」フィード
- * （recentVendors は vendors.updatedAt 順）に業者が浮上してしまうのを避けるため。
+ * Records the fetch result. On success pass null as error (the previous error is cleared).
+ * vendors.updated_at is not touched — to avoid the vendor surfacing in the
+ * "最近の更新" (Recent updates) feed (recentVendors is ordered by vendors.updatedAt) on
+ * every morning's automatic fetch.
  */
 export async function markNewsFetched(
   db: Db,
@@ -133,12 +136,13 @@ export async function markNewsFetched(
 }
 
 /**
- * 設定ページの「日程を再解析」。`eventDate.ts` の抽出ロジックが直った後に、
- * 既存の vendor_news 全件へ再適用して差分だけ更新する（design のトレードオフ:
- * 取得時に1回だけ判定する方針は変えず、ロジック改善時だけ手動で再計算できる
- * 逃げ道を用意する）。`planned_event_id`（「行く」で紐づけた自分の予定）は
- * 触らない。`vendors.updated_at` もここでは一切触らない（vendors テーブル自体を
- * 更新しないため自動的に動かない）。
+ * "日程を再解析" (Re-parse dates) on the settings page. After the extraction logic in
+ * `eventDate.ts` is fixed, re-applies it to all existing vendor_news and updates only the
+ * differences (the design trade-off: the policy of judging only once at fetch time stays,
+ * and an escape hatch is provided to recompute manually only when the logic improves).
+ * `planned_event_id` (your own event linked by "行く") is not touched.
+ * `vendors.updated_at` is not touched here at all either (the vendors table itself is not
+ * updated, so it automatically does not move).
  */
 export async function reparseNewsEventDates(db: Db): Promise<{ checked: number; updated: number }> {
   const rows = await db
@@ -172,8 +176,8 @@ export async function reparseNewsEventDates(db: Db): Promise<{ checked: number; 
   return { checked: rows.length, updated }
 }
 
-/** 「行く」で作った自分の予定（events）に紐づける */
-/** 1 件（業者名付き）。無ければ null。カレンダーの「行く」（?plan=）が使う */
+/** Links to your own event (events) created by "行く" */
+/** 1 item (with vendor name). null if none. Used by "行く" (?plan=) on the calendar */
 export async function getNewsById(
   db: Db,
   id: string,

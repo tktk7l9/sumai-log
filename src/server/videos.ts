@@ -15,8 +15,8 @@ import { listTagNames } from './tags'
 import { videoInput } from './videos.schema'
 import { idInput } from './zod'
 
-// videoInput は videos.schema.ts から（テストの都合で分離した理由はそちら参照）。
-// 公開する import パス（'./videos' から videoInput/VideoInput を取れる）は変えない。
+// videoInput comes from videos.schema.ts (see there for why it was split for the tests).
+// The public import path (videoInput/VideoInput available from './videos') does not change.
 export { videoInput }
 export type { VideoInput } from './videos.schema'
 
@@ -45,10 +45,11 @@ export const deleteVideo = createServerFn({ method: 'POST' })
     return { ok: true as const }
   })
 
-/** 動画フォームの選択肢: タグ候補（無ければ既定タグを仕込む）と業者一覧 */
+/** Options for the video form: tag suggestions (seeds the default tags if there are none)
+ * and the vendor list */
 export const videoFormOptions = createServerFn().handler(async () => {
-  // 業者一覧は候補フォームと同じ listLinkTargets（src/server/places.ts）を使う
-  // （properties も一緒に返るが videoFormOptions では使わない）
+  // The vendor list uses the same listLinkTargets (src/server/places.ts) as the candidates form
+  // (properties come back with it, but videoFormOptions does not use them)
   const [tags, targets] = await Promise.all([listTagNames(), listLinkTargets()])
   return { tags, vendors: targets.vendors }
 })

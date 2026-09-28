@@ -5,12 +5,13 @@ import { shouldRecordSeen } from '../lib/usage'
 import { writeLastSeen } from './repository'
 
 /**
- * 利用者の「最後に使った日時」を settings（`lastSeen:<メール>`）に残す。
+ * Stores the user's "最後に使った日時" (last used at) in settings (`lastSeen:<email>`).
  *
- * 認証ミドルウェア（src/start.ts）が全リクエストで呼ぶ。応答を待たせないよう waitUntil に
- * 逃がし、同じ人は SEEN_INTERVAL_MS に 1 回しか書かない（isolate ごとのメモリで間引く。
- * isolate が入れ替わると初回扱いでもう一度書くだけで、害はない）。
- * ここで何が起きても本体のリクエストは失敗させない。
+ * The authentication middleware (src/start.ts) calls this on every request. The write is
+ * handed to waitUntil so the response does not wait, and the same person is written only once
+ * per SEEN_INTERVAL_MS (throttled with per-isolate memory. When the isolate is replaced it is
+ * treated as the first time and written once more, which does no harm).
+ * Whatever happens here must not fail the main request.
  */
 const lastWritten = new Map<string, number>()
 
@@ -19,13 +20,14 @@ export function recordSeen(email: string, now: number = Date.now()): boolean {
   if (key === '' || !shouldRecordSeen(lastWritten.get(key), now)) return false
   lastWritten.set(key, now)
   const write = writeLastSeen(getDb(), key, new Date(now).toISOString()).catch(() => {
-    // 書けなかったら次のリクエストでやり直す
+    // If the write failed, retry on the next request
     lastWritten.delete(key)
   })
   try {
     waitUntil(write)
   } catch {
-    // リクエストの文脈外（テストなど）では waitUntil が使えない。投げっぱなしでよい
+    // Outside a request context (tests, etc.) waitUntil is not available. Leaving the promise
+    // unawaited is fine
   }
   return true
 }

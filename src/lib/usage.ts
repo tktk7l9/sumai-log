@@ -1,20 +1,23 @@
 /**
- * 設定ページの「環境」（リソースの使用量）と「利用者」（最後に使った日時）の純粋関数。
+ * Pure functions for "環境" (Environment: resource usage) and "利用者" (Users: last used
+ * time) on the settings page.
  *
- * 使用量は Worker の中から分かるものだけを扱う: D1 のデータベースの大きさ（クエリ結果の
- * meta.size_after）とテーブルごとの行数、R2 のオブジェクト数と合計サイズ。1 日あたりの
- * 読み書き回数やリクエスト数は Worker からは取れない（ダッシュボードで見る）。
+ * Usage covers only what can be known from inside the Worker: the size of the D1 database
+ * (meta.size_after of a query result) and the row count per table, and the number of R2
+ * objects and their total size. The number of reads and writes per day and the number of
+ * requests cannot be obtained from the Worker (look at the dashboard).
  *
- * 「最後に使った日時」は Cloudflare Access のログイン時刻ではなく、そのメールで最後に
- * リクエストがあった時刻（Access のセッションは約 1 ヶ月続き、ログインの瞬間はアプリからは
- * 見えない）。settings テーブルに `lastSeen:<メール>` のキーで持つ。
+ * "最後に使った日時" (Last used) is not the Cloudflare Access login time but the time of
+ * the last request with that email (an Access session lasts about 1 month, and the moment
+ * of login is not visible from the app). It is held in the settings table under the key
+ * `lastSeen:<email>`.
  */
 
-/** Cloudflare の無料枠（2026-09 時点）。D1 は 5 GB、R2 は 10 GB のストレージ */
+/** The Cloudflare free tier (as of 2026-09). Storage of 5 GB for D1 and 10 GB for R2 */
 export const D1_FREE_BYTES = 5 * 1024 ** 3
 export const R2_FREE_BYTES = 10 * 1024 ** 3
 
-/** 1,234 → '1.2 KB'。小さい値はそのままバイトで、1 KB 以上は 1 桁の小数 */
+/** 1,234 -> '1.2 KB'. Small values stay in bytes, and 1 KB or more gets 1 decimal place */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return '—'
   if (bytes < 1024) return `${Math.round(bytes)} B`
@@ -28,16 +31,17 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[i]}`
 }
 
-/** 上限に対する割合（%、小数 1 桁）。上限が 0 以下なら 0 */
+/** The percentage of the limit (%, 1 decimal place). 0 when the limit is 0 or less */
 export function percentOf(used: number, limit: number): number {
   if (limit <= 0 || !Number.isFinite(used) || used <= 0) return 0
   return Math.round((used / limit) * 1000) / 10
 }
 
-/** 同じ人の「最後に使った日時」を書き直す間隔（ms）。リクエストのたびに D1 へ書かない */
+/** The interval (ms) for rewriting the last used time of the same person. Does not write to
+ * D1 on every request */
 export const SEEN_INTERVAL_MS = 10 * 60 * 1000
 
-/** 前回書いた時刻から間隔が空いていれば true（初回は必ず true） */
+/** true when the interval has passed since the last write (always true the first time) */
 export function shouldRecordSeen(
   lastWrittenMs: number | undefined,
   nowMs: number,
@@ -53,14 +57,15 @@ export function lastSeenKey(email: string): string {
   return `${LAST_SEEN_PREFIX}${email.trim().toLowerCase()}`
 }
 
-/** `lastSeen:<メール>` のキーからメールを取り出す。形が違えば null */
+/** Takes the email out of a `lastSeen:<email>` key. null when the shape is wrong */
 export function emailFromLastSeenKey(key: string): string | null {
   if (!key.startsWith(LAST_SEEN_PREFIX)) return null
   const email = key.slice(LAST_SEEN_PREFIX.length)
   return email === '' ? null : email
 }
 
-/** 行数を数えるテーブルと、画面に出す呼び名（テーブル名を利用者に見せない） */
+/** The tables whose rows are counted, and the names shown on screen (table names are not
+ * shown to users) */
 export const COUNTED_TABLES = [
   'vendors',
   'properties',
@@ -89,7 +94,8 @@ export const COUNTED_TABLE_LABEL: Record<CountedTable, string> = {
   sources: '情報源',
 }
 
-/** 「見学記録 12・写真 40・…」のように 0 件は省いて並べる。全部 0 なら 'なし' */
+/** Lists them like "見学記録 12・写真 40・…" (visit records 12, photos 40, ...), omitting 0
+ * counts. 'なし' (none) when everything is 0 */
 export function formatRowCounts(rows: Partial<Record<CountedTable, number>>): string {
   const parts = COUNTED_TABLES.filter((t) => (rows[t] ?? 0) > 0).map(
     (t) => `${COUNTED_TABLE_LABEL[t]} ${rows[t]!.toLocaleString('ja-JP')}`,

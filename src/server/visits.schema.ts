@@ -3,17 +3,17 @@ import { z } from 'zod'
 import { idField } from './zod'
 
 /**
- * visits.ts から分離した理由: events.schema.ts と同じ（詳細はそちらのコメント参照）。
- * visits.ts は saveVisit の中で currentActorEmail（`@tanstack/react-start/server` の
- * getRequest を静的 import）を使っており、素の vitest workers テストから visits.ts を
- * import 経由で読み込むと TanStack Start の Vite プラグインが用意する virtual specifier
- * の解決に失敗して落ちる。reorderPhotosInput 自体は D1 も members も要らない純粋な
- * zod スキーマなので、ここへ切り出して visits.worker-test.ts はこちらから import する
- * （visits.ts は再エクスポートするだけで、公開している import パス・挙動は変えない）。
+ * Why this is split from visits.ts: same as events.schema.ts (see the comment there for
+ * details). visits.ts uses currentActorEmail (which statically imports getRequest from
+ * `@tanstack/react-start/server`) inside saveVisit, and loading visits.ts via import from a
+ * plain vitest workers test fails to resolve the virtual specifier that the TanStack Start
+ * Vite plugin provides. reorderPhotosInput itself is a pure zod schema that needs neither
+ * D1 nor members, so it is extracted here and visits.worker-test.ts imports from here
+ * (visits.ts only re-exports it, so the public import path and behavior do not change).
  *
- * 「その見学記録に属する写真か」までは zod では確かめない（D1 が要るため）。
- * ここでは形だけ（空でない・id の形・重複なし）を見て、所有チェックは
- * repository の reorderPhotoRows に任せる。
+ * zod does not go as far as checking "does the photo belong to that visit record"
+ * (because that needs D1). Here we look only at the shape (not empty, id shape, no
+ * duplicates) and leave the ownership check to reorderPhotoRows in the repository.
  */
 export const reorderPhotosInput = z.object({
   visitId: idField,

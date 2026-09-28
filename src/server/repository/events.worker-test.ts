@@ -11,7 +11,7 @@ import { listRecordedEventIds } from './visits'
 beforeEach(reset)
 
 describe('events', () => {
-  it('範囲検索は日付キーで比較し、終日と時刻ありが混ざっても開始順', async () => {
+  it('range search compares by date key, and stays in start order even when all-day and timed events are mixed', async () => {
     await upsertEvent(
       db,
       {
@@ -37,7 +37,7 @@ describe('events', () => {
     expect(rows.map((r) => r.title)).toEqual(['終日B', '見学A'])
   })
 
-  it('更新は createdBy を保ち、削除で見学記録の eventId が外れる', async () => {
+  it('update keeps createdBy, and deletion detaches eventId from visit records', async () => {
     const id = await upsertEvent(
       db,
       { title: 'X', kind: 'visit', startsAt: '2030-01-05', endsAt: null, allDay: true },
@@ -60,7 +60,7 @@ describe('events', () => {
     expect(visit.eventId).toBeNull()
   })
 
-  it('一覧に場所名・業者名が付く', async () => {
+  it('the list carries the place name and vendor name', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '甲工務店', kind: 'koumuten', serviceAreas: [] },

@@ -21,15 +21,18 @@ import type { FeedAction, FeedItem } from '../../lib/feed'
 import { parseToUtcMs } from '../../lib/jst'
 
 /**
- * ホームの「最近の更新」フィード用。各 recent* は updatedAt（photos/comments は
- * createdAt）の新しい順に n 件、FeedItem 形（kind/id/title/subtitle/action/at/by/href）で返す。
- * limit で件数を絞るのは呼び出し側（src/server/feed.ts の mergeFeed）の責務。
+ * For the home "最近の更新" (Recent updates) feed. Each recent* returns n items, newest
+ * updatedAt first (createdAt for photos/comments), in FeedItem shape
+ * (kind/id/title/subtitle/action/at/by/href).
+ * Narrowing the count with limit is the caller's responsibility (mergeFeed in
+ * src/server/feed.ts).
  */
 
-/** 挿入直後は createdAt と updatedAt が同じ datetime('now') 呼び出しでほぼ揃うため
- * 'add'、それより後に更新された（差が 60 秒を超える）行は 'update'。
- * 片方でも読めない書式なら安全側の 'add' にする。comments/photos は呼ばない
- * （更新という概念が無く常に 'add'）。 */
+/** Right after insertion createdAt and updatedAt nearly match because they come from the
+ * same datetime('now') call, so it is 'add'; a row updated later than that (the difference
+ * exceeds 60 seconds) is 'update'.
+ * If either one is in an unreadable format, fall to the safe side, 'add'. comments/photos
+ * do not call this (they have no concept of update and are always 'add'). */
 function actionFor(createdAt: string, updatedAt: string): FeedAction {
   const createdMs = parseToUtcMs(createdAt)
   const updatedMs = parseToUtcMs(updatedAt)
@@ -145,8 +148,8 @@ export async function recentVideos(db: Db, n: number): Promise<FeedItem[]> {
   }))
 }
 
-/** href はどれも一覧ページ（/sources）を指す。情報源に詳細ページが無いため、
- * href.params は付けない（recentVendors 等と違い id ページへは飛ばせない） */
+/** Every href points to the list page (/sources). Sources have no detail page, so
+ * href.params is not set (unlike recentVendors etc., it cannot jump to an id page) */
 export async function recentSources(db: Db, n: number): Promise<FeedItem[]> {
   const rows = await db.select().from(sources).orderBy(desc(sources.updatedAt)).limit(n)
   return rows.map((s) => ({
@@ -162,9 +165,10 @@ export async function recentSources(db: Db, n: number): Promise<FeedItem[]> {
 }
 
 /**
- * targetType ごとの対象 id → 表示名。コメントごとに 1 クエリ投げると N+1 になるため、
- * recentComments では targetType ごとにまとめて（`inArray`）1 クエリで引く。
- * 見つからない id は Map に入らない（呼び出し側で「（削除済み）」にする）
+ * Target id -> display name per targetType. Issuing 1 query per comment would be N+1, so
+ * recentComments looks them up in 1 query per targetType, batched (`inArray`).
+ * An id that is not found does not enter the Map (the caller turns it into
+ * "（削除済み）" (deleted))
  */
 async function targetNamesByType(
   db: Db,
@@ -212,7 +216,7 @@ async function targetNamesByType(
   }
 }
 
-/** コメント対象の詳細ページへの href。targetType ごとに固定で、他 kind の id が混ざらない */
+/** href to the comment target's detail page. Fixed per targetType, so ids of other kinds do not mix in */
 function targetHref(targetType: Comment['targetType'], targetId: string): FeedItem['href'] {
   switch (targetType) {
     case 'vendor':
@@ -231,8 +235,8 @@ function targetHref(targetType: Comment['targetType'], targetId: string): FeedIt
 export async function recentComments(db: Db, n: number): Promise<FeedItem[]> {
   const rows = await db.select().from(comments).orderBy(desc(comments.createdAt)).limit(n)
 
-  // targetType ごとに対象 id をまとめて、targetType の種類の数だけクエリを投げる
-  // （コメント 1 件につき 1 クエリだった N+1 を避ける）
+  // Group the target ids per targetType and issue only as many queries as there are
+  // targetType kinds (avoids the N+1 of 1 query per comment)
   const idsByType = new Map<Comment['targetType'], string[]>()
   for (const c of rows) {
     const ids = idsByType.get(c.targetType)

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { buildPlanInput, vendorResearchInput } from './research.schema'
 
 /**
- * saveVendorResearch / saveBuildPlan は createServerFn でラップされているため、ここでは
- * validator（zod）だけを直接確かめる（events.worker-test.ts と同じパターン）。
+ * saveVendorResearch / saveBuildPlan are wrapped in createServerFn, so here only the
+ * validator (zod) is checked directly (same pattern as events.worker-test.ts).
  */
 describe('vendorResearchInput', () => {
   const base = {
@@ -16,7 +16,7 @@ describe('vendorResearchInput', () => {
     sources: [{ label: '公式', url: 'https://example.com/' }],
   }
 
-  it('空の facts は落とし、それ以外はそのまま通す', () => {
+  it('drops empty facts and passes the rest through as is', () => {
     const result = vendorResearchInput.safeParse(base)
     expect(result.success).toBe(true)
     if (result.success) {
@@ -25,12 +25,12 @@ describe('vendorResearchInput', () => {
     }
   })
 
-  it('facts を省略しても通る', () => {
+  it('passes even when facts is omitted', () => {
     const { facts: _facts, ...rest } = base
     expect(vendorResearchInput.safeParse(rest).success).toBe(true)
   })
 
-  it('出典の URL は https のみ', () => {
+  it('citation URLs are https only', () => {
     expect(
       vendorResearchInput.safeParse({
         ...base,
@@ -39,7 +39,7 @@ describe('vendorResearchInput', () => {
     ).toBe(false)
   })
 
-  it('見出し・本文が空の節は弾く', () => {
+  it('rejects a section whose heading or body is empty', () => {
     expect(
       vendorResearchInput.safeParse({ ...base, sections: [{ title: '', body: '本文' }] }).success,
     ).toBe(false)
@@ -48,13 +48,13 @@ describe('vendorResearchInput', () => {
     ).toBe(false)
   })
 
-  it('知らない facts のキーは弾く', () => {
+  it('rejects unknown facts keys', () => {
     expect(vendorResearchInput.safeParse({ ...base, facts: { unknown: 'x' } }).success).toBe(false)
   })
 })
 
 describe('buildPlanInput', () => {
-  it('平屋 30〜35 坪・予算 6000 万円', () => {
+  it('single-story, 30-35 tsubo, budget 60 million yen', () => {
     const result = buildPlanInput.safeParse({
       floors: 1,
       tsuboMin: 30,
@@ -65,7 +65,7 @@ describe('buildPlanInput', () => {
     if (result.success) expect(result.data.budgetManYen).toBe(6000)
   })
 
-  it('予算は空欄（NumberInput の ""）なら null', () => {
+  it('budget is null when blank ("" from NumberInput)', () => {
     const result = buildPlanInput.safeParse({
       floors: 2,
       tsuboMin: 30,
@@ -76,7 +76,7 @@ describe('buildPlanInput', () => {
     if (result.success) expect(result.data.budgetManYen).toBeNull()
   })
 
-  it('坪数は下限≦上限、階数は 1 か 2', () => {
+  it('tsubo: lower bound <= upper bound; floors: 1 or 2', () => {
     expect(
       buildPlanInput.safeParse({ floors: 1, tsuboMin: 40, tsuboMax: 35, budgetManYen: null })
         .success,

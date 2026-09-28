@@ -4,7 +4,7 @@ import { securityHeadersInit } from '../lib/securityHeaders'
 import { canonicalYouTubeUrl, parseYouTubeId } from '../lib/youtube'
 import { fetchYouTubeOEmbed } from '../server/oembed'
 
-/** 認証は src/start.ts のグローバルミドルウェアが適用済み */
+/** Authentication is already applied by the global middleware in src/start.ts */
 export const Route = createFileRoute('/api/oembed')({
   server: {
     handlers: {

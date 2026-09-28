@@ -1,10 +1,10 @@
 /**
- * 業者のお知らせ（RSS / HTML）を実際に取りに行く層。design.md §1 の方針:
- * 1 ソースあたり 10 秒タイムアウト・1 MB 上限・User-Agent 明示。失敗しても他の
- * ソースは続行し、`vendors.news_fetch_error` に理由を残す。
+ * The layer that actually goes and fetches the vendor news (RSS / HTML). Policy of
+ * design.md §1: per source a 10 second timeout, a 1 MB cap, and an explicit User-Agent. On
+ * a failure the other sources continue, and the reason is kept in `vendors.news_fetch_error`.
  *
- * `fetchImpl` を注入できるようにして、worker テストでは架空の RSS/HTML を返す
- * フェイクに差し替える（実際のベンダーサイトを叩かない）。
+ * `fetchImpl` can be injected, and worker tests swap in a fake that returns fictional
+ * RSS/HTML (real vendor sites are not hit).
  */
 
 import type { Db } from '../db/client'
@@ -24,21 +24,22 @@ const TIMEOUT_MS = 10_000
 const MAX_BYTES = 1_000_000
 const USER_AGENT = 'sumai-log/1.0'
 const TOO_LARGE_ERROR = '応答が上限（1MB）を超えました'
-/** リダイレクトの上限超過・Location の解決失敗・許可されない hop 先のときのエラー。 */
+/** The error for exceeding the redirect limit, failing to resolve Location, or a disallowed hop target. */
 const REDIRECT_BLOCKED_ERROR = 'リダイレクト先が許可されていません'
-/** vendors.news_fetch_error に残す長さの上限。例外の message はどれだけ長くなるか
- * 分からない（D1 のエラー等）ため、ここで切る。スタックは元々含めない（Error#message
- * のみを見る。stack はここでは一切参照しない）。 */
+/** The length cap for what is kept in vendors.news_fetch_error. There is no telling how long
+ * the message of an exception gets (D1 errors, etc.), so it is cut here. The stack is never
+ * included in the first place (only Error#message is looked at. stack is not referenced here
+ * at all). */
 const ERROR_MESSAGE_MAX = 200
 
 type FetchOutcome = { candidates: NewsCandidate[] } | { error: string }
 
 /**
- * レスポンス本文をバイト列のまま読む。`content-length` があればそれで先に弾く
- * （本文を読まずに済む）。無ければストリームを読みながら合計バイト数を数え、
- * 1 MB を超えた時点で読み取りを打ち切る（全部読み切ってから切り捨てない）。
- * 文字列に直す（charset を見て decode する）のは呼び出し側の責務にする
- * （detectCharset に生バイトが要るため）。
+ * Reads the response body as raw bytes. When `content-length` exists, reject with it first
+ * (no need to read the body). Otherwise count the total bytes while reading the stream and
+ * abort reading at the moment it exceeds 1 MB (not truncating after reading everything).
+ * Turning it into a string (decoding according to charset) is the caller's responsibility
+ * (detectCharset needs the raw bytes).
  */
 async function readCappedBytes(response: Response): Promise<Uint8Array | { error: string }> {
   const contentLength = response.headers.get('content-length')
@@ -76,9 +77,9 @@ async function readCappedBytes(response: Response): Promise<Uint8Array | { error
 }
 
 /**
- * `charset` は Content-Type ヘッダ / `<meta charset>` から判定したラベル
- * （detectCharset の戻り値）。`TextDecoder` が知らないラベルなら例外を投げるので、
- * その場合は utf-8 にフォールバックする（文字化けはしうるが、取得自体を諦めない）。
+ * `charset` is the label determined from the Content-Type header / `<meta charset>`
+ * (the return value of detectCharset). `TextDecoder` throws for a label it does not know,
+ * so in that case fall back to utf-8 (text may be garbled, but the fetch itself is not given up).
  */
 function decodeWithCharset(bytes: Uint8Array, charset: string): string {
   try {
@@ -88,7 +89,7 @@ function decodeWithCharset(bytes: Uint8Array, charset: string): string {
   }
 }
 
-/** Error#message だけを見る（stack は含めない）。ERROR_MESSAGE_MAX で切り詰める。 */
+/** Looks only at Error#message (stack is not included). Truncates at ERROR_MESSAGE_MAX. */
 function errorMessage(e: unknown): string {
   const message = e instanceof Error ? e.message : '取得に失敗しました'
   return truncate(message, ERROR_MESSAGE_MAX)
@@ -100,12 +101,13 @@ async function fetchCandidates(
 ): Promise<FetchOutcome> {
   if (!vendor.newsUrl) return { error: '取得 URL が未設定です' }
   if (!vendor.newsSource) return { error: '取得方法が未設定です' }
-  // フォーム側（src/server/zod.ts の optionalHttpsUrl）でも同じ判定を通しているが、
-  // 既存データ（フォームを経由しない seed 取り込み等）にも同じ防御を掛けるため、
-  // 実際に fetch する直前にもう一度ここで弾く（SSRF 対策の多層防御）。
+  // The form side (optionalHttpsUrl in src/server/zod.ts) runs the same check too, but to
+  // apply the same defence to existing data (seed imports that do not go through the form,
+  // etc.), reject here once more right before the actual fetch (defence in depth against SSRF).
   if (!isAllowedNewsUrl(vendor.newsUrl)) return { error: 'URL が許可されていません' }
 
-  // リダイレクトの追従・hop ごとの許可判定は safeFetch.ts（vendorImages.ts と共有）に委ねる。
+  // Following redirects and the per-hop allow check are delegated to safeFetch.ts (shared
+  // with vendorImages.ts).
   const redirectOutcome = await fetchWithGuardedRedirects(vendor.newsUrl, {
     timeoutMs: TIMEOUT_MS,
     headers: { 'User-Agent': USER_AGENT },
@@ -129,18 +131,19 @@ async function fetchCandidates(
   const charset = detectCharset(response.headers.get('content-type'), bytes)
   const body = decodeWithCharset(bytes, charset)
 
-  // 相対リンクは実際に本文を返した最終的な URL（リダイレクト後）基準で解決する
+  // Relative links are resolved against the final URL that actually returned the body (after redirects)
   const candidates = vendor.newsSource === 'rss' ? parseRss(body) : parseHtmlList(body, finalUrl)
   return { candidates }
 }
 
 /**
- * 1 業者ぶん取得して保存する。`newsSource` に応じて parseRss / parseHtmlList を選び、
- * 各候補に extractEvent を適用してから insertNewsIfNew（新着のみ INSERT）、最後に
- * 必ず markNewsFetched（成功なら error は null、失敗なら理由）を呼ぶ。
+ * Fetches and saves for 1 vendor. Picks parseRss / parseHtmlList according to `newsSource`,
+ * applies extractEvent to each candidate, then insertNewsIfNew (INSERT of new items only),
+ * and at the end always calls markNewsFetched (error is null on success, the reason on failure).
  *
- * 取得後の DB 処理（insertNewsIfNew 等）が例外を投げても markNewsFetched は必ず
- * 呼ぶ（そうしないと直前の成功が設定画面に残り続け、失敗が見えなくなる）。
+ * Even when the DB work after the fetch (insertNewsIfNew, etc.) throws, markNewsFetched is
+ * always called (otherwise the previous success stays on the settings screen and the failure
+ * becomes invisible).
  */
 export async function fetchVendorNews(
   db: Db,
@@ -173,16 +176,18 @@ export async function fetchVendorNews(
     added = await insertNewsIfNew(db, rows)
   } catch (e) {
     const message = errorMessage(e)
-    // markNewsFetched 自体が失敗しても（例: 業者行が取得と同時に消えた）、
-    // ここでの記録の失敗を握りつぶして下の返り値・ログは必ず返す。
+    // Even when markNewsFetched itself fails (e.g. the vendor row disappeared at the same time
+    // as the fetch), swallow the failure of recording here and always return the value and
+    // log below.
     await markNewsFetched(db, vendor.id, message).catch(() => {})
     console.log(`news: ${vendor.id} added=0 error=${message}`)
     return { added: 0, error: message }
   }
 
-  // ここまで来た時点で追加（insertNewsIfNew）自体は成功している。added を
-  // このあとの markNewsFetched の成否に関わらず確実に返す（取り込みは終わって
-  // いるのに、最後の記録だけが失敗して「0 件」に化けるのを防ぐ）。
+  // By this point the insert (insertNewsIfNew) itself has succeeded. added is returned
+  // reliably regardless of whether the following markNewsFetched succeeds (this prevents the
+  // result turning into "0 items" because only the final recording failed although the
+  // import is done).
   try {
     await markNewsFetched(db, vendor.id, null)
   } catch (e) {
@@ -198,15 +203,16 @@ export async function fetchVendorNews(
 
 export type FetchAllVendorNewsResult = {
   vendorId: string
-  /** 呼び出し側（設定画面）が UUID をそのまま見せずに済むよう、業者名も一緒に返す */
+  /** The vendor name is returned too, so the caller (the settings screen) need not show the UUID as is */
   vendorName: string
   added: number
   error: string | null
 }
 
 /**
- * newsUrl が設定されている全業者を順に取得する。1 社の失敗（fetchVendorNews が
- * 想定外の例外を投げた場合も含め）で他の業者の取得を止めない。
+ * Fetches every vendor that has newsUrl set, in order. The failure of 1 vendor (including
+ * the case where fetchVendorNews throws an unexpected exception) does not stop the fetch for
+ * the other vendors.
  */
 export async function fetchAllVendorNews(
   db: Db,

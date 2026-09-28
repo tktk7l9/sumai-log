@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { tagsInput } from './tags'
 
 /**
- * saveTags は createServerFn でラップされているため、TanStack Start の
- * サーバーランタイム（AsyncLocalStorage の Start context）が無い素の
- * vitest workers テストから直接呼ぶと「No Start context found」で落ちる
- * （validator に届く前の話）。実質的な検証は validator である tagsInput
- * 自体を見れば足りるので、ここでは tagsInput.safeParse を直接確認する。
+ * saveTags is wrapped in createServerFn, so calling it directly from a plain
+ * vitest workers test, which has no TanStack Start server runtime (the Start
+ * context in AsyncLocalStorage), fails with "No Start context found"
+ * (before it even reaches the validator). Checking the validator, tagsInput
+ * itself, is enough for real validation, so here we check tagsInput.safeParse directly.
  */
 describe('tagsInput', () => {
-  it('names が空配列だと拒否する（seedDefaultTags の再発火を防ぐ）', () => {
+  it('rejects an empty names array (prevents seedDefaultTags from firing again)', () => {
     const result = tagsInput.safeParse({ names: [] })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -18,7 +18,7 @@ describe('tagsInput', () => {
     }
   })
 
-  it('names が 1 件以上なら通る', () => {
+  it('accepts names with 1 or more entries', () => {
     expect(tagsInput.safeParse({ names: ['断熱'] }).success).toBe(true)
   })
 })

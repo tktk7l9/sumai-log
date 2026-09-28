@@ -17,7 +17,7 @@ const V = '11111111-1111-1111-1111-111111111111'
 const P = '22222222-2222-2222-2222-222222222222'
 
 describe('photoKeys / isManagedPhotoKey', () => {
-  it('visit と photo の id からキーを作り、そのキーだけを管理対象とみなす', () => {
+  it('builds keys from the visit and photo ids and treats only those keys as managed', () => {
     const k = photoKeys(V, P)
     expect(k).toEqual({
       displayKey: `photos/${V}/${P}-display.jpg`,
@@ -32,8 +32,8 @@ describe('photoKeys / isManagedPhotoKey', () => {
   })
 })
 
-describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）', () => {
-  it('vendorId と stamp から代表者写真のキーを作り、それだけを管理対象とみなす', () => {
+describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey (vendors/)', () => {
+  it('builds the representative photo keys from vendorId and stamp and treats only those as managed', () => {
     const k = vendorImageKeys(V, '1abc2d')
     expect(k).toEqual({
       displayKey: `vendors/${V}/representative-1abc2d-display.jpg`,
@@ -41,11 +41,11 @@ describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）',
     })
     expect(isManagedPhotoKey(k.displayKey)).toBe(true)
     expect(isManagedPhotoKey(k.thumbKey)).toBe(true)
-    // 同じ引数を渡せば毎回同じキーになる（冪等）
+    // The same arguments give the same keys every time (idempotent)
     expect(vendorImageKeys(V, '1abc2d')).toEqual(k)
   })
 
-  it('stamp が違えば別のキー（差し替えのたびに URL が変わる）になる', () => {
+  it('a different stamp gives a different key (the URL changes on every replacement)', () => {
     const first = vendorImageKeys(V, '1abc2d')
     const second = vendorImageKeys(V, '1abc2e')
     expect(first.displayKey).not.toBe(second.displayKey)
@@ -53,12 +53,12 @@ describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）',
     expect(isManagedPhotoKey(second.displayKey)).toBe(true)
   })
 
-  it('旧形式（stamp 無し）の代表者写真キーも管理対象とみなす（既存行の後方互換）', () => {
+  it('also treats old-format (no stamp) representative photo keys as managed (backward compatibility for existing rows)', () => {
     expect(isManagedPhotoKey(`vendors/${V}/representative-display.jpg`)).toBe(true)
     expect(isManagedPhotoKey(`vendors/${V}/representative-thumb.jpg`)).toBe(true)
   })
 
-  it('representativeThumbKeyFromDisplayKey は display キーの末尾を thumb に置き換える（新旧どちらの形式でも）', () => {
+  it('representativeThumbKeyFromDisplayKey replaces the tail of the display key with thumb (in both the new and old format)', () => {
     expect(
       representativeThumbKeyFromDisplayKey(`vendors/${V}/representative-1abc2d-display.jpg`),
     ).toBe(`vendors/${V}/representative-1abc2d-thumb.jpg`)
@@ -67,7 +67,7 @@ describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）',
     )
   })
 
-  it('ファビコンのキーは vendorId・拡張子・stamp から作り、宣言した拡張子だけ管理対象とみなす', () => {
+  it('builds the favicon key from vendorId, extension and stamp, and treats only the declared extensions as managed', () => {
     for (const ext of ['png', 'ico', 'jpg', 'webp'] as const) {
       const key = vendorFaviconKey(V, ext, '1abc2d')
       expect(key).toBe(`vendors/${V}/favicon-1abc2d.${ext}`)
@@ -76,34 +76,34 @@ describe('vendorImageKeys / vendorFaviconKey / isManagedPhotoKey（vendors/）',
     expect(isManagedPhotoKey(`vendors/${V}/favicon-1abc2d.gif`)).toBe(false)
     expect(isManagedPhotoKey(`vendors/${V}/representative-1abc2d-original.jpg`)).toBe(false)
     expect(isManagedPhotoKey(`vendors/../${V}/favicon-1abc2d.png`)).toBe(false)
-    // stamp の区切り（ハイフン）だけ、中身が空だと弾く
+    // Rejected when there is only the stamp separator (hyphen) and the stamp itself is empty
     expect(isManagedPhotoKey(`vendors/${V}/favicon-.png`)).toBe(false)
     expect(isManagedPhotoKey(`vendors/${V}/representative--display.jpg`)).toBe(false)
   })
 
-  it('旧形式（stamp 無し）のファビコンキーも管理対象とみなす（既存行の後方互換）', () => {
+  it('also treats old-format (no stamp) favicon keys as managed (backward compatibility for existing rows)', () => {
     expect(isManagedPhotoKey(`vendors/${V}/favicon.png`)).toBe(true)
     expect(isManagedPhotoKey(`vendors/${V}/favicon.ico`)).toBe(true)
   })
 
-  it('末尾に改行が付いたキーは管理対象とみなさない', () => {
+  it('does not treat a key with a trailing newline as managed', () => {
     expect(isManagedPhotoKey(`vendors/${V}/favicon-1abc2d.png\n`)).toBe(false)
     expect(isManagedPhotoKey(`vendors/${V}/favicon-1abc2d.png\nDROP TABLE vendors;`)).toBe(false)
   })
 })
 
 describe('photoUrl', () => {
-  it('photos/ を剥がして配信ルートの URL にする', () => {
+  it('strips photos/ and makes the URL of the serving route', () => {
     expect(photoUrl('photos/a/b-thumb.jpg')).toBe('/api/photos/a/b-thumb.jpg')
   })
 
-  it('vendors/ キーはそのまま配信ルートの URL にする（photos/ 以外は剥がさない）', () => {
+  it('makes the URL of the serving route from a vendors/ key as is (nothing but photos/ is stripped)', () => {
     expect(photoUrl(`vendors/${V}/favicon.png`)).toBe(`/api/photos/vendors/${V}/favicon.png`)
   })
 })
 
 describe('sniffImageType', () => {
-  it('マジックバイトで JPEG/PNG/WebP を判定し、それ以外は null', () => {
+  it('detects JPEG/PNG/WebP by magic bytes and gives null for anything else', () => {
     expect(sniffImageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]))).toBe(
       'image/jpeg',
     )
@@ -122,7 +122,7 @@ describe('sniffImageType', () => {
 })
 
 describe('validatePhotoUpload', () => {
-  it('上限と寸法を見る。返り値は { status, message } か null', () => {
+  it('checks the size limit and dimensions. The return value is { status, message } or null', () => {
     expect(MAX_PHOTOS_PER_UPLOAD).toBe(20)
     expect(
       validatePhotoUpload({ displaySize: 1000, thumbSize: 100, width: 1600, height: 1200 }),

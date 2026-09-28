@@ -4,10 +4,10 @@ import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-worker
 import { defineConfig } from 'vitest/config'
 
 /**
- * サーバー層のテスト。実際の Workers ランタイムと D1 の上で走らせる。
+ * Server-layer tests. They run on the real Workers runtime and D1.
  *
- * 純粋関数は vitest.config.ts（素の Node）で見ているので、こちらは
- * 「本当に SQL が意図どおり動くか」だけを対象にする。
+ * Pure functions are covered by vitest.config.ts (plain Node), so this one targets
+ * only "does the SQL really work as intended".
  */
 export default defineConfig({
   plugins: [
@@ -15,10 +15,11 @@ export default defineConfig({
       const migrations = await readD1Migrations(path.join(__dirname, 'drizzle/migrations'))
       return {
         wrangler: { configPath: './wrangler.jsonc' },
-        // wrangler.jsonc の main は TanStack のパッケージ内エントリでテストからは解決できない
+        // main in wrangler.jsonc is an entry inside the TanStack package and cannot be
+        // resolved from the tests
         main: './test/worker-stub.ts',
         miniflare: {
-          // 本番のマイグレーションをそのまま適用してからテストする
+          // Apply the production migrations as they are, then test
           bindings: { TEST_MIGRATIONS: migrations },
         },
       }

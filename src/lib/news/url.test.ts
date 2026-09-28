@@ -3,121 +3,121 @@ import { describe, expect, it } from 'vitest'
 import { isAllowedNewsUrl, isAllowedRemoteUrl, sameHost } from './url'
 
 describe('isAllowedRemoteUrl', () => {
-  it('isAllowedNewsUrl は isAllowedRemoteUrl の別名（同じ関数）', () => {
+  it('isAllowedNewsUrl is an alias of isAllowedRemoteUrl (the same function)', () => {
     expect(isAllowedNewsUrl).toBe(isAllowedRemoteUrl)
   })
 
-  it('vendorImages（ファビコン取得）からの呼び出しを想定した許可判定も同じ関数で通る', () => {
+  it('the allow check for calls from vendorImages (favicon fetch) also passes through the same function', () => {
     expect(isAllowedRemoteUrl('https://vendor.example.com/')).toBe(true)
   })
 })
 
 describe('isAllowedNewsUrl', () => {
-  it('https の公開ホスト名は許可する', () => {
+  it('allows a public https hostname', () => {
     expect(isAllowedNewsUrl('https://news.example.com/feed/')).toBe(true)
   })
 
-  it('末尾に . が付く FQDN 表記も正規化して許可する', () => {
+  it('normalizes and allows the FQDN notation with a trailing . too', () => {
     expect(isAllowedNewsUrl('https://news.example.com./feed/')).toBe(true)
   })
 
-  it('大文字ホスト名も小文字化して判定する', () => {
+  it('lowercases an uppercase hostname before checking', () => {
     expect(isAllowedNewsUrl('https://NEWS.EXAMPLE.COM/feed/')).toBe(true)
   })
 
-  it('http は拒否する', () => {
+  it('rejects http', () => {
     expect(isAllowedNewsUrl('http://news.example.com/feed/')).toBe(false)
   })
 
-  it('URL として読めない文字列は拒否する', () => {
+  it('rejects a string that cannot be read as a URL', () => {
     expect(isAllowedNewsUrl('not a url')).toBe(false)
   })
 
-  it('userinfo（user:pass@）付きは拒否する', () => {
+  it('rejects a URL with userinfo (user:pass@)', () => {
     expect(isAllowedNewsUrl('https://user:pass@news.example.com/feed/')).toBe(false)
   })
 
-  it('既定以外のポートは拒否する', () => {
+  it('rejects a non-default port', () => {
     expect(isAllowedNewsUrl('https://news.example.com:8443/feed/')).toBe(false)
   })
 
-  it('既定ポート（443）を明示しても許可する', () => {
+  it('allows the default port (443) even when written explicitly', () => {
     expect(isAllowedNewsUrl('https://news.example.com:443/feed/')).toBe(true)
   })
 
-  it('IPv4 リテラルは拒否する', () => {
+  it('rejects an IPv4 literal', () => {
     expect(isAllowedNewsUrl('https://192.168.1.1/feed/')).toBe(false)
   })
 
-  it('16進数など別表記の IPv4 リテラルも（URL の正規化後に）拒否する', () => {
+  it('also rejects an IPv4 literal in another notation such as hex (after URL normalization)', () => {
     expect(isAllowedNewsUrl('https://0x7f000001/feed/')).toBe(false)
   })
 
-  it('IPv4 を含むがホスト名全体ではない場合は拒否しない', () => {
+  it('does not reject a hostname that contains an IPv4 but is not one as a whole', () => {
     expect(isAllowedNewsUrl('https://203.0.113.5.news.example.com/feed/')).toBe(true)
   })
 
-  it('ブラケット付き IPv6 リテラルは拒否する', () => {
+  it('rejects a bracketed IPv6 literal', () => {
     expect(isAllowedNewsUrl('https://[::1]/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://[2001:db8::1]/feed/')).toBe(false)
   })
 
-  it('localhost は拒否する', () => {
+  it('rejects localhost', () => {
     expect(isAllowedNewsUrl('https://localhost/feed/')).toBe(false)
   })
 
-  it('ドットを含まないホスト名は拒否する（localhost 以外の内部名も含めて）', () => {
+  it('rejects a hostname without a dot (including internal names other than localhost)', () => {
     expect(isAllowedNewsUrl('https://intranet/feed/')).toBe(false)
   })
 
-  it('.localhost / .local / .internal / .home.arpa で終わるホスト名は拒否する', () => {
+  it('rejects a hostname ending in .localhost / .local / .internal / .home.arpa', () => {
     expect(isAllowedNewsUrl('https://foo.localhost/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://printer.local/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://service.internal/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://host.home.arpa/feed/')).toBe(false)
   })
 
-  it('.workers.dev / .cloudflareaccess.com で終わるホスト名は拒否する', () => {
+  it('rejects a hostname ending in .workers.dev / .cloudflareaccess.com', () => {
     expect(isAllowedNewsUrl('https://some-worker.workers.dev/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://team.cloudflareaccess.com/feed/')).toBe(false)
   })
 
-  it('このアプリ自身のホスト（sumai-log.app・そのサブドメイン）は拒否する', () => {
+  it('rejects the host of this app itself (sumai-log.app and its subdomains)', () => {
     expect(isAllowedNewsUrl('https://sumai-log.app/feed/')).toBe(false)
     expect(isAllowedNewsUrl('https://www.sumai-log.app/feed/')).toBe(false)
   })
 
-  it('末尾ドットで拒否リストの suffix チェックを回避できない', () => {
+  it('a trailing dot cannot bypass the suffix check of the denylist', () => {
     expect(isAllowedNewsUrl('https://some-worker.workers.dev./feed/')).toBe(false)
   })
 })
 
 describe('sameHost', () => {
-  it('同じホスト名なら true', () => {
+  it('true for the same hostname', () => {
     expect(sameHost('https://vendor.example.com/news/', 'https://vendor.example.com/')).toBe(true)
   })
 
-  it('パス・大文字小文字が違っても同じホスト名なら true', () => {
+  it('true for the same hostname even when the path or case differs', () => {
     expect(sameHost('https://Vendor.example.com/news/feed', 'https://vendor.example.com/')).toBe(
       true,
     )
   })
 
-  it('別ホストなら false', () => {
+  it('false for a different host', () => {
     expect(sameHost('https://news.example.com/feed/', 'https://vendor.example.com/')).toBe(false)
   })
 
-  it('サブドメインが違えば別ホスト扱いで false', () => {
+  it('a different subdomain counts as a different host and gives false', () => {
     expect(sameHost('https://www.vendor.example.com/', 'https://vendor.example.com/')).toBe(false)
   })
 
-  it('どちらかが null なら false', () => {
+  it('false when either one is null', () => {
     expect(sameHost(null, 'https://vendor.example.com/')).toBe(false)
     expect(sameHost('https://vendor.example.com/', null)).toBe(false)
     expect(sameHost(null, null)).toBe(false)
   })
 
-  it('URL として読めない文字列は false', () => {
+  it('false for a string that cannot be read as a URL', () => {
     expect(sameHost('not a url', 'https://vendor.example.com/')).toBe(false)
     expect(sameHost('https://vendor.example.com/', 'not a url')).toBe(false)
   })

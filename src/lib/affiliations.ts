@@ -1,5 +1,6 @@
 /**
- * 加盟団体の解決。データ（`src/content/affiliations.ts`）は持たず、id から引くだけの純粋関数。
+ * Resolution of member organizations. Holds no data (`src/content/affiliations.ts`); pure
+ * functions that only look up by id.
  */
 
 import { AFFILIATIONS, type Affiliation } from '../content/affiliations'
@@ -9,8 +10,9 @@ export function findAffiliation(id: string): Affiliation | null {
 }
 
 /**
- * 業者の `affiliations`（id の配列）を団体に解決する。
- * データの直し忘れで落ちないよう知らない id は黙って捨て、順序は渡した順のまま、重複は除く。
+ * Resolves the `affiliations` of a vendor (array of ids) to organizations.
+ * So that a forgotten data fix does not crash it, unknown ids are silently dropped, the
+ * order stays as given, and duplicates are removed.
  */
 export function resolveAffiliations(ids: readonly string[]): Affiliation[] {
   const seen = new Set<string>()

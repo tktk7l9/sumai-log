@@ -6,9 +6,10 @@ import { pickRandomTerm } from '../lib/glossary'
 export type GlossaryPick = { id: string; term: string; reading: string | null; summary: string }
 
 /**
- * ホームの「用語集から」。読み込むたびにランダムに 1 語（所有者の要望、2026-09-19。
- * 当初は日替わりだった）。loader はサーバーで走り結果が HTML に埋まるので hydration は揺れない。
- * 用語集全体をホームのバンドルに含めないよう、表示に要る 4 項目だけ返す。
+ * "用語集から" (From the glossary) on the home page. 1 random term on every load (owner's
+ * request, 2026-09-19. Originally it changed daily). The loader runs on the server and the
+ * result is embedded in the HTML, so hydration does not flicker.
+ * Returns only the 4 fields needed for display, to keep the whole glossary out of the home bundle.
  */
 export const pickGlossaryTerm = createServerFn().handler(async (): Promise<GlossaryPick | null> => {
   const t = pickRandomTerm(GLOSSARY)

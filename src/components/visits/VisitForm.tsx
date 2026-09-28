@@ -22,8 +22,9 @@ type Targets = {
 type Options = { targets: Targets; places: PlaceWithLinks[]; events: Event[] }
 type Values = Omit<VisitInput, 'id'>
 
-// visitedOn の既定値は「今日」なのでモジュール読み込み時でなくコンポーネント内で計算する
-// （Worker は長寿命で isolate をまたいで再利用されるため、モジュール直下で固定すると古くなる）
+// The default of visitedOn is "today", so it is calculated inside the component, not at
+// module load (a Worker is long-lived and reused across isolates, so fixing it at module
+// top level makes it stale)
 const empty: Omit<Values, 'visitedOn'> = {
   eventId: null,
   placeId: null,
@@ -35,7 +36,7 @@ const empty: Omit<Values, 'visitedOn'> = {
   nextActions: null,
 }
 
-/** 保存済みの行からフォームの値だけを取り出す（id・作成者・日時は持たない） */
+/** Takes only the form values out of a saved row (no id, author or timestamps) */
 function pickValues(visit: Visit): Values {
   return {
     eventId: visit.eventId,
@@ -88,14 +89,15 @@ export function VisitForm({
       visitedOn: (v) => (v ? null : '日付は必須です'),
     },
   })
-  // 書きかけを端末に残す（新規は予定ごとに分ける）
+  // Keep the unfinished input on the device (a new entry is kept separately per event)
   const draft = useFormDraft(
     form,
     draftKey('visit', visit?.id, visit ? visit.updatedAt : (defaults?.eventId ?? undefined)),
     initialValues,
   )
 
-  // 予定を選んだら、その予定の日付・場所・業者・物件を合わせる（手で変えてもよい）
+  // When an event is chosen, match the date, place, vendor and property of that event
+  // (they may still be changed by hand)
   function onEventChange(eventId: string | null) {
     const e = eventId ? options.events.find((x) => x.id === eventId) : undefined
     form.setValues({
@@ -129,7 +131,8 @@ export function VisitForm({
       })
       if (res.conflict) {
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
-        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        // Reflect the other person's content on the screen (the next save is based on the
+        // latest update time)
         await router.invalidate()
         return
       }
@@ -156,7 +159,8 @@ export function VisitForm({
           onChange={(d) => form.setFieldValue('visitedOn', d ? dayjs(d).format('YYYY-MM-DD') : '')}
           error={form.errors.visitedOn}
         />
-        {/* 選べるものが無い欄は出さない（空のセレクトは意味を持たない） */}
+        {/* Do not show a field that has nothing to choose (an empty select carries no
+            meaning) */}
         {options.events.length > 0 ? (
           <Select
             label="予定"

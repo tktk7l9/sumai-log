@@ -1,7 +1,8 @@
 /**
- * フォーム入力の境界で使う正規化。Mantine の NumberInput は欄を空にすると
- * 数値ではなく空文字 `''` を emit するが、DB 側は null 許容の数値項目なので
- * ここで null に変換してから zod のスキーマへ渡す（そうしないと保存が失敗する）。
+ * Normalisation used at the form input boundary. When the field is emptied, Mantine's
+ * NumberInput emits an empty string `''` instead of a number, but the DB column is a
+ * nullable number, so convert to null here before passing to the zod schema (otherwise
+ * saving fails).
  */
 export function emptyToNull<T>(value: T | ''): T | null {
   return value === '' ? null : value

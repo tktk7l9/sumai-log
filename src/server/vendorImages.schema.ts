@@ -3,16 +3,18 @@ import { z } from 'zod'
 import { idField } from './zod'
 
 /**
- * vendorImages.ts から分離した理由: news.schema.ts と同じ（詳細はそちらのコメント参照）。
- * vendorImages.ts の createServerFn ラッパー（importRepresentativePhotoFromUrl 等）は
- * TanStack Start のサーバーランタイムが無い素の vitest workers テストから直接呼ぶと
- * 「No Start context found」で落ちるため、ここに置く純粋な zod スキーマだけを
- * vendorImages.worker-test.ts から直接検証する。
+ * Why this is split from vendorImages.ts: same as news.schema.ts (see the comment there
+ * for details). The createServerFn wrappers in vendorImages.ts
+ * (importRepresentativePhotoFromUrl etc.) fail with "No Start context found" when called
+ * directly from a plain vitest workers test that has no TanStack Start server runtime, so
+ * only the pure zod schemas placed here are validated directly from
+ * vendorImages.worker-test.ts.
  */
 
-/** 代表者の顔写真を URL から取り込む（POST /vendorImages importRepresentativePhotoFromUrl）。
- * https 限定 + isAllowedRemoteUrl（SSRF 対策）は実際に fetch する直前にも二重で見るが、
- * フォーム側で早めに弾けるようここでも同じ形（https:// で始まる）だけチェックする。 */
+/** Imports the representative's face photo from a URL (POST /vendorImages
+ * importRepresentativePhotoFromUrl). https only + isAllowedRemoteUrl (SSRF protection) is
+ * checked a second time right before the actual fetch, but here we also check just the same
+ * shape (starts with https://) so the form can reject early. */
 export const importRepresentativePhotoInput = z.object({
   vendorId: idField,
   url: z
@@ -24,7 +26,8 @@ export const importRepresentativePhotoInput = z.object({
 })
 export type ImportRepresentativePhotoInput = z.input<typeof importRepresentativePhotoInput>
 
-/** 設定画面「候補のサイトアイコン」の取得ボタン。force=true で「取り直す」（既に favicon_key がある業者も対象にする） */
+/** Fetch button of "候補のサイトアイコン" (site icons of candidates) on the settings screen.
+ * force=true means "取り直す" (fetch again; also targets vendors that already have a favicon_key) */
 export const refreshVendorFaviconsInput = z.object({ force: z.boolean().default(false) })
 export type RefreshVendorFaviconsInput = z.input<typeof refreshVendorFaviconsInput>
 

@@ -5,12 +5,14 @@ import type { NewsEventRow } from '../../server/repository'
 import { NewsAgenda } from '../news/NewsAgenda'
 
 /**
- * ホームの「お知らせ」ブロック。最新 5 件（loader 側で listVendorNews({ limit: 5 })
- * 済み）を `NewsAgenda`（AgendaView）で表示する（所有者の要望、2026-09-16）。0 件のときも
- * NewsAgenda 自身が「お知らせはありません」を出すので、ここでは「すべて見る」リンクの
- * 出し分けだけ持つ（0 件のときは `/news` に行っても何も無いので出さない）。
- * `todayKey`（サーバーが決めた JST の今日）は、終わった日程のお知らせの色を落とす
- * ために NewsAgenda へ渡す。
+ * The "お知らせ" (Vendor news) block on the home page. Shows the latest 5 items (already
+ * fetched by the loader with listVendorNews({ limit: 5 })) in `NewsAgenda` (AgendaView)
+ * (owner's request, 2026-09-16). With 0 items NewsAgenda itself shows
+ * "お知らせはありません" (No vendor news), so this component only decides whether to show
+ * the "すべて見る" (See all) link (with 0 items there is nothing at `/news` either, so it
+ * is not shown).
+ * `todayKey` (today in JST as decided by the server) is passed to NewsAgenda to dim news
+ * whose event dates have ended.
  */
 export function HomeNews({ items, todayKey }: { items: NewsEventRow[]; todayKey: string }) {
   return (

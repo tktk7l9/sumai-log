@@ -1,6 +1,7 @@
 /**
- * mbox（Gmail Takeout の書き出し形式）を 1 通ずつに分ける。純粋関数。
- * 区切りは行頭の "From "（mboxrd: 本文中の "From " は ">From " にエスケープされているので戻す）。
+ * Splits an mbox (the Gmail Takeout export format) into single messages. Pure function.
+ * The separator is "From " at the start of a line (mboxrd: a "From " in the body is escaped as
+ * ">From ", so it is restored).
  */
 const SEPARATOR = /^From .*$/m
 

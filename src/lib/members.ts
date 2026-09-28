@@ -1,6 +1,6 @@
 /**
- * 利用者の表示名と色。認証は Cloudflare Access が行い、ここは
- * secret `MEMBERS`（"email:表示名:色,..."）を読むだけ。DB には持たない。
+ * Display name and color of each member. Cloudflare Access does the authentication; this only
+ * reads the secret `MEMBERS` ("email:displayName:color,..."). Nothing is stored in the DB.
  */
 export type Member = { email: string; displayName: string; color: string }
 

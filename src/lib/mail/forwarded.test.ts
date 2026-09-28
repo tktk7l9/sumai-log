@@ -23,7 +23,7 @@ To: owner@example.com
 本文です。`
 
 describe('splitForwardedBlock', () => {
-  it('英語 UI のブロックから差出人・日付・件名・本文を取り出す', () => {
+  it('extracts sender, date, subject and body from an English UI block', () => {
     const b = splitForwardedBlock(EN)
     expect(b).toEqual({
       from: 'news@example.com',
@@ -32,29 +32,29 @@ describe('splitForwardedBlock', () => {
       body: '9月27日(土)・28日(日) 完成見学会を開催します。\n場所は後日ご案内します。',
     })
   })
-  it('日本語 UI の見出し語でも同じ', () => {
+  it('does the same with the Japanese UI header words', () => {
     const b = splitForwardedBlock(JA)
     expect(b?.from).toBe('news@example.com')
     expect(b?.date).toBe('2026-09-16')
     expect(b?.subject).toBe('完成見学会のご案内')
     expect(b?.body).toBe('本文です。')
   })
-  it('ブロックが無ければ null', () => {
+  it('returns null when there is no block', () => {
     expect(splitForwardedBlock('ただの本文')).toBeNull()
     expect(splitForwardedBlock('')).toBeNull()
   })
-  it('ヘッダ行が欠けていても落ちない（無い項目は null）', () => {
+  it('does not crash when header lines are missing (missing fields are null)', () => {
     const b = splitForwardedBlock('---------- Forwarded message ---------\nSubject: x\n\nbody')
     expect(b).toEqual({ from: null, date: null, subject: 'x', body: 'body' })
   })
-  it('空行が無くても本文が取れる（ヘッダ行が終わったところから）', () => {
+  it('gets the body even without a blank line (from where the header lines end)', () => {
     const b = splitForwardedBlock(
       '---------- Forwarded message ---------\nFrom: a@b.com\nbody line',
     )
     expect(b?.from).toBe('a@b.com')
     expect(b?.body).toBe('body line')
   })
-  it('From / Subject の値が空なら null（値そのものが空文字）', () => {
+  it('returns null when the From / Subject value is empty (the value itself is an empty string)', () => {
     const b = splitForwardedBlock('---------- Forwarded message ---------\nFrom:\nSubject:\n\nbody')
     expect(b?.from).toBeNull()
     expect(b?.subject).toBeNull()
@@ -62,13 +62,13 @@ describe('splitForwardedBlock', () => {
 })
 
 describe('parseForwardedDate', () => {
-  it('和暦なしの日本語表記', () => {
+  it('Japanese notation without the Japanese era', () => {
     expect(parseForwardedDate('2026年9月16日(火) 10:05')).toBe('2026-09-16')
   })
-  it('英語表記（"at" 付き）', () => {
+  it('English notation (with "at")', () => {
     expect(parseForwardedDate('Tue, Sep 16, 2026 at 10:05 AM')).toBe('2026-09-16')
   })
-  it('読めなければ null', () => {
+  it('returns null when unreadable', () => {
     expect(parseForwardedDate('someday')).toBeNull()
     expect(parseForwardedDate('')).toBeNull()
   })

@@ -8,13 +8,14 @@ import {
 } from '../../scripts/lib/normalize.mjs'
 
 /**
- * normalizeAddress（住所）・normalizeSocialUrls（SNS URL）は
- * src/lib/（geocode.ts・social.ts）と scripts/lib/normalize.mjs の 2 箇所に同じ
- * ロジックを重複させている（seed 側は plain .mjs で TS を import できないため。
- * AGENTS.md「重複ロジックの同期」節を参照）。ここで同じケースを両実装に流し、
- * 出力が一致することを固定する。片方だけ直して忘れる回帰を検出するのが目的。
+ * normalizeAddress (addresses) and normalizeSocialUrls (social media URLs) duplicate the same
+ * logic in 2 places, src/lib/ (geocode.ts, social.ts) and scripts/lib/normalize.mjs (the seed
+ * side is plain .mjs and cannot import TS. See the section "重複ロジックの同期" (Keeping
+ * duplicated logic in sync) of AGENTS.md). Here the same cases are fed to both
+ * implementations to pin that the outputs match. The goal is to detect the regression of
+ * fixing only one side and forgetting the other.
  */
-describe('normalizeAddress: src/lib/geocode.ts と scripts/lib/normalize.mjs の一致', () => {
+describe('normalizeAddress: src/lib/geocode.ts and scripts/lib/normalize.mjs match', () => {
   const cases: [string, string][] = [
     ['全角数字', '架空市架空町１丁目２番３号'],
     ['全角スペース区切り', '架空市　架空町1丁目2番3号'],
@@ -28,13 +29,13 @@ describe('normalizeAddress: src/lib/geocode.ts と scripts/lib/normalize.mjs の
     expect(normalizeAddressMjs(input)).toBe(normalizeAddress(input))
   })
 
-  it('null/undefined も一致する（.mjs 側は防御的に素通しする）', () => {
+  it('null/undefined match too (the .mjs side passes them through defensively)', () => {
     expect(normalizeAddressMjs(null)).toBe(null)
     expect(normalizeAddressMjs(undefined)).toBe(undefined)
   })
 })
 
-describe('normalizeSocialUrls: src/lib/social.ts と scripts/lib/normalize.mjs の一致', () => {
+describe('normalizeSocialUrls: src/lib/social.ts and scripts/lib/normalize.mjs match', () => {
   const cases: [string, string[]][] = [
     [
       'トラッキングパラメータ違いは別 URL として扱う',
@@ -79,7 +80,7 @@ describe('normalizeSocialUrls: src/lib/social.ts と scripts/lib/normalize.mjs �
     expect(normalizeSocialUrlsMjs(input)).toEqual(normalizeSocialUrls(input))
   })
 
-  it('未指定（undefined/null）も一致する', () => {
+  it('unspecified (undefined/null) matches too', () => {
     expect(normalizeSocialUrlsMjs(undefined)).toEqual(normalizeSocialUrls([]))
     expect(normalizeSocialUrlsMjs(null)).toEqual(normalizeSocialUrls([]))
   })

@@ -56,8 +56,9 @@ function Page() {
     try {
       const result = await remove({ data: { id: deleting.id } })
       await router.invalidate()
-      // ok: false は「既に消えていた」（もう一方の端末が先に削除した等）。行はどのみち
-      // 無いので一覧側は router.invalidate() で正しい状態になる。文言だけ変える
+      // ok: false means "it was already gone" (the other device deleted it first, etc.). The row
+      // is gone either way, so the list side reaches the right state through router.invalidate().
+      // Only the wording changes
       notifications.show({
         message: result.ok ? '情報源を削除しました' : '既に削除されていました',
         color: result.ok ? undefined : 'yellow',

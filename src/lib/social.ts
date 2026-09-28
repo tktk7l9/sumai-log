@@ -1,5 +1,5 @@
 /**
- * 業者の SNS / 公式サイト URL からプラットフォームを判定する純粋関数群。
+ * Pure functions that detect the platform from a vendor's SNS / official site URL.
  */
 
 export const SOCIAL_PLATFORMS = [

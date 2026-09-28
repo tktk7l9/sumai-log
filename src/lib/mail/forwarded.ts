@@ -1,20 +1,21 @@
 /**
- * Gmail の「転送」が本文の先頭に付けるブロックを解析する（設計 2026-09-19 §3-3 手動転送）。
+ * Parses the block that Gmail's "Forward" puts at the top of the body (design 2026-09-19 §3-3
+ * manual forwarding).
  *
- *   ---------- Forwarded message ---------   （日本語 UI: ---------- 転送メッセージ ---------）
- *   From: 名前 <addr>                         （差出人:）
- *   Date: ...                                 （日付:）
- *   Subject: ...                              （件名:）
- *   To: ...                                   （宛先: / To:）
- *   <空行>
- *   本文
+ *   ---------- Forwarded message ---------   (Japanese UI: ---------- 転送メッセージ ---------)
+ *   From: name <addr>                         (差出人:)
+ *   Date: ...                                 (日付:)
+ *   Subject: ...                              (件名:)
+ *   To: ...                                   (宛先: / To:)
+ *   <blank line>
+ *   body
  *
- * ブロックより上（転送した人のコメント）は捨てる。
+ * Anything above the block (the comment of the person who forwarded it) is discarded.
  */
 
 export type ForwardedBlock = {
   from: string | null
-  /** YYYY-MM-DD。読めなければ null */
+  /** YYYY-MM-DD. null when unreadable */
   date: string | null
   subject: string | null
   body: string
@@ -29,13 +30,13 @@ function pad(n: number): string {
   return String(n).padStart(2, '0')
 }
 
-/** '2026年9月16日(火) 10:05' / 'Tue, Sep 16, 2026 at 10:05 AM' → '2026-09-16' */
+/** '2026年9月16日(火) 10:05' / 'Tue, Sep 16, 2026 at 10:05 AM' -> '2026-09-16' */
 export function parseForwardedDate(raw: string): string | null {
   const ja = /(\d{4})年(\d{1,2})月(\d{1,2})日/.exec(raw)
   if (ja) return `${ja[1]}-${pad(Number(ja[2]))}-${pad(Number(ja[3]))}`
   const ms = Date.parse(raw.replace(/\s+at\s+/, ' '))
   if (Number.isNaN(ms)) return null
-  // 表記に時差が無いので、ローカル時刻として解釈した日付をそのまま使う
+  // The notation has no time offset, so the date interpreted as local time is used as is
   const d = new Date(ms)
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }

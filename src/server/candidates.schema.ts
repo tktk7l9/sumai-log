@@ -16,26 +16,28 @@ import {
 } from './zod'
 
 /**
- * candidates.ts から分離した理由: events.schema.ts / videos.schema.ts と同じ
- * （詳細はそちらのコメント参照）。candidates.ts は saveVendor / saveProperty の中で
- * currentActorEmail（`@tanstack/react-start/server` の getRequest を静的 import）を
- * 使っており、素の vitest workers テストから candidates.ts を import 経由で
- * 読み込むと TanStack Start の Vite プラグインが用意する virtual specifier の解決に
- * 失敗して落ちる。vendorInput・propertyInput 自体は D1 も members も要らない純粋な
- * zod スキーマなので、ここへ切り出して candidates.worker-test.ts はこちらから
- * import する（candidates.ts は再エクスポートするだけで、公開している import パス・
- * 挙動は変えない）。
+ * Why this is split from candidates.ts: the same as events.schema.ts / videos.schema.ts
+ * (see the comments there for details). candidates.ts uses currentActorEmail (which
+ * statically imports getRequest of `@tanstack/react-start/server`) inside saveVendor /
+ * saveProperty, and loading candidates.ts through import from a plain vitest workers test
+ * fails to resolve the virtual specifier provided by the TanStack Start Vite plugin and
+ * crashes. vendorInput and propertyInput themselves are pure zod schemas that need neither
+ * D1 nor members, so they are extracted here and candidates.worker-test.ts imports from this
+ * file (candidates.ts only re-exports, and the public import path and behaviour do not
+ * change).
  */
 
 export const vendorInput = z
   .object({
     id: idField.optional(),
-    // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+    // The updated-at at the time of opening. If the other person saved first, return a conflict
+    // instead of overwriting (repository/stale.ts)
     expectedUpdatedAt: z.string().max(40).nullish(),
     name: z.string().trim().min(1, '名前は必須です').max(200),
     kind: z.enum(VENDOR_KINDS),
     hq: optionalText,
-    // optionalText はヘルパの形固定（max 2000）のためここでは使えない（videos.schema.ts と同じ理由）。
+    // optionalText cannot be used here because the helper has a fixed shape (max 2000) (same
+    // reason as videos.schema.ts).
     representative: z
       .string()
       .trim()
@@ -49,10 +51,10 @@ export const vendorInput = z
       .max(AFFILIATIONS.length)
       .default([])
       .transform((arr) => Array.from(new Set(arr))),
-    // 加盟団体ごとの紹介ページ URL・メモ。キーは affiliations と同じ Affiliation['id']
-    // （partialRecord なので選ばなかった団体のキーは無くてよい）。url は
-    // optionalHttpsUrl と同じ判定（https のみ・isAllowedNewsUrl で SSRF 対策）だが
-    // こちらは必須（キーがある以上 URL は要る）
+    // Profile page URL and note per affiliated organisation. The key is Affiliation['id'], the
+    // same as affiliations (it is a partialRecord, so keys of organisations not chosen may be
+    // absent). url uses the same check as optionalHttpsUrl (https only, SSRF protection through
+    // isAllowedNewsUrl), but here it is required (as long as the key exists, a URL is needed)
     affiliationLinks: z
       .partialRecord(
         z.enum(AFFILIATION_IDS),
@@ -84,10 +86,12 @@ export const vendorInput = z
     sourceUrl: optionalUrl,
     websiteUrl: optionalUrl,
     socialUrls: z.array(z.string().trim().max(500)).max(200).transform(normalizeSocialUrls),
-    // お知らせの取得元。URL を空にしたら方式も一緒に null へ戻す（design.md §1）。
+    // The source of the vendor news. When the URL is emptied, the method goes back to null
+    // together with it (design.md §1).
     newsUrl: optionalHttpsUrl,
     newsSource: z.enum(NEWS_SOURCES).nullable(),
-    // メール取込（設計 2026-09-19）: メルマガの差出人ドメイン。保存時に小文字・カンマ区切りへ正規化
+    // Mail import (design 2026-09-19): the sender domain of the newsletter. Normalised to
+    // lowercase, comma separated on save
     newsEmailDomain: z.string().max(500).nullable().transform(normalizeDomains),
   })
   .transform((v) => ({ ...v, newsSource: v.newsUrl ? v.newsSource : null }))

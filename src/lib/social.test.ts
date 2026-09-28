@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { PLATFORM_LABEL, detectPlatform, normalizeSocialUrls } from './social'
 
 describe('detectPlatform', () => {
-  it('ホスト名で判定し www. と大文字を無視する', () => {
+  it('detects by hostname and ignores www. and uppercase', () => {
     expect(detectPlatform('https://www.instagram.com/example/')).toBe('instagram')
     expect(detectPlatform('https://x.com/Example_')).toBe('x')
     expect(detectPlatform('https://twitter.com/example')).toBe('x')
@@ -16,14 +16,14 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://note.com/example')).toBe('note')
     expect(detectPlatform('HTTPS://WWW.INSTAGRAM.COM/x')).toBe('instagram')
   })
-  it('不明・不正は other', () => {
+  it('returns other for unknown or invalid input', () => {
     expect(detectPlatform('https://example.com/')).toBe('other')
     expect(detectPlatform('not a url')).toBe('other')
     expect(PLATFORM_LABEL.other).toBe('リンク')
   })
 })
 describe('normalizeSocialUrls', () => {
-  it('空白除去・空と非 http を除外・重複除去・10 件まで', () => {
+  it('trims whitespace, excludes empty and non-http values, removes duplicates, and keeps up to 10', () => {
     expect(
       normalizeSocialUrls([
         ' https://x.com/a ',

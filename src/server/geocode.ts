@@ -5,8 +5,9 @@ import { getCachedGeocode, putCachedGeocode } from './repository'
 export type GeocodeResult = (GeocodeHit & { source: 'gsi' | 'cache' }) | null
 
 /**
- * 住所→座標。キャッシュ→国土地理院の順。国土地理院は 5 秒で諦める。
- * 失敗は null（画面側は「座標を手貼りしてください」に落とす）。
+ * Address -> coordinates. Order: cache -> Geospatial Information Authority of Japan (GSI).
+ * GSI is given up on after 5 seconds.
+ * Failure is null (the screen side falls back to "paste the coordinates by hand").
  */
 export async function geocodeAddress(
   db: Db,

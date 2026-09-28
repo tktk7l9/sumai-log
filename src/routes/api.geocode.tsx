@@ -4,7 +4,7 @@ import { getDb } from '../db/client'
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { geocodeAddress } from '../server/geocode'
 
-/** 認証は src/start.ts のグローバルミドルウェアが適用済み */
+/** Authentication is already applied by the global middleware in src/start.ts */
 export const Route = createFileRoute('/api/geocode')({
   server: {
     handlers: {

@@ -9,8 +9,9 @@ const OPTIONS = [
 
 export function ColorSchemeSetting() {
   const { colorScheme, setColorScheme } = useMantineColorScheme()
-  // サーバーは常に 'auto' を描画する。クライアントの保存値でずれるとハイドレーション不整合になるので、
-  // マウント後に初めて実際の値を出す（旧 ColorSchemeToggle の getInitialValueInEffect と同じ考え方）。
+  // The server always renders 'auto'. If the client's stored value differs, it causes a
+  // hydration mismatch, so the actual value is shown only after mount (same idea as
+  // getInitialValueInEffect of the former ColorSchemeToggle).
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 

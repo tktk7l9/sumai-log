@@ -1,4 +1,4 @@
-/** 実データを壊しうる操作を db 引数で受ける形にし、実 D1 でテストできるようにする */
+/** Operations that can break real data take db as an argument, so they can be tested against a real D1 */
 
 export * from './candidates'
 export * from './places'

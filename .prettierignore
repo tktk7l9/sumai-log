@@ -6,5 +6,6 @@ src/routeTree.gen.ts
 worker-configuration.d.ts
 package-lock.json
 
-# サブエージェント駆動の作業ドキュメント（管理側の成果物。整形対象に含めない）
+# Working documents of subagent-driven work (artifacts of the coordinating side. Excluded from
+# formatting)
 docs/

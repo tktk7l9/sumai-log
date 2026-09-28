@@ -65,10 +65,10 @@ export function SourceForm({
     ? {
         ...empty,
         ...initial,
-        // sources.genre/affiliation は db/schema.ts では drizzle の enum 制約を付けていない
-        // プレーンな text 列（ジャンルはデータファイル駆動のため）。SourceGenreId/
-        // AffiliationId への絞り込みは zod（sources.schema.ts）が保存時に検証済みなので、
-        // ここでは型を合わせるためだけの cast
+        // sources.genre/affiliation are plain text columns in db/schema.ts with no drizzle
+        // enum constraint (because genres are driven by a data file). Narrowing to
+        // SourceGenreId/AffiliationId is already validated by zod (sources.schema.ts) on
+        // save, so the cast here only makes the types match
         genre: initial.genre as SourceGenreId,
         affiliation: initial.affiliation as AffiliationId | null,
       }
@@ -80,7 +80,7 @@ export function SourceForm({
       name: (v) => (v.trim() ? null : '名前は必須です'),
     },
   })
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(
     form,
     draftKey('source', initial?.id, initial?.updatedAt),
@@ -101,9 +101,11 @@ export function SourceForm({
         return
       }
       const { fields } = result
-      // 何ひとつ取れなかったとき（og タグが無いページ等）は「取得しました」と嘘をつかない。
-      // 既に入力・保存済みの値（編集中の行の avatarUrl/handle/channelId 等）も、
-      // 取れなかった項目は上書きしない＝空値で消さない（3項目とも「値があれば差し替え」に揃える）
+      // When nothing at all could be fetched (a page without og tags etc.), do not lie
+      // with "取得しました" (Fetched).
+      // Values already entered/saved (avatarUrl/handle/channelId etc. of the row being
+      // edited) are also not overwritten for items that could not be fetched = not erased
+      // with an empty value (all 3 items follow "replace only when there is a value")
       const allEmpty = Object.values(fields).every((v) => v === null)
       if (allEmpty) {
         notifications.show({ message: RESOLVE_EMPTY_MESSAGE, color: 'yellow' })
@@ -135,8 +137,9 @@ export function SourceForm({
     } catch (error) {
       const { message, path } = extractFormError(error)
       notifications.show({ message, color: 'red' })
-      // 重複 URL（D1 の UNIQUE 制約違反、repository/sources.ts が言い換えたもの）はサーバー
-      // 側の zod issue ではないため path が付かない。message で判別して url 欄に出す
+      // A duplicate URL (a violation of the D1 UNIQUE constraint, rephrased by
+      // repository/sources.ts) is not a server-side zod issue, so it has no path. Detect
+      // it by message and show it on the url field
       if (path) form.setFieldError(path, message)
       else if (message === DUPLICATE_URL_ERROR) form.setFieldError('url', message)
     } finally {

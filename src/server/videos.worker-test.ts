@@ -3,19 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { videoInput } from './videos.schema'
 
 /**
- * saveVideo は createServerFn でラップされているため、TanStack Start の
- * サーバーランタイム（AsyncLocalStorage の Start context）が無い素の
- * vitest workers テストから直接呼ぶと「No Start context found」で落ちる
- * （validator に届く前の話）。実質的な検証は validator である videoInput
- * 自体を見れば足りるので、ここでは videoInput.safeParse を直接確認する
- * （src/server/events.worker-test.ts と同じパターン）。
+ * saveVideo is wrapped in createServerFn, so calling it directly from a plain
+ * vitest workers test, which has no TanStack Start server runtime (the Start
+ * context in AsyncLocalStorage), fails with "No Start context found"
+ * (before it even reaches the validator). Checking the validator, videoInput
+ * itself, is enough for real validation, so here we check videoInput.safeParse
+ * directly (same pattern as src/server/events.worker-test.ts).
  *
- * `./videos` からではなく `./videos.schema` から import しているのは、
- * videos.ts が（saveVideo の中で使う）currentActorEmail 経由で
- * `@tanstack/react-start/server` の getRequest を静的 import しており、それが
- * TanStack Start の Vite プラグイン無しのこの素の vitest workers テストからは
- * 解決できない virtual specifier（`#tanstack-router-entry`）を踏んで落ちるため
- * （詳細は videos.schema.ts のコメント）。
+ * We import from `./videos.schema` instead of `./videos` because videos.ts
+ * statically imports getRequest from `@tanstack/react-start/server` via
+ * currentActorEmail (used inside saveVideo), and that hits a virtual specifier
+ * (`#tanstack-router-entry`) that cannot be resolved from this plain vitest
+ * workers test without the TanStack Start Vite plugin, so it fails
+ * (details in the comment in videos.schema.ts).
  */
 const base = {
   url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -30,7 +30,7 @@ const base = {
 }
 
 describe('videoInput', () => {
-  it('YouTube でない URL は拒否する（path=url、メッセージは「YouTube の URL を入れてください」）', () => {
+  it('rejects a non-YouTube URL (path=url, message is "YouTube の URL を入れてください" (Enter a YouTube URL))', () => {
     const result = videoInput.safeParse({ ...base, url: 'https://example.com/video' })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -39,7 +39,7 @@ describe('videoInput', () => {
     }
   })
 
-  it('youtu.be の短縮 URL（クエリ付き）は正規化された url と videoId になる', () => {
+  it('turns a youtu.be short URL (with query) into a normalized url and videoId', () => {
     const result = videoInput.safeParse({
       ...base,
       url: 'https://youtu.be/dQw4w9WgXcQ?si=abc',
@@ -51,17 +51,17 @@ describe('videoInput', () => {
     }
   })
 
-  it('題名が空なら拒否する', () => {
+  it('rejects an empty title', () => {
     const result = videoInput.safeParse({ ...base, title: '' })
     expect(result.success).toBe(false)
   })
 
-  it('題名が 300 文字を超えたら拒否する', () => {
+  it('rejects a title longer than 300 characters', () => {
     const result = videoInput.safeParse({ ...base, title: 'あ'.repeat(301) })
     expect(result.success).toBe(false)
   })
 
-  it('タグは 11 個で拒否する', () => {
+  it('rejects 11 tags', () => {
     const result = videoInput.safeParse({
       ...base,
       tags: Array.from({ length: 11 }, (_, i) => `tag${i}`),
@@ -69,12 +69,12 @@ describe('videoInput', () => {
     expect(result.success).toBe(false)
   })
 
-  it('31 文字のタグは拒否する', () => {
+  it('rejects a tag of 31 characters', () => {
     const result = videoInput.safeParse({ ...base, tags: ['a'.repeat(31)] })
     expect(result.success).toBe(false)
   })
 
-  it('10 個 × 30 文字のタグは通る', () => {
+  it('accepts 10 tags x 30 characters', () => {
     const result = videoInput.safeParse({
       ...base,
       tags: Array.from({ length: 10 }, () => 'a'.repeat(30)),
@@ -82,12 +82,12 @@ describe('videoInput', () => {
     expect(result.success).toBe(true)
   })
 
-  it('takeaways が 4000 文字を超えたら拒否する', () => {
+  it('rejects takeaways longer than 4000 characters', () => {
     const result = videoInput.safeParse({ ...base, takeaways: 'あ'.repeat(4001) })
     expect(result.success).toBe(false)
   })
 
-  it('watchedBy が enum の範囲外なら拒否する', () => {
+  it('rejects a watchedBy outside the enum', () => {
     const result = videoInput.safeParse({ ...base, watchedBy: 'someone' })
     expect(result.success).toBe(false)
   })

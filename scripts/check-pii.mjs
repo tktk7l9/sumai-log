@@ -1,20 +1,21 @@
 #!/usr/bin/env node
 /**
- * 実データがコミット対象に紛れ込んでいないか調べる。
+ * Check whether real data has slipped into what is being committed.
  *
- *   node scripts/check-pii.mjs            # 作業ツリーの追跡ファイル
- *   node scripts/check-pii.mjs --staged   # コミットしようとしている内容だけ
+ *   node scripts/check-pii.mjs            # tracked files in the working tree
+ *   node scripts/check-pii.mjs --staged   # only the content about to be committed
  *
- * AGENTS.md の1番目に「PII をコミットしない」と書いてあっても、書いてあるだけでは
- * 守られない。人が気をつける代わりに機械が見る。
+ * Even though item 1 of AGENTS.md says "do not commit PII", writing it down alone does
+ * not enforce it. A machine checks instead of a person being careful.
  *
- * 探す語は **`.dev.vars` から取り出す**。二人のメールと表示名がそこにしか
- * 無いので、禁止語の一覧を別に作ってコミットする必要がない
- * （一覧そのものが PII になってしまう、という堂々巡りを避ける）。
+ * The words to look for are **taken from `.dev.vars`**. The two users' e-mails and
+ * display names exist only there, so there is no need to create and commit a separate
+ * list of forbidden words
+ * (this avoids the circular problem of the list itself becoming PII).
  *
- * .dev.vars が無い環境（CI の clone 直後など）では、照合する材料が
- * 無いだけなので黙って成功させる。CI で本当に守りたいなら、実データを
- * 持っている手元で走らせるか、pre-commit に入れる。
+ * In an environment without .dev.vars (right after a clone in CI, etc.) there is simply
+ * nothing to match against, so succeed silently. To really protect in CI, run it
+ * locally where the real data exists, or put it in pre-commit.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -31,10 +32,10 @@ if (!existsSync(devVarsPath)) {
 }
 
 /**
- * 照合する語は .dev.vars から取り出す。二人のメールと表示名がそこにしか無いので、
- * 禁止語の一覧を別に作ってコミットする必要がない。
- *   ACCESS_ALLOWED_EMAILS=a@x,b@y   → a@x, b@y
- *   MEMBERS=a@x:名前:色,b@y:名前:色   → a@x, 名前, b@y, 名前
+ * The words to match are taken from .dev.vars. The two users' e-mails and display names
+ * exist only there, so there is no need to create and commit a separate list of forbidden words.
+ *   ACCESS_ALLOWED_EMAILS=a@x,b@y   -> a@x, b@y
+ *   MEMBERS=a@x:name:color,b@y:name:color   -> a@x, name, b@y, name
  */
 function unquote(v) {
   return v.length >= 2 && v[0] === v[v.length - 1] && (v[0] === '"' || v[0] === "'")
@@ -69,7 +70,7 @@ const secretList = [...secrets]
 
 const staged = process.argv.includes('--staged')
 
-/** 生成物と、そもそも実データが入る前提のものは除く */
+/** Exclude generated files and files that are expected to contain real data in the first place */
 const SKIP = /^(worker-configuration\.d\.ts|src\/routeTree\.gen\.ts)$/
 
 function git(args) {
@@ -77,12 +78,12 @@ function git(args) {
 }
 
 /**
- * 見るファイルの一覧。
+ * The list of files to check.
  *
- * --staged では **インデックスの内容** を読む。作業ツリーを読むと、
- * 汚れたファイルを stage せずに置いてあるときに止まってしまうし、
- * 逆に PII を stage したあと手元で消すと素通りしてしまう。
- * コミットに入るのはインデックスの中身なので、そちらを見る。
+ * With --staged, read **the index content**. Reading the working tree would block
+ * the commit when a dirty file is left unstaged, and conversely would let PII
+ * through when it is staged and then removed locally.
+ * What goes into the commit is the index content, so check that.
  */
 const files = (
   staged ? git(['diff', '--cached', '--name-only', '--diff-filter=ACMR']) : git(['ls-files'])
@@ -97,7 +98,7 @@ for (const file of files) {
   try {
     content = staged ? git(['show', `:${file}`]) : readFileSync(resolve(root, file), 'utf8')
   } catch {
-    continue // バイナリや読めないものは飛ばす
+    continue // skip binaries and unreadable files
   }
   for (const secret of secretList) {
     if (!content.includes(secret)) continue
@@ -114,7 +115,7 @@ if (hits.length === 0) {
 
 console.error('コミット対象に実データが混ざっています（AGENTS.md 1）:')
 for (const hit of hits) {
-  // 見つけた語そのものは出さない。出力がログに残ると、それも漏洩になる
+  // Do not print the found word itself. If the output stays in a log, that is a leak too
   const masked = `${hit.secret.slice(0, 1)}…（${hit.secret.length}文字）`
   console.error(`  ${hit.file}:${hit.line}  ${masked}`)
 }

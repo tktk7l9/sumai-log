@@ -2,41 +2,42 @@ import { describe, expect, it } from 'vitest'
 
 import { findAffiliation, resolveAffiliations } from './affiliations'
 
-// AFFILIATIONS は id 3 件だけの固定データ（実在の団体名・URL は仕様上コードに残す約束）。
-// 「未知の id」の検証だけ架空の値を使う。
+// AFFILIATIONS is fixed data of only 3 ids (by spec, the names and URLs of the real
+// organizations are promised to stay in the code).
+// Only the check of "unknown id" uses a fictional value.
 
 describe('findAffiliation', () => {
-  it('id から団体を引ける', () => {
+  it('looks up an organization by id', () => {
     expect(findAffiliation('iedukuri100')?.shortName).toBe('家百')
     expect(findAffiliation('miratsugu')?.shortName).toBe('みらつぐ')
   })
 
-  it('未知の id は null', () => {
+  it('returns null for an unknown id', () => {
     expect(findAffiliation('unknown-org')).toBeNull()
   })
 })
 
 describe('resolveAffiliations', () => {
-  it('id の配列を団体へ解決する（渡した順を保つ）', () => {
+  it('resolves an array of ids to organizations (keeps the given order)', () => {
     expect(resolveAffiliations(['miratsugu', 'iedukuri100']).map((a) => a.id)).toEqual([
       'miratsugu',
       'iedukuri100',
     ])
   })
 
-  it('未知の id は黙って落とす', () => {
+  it('silently drops unknown ids', () => {
     expect(resolveAffiliations(['iedukuri100', 'unknown-org']).map((a) => a.id)).toEqual([
       'iedukuri100',
     ])
   })
 
-  it('重複は除く（初出の位置を保つ）', () => {
+  it('removes duplicates (keeps the position of the first occurrence)', () => {
     expect(
       resolveAffiliations(['iedukuri100', 'iedukuri100', 'miratsugu']).map((a) => a.id),
     ).toEqual(['iedukuri100', 'miratsugu'])
   })
 
-  it('空配列は空配列を返す', () => {
+  it('returns an empty array for an empty array', () => {
     expect(resolveAffiliations([])).toEqual([])
   })
 })

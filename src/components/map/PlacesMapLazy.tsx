@@ -5,9 +5,9 @@ import { lazy, Suspense, type ComponentProps } from 'react'
 const Inner = lazy(() => import('./PlacesMap').then((m) => ({ default: m.PlacesMap })))
 
 /**
- * Google Maps JavaScript API は window に依存するため SSR では評価できない。
- * `ClientOnly` でハイドレーション後まで待ち、さらに `lazy` で PlacesMap 自体の
- * import（＝API ローダーの import）もクライアントでしか走らせない。
+ * The Google Maps JavaScript API depends on window, so it cannot be evaluated in SSR.
+ * `ClientOnly` waits until after hydration, and `lazy` additionally makes the import of
+ * PlacesMap itself (= the import of the API loader) run only on the client.
  */
 export function PlacesMapLazy(props: ComponentProps<typeof Inner>) {
   return (

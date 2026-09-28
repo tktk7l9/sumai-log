@@ -26,7 +26,7 @@ const actorA = 'owner@example.com'
 beforeEach(reset)
 
 describe('recentVendors / recentProperties / recentPlaces / recentVideos', () => {
-  it('業者は名前・kind ラベル・詳細ページへの href を持つ', async () => {
+  it('a vendor has the name, kind label and href to the detail page', async () => {
     const id = await upsertVendor(
       db,
       { name: '乙建設', kind: 'koumuten', serviceAreas: [] },
@@ -43,7 +43,7 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     })
   })
 
-  it('場所は kind ラベルと href を持つ', async () => {
+  it('a place has the kind label and href', async () => {
     const id = await upsertPlace(db, { name: 'モデルハウスA', kind: 'model_house' }, actorA)
     const [item] = await recentPlaces(db, 10)
     expect(item).toMatchObject({
@@ -55,7 +55,7 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     })
   })
 
-  it('動画は題名・チャンネルと動画詳細への href を持つ', async () => {
+  it('a video has the title, channel and href to the video detail', async () => {
     const id = await upsertVideo(
       db,
       {
@@ -76,14 +76,14 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     })
   })
 
-  it('n 件までに絞る', async () => {
+  it('narrows to at most n items', async () => {
     for (let i = 0; i < 3; i += 1) {
       await upsertVendor(db, { name: `業者${i}`, kind: 'koumuten', serviceAreas: [] }, actorA)
     }
     expect(await recentVendors(db, 2)).toHaveLength(2)
   })
 
-  it('recentVideos は updatedAt の新しい順（明示タイムスタンプ）', async () => {
+  it('recentVideos is ordered newest updatedAt first (explicit timestamps)', async () => {
     await db.insert(videos).values([
       {
         id: crypto.randomUUID(),
@@ -114,7 +114,7 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     expect(rows.map((r) => r.title)).toEqual(['B', 'C', 'A'])
   })
 
-  it('リポジトリの upsert で更新された行が先頭に来て at が読める（挿入・更新とも同じ書式）', async () => {
+  it('a row updated by the repository upsert comes first and at is readable (same format for insert and update)', async () => {
     const oldId = await upsertVendor(
       db,
       { name: '古い方', kind: 'koumuten', serviceAreas: [] },
@@ -127,8 +127,8 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
       { name: '新しい方', kind: 'koumuten', serviceAreas: [] },
       actorA,
     )
-    // 更新経路を通す（repository/candidates.ts の upsertVendor は
-    // updatedAt: sql`(datetime('now'))` を書く＝挿入の datetime('now') 既定値と同じ書式になる）
+    // Go through the update path (upsertVendor in repository/candidates.ts writes
+    // updatedAt: sql`(datetime('now'))` = the same format as the datetime('now') default of insert)
     await upsertVendor(
       db,
       { id: freshId, name: '新しい方', kind: 'koumuten', serviceAreas: [] },
@@ -142,11 +142,13 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     expect(rows.map((r) => r.id)).toEqual([freshId, oldId])
   })
 
-  it('同じ日の後刻に挿入されたまま触れていない行が、それより前の実時刻に更新された行より先に並ぶ（書式が揃っているので実時刻どおりになる）', async () => {
-    // 挿入は D1 の datetime('now')（'YYYY-MM-DD HH:MM:SS'）、更新も同じ書式で書かれる前提。
-    // 修正前は更新側だけミリ秒付き ISO（'YYYY-MM-DDTHH:MM:SS.sssZ'）で、同じ日付なら
-    // 'T' が常に空白より大きく並ぶため、実時刻に関わらず「更新した行」が先頭に来ていた
-    // （このテストは旧実装なら rows[0] が updatedThenId になり失敗する）。
+  it('a row inserted later the same day and left untouched sorts before a row updated at an earlier real time (the formats match, so the order follows real time)', async () => {
+    // Assumes insert uses D1's datetime('now') ('YYYY-MM-DD HH:MM:SS') and update is
+    // written in the same format too.
+    // Before the fix only the update side was ISO with milliseconds
+    // ('YYYY-MM-DDTHH:MM:SS.sssZ'), and on the same date 'T' always sorts greater than a
+    // space, so "the updated row" came first regardless of real time
+    // (with the old implementation this test fails because rows[0] becomes updatedThenId).
     const todayKey = new Date().toISOString().slice(0, 10)
     const insertedLaterTodayId = crypto.randomUUID()
     await db.insert(vendors).values({
@@ -177,7 +179,7 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
     expect(rows[0].id).toBe(insertedLaterTodayId)
   })
 
-  it('recentVideos も同じ日の後刻に挿入されたまま触れていない行が、直前に更新した行より先に並ぶ', async () => {
+  it('recentVideos too: a row inserted later the same day and left untouched sorts before a row updated just now', async () => {
     const todayKey = new Date().toISOString().slice(0, 10)
     const insertedLaterTodayId = crypto.randomUUID()
     await db.insert(videos).values({
@@ -218,14 +220,14 @@ describe('recentVendors / recentProperties / recentPlaces / recentVideos', () =>
   })
 })
 
-describe('action（add/update）', () => {
-  it('挿入直後は add（createdAt と updatedAt がほぼ同時刻）', async () => {
+describe('action (add/update)', () => {
+  it('add right after insertion (createdAt and updatedAt are nearly the same time)', async () => {
     await upsertVendor(db, { name: '新規業者', kind: 'koumuten', serviceAreas: [] }, actorA)
     const [item] = await recentVendors(db, 10)
     expect(item.action).toBe('add')
   })
 
-  it('5 分後にリポジトリの upsert で更新された行は update', async () => {
+  it('a row updated by the repository upsert 5 minutes later is update', async () => {
     const id = crypto.randomUUID()
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
       .toISOString()
@@ -240,8 +242,8 @@ describe('action（add/update）', () => {
       createdAt: fiveMinAgo,
       updatedAt: fiveMinAgo,
     })
-    // 更新経路を通す（updatedAt は repository/candidates.ts の upsertVendor が
-    // sql`(datetime('now'))` で現在時刻に書き換える。createdAt は触らない）
+    // Go through the update path (upsertVendor in repository/candidates.ts rewrites
+    // updatedAt to the current time with sql`(datetime('now'))`. createdAt is not touched)
     await upsertVendor(
       db,
       { id, name: '更新される業者', kind: 'koumuten', serviceAreas: [] },
@@ -254,7 +256,7 @@ describe('action（add/update）', () => {
 })
 
 describe('recentVisits / recentEvents', () => {
-  it('見学記録は場所名を題名に、visitedOn を副題に、href は見学記録詳細', async () => {
+  it('a visit record uses the place name as title, visitedOn as subtitle, and href is the visit record detail', async () => {
     const placeId = await upsertPlace(db, { name: 'ギャラリーB', kind: 'gallery' }, actorA)
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({
@@ -273,14 +275,14 @@ describe('recentVisits / recentEvents', () => {
     })
   })
 
-  it('場所の紐付けが無い見学記録は題名が「見学記録」になる', async () => {
+  it('a visit record with no linked place gets the title "見学記録" (visit record)', async () => {
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({ id: visitId, visitedOn: '2030-01-05', createdBy: actorA })
     const [item] = await recentVisits(db, 10)
     expect(item.title).toBe('見学記録')
   })
 
-  it('recentVisits は updatedAt の新しい順（明示タイムスタンプ）', async () => {
+  it('recentVisits is ordered newest updatedAt first (explicit timestamps)', async () => {
     await db.insert(visits).values([
       {
         id: crypto.randomUUID(),
@@ -309,7 +311,7 @@ describe('recentVisits / recentEvents', () => {
     ])
   })
 
-  it('予定は /calendar への href.search に日付が入る（params ではない）', async () => {
+  it('an event puts the date in href.search to /calendar (not in params)', async () => {
     const id = await upsertEvent(
       db,
       {
@@ -333,7 +335,7 @@ describe('recentVisits / recentEvents', () => {
 })
 
 describe('recentComments', () => {
-  it('対象の名前を JOIN して subtitle にし、href は対象のページになる', async () => {
+  it('JOINs the target name into subtitle, and href becomes the page of the target', async () => {
     const vendorId = await upsertVendor(
       db,
       { name: '丙建設', kind: 'koumuten', serviceAreas: [] },
@@ -357,7 +359,7 @@ describe('recentComments', () => {
     })
   })
 
-  it('対象が削除済みなら subtitle が「（削除済み）」になる（href の id は元の targetId のまま）', async () => {
+  it('when the target is deleted, subtitle becomes "（削除済み）" (deleted) (the id in href stays the original targetId)', async () => {
     const goneId = crypto.randomUUID()
     const commentId = crypto.randomUUID()
     await db.insert(comments).values({
@@ -372,7 +374,7 @@ describe('recentComments', () => {
     expect(item.href).toEqual({ to: '/places/$id', params: { id: goneId } })
   })
 
-  it('動画コメントの href は動画詳細で、業者や場所には漏れない', async () => {
+  it('href of a video comment is the video detail, and does not leak to vendors or places', async () => {
     const videoId = await upsertVideo(
       db,
       {
@@ -404,7 +406,7 @@ describe('recentComments', () => {
       },
     ])
     const items = await recentComments(db, 10)
-    // href の kind が targetType と食い違っていない（他 kind の id が混ざらない）ことを確認する
+    // Check that the kind of href does not disagree with targetType (ids of other kinds do not mix in)
     const byTitle = (t: string) => items.find((i) => i.title === t)!
     expect(byTitle('動画への一言').href).toEqual({
       to: '/records/videos/$id',
@@ -418,7 +420,7 @@ describe('recentComments', () => {
 })
 
 describe('recentPhotos', () => {
-  it('写真は caption を題名に、at は createdAt、href は見学記録詳細', async () => {
+  it('a photo uses caption as title, at is createdAt, and href is the visit record detail', async () => {
     const placeId = await upsertPlace(db, { name: 'ギャラリーC', kind: 'gallery' }, actorA)
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({
@@ -448,7 +450,7 @@ describe('recentPhotos', () => {
     })
   })
 
-  it('caption が無ければ「写真」になる', async () => {
+  it('becomes "写真" (photo) when there is no caption', async () => {
     const visitId = crypto.randomUUID()
     await db.insert(visits).values({ id: visitId, visitedOn: '2030-01-05', createdBy: actorA })
     await db.insert(photos).values({
@@ -466,7 +468,7 @@ describe('recentPhotos', () => {
 })
 
 describe('recentProperties', () => {
-  it('物件は住所を副題に、詳細への href を持つ', async () => {
+  it('a property uses the address as subtitle and has href to the detail', async () => {
     const id = crypto.randomUUID()
     await db.insert(properties).values({
       id,
@@ -486,7 +488,7 @@ describe('recentProperties', () => {
 })
 
 describe('recentSources', () => {
-  it('情報源は名前を題名に、handle を副題に、一覧（/sources）への href を持つ', async () => {
+  it('a source uses the name as title, handle as subtitle, and has href to the list (/sources)', async () => {
     const id = await upsertSource(
       db,
       {
@@ -515,7 +517,7 @@ describe('recentSources', () => {
     })
   })
 
-  it('handle が無ければ subtitle は undefined', async () => {
+  it('subtitle is undefined when there is no handle', async () => {
     await upsertSource(
       db,
       {

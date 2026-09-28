@@ -38,9 +38,9 @@ type OEmbedResponse = {
   canonicalUrl: string
 }
 
-// watchedOn（観た日）の既定は「今日」なので、モジュール読み込み時ではなく
-// コンポーネントの中で計算する（VisitForm と同じ理由: Worker は長寿命で isolate を
-// またいで再利用されるため、モジュール直下で固定すると日付が古くなる）
+// The default of watchedOn (the day watched) is "today", so it is calculated inside the
+// component, not at module load (same reason as VisitForm: a Worker is long-lived and
+// reused across isolates, so fixing it at module top level makes the date stale)
 const empty: Omit<Values, 'watchedOn'> = {
   url: '',
   title: '',
@@ -66,12 +66,14 @@ export function VideoForm({
   const save = useServerFn(saveVideo)
   const [saving, setSaving] = useState(false)
   const [fetchState, setFetchState] = useState<FetchState>('idle')
-  // 既存動画を開いた時点では既に題名が入っているので、oEmbed の自動入力で上書きしない
+  // When an existing video is opened the title is already filled, so the oEmbed
+  // auto-fill does not overwrite it
   const [titleTouched, setTitleTouched] = useState(Boolean(initial))
   const lastFetchedUrl = useRef<string | null>(initial?.url ?? null)
-  // oEmbed は連打・貼り直しで複数リクエストが飛びうる。古いレスポンスが後から返って
-  // 新しい入力を上書きしないよう、リクエストごとに番号を振って最新のものだけを反映する。
-  // アンマウント後（Drawer を閉じた後）に届いた応答も同様に捨てる。
+  // oEmbed can send several requests on repeated presses or re-pasting. So that an old
+  // response returning later does not overwrite newer input, each request gets a number
+  // and only the latest one is applied.
+  // Responses that arrive after unmount (after the Drawer is closed) are dropped the same way.
   const requestSeq = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
   const mountedRef = useRef(true)
@@ -84,8 +86,8 @@ export function VideoForm({
     }
   }, [])
 
-  // 新規作成は「今日観た」ことがほとんどなので、観た日は今日を選んだ状態で開く
-  // （所有者の要望、2026-09-21）。clearable なので要らなければ消せる
+  // A new entry is almost always "watched today", so it opens with today selected as the
+  // day watched (owner's request, 2026-09-21). It is clearable, so it can be removed
   const today = dayjs().format('YYYY-MM-DD')
   const initialValues: Values = initial
     ? {
@@ -111,13 +113,14 @@ export function VideoForm({
     },
   })
 
-  // 書きかけを端末に残す（Drawer を閉じても消えない）
+  // Keep the unfinished input on the device (it survives closing the Drawer)
   const draft = useFormDraft(
     form,
     draftKey('video', initial?.id, initial?.updatedAt),
     initialValues,
   )
-  // 「保存して続けて追加」で押されたか（新規のときだけ出す）
+  // Whether it was pressed via "保存して続けて追加" (Save and add another) (shown only
+  // for a new entry)
   const continueRef = useRef(false)
   const urlInputRef = useRef<HTMLInputElement>(null)
 
@@ -131,11 +134,12 @@ export function VideoForm({
     }
     form.clearFieldError('url')
     if (lastFetchedUrl.current === url) return
-    // lastFetchedUrl は成功時だけ更新する（下の setFetchState('ok') の直前）。
-    // ここで先に立てると、本当に oEmbed が失敗したあと同じ URL を貼り直しても
-    // 「もう取得済み」扱いでリトライできなくなるため
+    // lastFetchedUrl is updated only on success (right before setFetchState('ok') below).
+    // If it were set here first, then after oEmbed really failed, re-pasting the same URL
+    // would be treated as "already fetched" and could not be retried
 
-    // 前のリクエストがまだ飛んでいれば打ち切り、この呼び出しだけを「最新」として扱う
+    // If the previous request is still in flight, abort it and treat only this call as
+    // "the latest"
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -179,13 +183,15 @@ export function VideoForm({
       })
       if (res.conflict) {
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
-        // 相手の内容を画面に反映する（次の保存は最新の更新日時を基準にする）
+        // Reflect the other person's content on the screen (the next save is based on the
+        // latest update time)
         await router.invalidate()
         return
       }
       await router.invalidate()
       if (!initial && continueRef.current) {
-        // 続けて入れる: 観た日・観た人・業者・タグは残し、URL から入れ直せるようにする
+        // Continue entering: keep the day watched, who watched, the vendor and the tags,
+        // and allow entering again from the URL
         const next: Values = {
           ...empty,
           watchedOn: values.watchedOn,
@@ -193,7 +199,8 @@ export function VideoForm({
           vendorId: values.vendorId,
           tags: values.tags,
         }
-        // 保存前に始まった題名の自動取得が遅れて返り、空にした欄を埋め戻さないよう打ち切る
+        // Abort, so that a title auto-fetch that started before the save does not return
+        // late and refill the field that was emptied
         abortRef.current?.abort()
         requestSeq.current += 1
         draft.restart(next)
@@ -295,8 +302,9 @@ export function VideoForm({
           value={form.values.takeaways ?? ''}
           onChange={(e) => form.setFieldValue('takeaways', e.currentTarget.value || null)}
         />
-        {/* 新規は「続けて追加」と「保存」の 2 つ（キャンセルは右上の × で閉じれば下書きが残る）。
-            3 つ並べるとスマホ幅で文字が見切れた（所有者の報告、2026-09-24） */}
+        {/* A new entry has 2 buttons, "続けて追加" (Add another) and "保存" (Save) (to
+            cancel, closing with the × at the top right keeps the draft).
+            With 3 in a row the text was cut off at phone width (owner's report, 2026-09-24) */}
         <Group grow className="form-actions" gap="sm" wrap="nowrap">
           {initial && onCancel ? (
             <Button type="button" variant="default" onClick={onCancel}>

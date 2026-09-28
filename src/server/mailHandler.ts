@@ -11,7 +11,7 @@ import { classifyRoute } from '../lib/mail/route'
 import { MAX_INPUT_LENGTH } from '../lib/news/text'
 import { importMailAsNews, insertInboundMail, reviveRejectedInboundMail } from './repository/mails'
 
-/** ForwardableEmailMessage のうち使う部分（テストは素のオブジェクトで渡す） */
+/** The part of ForwardableEmailMessage that is used (tests pass a plain object) */
 export type InboundMessage = {
   from: string
   to: string
@@ -27,31 +27,35 @@ export type HandleResult = {
 }
 
 /**
- * news@ に届いた 1 通を処理する（設計 2026-09-19 §3）。
- * 読む → 経路判定 → inbound_mails に記録 → 業者が決まれば vendor_news へ。
- * 例外は呼び出し側（server.ts）でログにする。ctx.waitUntil は使わない。
+ * Handles 1 mail delivered to news@ (design 2026-09-19 §3).
+ * Read -> classify the route -> record in inbound_mails -> into vendor_news once the vendor
+ * is decided. Exceptions are logged by the caller (server.ts). ctx.waitUntil is not used.
  *
- * 信頼モデル（src/lib/mail/route.ts 参照）: 認可は `message.from`（Cloudflare Email Routing が
- * 渡すエンベロープ送信者）だけで行う。ヘッダ（`From:` / `X-Forwarded-For`）はメール本文の
- * 一部で偽装できるため、`classifyRoute` の第三引数として渡すだけで認可には使わない。
- * Email Routing は送信ドメインの DMARC ポリシーに従って認証失敗メールを拒否するので、
- * `google.com`（p=reject）を騙る system 経路は保護されるが、`gmail.com` は p=none のため
- * エンベロープ送信者の偽装は Routing を通り得る。ヘッダより強い判定だが完全ではない
- * （緩和策は転送先アドレスを推測できない secret にすること。SPF/ARC ヘッダ検証は follow-up）。
+ * Trust model (see src/lib/mail/route.ts): authorisation is done only with `message.from`
+ * (the envelope sender passed by Cloudflare Email Routing). Headers (`From:` /
+ * `X-Forwarded-For`) are part of the mail body and can be forged, so they are only passed as
+ * the third argument of `classifyRoute` and are not used for authorisation.
+ * Email Routing rejects mail that fails authentication according to the DMARC policy of the
+ * sending domain, so the system route impersonating `google.com` (p=reject) is protected, but
+ * `gmail.com` is p=none, so a forged envelope sender can pass through Routing. This is a
+ * stronger check than headers but not complete (the mitigation is to make the forwarding
+ * address a secret that cannot be guessed. SPF/ARC header verification is a follow-up).
  *
- * この「誰でも送れる」前提があるので、**本文のテキスト化（重い）は経路が受理されてから**
- * 行う: 拒否するメールでは extractBody を呼ばない（HTML → テキストは入力サイズに比例する）。
+ * Because of this "anyone can send" assumption, **turning the body into text (heavy) happens
+ * only after the route is accepted**: extractBody is not called for mail that is rejected
+ * (HTML -> text is proportional to the input size).
  *
- * auto/manual 経路は常に status: 'unassigned' で記録し、業者が決まったときだけ
- * importMailAsNews に imported へ上げさせる（お知らせ化に失敗しても行は unassigned の
- * ままなので、設定ページから再取込できる。imported かつ newsId が無い、という
- * 中途半端な状態を作らない）。
+ * The auto/manual routes are always recorded with status: 'unassigned', and only when the
+ * vendor is decided does importMailAsNews raise it to imported (even if turning it into
+ * vendor news fails, the row stays unassigned, so it can be imported again from the settings
+ * page. The half-done state of imported with no newsId is never created).
  *
- * Gmail の自動転送は元メールの Message-ID をそのまま使うため、本人以外から news@ に
- * 直接届いて reject された行と、後日正しく転送されてきた同じメールは message_id が
- * 衝突する。素直に重複扱いすると reject された内容（本文なし）のまま取り戻せなくなる
- * ので、reject 済みの行だけは reviveRejectedInboundMail で新しい内容に上書きしてから
- * 続ける（それ以外の既存 status は普通に duplicate）。
+ * Gmail auto-forwarding uses the Message-ID of the original mail as is, so a row that arrived
+ * at news@ directly from someone other than the owner and was rejected, and the same mail
+ * forwarded correctly at a later date, collide on message_id. Treating it plainly as a
+ * duplicate would leave the rejected content (no body) with no way to recover it, so only a
+ * row already rejected is overwritten with the new content by reviveRejectedInboundMail
+ * before continuing (any other existing status is an ordinary duplicate).
  */
 export async function handleInboundMail(
   message: InboundMessage,
@@ -70,8 +74,8 @@ export async function handleInboundMail(
   const receivedOn = toJstDateKey(nowIso)
 
   if (route.kind === 'rejected') {
-    // setReject は常に呼ぶ（配信自体が許可されていないため）。記録が重複していても
-    // 拒否の通知そのものは毎回返す。
+    // setReject is always called (the delivery itself is not permitted). Even when the record
+    // is a duplicate, the rejection notice itself is returned every time.
     message.setReject(route.reason)
     const { created } = await insertInboundMail(db, {
       messageId: parsed.messageId,
@@ -94,8 +98,9 @@ export async function handleInboundMail(
     }
   }
 
-  // ここから先は受理済みの経路だけ。本文のテキスト化はこの位置より後でしか行わない
-  // （拒否されるメールで重い変換を走らせない。関数コメントの信頼モデル参照）。
+  // From here on only accepted routes. Turning the body into text happens only after this
+  // point (no heavy conversion runs for rejected mail. See the trust model in the function
+  // comment).
   const body = extractBody(email)
 
   if (route.kind === 'system') {
@@ -120,7 +125,7 @@ export async function handleInboundMail(
     }
   }
 
-  // 手動転送は転送ブロックの中身が「元のメール」
+  // For a manual forward, the contents of the forwarded block are "the original mail"
   let fromAddress = parsed.from
   let subject = parsed.subject
   let sentOn = parsed.date ? toJstDateKey(parsed.date) : null
@@ -141,8 +146,9 @@ export async function handleInboundMail(
     .where(isNotNull(vendors.newsEmailDomain))
   const vendor = matchVendorByDomain(fromAddress, candidates)
 
-  // 常に unassigned で入れる。imported へ上げる・newsId を付けるのは importMailAsNews だけ
-  // （途中で失敗しても行は unassigned のまま残り、設定ページから再取込できる）。
+  // Always inserted as unassigned. Only importMailAsNews raises it to imported and attaches
+  // newsId (even on a failure midway the row stays unassigned and can be imported again from
+  // the settings page).
   const row = {
     messageId: parsed.messageId,
     receivedAt: nowIso,
@@ -162,7 +168,8 @@ export async function handleInboundMail(
 
   if (!created) {
     if (existingStatus === 'rejected') {
-      // 本人以外から直接届いて reject された行を、後から届いた正しい転送で生き返らせる
+      // Revive a row that arrived directly from someone other than the owner and was rejected,
+      // using the correct forward that arrived later
       await reviveRejectedInboundMail(db, id, row)
     } else {
       return { status: 'duplicate', fromDomain, subject }

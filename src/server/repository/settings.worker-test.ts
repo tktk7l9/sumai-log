@@ -6,7 +6,7 @@ import { db, reset } from './test-helpers'
 beforeEach(reset)
 
 describe('settings', () => {
-  it('homeAreas を JSON で往復し、壊れた値は空にする', async () => {
+  it('homeAreas round-trips as JSON, and a broken value becomes empty', async () => {
     expect(await readHomeAreas(db)).toEqual([])
     await writeSetting(db, 'homeAreas', JSON.stringify(['テスト市']))
     expect(await readHomeAreas(db)).toEqual(['テスト市'])
@@ -14,7 +14,7 @@ describe('settings', () => {
     expect(await readHomeAreas(db)).toEqual([])
   })
 
-  it('最後に使った日時をメールごとに持ち、上書きできる', async () => {
+  it('keeps the last used time per email and can overwrite it', async () => {
     expect(await readLastSeen(db)).toEqual({})
     await writeLastSeen(db, 'Owner@Example.com', '2026-09-24T10:00:00.000Z')
     await writeLastSeen(db, 'partner@example.com', '2026-09-24T11:00:00.000Z')

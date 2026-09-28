@@ -18,18 +18,18 @@ function json(status: number, body: unknown) {
   })
 }
 
-// multipart のオーバーヘッド（boundary・フィールド名等）ぶんだけ本体の上限より少し余裕を持たせる
+// Leave a little headroom above the body limit for the multipart overhead (boundary, field names, etc.)
 const MAX_UPLOAD_CONTENT_LENGTH = FAVICON_UPLOAD_MAX_BYTES + 4_096
 
 /**
- * サイトのアイコンの手動アップロード（POST /api/vendor-favicon/<vendorId>）。
- * Cloudflare からのアクセスを拒否するサーバー（README「取得を拒否するサイトへの対応」参照）
- * 向けの唯一の代替経路。`/api/vendor-photos/$vendorId` と同じ形（raw route で multipart を
- * 受け取る）だが、検証・R2 書き込み・DB 更新のロジックは vendorImagesFetcher.ts の
- * uploadVendorFaviconCore に集約している（AGENTS.md のファイル分割ルール通り。
- * worker テストから HTTP 層を経由せず直接叩けるようにするため）。配信は既存の
- * `/api/photos/<key>`（vendors/… キーもそのまま扱える）。認証は src/start.ts の
- * グローバルミドルウェアが適用済み。
+ * Manual upload of the site icon (POST /api/vendor-favicon/<vendorId>).
+ * The only alternative path for servers that refuse access from Cloudflare (see the README
+ * section on handling sites that refuse fetching). Same shape as `/api/vendor-photos/$vendorId`
+ * (a raw route receives multipart), but the validation, R2 write and DB update logic is
+ * gathered in uploadVendorFaviconCore in vendorImagesFetcher.ts (as the file split rule in
+ * AGENTS.md says, so that worker tests can call it directly without going through the HTTP
+ * layer). Delivery uses the existing `/api/photos/<key>` (it handles vendors/… keys as is).
+ * Authentication is already applied by the global middleware in src/start.ts.
  */
 export const Route = createFileRoute('/api/vendor-favicon/$vendorId')({
   server: {

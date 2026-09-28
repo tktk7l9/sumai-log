@@ -32,7 +32,7 @@ const base: EventWithLinks = {
 const ev = (overrides: Partial<EventWithLinks>): EventWithLinks => ({ ...base, ...overrides })
 
 describe('nextDay', () => {
-  it('日・月末・年末をまたぐ', () => {
+  it('crosses a day, a month end and a year end', () => {
     expect(nextDay('2030-01-05')).toBe('2030-01-06')
     expect(nextDay('2030-01-31')).toBe('2030-02-01')
     expect(nextDay('2030-12-31')).toBe('2031-01-01')
@@ -40,7 +40,7 @@ describe('nextDay', () => {
 })
 
 describe('toScheduleEvents', () => {
-  it('終日フラグのイベントは 00:00:00〜翌日 00:00:00、色は種別による', () => {
+  it('maps an all-day event to 00:00:00 through 00:00:00 the next day, with the color by kind', () => {
     const [result] = toScheduleEvents([
       ev({ id: 'a', title: '終日イベント', kind: 'visit', startsAt: '2030-01-05', allDay: true }),
     ])
@@ -54,7 +54,7 @@ describe('toScheduleEvents', () => {
     })
   })
 
-  it('日付のみの startsAt は allDay フラグが無くても終日扱い', () => {
+  it('treats a date-only startsAt as all-day even without the allDay flag', () => {
     const [result] = toScheduleEvents([
       ev({ id: 'b', title: '打合せ', kind: 'meeting', startsAt: '2030-01-06', allDay: false }),
     ])
@@ -63,7 +63,7 @@ describe('toScheduleEvents', () => {
     expect(result.color).toBe('blue')
   })
 
-  it('終了時刻ありの時刻指定イベント', () => {
+  it('handles a timed event with an end time', () => {
     const [result] = toScheduleEvents([
       ev({
         id: 'c',
@@ -79,7 +79,7 @@ describe('toScheduleEvents', () => {
     expect(result.color).toBe('teal')
   })
 
-  it('終了時刻が無ければ開始の 60 分後', () => {
+  it('ends 60 minutes after the start when there is no end time', () => {
     const [result] = toScheduleEvents([
       ev({
         id: 'd',
@@ -95,7 +95,7 @@ describe('toScheduleEvents', () => {
     expect(result.color).toBe('gray')
   })
 
-  it('終了時刻が無く日をまたぐ場合は翌日にする', () => {
+  it('rolls over to the next day when there is no end time and it crosses midnight', () => {
     const [result] = toScheduleEvents([
       ev({
         id: 'e',
@@ -110,7 +110,7 @@ describe('toScheduleEvents', () => {
     expect(result.end).toBe('2030-01-10 00:30:00')
   })
 
-  it('payload は自分たちの予定の id を持つ。now を渡さなければ past は立たない', () => {
+  it('carries the id of our own event in the payload. past is not set unless now is passed', () => {
     const [result] = toScheduleEvents([ev({ id: 'f' })])
     expect(result.payload).toEqual({ kind: 'own', eventId: 'f', past: false })
   })
@@ -137,7 +137,7 @@ const newsBase: NewsEventRow = {
 const news = (overrides: Partial<NewsEventRow>): NewsEventRow => ({ ...newsBase, ...overrides })
 
 describe('newsToScheduleEvents', () => {
-  it('単日イベントは 00:00:00〜翌日 00:00:00、色は常に gray', () => {
+  it('maps a single-day event to 00:00:00 through 00:00:00 the next day, always in gray', () => {
     const [result] = newsToScheduleEvents([news({})])
     expect(result).toEqual({
       id: 'news-n1',
@@ -149,7 +149,7 @@ describe('newsToScheduleEvents', () => {
     })
   })
 
-  it('複数日イベントは event_end の翌日まで', () => {
+  it('extends a multi-day event to the day after event_end', () => {
     const [result] = newsToScheduleEvents([
       news({ eventStart: '2030-01-05', eventEnd: '2030-01-07' }),
     ])
@@ -157,33 +157,33 @@ describe('newsToScheduleEvents', () => {
     expect(result.end).toBe('2030-01-08 00:00:00')
   })
 
-  it('event_end が無ければ event_start と同じ日を終端にする', () => {
+  it('ends on the same day as event_start when there is no event_end', () => {
     const [result] = newsToScheduleEvents([news({ eventStart: '2030-01-05', eventEnd: null })])
     expect(result.start).toBe('2030-01-05 00:00:00')
     expect(result.end).toBe('2030-01-06 00:00:00')
   })
 
-  it('event_start が無ければ（イベント未判定）除外する', () => {
+  it('excludes rows without event_start (not detected as an event)', () => {
     expect(newsToScheduleEvents([news({ eventStart: null, eventEnd: null })])).toEqual([])
   })
 
-  it('planned_event_id が付いていても情報レイヤーからは消さない', () => {
+  it('does not remove a row from the information layer even when it has planned_event_id', () => {
     const [result] = newsToScheduleEvents([news({ plannedEventId: 'e1' })])
     expect(result.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
   })
 
-  it('todayKey を渡すと終わった日程のお知らせに past が立つ', () => {
+  it('sets past on vendor news whose dates are over when todayKey is passed', () => {
     const [done] = newsToScheduleEvents([news({ eventEnd: '2030-01-05' })], '2030-01-06')
     const [today] = newsToScheduleEvents([news({ eventEnd: '2030-01-05' })], '2030-01-05')
     expect(done.payload).toEqual({ kind: 'news', newsId: 'n1', past: true })
     expect(today.payload).toEqual({ kind: 'news', newsId: 'n1', past: false })
-    // 色は元からグレーなので変えない（描画側が文字色を落とす）
+    // The color is gray to begin with, so it does not change (the renderer dims the text color)
     expect(done.color).toBe('gray')
   })
 })
 
 describe('groupNewsByDate', () => {
-  it('公開日ごとにまとめ、新しい日を上にする（同じ日の中は渡した順）', () => {
+  it('groups by publication date with newer dates first (input order within a day)', () => {
     const groups = groupNewsByDate([
       news({ id: 'a', publishedOn: '2030-01-01' }),
       news({ id: 'b', publishedOn: '2030-01-03' }),
@@ -195,7 +195,7 @@ describe('groupNewsByDate', () => {
     ])
   })
 
-  it('イベント未判定のお知らせも含め、日付はイベント日ではなく公開日', () => {
+  it('includes news not detected as an event, and dates by publication date, not event date', () => {
     const [g] = groupNewsByDate([
       news({ publishedOn: '2030-02-01', eventStart: '2030-03-01', eventKind: null }),
     ])
@@ -205,28 +205,28 @@ describe('groupNewsByDate', () => {
 })
 
 describe('toScheduleStamp', () => {
-  it('JST の ISO を Schedule と同じ形に揃える', () => {
+  it('aligns a JST ISO string to the same shape as Schedule', () => {
     expect(toScheduleStamp('2030-01-05T09:30:00+09:00')).toBe('2030-01-05 09:30:00')
   })
 
-  it('日付だけなら 00:00:00 を補う', () => {
+  it('fills in 00:00:00 for a date-only value', () => {
     expect(toScheduleStamp('2030-01-05')).toBe('2030-01-05 00:00:00')
   })
 })
 
 describe('isPastNews', () => {
-  it('日程を持たないお知らせは過去扱いしない（公開日は常に過去のため）', () => {
+  it('does not treat news without dates as past (the publication date is always in the past)', () => {
     expect(isPastNews({ eventStart: null, eventEnd: null }, '2030-01-05')).toBe(false)
   })
 
-  it('終了日の当日はまだ過去ではない', () => {
+  it('is not yet past on the end date itself', () => {
     expect(isPastNews({ eventStart: '2030-01-05', eventEnd: null }, '2030-01-05')).toBe(false)
     expect(isPastNews({ eventStart: '2030-01-04', eventEnd: '2030-01-05' }, '2030-01-05')).toBe(
       false,
     )
   })
 
-  it('終了日を過ぎたら過去', () => {
+  it('is past once the end date has passed', () => {
     expect(isPastNews({ eventStart: '2030-01-05', eventEnd: null }, '2030-01-06')).toBe(true)
     expect(isPastNews({ eventStart: '2030-01-04', eventEnd: '2030-01-05' }, '2030-01-06')).toBe(
       true,
@@ -234,8 +234,8 @@ describe('isPastNews', () => {
   })
 })
 
-describe('toScheduleEvents（終わった予定の色）', () => {
-  it('終了時刻を過ぎた予定はグレーになり payload.past が立つ', () => {
+describe('toScheduleEvents (color of finished events)', () => {
+  it('turns an event past its end time gray and sets payload.past', () => {
     const [result] = toScheduleEvents(
       [
         ev({
@@ -252,7 +252,7 @@ describe('toScheduleEvents（終わった予定の色）', () => {
     expect(result.payload).toEqual({ kind: 'own', eventId: 'p1', past: true })
   })
 
-  it('まだ終わっていない予定は種別の色のまま', () => {
+  it('keeps the kind color for an event that has not finished yet', () => {
     const [result] = toScheduleEvents(
       [
         ev({
@@ -269,15 +269,15 @@ describe('toScheduleEvents（終わった予定の色）', () => {
     expect(result.payload).toEqual({ kind: 'own', eventId: 'p2', past: false })
   })
 
-  it('終日の予定はその日のうちは過去にならず、翌日から過去になる', () => {
+  it('keeps an all-day event non-past during that day and makes it past from the next day', () => {
     const allDay = ev({ id: 'p3', kind: 'meeting', startsAt: '2030-01-05', allDay: true })
     expect(toScheduleEvents([allDay], '2030-01-05T23:59:00+09:00')[0].color).toBe('blue')
     expect(toScheduleEvents([allDay], '2030-01-06T00:00:00+09:00')[0].color).toBe('gray')
   })
 })
 
-describe('groupNewsByDate（終わった日程）', () => {
-  it('todayKey を渡すと終わった日程のお知らせに past が立つ。日程の無いものは立たない', () => {
+describe('groupNewsByDate (finished dates)', () => {
+  it('sets past on vendor news whose dates are over when todayKey is passed. Not on news without dates', () => {
     const [g] = groupNewsByDate(
       [
         news({ id: 'done', eventEnd: '2030-01-05' }),

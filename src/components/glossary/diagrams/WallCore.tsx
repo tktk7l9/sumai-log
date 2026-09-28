@@ -1,6 +1,9 @@
 import { Arrow, Figure, Label } from './Figure'
 
-/** 壁の中心線で測る「壁芯」と、壁の内側で測る「内法」の違い */
+/**
+ * The difference between "壁芯" (wall centerline), measured at the center line of the wall, and "内法"
+ * (inner dimension), measured at the inside of the wall
+ */
 export function WallCoreDiagram() {
   return (
     <Figure label="壁の厚みを挟んだ寸法の測り方の違い。壁の中心線で測る壁芯と、壁の内側の面で測る内法">

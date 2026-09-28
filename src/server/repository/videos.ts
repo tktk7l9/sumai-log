@@ -9,7 +9,7 @@ type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>
   expectedUpdatedAt?: string | null
 }
 
-/** id が無ければ作成、あれば更新。作成者は最初の保存時だけ記録する */
+/** Creates when there is no id, updates when there is. The creator is recorded only on the first save */
 export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string): Promise<string> {
   const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
@@ -30,13 +30,13 @@ export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string)
   return id
 }
 
-/** 動画を消す。コメントは消す */
+/** Deletes a video. Comments are deleted */
 export async function deleteVideoCascade(db: Db, id: string): Promise<void> {
   await db.delete(comments).where(and(eq(comments.targetType, 'video'), eq(comments.targetId, id)))
   await db.delete(videos).where(eq(videos.id, id))
 }
 
-/** 一覧: 観た日の新しい順（無ければ末尾）→ 作成順で業者名を付ける */
+/** List: newest watched date first (at the end if none) -> creation order, with the vendor name attached */
 export async function listVideosWithLinks(
   db: Db,
 ): Promise<(Video & { vendorName: string | null })[]> {

@@ -4,8 +4,10 @@ import type { ReactNode } from 'react'
 import type { Count } from '../../lib/analysis'
 
 /**
- * 件数の横棒リスト（1 系列なので凡例は置かず、見出しが系列を名乗る）。棒は多いほど長く、
- * 数値は棒の右に文字色で書く（色だけに頼らない）。renderName で名前をリンクなどにできる
+ * A horizontal bar list of counts (1 series, so there is no legend and the heading names
+ * the series). A bar is longer for a larger count, and the number is written to the right
+ * of the bar in the text color (not relying on color alone). renderName can turn the name
+ * into a link, etc.
  */
 export function CountBars({
   items,

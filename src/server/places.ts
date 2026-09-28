@@ -15,10 +15,10 @@ export const placeInput = z
     name: z.string().trim().min(1, '名前は必須です').max(200),
     kind: z.enum(PLACE_KINDS),
     address: optionalText,
-    /** 住所検索で得た座標（画面が /api/geocode を呼んで埋める） */
+    /** Coordinates obtained by address search (the screen calls /api/geocode and fills them in) */
     lat: z.number().min(-90).max(90).nullable(),
     lng: z.number().min(-180).max(180).nullable(),
-    /** 手貼りの座標。入っていれば lat/lng より優先し geocodeSource='manual' */
+    /** Hand-pasted coordinates. If present, they take priority over lat/lng and geocodeSource='manual' */
     coordsText: optionalText,
     geocodeSource: z.enum(GEOCODE_SOURCES).nullable(),
     vendorId: idField.nullable(),
@@ -63,7 +63,7 @@ export const deletePlace = createServerFn({ method: 'POST' })
   .validator(idInput)
   .handler(async ({ data }) => deletePlaceCascade(getDb(), data.id))
 
-/** 候補フォームの選択肢 */
+/** Options for the candidate form */
 export const listLinkTargets = createServerFn().handler(async () => {
   const db = getDb()
   const [v, p] = await Promise.all([

@@ -18,9 +18,10 @@ const BAND_TOP = 40
 const BAND_BOTTOM = 100
 
 /**
- * 外壁の断面を、外側→内側の8層の縦じま（バンド内は番号のみ）＋
- * 下の凡例リスト（番号と名前）で表す。バンドの中に8つの日本語ラベルを
- * 詰めると 12px では収まらないため、番号とテキストを分離した
+ * Shows the cross section of the exterior wall as 8 vertical stripes of layers from
+ * outside -> inside (numbers only inside the bands) + a legend list below (numbers and
+ * names). Packing 8 Japanese labels into the bands does not fit at 12px, so the numbers
+ * and the text were separated
  */
 export function WallSectionDiagram() {
   return (

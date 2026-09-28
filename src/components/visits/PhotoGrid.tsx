@@ -16,7 +16,8 @@ import { useEffect, useState, type TouchEvent } from 'react'
 import type { Photo } from '../../db/schema'
 import { photoUrl } from '../../lib/photos'
 
-/** スワイプと判定する最小の横移動量（px）。これ未満はタップ・縦スクロールとして無視する */
+/** Minimum horizontal movement judged as a swipe (px). Less than this is ignored as a tap
+ * or vertical scroll */
 const SWIPE_THRESHOLD_PX = 40
 
 export function PhotoGrid({
@@ -34,12 +35,13 @@ export function PhotoGrid({
   const [saving, setSaving] = useState(false)
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
 
-  // 写真が消えた等で並びが変わったら、並び替え中でなければ表示は常に最新の photos に従う
+  // When the order changes, e.g. a photo was removed, the display always follows the
+  // latest photos unless a reorder is in progress
   const displayed = reordering && order ? order : photos
 
   const openIndex = open ? photos.findIndex((p) => p.id === open.id) : -1
 
-  // ビューアを開いている間だけキーボードの ← → で前後に移動する
+  // Move to previous/next with the keyboard ← → only while the viewer is open
   useEffect(() => {
     if (open === null || photos.length <= 1) return
     function handleKeyDown(e: KeyboardEvent) {
@@ -61,8 +63,9 @@ export function PhotoGrid({
   function showRelative(delta: number) {
     if (openIndex < 0 || photos.length === 0) return
     const len = photos.length
-    // 負数を含む % は JS では負のまま返るので、+ len してから再度 % len で
-    // 0〜len-1 に丸める（端で ← / → を繰り返すと両端をループする）
+    // In JS, % with a negative number returns a negative value, so add len and take
+    // % len again to round into 0 to len-1 (repeating ← / → at an end loops around both
+    // ends)
     const next = ((openIndex + delta) % len) + len
     setOpen(photos[next % len])
   }
@@ -110,7 +113,7 @@ export function PhotoGrid({
     const diff = touchStartX - endX
     setTouchStartX(null)
     if (Math.abs(diff) < SWIPE_THRESHOLD_PX) return
-    // 左スワイプ（指が左へ）= 次の写真、右スワイプ = 前の写真
+    // Left swipe (finger moves left) = next photo, right swipe = previous photo
     showRelative(diff > 0 ? 1 : -1)
   }
 

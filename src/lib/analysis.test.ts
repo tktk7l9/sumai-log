@@ -55,7 +55,7 @@ const input = (o: Partial<AnalysisInput> = {}): AnalysisInput => ({
 })
 
 describe('countTop', () => {
-  it('多い順・同数は名前順・上位だけ', () => {
+  it('sorts by count descending, ties by name, top entries only', () => {
     expect(countTop(['い', 'あ', 'い', 'う', 'あ', 'い'])).toEqual([
       { name: 'い', count: 3 },
       { name: 'あ', count: 2 },
@@ -66,11 +66,11 @@ describe('countTop', () => {
 })
 
 describe('monthlyCounts', () => {
-  it('記録が無ければ空', () => {
+  it('returns empty when there are no records', () => {
     expect(monthlyCounts([], [video({ watchedOn: null })])).toEqual([])
   })
 
-  it('最初から最後の月まで、無い月も 0 で埋める（年をまたぐ）', () => {
+  it('fills from the first to the last month, missing months with 0 (across years)', () => {
     const rows = monthlyCounts(
       [visit({ visitedOn: '2025-11-02' }), visit({ visitedOn: '2026-02-10' })],
       [video({ watchedOn: '2026-02-01' }), video({ watchedOn: '2026-02-20' })],
@@ -80,7 +80,7 @@ describe('monthlyCounts', () => {
     expect(rows[1]).toEqual({ month: '2025-12', visits: 0, videos: 0 })
   })
 
-  it('長すぎる期間は新しい方から MAX_MONTHS 件', () => {
+  it('keeps the newest MAX_MONTHS entries when the period is too long', () => {
     const rows = monthlyCounts(
       [visit({ visitedOn: '2020-01-01' }), visit({ visitedOn: '2026-09-01' })],
       [],
@@ -91,7 +91,7 @@ describe('monthlyCounts', () => {
 })
 
 describe('vendorContacts', () => {
-  it('見学・動画・済んだ予定を数え、接点の多い順。これからの予定は別に数える', () => {
+  it('counts visits, videos and past events, most contacts first; upcoming events separately', () => {
     const rows = vendorContacts(
       input({
         vendors: [
@@ -123,7 +123,7 @@ describe('vendorContacts', () => {
     expect(rows[2]!.lastContact).toBeNull()
   })
 
-  it('接点が同数なら最後の接点が新しい方が先', () => {
+  it('puts the one with the newer last contact first when contacts tie', () => {
     const rows = vendorContacts(
       input({
         vendors: [
@@ -137,7 +137,7 @@ describe('vendorContacts', () => {
       }),
     )
     expect(rows.map((r) => r.id)).toEqual(['b', 'a'])
-    // どちらも接点が無ければ元の並びのまま
+    // When neither has any contact, the original order is kept
     const none = vendorContacts(
       input({
         vendors: [
@@ -156,7 +156,7 @@ describe('termHits', () => {
     { id: 'c', term: 'C値', aliases: ['気密'] },
     { id: 'none', term: '耐震等級' },
   ]
-  it('用語名・別名（2 文字以上）で照合し、1 件の記録では 1 回と数える', () => {
+  it('matches by term name and aliases (2+ characters), counting once per record', () => {
     const hits = termHits(
       ['ＵＡ値は0.46。UA値が大事', '気密測定をした', 'ua を比べる', 'Uの字'],
       terms,
@@ -167,14 +167,14 @@ describe('termHits', () => {
     ])
   })
 
-  it('上位 TOP_N まで', () => {
+  it('returns up to the top TOP_N', () => {
     const many = Array.from({ length: TOP_N + 3 }, (_, i) => ({ id: `t${i}`, term: `用語${i}` }))
     expect(termHits([many.map((t) => t.term).join(' ')], many)).toHaveLength(TOP_N)
   })
 })
 
 describe('frequentWords', () => {
-  it('漢字・カタカナ・英数を含む 2 文字以上の語を、記録ごとに 1 回と数える', () => {
+  it('counts words of 2+ characters with kanji, katakana or alphanumerics once per record', () => {
     const words = frequentWords([
       '断熱がよい。断熱の話。',
       '断熱と気密。キッチンが広い',
@@ -188,13 +188,13 @@ describe('frequentWords', () => {
     expect(names).not.toContain('3')
   })
 
-  it('数字だけの語は数えない', () => {
+  it('does not count words made only of digits', () => {
     expect(frequentWords(['2026 年'])).toEqual([])
   })
 })
 
 describe('openNextActions', () => {
-  it('行ごとに分け、印を外し、済んだ行は除く。新しい見学から', () => {
+  it('splits by line, strips markers, excludes done lines; newest visit first', () => {
     const actions = openNextActions([
       visit({
         id: 'old',
@@ -219,7 +219,7 @@ describe('openNextActions', () => {
 })
 
 describe('analyzeRecords', () => {
-  it('まとめて集計する（書きかけの記録・誰が・タグ・チャンネル）', () => {
+  it('aggregates everything together (unfinished records, who, tags, channels)', () => {
     const a = analyzeRecords(
       input({
         visits: [
@@ -263,7 +263,7 @@ describe('analyzeRecords', () => {
     expect(a.gaps.visitsWithoutPhotos[1]!.label).toBe('（場所なし）')
   })
 
-  it('何も無ければ空の集計', () => {
+  it('returns an empty aggregate when there is nothing', () => {
     const a = analyzeRecords(input())
     expect(a.summary.firstDate).toBeNull()
     expect(a.summary.lastDate).toBeNull()

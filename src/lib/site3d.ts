@@ -1,9 +1,11 @@
 /**
- * 区画シミュレーターの 3D 表示に渡すシーンの中身（純粋関数）。描画（three.js）は
- * src/components/site/SiteView3D.tsx が受け持ち、ここは「何をどこに置くか」だけを決める。
+ * The contents of the scene passed to the 3D view of the site plan simulator (pure
+ * functions). Rendering (three.js) is handled by src/components/site/SiteView3D.tsx, and
+ * this file decides only what is placed where.
  *
- * 座標は土地の座標（m。x: 間口方向、y: 道路→奥、z: 高さ）で持ち、three.js の座標
- * （Y が上）へは toThree で写す。土地の奥（+y）は画面の奥（-Z）になる。
+ * Coordinates are held in land coordinates (m. x: along the frontage, y: road -> rear,
+ * z: height), and are mapped to three.js coordinates (Y is up) by toThree. The rear of the
+ * land (+y) becomes the back of the screen (-Z).
  */
 
 import {
@@ -19,7 +21,8 @@ import {
 } from './sitePlan'
 import { SEASON_DECLINATION, solarPosition, sunInLand, type Season, type Vec3 } from './sun'
 
-/** 高さが不明な隣の建物を仮に立てる高さ（m）。半透明で描き、計算には使わない */
+/** Provisional height (m) for a neighboring building whose height is unknown. Drawn
+ * semi-transparent and not used in calculations */
 export const UNKNOWN_HEIGHT = 3
 
 export type ScenePlaneKind = 'road' | 'land' | 'open' | 'access' | 'section' | 'flag'
@@ -31,7 +34,7 @@ export type SceneBox = Rect & { kind: SceneBoxKind; height: number; label: strin
 export type Scene = {
   planes: ScenePlane[]
   boxes: SceneBox[]
-  /** シーン全体の広がり（土地の座標） */
+  /** Extent of the whole scene (land coordinates) */
   bounds: { minX: number; maxX: number; minY: number; maxY: number }
 }
 
@@ -40,7 +43,8 @@ function boxKind(kind: NeighborKind, height: number): SceneBoxKind {
   return kind === 'construction' ? 'construction' : 'building'
 }
 
-/** 区画シミュレーターの値から 3D のシーンを組む。道路はシーンの左右いっぱいに伸ばす */
+/** Builds the 3D scene from the values of the site plan simulator. The road is stretched to
+ * the full left-right extent of the scene */
 export function buildScene(plan: SitePlan): Scene {
   const planes: ScenePlane[] = []
   const boxes: SceneBox[] = []
@@ -99,14 +103,15 @@ export function buildScene(plan: SitePlan): Scene {
   return { planes, boxes, bounds }
 }
 
-/** 土地の座標 → three.js の座標 [X, Y, Z]（Y が上、土地の奥は -Z） */
+/** Land coordinates -> three.js coordinates [X, Y, Z] (Y is up, the rear of the land is -Z) */
 export function toThree(p: Vec3): [number, number, number] {
   return [p.x, p.z, -p.y]
 }
 
 /**
- * 太陽の方向（three.js の座標の単位ベクトル）と高度。日が出ていなければ null。
- * 平行光源を「シーンの中心 + 方向×距離」に置けば、影が太陽の向きに落ちる
+ * The direction of the sun (a unit vector in three.js coordinates) and its altitude. null
+ * when the sun is not up. Placing the directional light at "scene center + direction x
+ * distance" makes the shadows fall according to the direction of the sun
  */
 export function sunDirection3d(
   plan: SitePlan,
@@ -119,10 +124,11 @@ export function sunDirection3d(
   return { dir: toThree(sunInLand(altitude, azimuth, rightAz, backAz)), altitude }
 }
 
-/** three.js の座標で、北を指す向き（XZ 平面の単位ベクトル）。方位記号に使う */
+/** The direction pointing north in three.js coordinates (a unit vector in the XZ plane).
+ * Used for the compass symbol */
 export function northDirection3d(plan: SitePlan): [number, number] {
   const { rightAz, backAz } = landAxes(plan)
-  // 北（方位 0°）を土地の x・y に分けて写す
+  // Map north (azimuth 0°) onto the x and y of the land, component by component
   const x = Math.cos(rightAz * (Math.PI / 180))
   const y = Math.cos(backAz * (Math.PI / 180))
   return [x, -y]

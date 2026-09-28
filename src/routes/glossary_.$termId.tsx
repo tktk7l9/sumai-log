@@ -17,14 +17,15 @@ export const Route = createFileRoute('/glossary_/$termId')({
     if (!term) throw notFound()
     return { term, related: relatedTerms(GLOSSARY, term) }
   },
-  // notFoundComponent 側は loaderData が無いのでタブ名は __root.tsx の既定のまま
+  // The notFoundComponent side has no loaderData, so the tab title stays the default of __root.tsx
   head: ({ loaderData }) => ({
     meta: loaderData ? [{ title: `${loaderData.term.term} | 用語集 | 住まいログ` }] : [],
   }),
 })
 
-// 一覧側の検索・絞り込み（`?q` `?c`）をそのまま「← 用語集」へ持ち帰る。
-// 一覧→詳細→関連語→…と何度たどっても、最後に戻ったとき絞り込みが消えない。
+// Carries the search and filter of the list side (`?q` `?c`) back to "← 用語集" (Glossary) as is.
+// However many times list -> detail -> related term -> ... is followed, the filter is not lost
+// on the final return.
 function BackLink() {
   const { q, c } = Route.useSearch()
   return (

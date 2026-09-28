@@ -25,8 +25,8 @@ function Page() {
   const filtered = c ? searched.filter((term) => term.category === c) : searched
   const groups = groupByCategory(filtered)
 
-  // 旧形式 `#term-<id>` で直接開かれた／ブックマークされたリンクを、詳細ページへ
-  // 案内する（バッジ類は書き換え済みだが、外部のブックマークや共有リンクは残りうる）。
+  // Guide links opened directly or bookmarked in the old `#term-<id>` form to the detail page
+  // (badges and the like are already rewritten, but external bookmarks and shared links can remain).
   useEffect(() => {
     const raw = location.hash
     if (!raw.startsWith('term-')) return
@@ -36,8 +36,8 @@ function Page() {
     navigate({ to: '/glossary/$termId', params: { termId: id }, replace: true })
   }, [location.hash, navigate])
 
-  // 検索・絞り込みを変えたら、畳んであった分類も開き直す（「性能 2」と出ているのに
-  // 中身が見えず 0 件と誤解しないように）。
+  // When the search or filter changes, reopen the collapsed categories too (so that a heading
+  // such as "性能 2" (Performance 2) with its contents hidden is not mistaken for 0 items).
   useEffect(() => {
     if (q || c) setOpenCategories([...CATEGORY_IDS])
   }, [q, c])

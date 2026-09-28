@@ -1,9 +1,9 @@
 import { defineConfig } from 'drizzle-kit'
 
 /**
- * マイグレーション生成専用の設定。
- * 生成された SQL は `wrangler d1 migrations apply` で D1 に適用する
- * （wrangler.jsonc の migrations_dir と同じ場所を out に指定している）。
+ * Config used only for generating migrations.
+ * The generated SQL is applied to D1 with `wrangler d1 migrations apply`
+ * (out points to the same place as migrations_dir in wrangler.jsonc).
  */
 export default defineConfig({
   schema: './src/db/schema.ts',

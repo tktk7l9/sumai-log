@@ -1,8 +1,8 @@
 /**
- * YouTube の動画 URL 解析・正規化。
+ * Parsing and normalisation of YouTube video URLs.
  *
- * 対応ホスト: youtube.com 系（bare / www / m / music）と youtu.be。
- * 動画 ID は 11 文字の [A-Za-z0-9_-] のみを受ける。
+ * Supported hosts: the youtube.com family (bare / www / m / music) and youtu.be.
+ * A video ID is accepted only as 11 characters of [A-Za-z0-9_-].
  */
 
 const YOUTUBE_HOSTS = new Set([
@@ -15,7 +15,7 @@ const YOUTUBE_HOSTS = new Set([
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{11}$/
 
-/** アプリ内の呼び出し元は今は無い。lib の公開 API として維持 */
+/** No caller inside the app right now. Kept as public API of lib */
 export function isYouTubeHost(hostname: string): boolean {
   return YOUTUBE_HOSTS.has(hostname.toLowerCase())
 }
@@ -24,7 +24,7 @@ function pathSegments(pathname: string): string[] {
   return pathname.split('/').filter(Boolean)
 }
 
-/** youtube.com 系・youtu.be それぞれの形から動画 id 候補を取り出す（未検証） */
+/** Extracts the video id candidate from each shape, youtube.com family and youtu.be (unvalidated) */
 function extractId(host: string, pathname: string, searchParams: URLSearchParams): string {
   if (host === 'youtu.be') return pathSegments(pathname)[0] ?? ''
 
@@ -35,9 +35,9 @@ function extractId(host: string, pathname: string, searchParams: URLSearchParams
 }
 
 /**
- * YouTube の URL から動画 id を取り出す。http/https 以外のスキーム
- * （file: / ftp: / ws: / javascript: など）、対応外のホスト・パス、
- * 11 文字でない id、空文字は null。前後の空白は trim する。
+ * Extracts the video id from a YouTube URL. Returns null for schemes other than
+ * http/https (file: / ftp: / ws: / javascript: and so on), unsupported hosts or paths,
+ * an id that is not 11 characters, and an empty string. Trims leading and trailing whitespace.
  */
 export function parseYouTubeId(url: string): string | null {
   const trimmed = url.trim()

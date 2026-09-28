@@ -24,11 +24,13 @@ import {
   type Season,
 } from '../../lib/sun'
 
-/** 余白（m） */
+/** Margin (m) */
 const PAD = 1.5
-/** 道路の帯は実際の幅員で描くが、文字が入るよう最低この奥行は取る（m） */
+/** The road band is drawn at the actual road width, but takes at least this depth so that
+ * the text fits (m) */
 const MIN_ROAD = 3
-/** 隣地を描くのは土地の外この距離まで（m）。スマホで土地が小さくなりすぎないように */
+/** Neighboring lots are drawn up to this distance outside the land (m), so that the land
+ * does not get too small on a phone */
 const MAX_AROUND = 16
 
 function clampBetween(v: number, min: number, max: number): number {
@@ -38,15 +40,17 @@ function clampBetween(v: number, min: number, max: number): number {
 type DragKind = 'section' | 'building'
 type Drag = { kind: DragKind; startX: number; startY: number; origX: number; origY: number }
 
-/** ドラッグは 0.5 m 刻みに吸着させる（指でも狙った位置に置きやすいように） */
+/** Dragging snaps to 0.5 m steps (so that even a finger can place it where intended) */
 function snap(v: number): number {
   return Math.round(v * 2) / 2
 }
 
 /**
- * 区画シミュレーターの平面図（SVG）。単位はメートルで、道路を常に下に描く。区画と建物は
- * 指・マウスでドラッグして動かせる（Pointer Events）。ドラッグ中だけページのスクロールを
- * 止める（iOS Safari は touch-action だけでは止まらないことがあるので touchmove も抑える）。
+ * The floor plan view (SVG) of the site plan simulator. The unit is meters, and the road
+ * is always drawn at the bottom. The section and the building can be moved by dragging
+ * with a finger or mouse (Pointer Events). Page scrolling is stopped only while dragging
+ * (iOS Safari sometimes does not stop with touch-action alone, so touchmove is suppressed
+ * too).
  */
 export function SiteCanvas({
   plan,
@@ -55,7 +59,7 @@ export function SiteCanvas({
 }: {
   plan: SitePlan
   onChange: (next: SitePlan) => void
-  /** 影を描く季節と時刻（真太陽時）。null なら描かない */
+  /** The season and time (true solar time) to draw shadows for. null draws none */
   sun: { season: Season; hour: number } | null
 }) {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -72,7 +76,8 @@ export function SiteCanvas({
   }, [])
 
   const ROAD = Math.max(plan.roadWidth, MIN_ROAD)
-  // 隣地の広がりに合わせて周りの余白を取る（MAX_AROUND まで）
+  // Take the surrounding margin according to the extent of the neighboring lots (up to
+  // MAX_AROUND)
   const around = { left: 0, right: 0, back: 0, front: 0 }
   for (const n of plan.neighbors) {
     around.left = Math.max(around.left, -n.x)
@@ -89,7 +94,7 @@ export function SiteCanvas({
   const unit = Math.max(plan.landWidth, plan.landDepth) / 40
   const font = Math.max(unit * 1.1, 0.5)
 
-  /** 土地の座標（道路側が y=0）を SVG の座標（上が y=0）に直す */
+  /** Converts land coordinates (road side is y=0) to SVG coordinates (top is y=0) */
   function toSvg(r: Rect) {
     return {
       x: mL + r.x,
@@ -101,7 +106,7 @@ export function SiteCanvas({
   function pointsToSvg(pts: Point[]): string {
     return pts.map((p) => `${mL + p.x},${mT + plan.landDepth - p.y}`).join(' ')
   }
-  /** 描く範囲（viewBox）からはみ出す分を切る。何も残らなければ null */
+  /** Cuts off what sticks out of the drawn range (viewBox). null when nothing remains */
   function clipToView(r: ReturnType<typeof toSvg>) {
     const x0 = Math.max(r.x, 0)
     const y0 = Math.max(r.y, 0)
@@ -137,7 +142,7 @@ export function SiteCanvas({
     if (!drag) return
     const p = svgPoint(e)
     const x = snap(drag.origX + (p.x - drag.startX))
-    // SVG は下向きが +y、土地の座標は奥（画面の上）が +y
+    // In SVG downward is +y; in land coordinates the back (top of the screen) is +y
     const y = snap(drag.origY - (p.y - drag.startY))
     onChange(
       normalizePlan(
@@ -160,7 +165,8 @@ export function SiteCanvas({
   const flagSvg = flag ? toSvg(flag) : null
   const building = toSvg(buildingRect(plan))
   const sec = sectionRect(plan)
-  // 延焼ライン（準防火地域のとき。2 階建てなら 2 階の 5m の線も）。区画の座標から土地の座標へ
+  // Fire spread lines (when in a quasi-fire-prevention district. For 2 stories, also the
+  // 5m line of the 2nd floor). From section coordinates to land coordinates
   const fireLines = (
     plan.quasiFireZone
       ? plan.floors >= 2
@@ -172,7 +178,7 @@ export function SiteCanvas({
     .map((r) => toSvg({ x: sec.x + r.x, y: sec.y + r.y, width: r.width, depth: r.depth }))
   const access = accessRect(plan)
   const accessSvg = access ? toSvg(access) : null
-  // 区画の奥（画面の上）に残る土地の奥行
+  // Depth of the land left behind the section (top of the screen)
   const backDepth = plan.landDepth - plan.sectionY - sectionRect(plan).depth
   const sectionTsubo = m2ToTsubo(sectionRect(plan).width * sectionRect(plan).depth)
   const angle = (360 - landAxes(plan).backAz) % 360
@@ -180,7 +186,8 @@ export function SiteCanvas({
   const gapBelow = section.y + section.height - (building.y + building.height)
   const sectionLabelY =
     gapAbove >= gapBelow ? section.y + gapAbove / 2 : building.y + building.height + gapBelow / 2
-  // 方位は道路の帯の右端に置く（土地の上に重ねると区画・建物を隠すため）
+  // The compass sits at the right end of the road band (overlaid on the land it would
+  // hide the section and the building)
   const compass = { x: width - PAD - unit * 1.2, y: mT + plan.landDepth + ROAD / 2 }
   const compassR = Math.min(unit * 1.1, ROAD * 0.4)
 
@@ -189,7 +196,8 @@ export function SiteCanvas({
     if (!r) return null
     const tall = n.kind !== 'open'
     const text = tall ? `${n.label}（${n.height > 0 ? `${n.height}m` : '高さ不明'}）` : n.label
-    // 縦長の区画は文字を縦に回す。文字は区画に収まる大きさまで縮める
+    // For a tall lot, rotate the text to vertical. The text shrinks to a size that fits
+    // in the lot
     const vertical = r.height > r.width * 1.5
     const room = (vertical ? r.height : r.width) * 0.9
     const size = Math.min(font * 0.75, room / Math.max(text.length, 4))
@@ -215,7 +223,8 @@ export function SiteCanvas({
     )
   })
 
-  // 影: 周りの建物（高さが分かっているもの）と自分たちの平屋
+  // Shadows: the surrounding buildings (those with a known height) and our own
+  // single-story house
   const shadows: Point[][] = []
   if (sun) {
     const { rightAz, backAz } = landAxes(plan)
@@ -231,7 +240,7 @@ export function SiteCanvas({
     }
   }
 
-  // 5 m ごとの目盛り線（土地の中だけ）
+  // Grid lines every 5 m (inside the land only)
   const grid: React.ReactNode[] = []
   for (let gx = 5; gx < plan.landWidth; gx += 5) {
     grid.push(
@@ -269,7 +278,7 @@ export function SiteCanvas({
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
     >
-      {/* 道路 */}
+      {/* Road */}
       <rect x={0} y={mT + plan.landDepth} width={width} height={ROAD} className="site-road" />
       <text
         x={mL + plan.landWidth / 2}
@@ -291,14 +300,14 @@ export function SiteCanvas({
         />
       ) : null}
 
-      {/* 隣地・周りの建物 */}
+      {/* Neighboring lots and surrounding buildings */}
       {neighborsSvg}
 
-      {/* 土地 */}
+      {/* Land */}
       <rect {...land} className="site-land" />
       {grid}
 
-      {/* 筆界 */}
+      {/* Parcel boundaries */}
       {plan.lotLines.map((lx) => (
         <g key={`lot${lx}`} pointerEvents="none">
           <line
@@ -319,7 +328,8 @@ export function SiteCanvas({
         </g>
       ))}
 
-      {/* 残りの土地（駐車場）への通路と、区画の奥に残る土地 */}
+      {/* The passage to the remaining land (parking lot), and the land left behind the
+          section */}
       {accessSvg ? (
         <>
           <rect {...accessSvg} className="site-access" />
@@ -351,18 +361,18 @@ export function SiteCanvas({
         </text>
       ) : null}
 
-      {/* 路地状部分（区画が奥のとき） */}
+      {/* Flagpole (access strip) part (when the section is at the back) */}
       {flagSvg ? <rect {...flagSvg} className="site-flag" /> : null}
 
-      {/* 区画（ドラッグで移動） */}
+      {/* Section (drag to move) */}
       <rect {...section} className="site-section" onPointerDown={(e) => startDrag('section', e)} />
 
-      {/* 影（指定の季節・時刻） */}
+      {/* Shadows (for the given season and time) */}
       {shadows.map((pts, i) => (
         <polygon key={`sh${i}`} points={pointsToSvg(pts)} className="site-shadow" />
       ))}
 
-      {/* 延焼ライン（この外側が延焼のおそれのある部分） */}
+      {/* Fire spread lines (outside of them is the part at risk of fire spread) */}
       {fireLines.map((r, i) => (
         <rect
           key={`fire${i}`}
@@ -372,7 +382,7 @@ export function SiteCanvas({
         />
       ))}
 
-      {/* 建物（ドラッグで区画の中を移動） */}
+      {/* Building (drag to move inside the section) */}
       <rect
         {...building}
         className="site-building"
@@ -401,7 +411,8 @@ export function SiteCanvas({
         {plan.buildingWidth.toFixed(1)}×{buildingDepth(plan).toFixed(1)}m
       </text>
 
-      {/* 区画の面積は、区画の中で建物の上下のうち広く空いている側に置く（建物に隠れないように） */}
+      {/* The section area label sits inside the section, on whichever side above or below
+          the building has more free space (so that the building does not hide it) */}
       <text
         x={section.x + section.width / 2}
         y={sectionLabelY}
@@ -414,7 +425,7 @@ export function SiteCanvas({
         区画 {sectionTsubo.toFixed(1)}坪
       </text>
 
-      {/* 寸法（間口・奥行） */}
+      {/* Dimensions (frontage, depth) */}
       <text
         x={land.x + land.width / 2}
         y={land.y - PAD * 0.3}
@@ -435,7 +446,7 @@ export function SiteCanvas({
         奥行 {plan.landDepth}m
       </text>
 
-      {/* 方位 */}
+      {/* Compass */}
       <g transform={`translate(${compass.x} ${compass.y}) rotate(${angle})`} pointerEvents="none">
         <circle r={compassR} className="site-compass" />
         <path
@@ -443,7 +454,8 @@ export function SiteCanvas({
           className="site-compass-needle"
         />
       </g>
-      {/* 「北」は方位の左に正立で置く（針が向きを示す） */}
+      {/* "北" (North) sits upright to the left of the compass (the needle shows the
+          direction) */}
       <text
         x={compass.x - compassR - font * 0.3}
         y={compass.y}

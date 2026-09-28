@@ -7,30 +7,30 @@ function issueError(issues: unknown[]): Error {
 }
 
 describe('extractFormError', () => {
-  it('Error でない値は既定のメッセージ・path なし', () => {
+  it('gives the default message and no path for a value that is not an Error', () => {
     expect(extractFormError('boom')).toEqual({ message: '保存できませんでした', path: null })
     expect(extractFormError(undefined)).toEqual({ message: '保存できませんでした', path: null })
   })
 
-  it('issues 配列として読めないプレーンな Error は、日本語ならそのまま使う', () => {
+  it('uses a plain Error that cannot be read as an issues array as is when it is Japanese', () => {
     expect(extractFormError(new Error('ネットワークに問題があります'))).toEqual({
       message: 'ネットワークに問題があります',
       path: null,
     })
   })
 
-  it('issues 配列として読めないプレーンな Error で、英語なら既定のメッセージにする', () => {
+  it('uses the default message for a plain Error that cannot be read as an issues array when it is English', () => {
     expect(extractFormError(new Error('Network error'))).toEqual({
       message: '保存できませんでした',
       path: null,
     })
   })
 
-  it('issues 配列として読めないプレーンな Error で、message が空なら既定のメッセージにする', () => {
+  it('uses the default message for a plain Error that cannot be read as an issues array when message is empty', () => {
     expect(extractFormError(new Error())).toEqual({ message: '保存できませんでした', path: null })
   })
 
-  it('サーバーが明示的に日本語で投げた issue のメッセージはそのまま使う', () => {
+  it('uses the message of an issue the server explicitly threw in Japanese as is', () => {
     const error = issueError([
       { code: 'custom', path: ['url'], message: 'YouTube の URL を入れてください' },
     ])
@@ -40,7 +40,7 @@ describe('extractFormError', () => {
     })
   })
 
-  it('tags too_big（10 個超）は言い換える', () => {
+  it('rephrases tags too_big (more than 10)', () => {
     const error = issueError([{ code: 'too_big', path: ['tags'], message: 'Too big' }])
     expect(extractFormError(error)).toEqual({
       message: 'タグは 1〜30 文字、最大 10 個です',
@@ -48,7 +48,7 @@ describe('extractFormError', () => {
     })
   })
 
-  it('tags too_big（1 個の 30 文字超、path は [tags, index]）も先頭フィールドで言い換える', () => {
+  it('also rephrases tags too_big (1 tag over 30 characters, path is [tags, index]) by the leading field', () => {
     const error = issueError([{ code: 'too_big', path: ['tags', 0], message: 'Too big' }])
     expect(extractFormError(error)).toEqual({
       message: 'タグは 1〜30 文字、最大 10 個です',
@@ -56,7 +56,7 @@ describe('extractFormError', () => {
     })
   })
 
-  it('names（設定画面のタグ一覧）の too_big / too_small は 100 個上限の文言に言い換える', () => {
+  it('rephrases too_big / too_small of names (the tag list on the settings screen) with the 100-item limit wording', () => {
     expect(
       extractFormError(issueError([{ code: 'too_big', path: ['names', 3], message: 'Too big' }])),
     ).toEqual({ message: 'タグは 1〜30 文字、最大 100 個です', path: 'names' })
@@ -67,12 +67,12 @@ describe('extractFormError', () => {
     ).toEqual({ message: 'タグは 1〜30 文字で入力してください', path: 'names' })
   })
 
-  it('tags too_small も同じ文言に言い換える', () => {
+  it('rephrases tags too_small with the same wording', () => {
     const error = issueError([{ code: 'too_small', path: ['tags'], message: 'Too small' }])
     expect(extractFormError(error).message).toBe('タグは 1〜30 文字、最大 10 個です')
   })
 
-  it('title too_big / too_small はそれぞれ別の文言', () => {
+  it('has separate wording for title too_big / too_small', () => {
     expect(
       extractFormError(issueError([{ code: 'too_big', path: ['title'], message: 'Too big' }]))
         .message,
@@ -83,7 +83,7 @@ describe('extractFormError', () => {
     ).toBe('題名は必須です')
   })
 
-  it('url too_big / too_small はそれぞれ別の文言', () => {
+  it('has separate wording for url too_big / too_small', () => {
     expect(
       extractFormError(issueError([{ code: 'too_big', path: ['url'], message: 'Too big' }]))
         .message,
@@ -113,7 +113,7 @@ describe('extractFormError', () => {
     ).toBe('メモが長すぎます')
   })
 
-  it('watchedBy の invalid_type / invalid_value はどちらも同じ文言', () => {
+  it('has the same wording for both invalid_type / invalid_value of watchedBy', () => {
     expect(
       extractFormError(
         issueError([{ code: 'invalid_type', path: ['watchedBy'], message: 'Invalid' }]),
@@ -126,7 +126,7 @@ describe('extractFormError', () => {
     ).toBe('観た人の指定が不正です')
   })
 
-  it('未知のフィールドは既定のメッセージ（path は返す）', () => {
+  it('gives the default message for an unknown field (path is still returned)', () => {
     expect(
       extractFormError(issueError([{ code: 'too_big', path: ['unknown'], message: 'x' }])),
     ).toEqual({
@@ -135,13 +135,13 @@ describe('extractFormError', () => {
     })
   })
 
-  it('既知のフィールドでも未知の code は既定のメッセージ', () => {
+  it('gives the default message for an unknown code even on a known field', () => {
     expect(
       extractFormError(issueError([{ code: 'custom', path: ['title'], message: 'oops' }])),
     ).toEqual({ message: '保存できませんでした', path: 'title' })
   })
 
-  it('path が空配列・無い・数値始まりなら path は null', () => {
+  it('gives a null path when path is an empty array, missing or starts with a number', () => {
     expect(
       extractFormError(issueError([{ code: 'too_big', path: [], message: 'x' }])).path,
     ).toBeNull()
@@ -151,33 +151,33 @@ describe('extractFormError', () => {
     ).toBeNull()
   })
 
-  it('issue の message が文字列でなくても既定のメッセージにフォールバックする', () => {
+  it('falls back to the default message even when the issue message is not a string', () => {
     expect(extractFormError(issueError([{ code: 'too_big', path: ['title'] }])).message).toBe(
       '題名は 300 文字までです',
     )
   })
 
-  it('code が無ければ既知のフィールドでも既定のメッセージ', () => {
+  it('gives the default message even on a known field when there is no code', () => {
     expect(extractFormError(issueError([{ path: ['title'], message: 'x' }])).message).toBe(
       '保存できませんでした',
     )
   })
 
-  it('issues が空配列なら issue 無しとして扱う', () => {
+  it('treats an empty issues array as having no issue', () => {
     expect(extractFormError(issueError([]))).toEqual({
       message: '保存できませんでした',
       path: null,
     })
   })
 
-  it('JSON だが配列でなければ issues 配列としては読めない扱いになる', () => {
+  it('treats JSON that is not an array as unreadable as an issues array', () => {
     const error = new Error(JSON.stringify({ not: 'an array' }))
     expect(extractFormError(error)).toEqual({ message: '保存できませんでした', path: null })
   })
 })
 
 describe('extractErrorMessage', () => {
-  it('extractFormError の message だけを返す', () => {
+  it('returns only the message of extractFormError', () => {
     expect(
       extractErrorMessage(issueError([{ code: 'too_big', path: ['tags'], message: 'x' }])),
     ).toBe('タグは 1〜30 文字、最大 10 個です')

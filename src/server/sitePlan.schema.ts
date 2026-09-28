@@ -3,9 +3,10 @@ import { z } from 'zod'
 import { NEIGHBOR_KINDS, NEIGHBOR_LABEL_MAX, NEIGHBORS_MAX, ROAD_SIDES } from '../lib/sitePlan'
 
 /**
- * 区画シミュレーターの保存値（設定 `sitePlan`）。sitePlan.ts から分離しているのは
- * candidates.schema.ts と同じ理由（createServerFn を素の workers テストから import できない）。
- * 寸法の数値だけを持ち、所在地・地番・座標は持たない（design.md §1）。
+ * The saved value of the site plan simulator (the setting `sitePlan`). Separated from
+ * sitePlan.ts for the same reason as candidates.schema.ts (createServerFn cannot be
+ * imported from a plain workers test).
+ * Holds only dimension numbers, and no location, lot number or coordinates (design.md §1).
  */
 const meters = (max: number) => z.number().min(0).max(max)
 
@@ -37,7 +38,7 @@ export const sitePlanInput = z.object({
   facingOffset: z.number().min(-45).max(45),
   latitude: z.number().min(20).max(46),
   buildingHeight: z.number().min(2).max(15),
-  // 隣地は土地の外（負の座標）にも置く
+  // Neighboring lots are also placed outside the land (negative coordinates)
   neighbors: z
     .array(
       z.object({

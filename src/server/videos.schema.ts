@@ -5,23 +5,24 @@ import { canonicalYouTubeUrl, parseYouTubeId } from '../lib/youtube'
 import { dateField, idField, optionalUrl } from './zod'
 
 /**
- * videos.ts から分離した理由: events.schema.ts と同じ（詳細はそちらのコメント参照）。
- * videos.ts は saveVideo の中で currentActorEmail（`@tanstack/react-start/server` の
- * getRequest を静的 import）を使っており、素の vitest workers テストから videos.ts を
- * import 経由で読み込むと TanStack Start の Vite プラグインが用意する virtual specifier
- * の解決に失敗して落ちる。videoInput 自体は D1 も members も要らない純粋な zod スキーマ
- * なので、ここへ切り出して videos.worker-test.ts はこちらから import する（videos.ts は
- * 再エクスポートするだけで、公開している import パス・挙動は変えない）。
+ * Why this is split from videos.ts: same as events.schema.ts (see the comment there for
+ * details). videos.ts uses currentActorEmail (which statically imports getRequest from
+ * `@tanstack/react-start/server`) inside saveVideo, and loading videos.ts via import from a
+ * plain vitest workers test fails to resolve the virtual specifier that the TanStack Start
+ * Vite plugin provides. videoInput itself is a pure zod schema that needs neither D1 nor
+ * members, so it is extracted here and videos.worker-test.ts imports from here (videos.ts
+ * only re-exports it, so the public import path and behavior do not change).
  */
 export const videoInput = z
   .object({
     id: idField.optional(),
-    // 開いた時点の更新日時。相手が先に保存していたら上書きせず競合を返す（repository/stale.ts）
+    // Update time as of opening. If the other person saved first, return a conflict instead
+    // of overwriting (repository/stale.ts)
     expectedUpdatedAt: z.string().max(40).nullish(),
     url: z.string().trim().max(500),
     title: z.string().trim().min(1, '題名は必須です').max(300),
-    // optionalText はヘルパの形固定（max 2000）のためここでは使えない（G3-R2）。
-    // 同じ null/空文字の意味論を維持したまま上限だけ変える。
+    // optionalText cannot be used here because the helper has a fixed shape (max 2000) (G3-R2).
+    // Keep the same null/empty-string semantics and change only the upper limit.
     channel: z
       .string()
       .trim()
@@ -30,7 +31,8 @@ export const videoInput = z
       .nullable(),
     thumbnailUrl: optionalUrl,
     watchedOn: dateField.nullable(),
-    // 観た人の入力欄は廃止（2026-09-19）。列は残し常に既定値
+    // The "watched by" input field was removed (2026-09-19). The column stays and always
+    // holds the default value
     watchedBy: z.enum(ATTENDEES).default('both'),
     tags: z.array(z.string().trim().min(1).max(30)).max(10),
     takeaways: z

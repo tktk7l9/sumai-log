@@ -1,39 +1,44 @@
 /**
- * サイトのファビコン探索・判定の純粋関数。design.md 同様、外部 HTML パーサは入れない
- * 方針なので、`<link>` タグの抽出も自前の正規表現（属性値の中に `>` があるケースの
- * 既知の限界は src/lib/news/text.ts の stripTagsOnce と同じ）で行う。
+ * Pure functions for finding and detecting a site's favicon. As in design.md, the policy is
+ * not to add an external HTML parser, so `<link>` tags are also extracted with our own regex
+ * (the known limit when an attribute value contains `>` is the same as stripTagsOnce in
+ * src/lib/news/text.ts).
  *
- * 実際に fetch するのは src/server/vendorImages.ts。ここは
- * 「HTML 文字列 → 候補 URL の配列」と「バイト列 → 画像形式の判定」だけを担う。
+ * The actual fetch happens in src/server/vendorImages.ts. This file only handles
+ * "HTML string -> array of candidate URLs" and "bytes -> image format detection".
  */
 
 import { decodeEntities } from './news/text'
 
-/** pickFaviconCandidates に渡す HTML の上限（文字数）。これを超えたら候補抽出を諦め、
- * `${origin}/favicon.ico` だけを返す（favicon 探索のために巨大な HTML を舐めない）。 */
+/** Upper limit (in characters) of the HTML passed to pickFaviconCandidates. Beyond this, give up
+ * extracting candidates and return only `${origin}/favicon.ico` (do not scan huge HTML just to
+ * find a favicon). */
 export const MAX_HTML_LENGTH = 2 * 1024 * 1024
 
-// SVG は意図的に扱わない: 自分の Origin（/api/photos/<key>）から image/svg+xml として
-// 配信すると、業者サイトが仕込んだ <script> 入りの SVG がそのまま実行される
-// stored XSS の経路になる（サニタイズ用の外部ライブラリは入れない方針のため、
-// 「受け付けない」以外に安全な対処が無い）。sniffFaviconType は SVG のバイト列を
-// 判定せず null を返し、pickFaviconCandidates も .svg の href を候補にしない。
+// SVG is deliberately not handled: serving it from our own Origin (/api/photos/<key>) as
+// image/svg+xml would run an SVG containing a <script> planted by a vendor site as is,
+// which is a stored XSS path (the policy is not to add an external sanitising library, so
+// there is no safe handling other than not accepting it). sniffFaviconType does not detect
+// SVG bytes and returns null, and pickFaviconCandidates does not make a .svg href a candidate.
 export type FaviconExt = 'png' | 'ico' | 'jpg' | 'webp'
 export type FaviconMimeType = 'image/png' | 'image/x-icon' | 'image/jpeg' | 'image/webp'
 
 const LINK_TAG = /<link\b[^>]*>/gi
 
-/** `name="value"` / `name='value'` / `name=value` のいずれの書式でも読む。エンティティは解決する。 */
+/** Reads any of `name="value"` / `name='value'` / `name=value`. Entities are resolved. */
 function getAttr(tag: string, name: string): string | null {
   const re = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`, 'i')
   const m = re.exec(tag)
   if (!m) return null
-  // 3 つの代替（"..." / '...' / 無クォート）のどれかは必ず一致しているので、
-  // すべて undefined になることは無い（?? '' の保険は要らない）。
+  // One of the 3 alternatives ("..." / '...' / unquoted) always matches, so they are
+  // never all undefined (no `?? ''` fallback is needed).
   return decodeEntities((m[1] ?? m[2] ?? m[3]) as string)
 }
 
-/** `sizes="32x32"` 等から最大の一辺（px）を読む。`any`（SVG 等）や指定無しは呼び出し側で扱う */
+/**
+ * Reads the largest side (px) from `sizes="32x32"` etc. `any` (SVG etc.) and no value are
+ * handled by the caller
+ */
 function maxDeclaredSize(sizesRaw: string | null): number {
   if (!sizesRaw) return 0
   const lower = sizesRaw.toLowerCase()
@@ -59,23 +64,27 @@ function dedupe(urls: string[]): string[] {
 
 type Candidate = { href: string; kind: 'icon' | 'apple-touch'; size: number }
 
-/** 宣言された候補（favicon.ico の保険を除く）を優先度順に残す最大件数。広告テンプレート等が
- * `<link rel="icon">` を大量に並べても、1 業者の保存に対する外向き fetch を有限に抑える。 */
+/** Maximum number of declared candidates (excluding the favicon.ico fallback) kept in priority
+ * order. Even when an ad template or the like lists many `<link rel="icon">`, this keeps the
+ * outbound fetches for saving 1 vendor finite. */
 const MAX_DECLARED_CANDIDATES = 5
 
 /**
- * `pageUrl` の HTML から favicon の候補 URL を、優先度の高い順に並べて返す。
- * 並び: rel="icon"/"shortcut icon" を宣言サイズの大きい順（sizes="any" は最優先）
- * → rel="apple-touch-icon"（-precomposed 含む）を同様に大きい順
- * → 末尾に必ず `${origin}/favicon.ico` を足す（宣言が無い/読めないサイト向けの保険）。
- * `data:` URL・`.svg` の href は候補にしない（SVG は画像として受け付けない。上の
- * FaviconExt/FaviconMimeType のコメント参照。無駄な fetch もしない）。同じ URL が
- * 重複したら最初の出現だけ残す。宣言が全部 .svg だった場合も favicon.ico の保険は残る。
- * 宣言された候補は優先度順に上位 `MAX_DECLARED_CANDIDATES`（5）件までに切り、
- * favicon.ico の保険を足して最大 6 件を返す（呼び出し側の外向き fetch 数の上限のため）。
+ * Returns the favicon candidate URLs from the HTML of `pageUrl`, highest priority first.
+ * Order: rel="icon"/"shortcut icon" by declared size descending (sizes="any" is top priority)
+ * -> rel="apple-touch-icon" (including -precomposed) by size descending in the same way
+ * -> always append `${origin}/favicon.ico` at the end (a fallback for sites whose declaration
+ * is missing or unreadable).
+ * `data:` URLs and `.svg` hrefs are not candidates (SVG is not accepted as an image. See the
+ * comment on FaviconExt/FaviconMimeType above. No wasted fetch either). When the same URL is
+ * duplicated, only the first occurrence is kept. The favicon.ico fallback remains even when
+ * every declaration was .svg.
+ * Declared candidates are cut to the top `MAX_DECLARED_CANDIDATES` (5) in priority order, and
+ * with the favicon.ico fallback added at most 6 are returned (to cap the caller's outbound
+ * fetches).
  *
- * `pageUrl` が URL として読めない、または HTML が MAX_HTML_LENGTH を超える場合は
- * 空配列を返す（呼び出し側は候補が尽きたのと同じ扱いになる）。
+ * When `pageUrl` cannot be read as a URL, or the HTML exceeds MAX_HTML_LENGTH, an empty
+ * array is returned (the caller treats it the same as running out of candidates).
  */
 export function pickFaviconCandidates(html: string, pageUrl: string): string[] {
   let origin: string
@@ -107,7 +116,7 @@ export function pickFaviconCandidates(html: string, pageUrl: string): string[] {
     } catch {
       continue
     }
-    if (/\.svg(?:[?#]|$)/i.test(resolved)) continue // SVG は候補にしない（上のコメント参照）
+    if (/\.svg(?:[?#]|$)/i.test(resolved)) continue // SVG is not a candidate (see the comment above)
 
     const size = maxDeclaredSize(getAttr(tag, 'sizes'))
     candidates.push({ href: resolved, kind: isIcon ? 'icon' : 'apple-touch', size })
@@ -129,9 +138,10 @@ function asciiAt(bytes: Uint8Array, from: number, to: number): string {
 }
 
 /**
- * マジックバイトで画像形式を判定する。SVG は意図的に判定しない（上の FaviconExt/
- * FaviconMimeType のコメント参照。stored XSS 対策のため一律 null = 「画像として使わない」）。
- * どれにも一致しなければ null（favicon として使わない）。
+ * Detects the image format from the magic bytes. SVG is deliberately not detected (see the
+ * comment on FaviconExt/FaviconMimeType above. As a stored XSS countermeasure it is always
+ * null = not used as an image).
+ * Returns null when nothing matches (not used as a favicon).
  */
 export function sniffFaviconType(bytes: Uint8Array): FaviconMimeType | null {
   if (bytes.length >= 8 && PNG_MAGIC.every((b, i) => bytes[i] === b)) return 'image/png'

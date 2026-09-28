@@ -1,7 +1,8 @@
 import type { PlaceWithLinks } from '../server/repository'
 
 /**
- * 地図に置くピンの最小情報。`PlaceWithLinks` から座標が無い場所を落として作る。
+ * Minimal data for a pin on the map. Built from `PlaceWithLinks` by dropping places without
+ * coordinates.
  */
 export type MapMarker = {
   id: string
@@ -12,7 +13,7 @@ export type MapMarker = {
   subtitle?: string
 }
 
-/** 座標のある場所だけをマーカーにする。subtitle は業者名→物件名の順で拾う */
+/** Turns only places with coordinates into markers. subtitle: vendor name, then property name */
 export function toMarkers(places: readonly PlaceWithLinks[]): MapMarker[] {
   const out: MapMarker[] = []
   for (const p of places) {
@@ -30,7 +31,7 @@ export function toMarkers(places: readonly PlaceWithLinks[]): MapMarker[] {
   return out
 }
 
-/** 全マーカーを含む矩形（南西・北東）。0 件は null、1 件は点になる */
+/** Rectangle containing all markers (south-west, north-east). 0 markers: null, 1 marker: a point */
 export function boundsOf(
   markers: readonly MapMarker[],
 ): [[number, number], [number, number]] | null {

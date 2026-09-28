@@ -17,7 +17,7 @@ type VendorInput = Omit<NewVendor, 'id' | 'createdBy' | 'createdAt' | 'updatedAt
   expectedUpdatedAt?: string | null
 }
 
-/** id が無ければ作成、あれば更新。作成者は最初の保存時だけ記録する */
+/** Creates when there is no id, updates when there is. The creator is recorded only on the first save */
 export async function upsertVendor(
   db: Db,
   input: VendorInput,
@@ -42,7 +42,7 @@ export async function upsertVendor(
   return id
 }
 
-/** 業者を消す。場所・予定・見学・動画の vendorId は FK の SET NULL で外れる。コメントは消す */
+/** Deletes a vendor. FK SET NULL detaches vendorId on places/events/visits/videos. Comments are deleted */
 export async function deleteVendorCascade(db: Db, id: string): Promise<void> {
   await db.delete(comments).where(and(eq(comments.targetType, 'vendor'), eq(comments.targetId, id)))
   await db.delete(vendors).where(eq(vendors.id, id))
@@ -58,9 +58,10 @@ export async function getVendorWebsiteUrl(db: Db, id: string): Promise<string | 
 }
 
 /**
- * 業者が実在するか。R2 へ書き込む・消す前に呼ぶ（存在しない id に対して write/delete すると
- * 孤児オブジェクトが残る・0 行更新で気づけないため）。`api.vendor-photos.$vendorId.tsx` の
- * アップロード経路と同じ判定をここに切り出し、URL 取り込み・削除でも使う。
+ * Whether the vendor really exists. Call it before writing to or deleting from R2 (because
+ * a write/delete against a non-existent id leaves orphan objects, and a 0-row update goes
+ * unnoticed). The same check as the upload path of `api.vendor-photos.$vendorId.tsx` is
+ * extracted here and also used for URL import and deletion.
  */
 export async function vendorExists(db: Db, id: string): Promise<boolean> {
   const [row] = await db.select({ id: vendors.id }).from(vendors).where(eq(vendors.id, id)).limit(1)
@@ -68,14 +69,15 @@ export async function vendorExists(db: Db, id: string): Promise<boolean> {
 }
 
 /**
- * favicon_key / favicon_source を vendors.updated_at を動かさずに差し替える。markNewsFetched
- * （repository/news.ts）と同じ理由: 自動取得のたびにホームの「最近の更新」フィードへ
- * 業者が浮上してしまうのを避ける。戻り値は差し替え前の favicon_key（無ければ null）。
- * 呼び出し側はこれを使って古い R2 オブジェクトを消せる。
+ * Replaces favicon_key / favicon_source without touching vendors.updated_at. Same reason as
+ * markNewsFetched (repository/news.ts): avoid the vendor surfacing in the home
+ * "最近の更新" (Recent updates) feed on every automatic fetch. The return value is the
+ * favicon_key before the replacement (null if none). The caller can use it to delete the
+ * old R2 object.
  *
- * `source` は呼び出し側が明示する: 自動取得（fetchFaviconForVendor）は 'auto'、業者フォームの
- * 手動アップロード（uploadVendorFaviconCore）は 'manual'、削除（deleteVendorFaviconObjects）は
- * key と一緒に null を渡して両方クリアする。
+ * `source` is stated explicitly by the caller: automatic fetch (fetchFaviconForVendor) is
+ * 'auto', manual upload from the vendor form (uploadVendorFaviconCore) is 'manual', and
+ * deletion (deleteVendorFaviconObjects) passes null together with key to clear both.
  */
 export async function setVendorFaviconKey(
   db: Db,
@@ -93,9 +95,9 @@ export async function setVendorFaviconKey(
 }
 
 /**
- * favicon_source の現在値。saveVendor（candidates.ts）のインライン取得ガード用:
- * 手動アップロード後は websiteUrl が変わっても自動取得で上書きしない
- * （非 force の refreshAllVendorFavicons と同じ方針）。
+ * The current value of favicon_source. For the inline fetch guard of saveVendor
+ * (candidates.ts): after a manual upload, automatic fetch does not overwrite it even if
+ * websiteUrl changes (same policy as the non-force refreshAllVendorFavicons).
  */
 export async function getVendorFaviconSource(db: Db, id: string): Promise<FaviconSource | null> {
   const [row] = await db
@@ -106,7 +108,7 @@ export async function getVendorFaviconSource(db: Db, id: string): Promise<Favico
   return row?.faviconSource ?? null
 }
 
-/** representative_photo_key 版。setVendorFaviconKey と同じ方針（updated_at は動かさない） */
+/** The representative_photo_key version. Same policy as setVendorFaviconKey (updated_at is not touched) */
 export async function setVendorRepresentativePhotoKey(
   db: Db,
   id: string,
@@ -122,16 +124,19 @@ export async function setVendorRepresentativePhotoKey(
 }
 
 /**
- * 設定画面「候補のサイトアイコン」用。website_url がある業者のみ（force 判定は呼び出し側）。
- * `faviconSource` は refreshAllVendorFavicons が非 force のとき 'manual' の業者を除外するために
- * 使う。`newsFetchError` はお知らせ取得と同じ業者・同じ拒否理由（Cloudflare の IP レンジを
- * 一律拒否するサーバー）でファビコンの自動取得も失敗していることが多いため、設定画面の
- * カードで `describeFetchError`（src/lib/news/errors.ts）を使い回して同じ文言を出すのに使う
- * （ファビコン取得自体は成否だけを返し、HTTP ステータスつきの理由を保存する列を別途
- * 持っていないため、業者のお知らせの取得結果を手がかりにする）。ただし news_url と
- * website_url が別ホストのこともあるため `newsUrl` も返す。呼び出し側（settings.tsx）は
- * `sameHost(newsUrl, websiteUrl)`（src/lib/news/url.ts）が true のときだけこのヒントを
- * 見せる（別ホストなら推測に過ぎないという PR #12 レビュー指摘への対応）。
+ * For "候補のサイトアイコン" (Candidate site icons) on the settings screen. Only vendors
+ * that have website_url (the force decision is the caller's). `faviconSource` is used by
+ * refreshAllVendorFavicons to exclude 'manual' vendors when not force. `newsFetchError`:
+ * the automatic favicon fetch often fails too for the same vendor and the same rejection
+ * reason as the vendor news fetch (a server that rejects the Cloudflare IP ranges across
+ * the board), so the card on the settings screen uses it to show the same wording by
+ * reusing `describeFetchError` (src/lib/news/errors.ts) (the favicon fetch itself returns
+ * only success or failure and has no separate column that stores a reason with the HTTP
+ * status, so the result of the vendor news fetch is used as a clue). However, news_url and
+ * website_url can be on different hosts, so `newsUrl` is returned as well. The caller
+ * (settings.tsx) shows this hint only when `sameHost(newsUrl, websiteUrl)`
+ * (src/lib/news/url.ts) is true (a response to the PR #12 review comment that on a
+ * different host it is only a guess).
  */
 export async function listVendorsWithWebsite(
   db: Db,
@@ -177,7 +182,7 @@ export async function upsertProperty(
   return id
 }
 
-/** 物件を消す。コメントは消す */
+/** Deletes a property. Comments are deleted */
 export async function deletePropertyCascade(db: Db, id: string): Promise<void> {
   await db
     .delete(comments)

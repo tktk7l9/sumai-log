@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { inboundToNews, isMailNews, mailUrl } from './toNews'
 
 describe('mailUrl / isMailNews', () => {
-  it('mail: 接頭辞で見分ける', () => {
+  it('tells them apart by the mail: prefix', () => {
     expect(mailUrl('<a@b>')).toBe('mail:<a@b>')
     expect(isMailNews('mail:<a@b>')).toBe(true)
     expect(isMailNews('https://example.com/')).toBe(false)
@@ -11,7 +11,7 @@ describe('mailUrl / isMailNews', () => {
 })
 
 describe('inboundToNews', () => {
-  it('件名がタイトル・本文先頭 300 字が要約・日程は件名+本文から判定', () => {
+  it('subject is the title, first 300 chars of the body are the summary, event dates come from subject + body', () => {
     const n = inboundToNews(
       {
         messageId: '<m1@example.com>',
@@ -31,7 +31,7 @@ describe('inboundToNews', () => {
     expect(n.eventStart).toBe('2026-09-27')
     expect(n.eventEnd).toBe('2026-09-28')
   })
-  it('日付が無ければ受信日。件名が空なら「（件名なし）」。本文が空なら要約 null。日程が無ければ null', () => {
+  it('no date -> received date. Empty subject -> "（件名なし）" (No subject). Empty body -> summary null. No event dates -> null', () => {
     const n = inboundToNews(
       { messageId: 'hash:x', subject: '', text: '', sentOn: null },
       'v',

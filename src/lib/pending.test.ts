@@ -18,7 +18,7 @@ const ev = (
 
 describe('pendingVisitEvents', () => {
   const now = '2030-01-10T12:00:00+09:00'
-  it('終わった見学/内覧で記録が無いものを新しい順に返す', () => {
+  it('returns finished visits / viewings without a record, newest first', () => {
     const events = [
       ev('old', '2030-01-05'),
       ev('done', '2030-01-06'),
@@ -33,7 +33,7 @@ describe('pendingVisitEvents', () => {
       'old',
     ])
   })
-  it('空なら空', () => {
+  it('empty in, empty out', () => {
     expect(pendingVisitEvents([], new Set(), now)).toEqual([])
   })
 })
