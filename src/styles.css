@@ -244,6 +244,18 @@ a:focus-visible {
 }
 
 /*
+ * Saturday in blue, Sunday / holidays in red, as on Japanese calendars (SHIG 71). Mantine's
+ * weekendDays paints both weekend days red; calendar.tsx puts `is-saturday` on Saturdays that
+ * are not holidays. blue-7 / blue-3 keep 4.5:1 on the light / dark surfaces.
+ */
+.mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
+  color: var(--mantine-color-blue-7);
+}
+[data-mantine-color-scheme='dark'] .mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
+  color: var(--mantine-color-blue-3);
+}
+
+/*
  * `NewsAgenda` (vendor news. Shared by both the "お知らせ" (vendor news) block on the home
  * page and `/news`).
  * Our own list with newer days on top (replaced AgendaView on 2026-09-24). With only the

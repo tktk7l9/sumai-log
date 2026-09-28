@@ -1,14 +1,15 @@
-import { ActionIcon, Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { NextActionsChecklist } from '../components/visits/NextActionsChecklist'
 import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PhotoGrid } from '../components/visits/PhotoGrid'
@@ -58,26 +59,29 @@ function Page() {
   const reorder = useServerFn(reorderPhotos)
   const [editing, setEditing] = useState(false)
 
-  async function handleDeleteVisit() {
-    if (!window.confirm('見学記録と写真を削除します')) return
-    try {
-      await removeVisit({ data: { id: visit.id } })
-      notifications.show({ message: '見学記録を削除しました' })
-      navigate({ to: '/records', search: { tab: 'visits' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  const pendingDeletes = usePendingDeletes()
+
+  function handleDeleteVisit() {
+    deleteWithUndo({
+      id: visit.id,
+      message: '見学記録を削除しました',
+      commit: async () => {
+        await removeVisit({ data: { id: visit.id } })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/records', search: { tab: 'visits' } })
   }
 
-  async function handleDeletePhoto(photo: Photo) {
-    if (!window.confirm('この写真を削除します')) return
-    try {
-      await removePhoto({ data: { id: photo.id } })
-      await router.invalidate()
-      notifications.show({ message: '写真を削除しました' })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDeletePhoto(photo: Photo) {
+    deleteWithUndo({
+      id: photo.id,
+      message: '写真を削除しました',
+      commit: async () => {
+        await removePhoto({ data: { id: photo.id } })
+        await router.invalidate()
+      },
+    })
   }
 
   async function handleReorderPhotos(photoIds: string[]) {
@@ -100,12 +104,7 @@ function Page() {
       title={formatDateWithWeekday(visit.visitedOn)}
       actions={
         <Group gap="xs">
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDeleteVisit}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -165,7 +164,11 @@ function Page() {
       <Stack gap="xs">
         <Title order={2}>写真</Title>
         <PhotoUploader visitId={visit.id} onUploaded={() => router.invalidate()} />
-        <PhotoGrid photos={photos} onDelete={handleDeletePhoto} onReorder={handleReorderPhotos} />
+        <PhotoGrid
+          photos={photos.filter((p) => !pendingDeletes.has(p.id))}
+          onDelete={handleDeletePhoto}
+          onReorder={handleReorderPhotos}
+        />
       </Stack>
 
       <CommentThread
@@ -175,6 +178,8 @@ function Page() {
         me={me}
         members={members}
       />
+
+      <DeleteSection label="この見学記録を削除" onDelete={handleDeleteVisit} />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="見学記録を編集">
         <VisitForm visit={visit} options={options} onSaved={() => setEditing(false)} />

@@ -17,6 +17,7 @@ import {
 } from '../../lib/research'
 import { saveVendorResearch } from '../../server/research'
 import { draftKey } from '../../lib/drafts'
+import { deleteWithUndo, researchDeleteId } from '../undoableDelete'
 import { DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 
@@ -77,20 +78,17 @@ export function ResearchForm({
     }
   }
 
-  async function remove() {
-    if (!window.confirm('調査メモを削除します。業者の他の情報は残ります。')) return
-    setSaving(true)
-    try {
-      await save({ data: { id: vendorId, research: null } })
-      await router.invalidate()
-      notifications.show({ message: '調査メモを削除しました' })
-      draft.clear()
-      onSaved()
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    } finally {
-      setSaving(false)
-    }
+  function remove() {
+    draft.clear()
+    onSaved()
+    deleteWithUndo({
+      id: researchDeleteId(vendorId),
+      message: '調査メモを削除しました',
+      commit: async () => {
+        await save({ data: { id: vendorId, research: null } })
+        await router.invalidate()
+      },
+    })
   }
 
   return (

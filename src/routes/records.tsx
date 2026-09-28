@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { EmptyState } from '../components/EmptyState'
 import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
+import { usePendingDeletes } from '../components/undoableDelete'
 import { PageShell } from '../components/PageShell'
 import { VideoCard } from '../components/videos/VideoCard'
 import { VideoForm } from '../components/videos/VideoForm'
@@ -53,12 +54,16 @@ export const Route = createFileRoute('/records')({
 
 function Page() {
   const {
-    visits,
-    videos,
+    visits: loadedVisits,
+    videos: loadedVideos,
     options,
     videoOptions,
     fromEventRow: loadedFromEventRow,
   } = Route.useLoaderData()
+  // Rows whose deletion can still be undone are hidden at once
+  const pendingDeletes = usePendingDeletes()
+  const visits = loadedVisits.filter((v) => !pendingDeletes.has(v.id))
+  const videos = loadedVideos.filter((v) => !pendingDeletes.has(v.id))
   const { tab: tabParam, fromEvent } = Route.useSearch()
   // When arriving from an event through "記録を書く", always open the visits tab even without
   // the tab parameter

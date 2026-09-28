@@ -6,18 +6,29 @@
 
 import { SOURCE_GENRES, type SourceGenre } from '../content/sourceGenres'
 
+/** The group for a genre id that is not in SOURCE_GENRES (genre is plain text in the DB and
+ * can be set through seed / SQL). Shown last so that such a source is never silently hidden */
+export const OTHER_GENRE = { id: 'other', label: 'その他' } as const
+
+export type SourceGroupGenre = SourceGenre | typeof OTHER_GENRE
+
 /** Groups by genre. Keeps the order of SOURCE_GENRES and leaves out genres with 0 items.
+ * Unknown genre ids go into OTHER_GENRE at the end (SHIG 38: what the user entered is theirs).
  * Within each genre, sorts by ascending sortOrder (by name in dictionary order when equal). */
 export function groupSourcesByGenre<T extends { genre: string; sortOrder: number; name: string }>(
   sources: readonly T[],
-): { genre: SourceGenre; items: T[] }[] {
-  return SOURCE_GENRES.map((genre) => ({
+): { genre: SourceGroupGenre; items: T[] }[] {
+  const known = new Set<string>(SOURCE_GENRES.map((g) => g.id))
+  const byOrder = (a: T, b: T) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')
+  const groups: { genre: SourceGroupGenre; items: T[] }[] = SOURCE_GENRES.map((genre) => ({
     genre,
-    items: sources
-      .filter((s) => s.genre === genre.id)
-      .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'ja')),
-  })).filter((g) => g.items.length > 0)
+    items: sources.filter((s) => s.genre === genre.id).sort(byOrder),
+  }))
+  groups.push({
+    genre: OTHER_GENRE,
+    items: sources.filter((s) => !known.has(s.genre)).sort(byOrder),
+  })
+  return groups.filter((g) => g.items.length > 0)
 }
 
 /** The identifier that can be taken from a channel URL. Holds only one of the two (never

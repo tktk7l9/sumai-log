@@ -1,13 +1,13 @@
-import { ActionIcon, Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate, notFound } from '@tanstack/react-router'
+import { Anchor, Badge, Card, Group, Stack, Text } from '@mantine/core'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { PlaceForm } from '../components/places/PlaceForm'
@@ -38,18 +38,22 @@ function Page() {
   const { place, vendor, property, visited, targets, comments, me, members, mapConfig } =
     Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
   const remove = useServerFn(deletePlace)
   const [editing, setEditing] = useState(false)
 
-  async function handleDelete() {
-    if (!window.confirm(`「${place.name}」を削除します。`)) return
-    const result = await remove({ data: { id: place.id } })
-    if (!result.ok) {
-      notifications.show({ message: '見学記録があるため消せません', color: 'red' })
-      return
-    }
-    notifications.show({ message: '場所を削除しました' })
-    navigate({ to: '/map' })
+  function handleDelete() {
+    deleteWithUndo({
+      id: place.id,
+      message: `「${place.name}」を削除しました`,
+      failureMessage: '見学記録があるため消せません',
+      commit: async () => {
+        const result = await remove({ data: { id: place.id } })
+        await router.invalidate()
+        return result.ok
+      },
+    })
+    navigate({ to: '/map', search: { view: 'list' } })
   }
 
   return (
@@ -64,12 +68,7 @@ function Page() {
       actions={
         <Group gap="xs">
           <Badge variant="default">{PLACE_KIND_LABEL[place.kind]}</Badge>
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDelete}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -109,6 +108,14 @@ function Page() {
         comments={comments}
         me={me}
         members={members}
+      />
+
+      <DeleteSection
+        label="この場所を削除"
+        onDelete={handleDelete}
+        blockedReason={
+          visited ? '見学記録がある場所は削除できません。先に見学記録を削除してください。' : null
+        }
       />
 
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="場所を編集">

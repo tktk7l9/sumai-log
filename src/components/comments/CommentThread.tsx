@@ -11,6 +11,7 @@ import { formatJst } from '../../lib/jst'
 import type { Member } from '../../lib/members'
 import { addComment, deleteComment } from '../../server/comments'
 import { MemberChip, authorBandColor } from '../MemberChip'
+import { deleteWithUndo, usePendingDeletes } from '../undoableDelete'
 
 export function CommentThread({
   targetType,
@@ -63,26 +64,31 @@ export function CommentThread({
     }
   }
 
-  async function handleDelete(c: Comment) {
-    if (!window.confirm('このコメントを削除します。')) return
-    try {
-      const { ok } = await remove({ data: { id: c.id } })
-      if (!ok) notifications.show({ message: '自分のコメントだけ削除できます', color: 'orange' })
-      await router.invalidate()
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  const pendingDeletes = usePendingDeletes()
+  const visible = comments.filter((c) => !pendingDeletes.has(c.id))
+
+  function handleDelete(c: Comment) {
+    deleteWithUndo({
+      id: c.id,
+      message: 'コメントを削除しました',
+      failureMessage: '自分のコメントだけ削除できます',
+      commit: async () => {
+        const { ok } = await remove({ data: { id: c.id } })
+        await router.invalidate()
+        return ok
+      },
+    })
   }
 
   return (
     <Stack gap="sm">
       <Title order={2}>コメント</Title>
-      {comments.length === 0 ? (
+      {visible.length === 0 ? (
         <Text size="sm" c="dimmed">
           まだコメントはありません。
         </Text>
       ) : (
-        comments.map((c) => (
+        visible.map((c) => (
           <Card
             key={c.id}
             withBorder

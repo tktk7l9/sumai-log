@@ -1,24 +1,14 @@
-import {
-  ActionIcon,
-  Anchor,
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  Group,
-  Stack,
-  Text,
-  Title,
-} from '@mantine/core'
-import { notifications } from '@mantine/notifications'
-import { Link, createFileRoute, useNavigate, notFound } from '@tanstack/react-router'
+import { Anchor, Avatar, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Link, createFileRoute, useNavigate, useRouter, notFound } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { ExternalLink, MapPin, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ExternalLink, MapPin, NotebookPen, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 import { CommentThread } from '../components/comments/CommentThread'
 import { RouteNotFoundState } from '../components/ErrorStates'
+import { DeleteSection, EditButton } from '../components/DetailActions'
 import { FormDrawer } from '../components/FormDrawer'
+import { deleteWithUndo, researchDeleteId, usePendingDeletes } from '../components/undoableDelete'
 import { BackButton, PageShell } from '../components/PageShell'
 import { Row } from '../components/candidates/DetailRow'
 import { StatusBadge } from '../components/candidates/StatusBadge'
@@ -81,20 +71,25 @@ function Page() {
   const { vendor, places, coversHome, homeAreas, targets, comments, me, members, buildPlan } =
     Route.useLoaderData()
   const navigate = useNavigate()
+  const router = useRouter()
   const remove = useServerFn(deleteVendor)
   const [editing, setEditing] = useState(false)
   const [addingPlace, setAddingPlace] = useState(false)
   const [editingResearch, setEditingResearch] = useState(false)
+  const pendingDeletes = usePendingDeletes()
+  // Hidden at once while its deletion can still be undone
+  const research = pendingDeletes.has(researchDeleteId(vendor.id)) ? null : vendor.research
 
-  async function handleDelete() {
-    if (!window.confirm(`「${vendor.name}」を削除します。場所・予定・記録は残ります。`)) return
-    try {
-      await remove({ data: { id: vendor.id } })
-      notifications.show({ message: '業者を削除しました' })
-      navigate({ to: '/candidates', search: { tab: 'vendors' } })
-    } catch {
-      notifications.show({ message: '削除できませんでした', color: 'red' })
-    }
+  function handleDelete() {
+    deleteWithUndo({
+      id: vendor.id,
+      message: `「${vendor.name}」を削除しました`,
+      commit: async () => {
+        await remove({ data: { id: vendor.id } })
+        await router.invalidate()
+      },
+    })
+    navigate({ to: '/candidates', search: { tab: 'vendors' } })
   }
 
   return (
@@ -129,12 +124,7 @@ function Page() {
             </Badge>
           ) : null}
           <VendorLinks websiteUrl={vendor.websiteUrl} socialUrls={vendor.socialUrls} size="md" />
-          <ActionIcon variant="default" aria-label="編集" onClick={() => setEditing(true)}>
-            <Pencil size={16} />
-          </ActionIcon>
-          <ActionIcon variant="default" color="red" aria-label="削除" onClick={handleDelete}>
-            <Trash2 size={16} />
-          </ActionIcon>
+          <EditButton onClick={() => setEditing(true)} />
         </Group>
       }
     >
@@ -245,11 +235,11 @@ function Page() {
             leftSection={<NotebookPen size={14} aria-hidden />}
             onClick={() => setEditingResearch(true)}
           >
-            {vendor.research ? '編集' : '書く'}
+            {research ? '編集' : '書く'}
           </Button>
         </Group>
-        {vendor.research ? (
-          <ResearchSection research={vendor.research} />
+        {research ? (
+          <ResearchSection research={research} />
         ) : (
           <Text size="sm" c="dimmed">
             まだ調べたことを書いていません。特徴・性能・価格・保証・平屋の実績などをまとめると、比較表に並びます。
@@ -349,6 +339,8 @@ function Page() {
         members={members}
       />
 
+      <DeleteSection label="この業者を削除" onDelete={handleDelete} />
+
       <FormDrawer opened={editing} onClose={() => setEditing(false)} title="業者を編集">
         <VendorForm vendor={vendor} homeAreas={homeAreas} onSaved={() => setEditing(false)} />
       </FormDrawer>
@@ -360,7 +352,7 @@ function Page() {
         {editingResearch ? (
           <ResearchForm
             vendorId={vendor.id}
-            research={vendor.research ?? null}
+            research={research ?? null}
             onSaved={() => setEditingResearch(false)}
           />
         ) : null}
