@@ -149,6 +149,7 @@ function Page() {
         onSelect={setSheetId}
         apiKey={mapConfig.apiKey}
         mapId={mapConfig.mapId}
+        onShowList={() => setView('list')}
       />
 
       <Stack gap={6} style={{ position: 'absolute', top: 8, left: 8, right: 56, zIndex: 1000 }}>
