@@ -213,9 +213,27 @@ npm run cf-typegen   # when bindings or vars were added
 - When a comment must name a UI label, quote the Japanese label and add an English gloss.
 - Commit messages and PR descriptions follow the existing convention of this repository.
 
+## UI tests
+
+- `src/**/*.ui.test.tsx` run on jsdom with Testing Library (`npm run test:ui`,
+  `vitest.ui.config.ts`, with its own coverage gate over `src/components` and `src/routes`).
+  Assert what a person sees and does (roles, labels, text, the URL), not snapshots
+- Routes are rendered with the real route tree in a memory history (`renderRoute` in
+  `test/ui/render.tsx`). `test/ui/setup.ts` turns every `createServerFn` into a `vi.fn()`, so a
+  test stubs the server functions its loader and forms call (`stub` in `test/ui/fixtures.ts`)
+  and nothing touches D1/R2. The root route is swapped for `test/ui/root.tsx` (same layout,
+  without the `<html>` shell)
+- Fixtures are fictional (rule 1): `test/ui/fixtures.ts`. Detail routes need UUID-shaped ids
+  (`uid(n)`)
+- Not run in jsdom, excluded from the gate: `PlacesMap.tsx` (Google Maps), `SiteView3D.tsx`
+  (WebGL) and `__root.tsx` (document shell). Pages that use the first two are tested with the
+  stand-ins `test/ui/mapStub.tsx` and `test/ui/site3dStub.tsx`
+- A delete waiting for its undo window is sent at once with `flushPendingDeletes()` (the same
+  `pagehide` path the app uses when the tab closes)
+
 ## Completion criteria
 
-`npm run format:check` `typecheck` `test:coverage` `test:server` `build` `check:pii` are all green.
+`npm run format:check` `typecheck` `test:coverage` `test:server` `test:ui` `build` `check:pii` are all green.
 When authentication was touched, confirm 403 on the rejecting side (no JWT / invalid signature / outside the allowlist / the dev path in production).
 
 ## References
