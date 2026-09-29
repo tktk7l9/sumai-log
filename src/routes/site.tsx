@@ -27,7 +27,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useRef, useState } from 'react'
 
 import { PageShell } from '../components/PageShell'
 import { SiteCanvas } from '../components/site/SiteCanvas'
@@ -148,8 +148,20 @@ function Page() {
       plan.sectionWidth,
   }
 
+  // Typing a number digit by digit passes through values that normalizePlan clamps other
+  // fields to: retyping 間口 (width) 20 -> 30 goes 3 -> 30, and at 3 the section was cut to
+  // 3 m wide and stayed so. While the same field keeps changing (and nothing else changed the
+  // plan in between), normalize from the plan as it was before that edit started. Worked out
+  // here rather than in a setPlan updater, which StrictMode runs twice
+  const editBase = useRef<{ key: string; base: SitePlan; result: SitePlan } | null>(null)
+
   function update(patch: Partial<SitePlan>) {
-    setPlan((p) => normalizePlan({ ...p, ...patch }))
+    const key = Object.keys(patch).sort().join(',')
+    const prev = editBase.current
+    const base = prev && prev.key === key && prev.result === plan ? prev.base : plan
+    const result = normalizePlan({ ...base, ...patch })
+    editBase.current = { key, base, result }
+    setPlan(result)
   }
 
   function updateNeighbor(index: number, patch: Partial<Neighbor>) {

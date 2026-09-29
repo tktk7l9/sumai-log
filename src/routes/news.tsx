@@ -85,16 +85,22 @@ function Page() {
     <PageShell title="お知らせ">
       <Stack gap="md">
         {sources.length > 0 ? (
+          // A single-choice chip group cannot be unticked, so "すべて" (All) is the way back
+          // from one vendor to every vendor (same as the status chips of the candidates list;
+          // SHIG 60). It is not a vendor id, so it is not kept in search
           <Chip.Group
-            value={v ?? null}
+            value={v ?? 'all'}
             onChange={(next) =>
               navigate({
-                search: (s) => ({ ...s, v: (next as string) || undefined }),
+                search: (s) => ({ ...s, v: next === 'all' ? undefined : (next as string) }),
                 replace: true,
               })
             }
           >
             <Group gap={6}>
+              <Chip value="all" size="xs">
+                すべて
+              </Chip>
               {sources.map((source) => (
                 <Chip key={source.id} value={source.id} size="xs">
                   {source.name}

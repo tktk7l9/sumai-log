@@ -7,6 +7,9 @@ import { GLOSSARY_CATEGORIES, type CategoryId } from '../../content/glossary'
 
 const SEARCH_DEBOUNCE_MS = 250
 
+/** Chip value for "no category filter" (not a category id) */
+const ALL = 'all'
+
 /**
  * The search bar + category chips of the glossary. The route (`glossary.tsx`) only reads
  * and writes `?q=` `?c=`, and the presentation is gathered here.
@@ -65,11 +68,17 @@ export function GlossaryFilters({
         leftSection={<Search size={16} aria-hidden />}
         aria-label="用語・読みで検索"
       />
+      {/* A single-choice chip group cannot be unticked, so "すべて" (All) comes first as the way
+          back from one category to all of them (same as the candidates and sources filters;
+          SHIG 6, 60) */}
       <Chip.Group
-        value={category ?? null}
-        onChange={(v) => onCategoryChange((v as CategoryId | '') || null)}
+        value={category ?? ALL}
+        onChange={(v) => onCategoryChange(v === ALL ? null : (v as CategoryId))}
       >
         <Group gap={6}>
+          <Chip value={ALL} size="xs">
+            すべて
+          </Chip>
           {GLOSSARY_CATEGORIES.map((cat) => (
             <Chip key={cat.id} value={cat.id} size="xs">
               {cat.label}

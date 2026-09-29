@@ -92,22 +92,27 @@ export function VideoDetail({
         YouTube で開く
       </Button>
 
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          {video.channel ? <Row label="チャンネル" value={video.channel} /> : null}
-          {video.watchedOn ? <Row label="観た日" value={formatDateSlash(video.watchedOn)} /> : null}
-          {vendor ? (
-            <Row
-              label="関連業者"
-              value={
-                <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
-                  <Anchor component="span">{vendor.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-        </Stack>
-      </Card>
+      {/* With no channel, date or vendor the card would be an empty frame; leave it out (SHIG 1) */}
+      {video.channel || video.watchedOn || vendor ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {video.channel ? <Row label="チャンネル" value={video.channel} /> : null}
+            {video.watchedOn ? (
+              <Row label="観た日" value={formatDateSlash(video.watchedOn)} />
+            ) : null}
+            {vendor ? (
+              <Row
+                label="関連業者"
+                value={
+                  <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
+                    <Anchor component="span">{vendor.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+          </Stack>
+        </Card>
+      ) : null}
 
       {video.tags.length > 0 ? (
         <Group gap={4}>
