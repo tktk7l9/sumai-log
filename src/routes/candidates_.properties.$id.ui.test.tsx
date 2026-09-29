@@ -95,6 +95,7 @@ describe('property detail route', () => {
     await screen.findByRole('heading', { level: 1, name: 'テストレジデンス' })
     expect(screen.queryByText('—')).not.toBeInTheDocument()
     expect(screen.queryByText('竣工予定')).not.toBeInTheDocument()
+    expect(document.querySelector('main .mantine-Card-root')).toBeNull()
   })
 
   it('edits the property', async () => {

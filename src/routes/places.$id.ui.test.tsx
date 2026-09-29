@@ -79,6 +79,23 @@ describe('place detail route', () => {
     ).toBeInTheDocument()
     expect(screen.queryByText('住所')).not.toBeInTheDocument()
     expect(screen.queryByText('—')).not.toBeInTheDocument()
+    // Nothing to show: no empty frame either
+    const cards = [...document.querySelectorAll('main .mantine-Card-root')]
+    expect(cards.filter((card) => !card.textContent?.trim())).toHaveLength(0)
+  })
+
+  it('keeps the vendor row but drops the address row when only the address is missing', async () => {
+    stub(getPlace, {
+      place: place({ id: ID, address: null }),
+      vendor: vendor({ id: 'v1' }),
+      property: null,
+      visited: false,
+    })
+    await renderRoute(PAGE)
+    expect(await screen.findByText('業者')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'テスト工務店' })).toBeInTheDocument()
+    expect(screen.queryByText('住所')).not.toBeInTheDocument()
+    expect(screen.queryByText('—')).not.toBeInTheDocument()
   })
 
   it('edits the place', async () => {

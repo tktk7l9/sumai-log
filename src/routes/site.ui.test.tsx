@@ -136,6 +136,25 @@ describe('site route', () => {
     expect(screen.getByText(/^時刻 7:00/)).toBeInTheDocument()
   })
 
+  it('keeps a change made elsewhere in the middle of retyping a number', async () => {
+    const { user } = await renderRoute('/site')
+    await screen.findByText('初期値（まだ保存していません）')
+    await user.click(screen.getByRole('button', { name: '隣地・周りの建物（0）' }))
+    await user.click(await screen.findByRole('button', { name: '隣地・建物を足す' }))
+    await user.click(screen.getByRole('button', { name: '土地（長方形で近似）' }))
+    const width = await screen.findByRole('textbox', { name: '間口（m）' })
+    await user.clear(width)
+    await user.type(width, '3')
+    // Renaming the neighbour goes around update(); retyping the width afterwards must not
+    // start again from the plan as it was before the width edit and drop the new name
+    const name = screen.getByRole('textbox', { name: '名前' })
+    await user.clear(name)
+    await user.type(name, '倉庫')
+    await user.type(width, '0')
+    expect(await screen.findByRole('img', { name: /間口30m×奥行50m/ })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '名前' })).toHaveValue('倉庫')
+  })
+
   it('edits the land, lots, access, building and rules', async () => {
     const { user } = await renderRoute('/site')
     await screen.findByText('初期値（まだ保存していません）')
