@@ -45,6 +45,8 @@ body {
      separation and contrast were confirmed by the dataviz validation */
   --sumai-series-visit: #a3542f;
   --sumai-series-video: #2f6fb3;
+  /* Mantine's error red (red-6) is 3.2:1 on the surface; red-9 is 5.4:1 (SHIG 94) */
+  --mantine-color-error: var(--mantine-color-red-9);
 }
 
 :root[data-mantine-color-scheme='dark'],
@@ -55,6 +57,8 @@ body {
   --sumai-lift: 0 6px 18px -6px rgba(0, 0, 0, 0.7);
   --sumai-series-visit: #bd7148;
   --sumai-series-video: #4f8fd8;
+  /* Mantine's dark error red (red-8) is 3.5:1 on the dark surface; red-4 is 6.9:1 */
+  --mantine-color-error: var(--mantine-color-red-4);
 }
 
 /*
@@ -215,6 +219,10 @@ a:focus-visible {
  * (without cancelling, the top and bottom padding of main stacks twice and overflows 100dvh).
  */
 .map-page {
+  /* The controls over the map use z-index: 1000 to sit above the Google Maps layers. Keep
+     that inside the map page: without it they also rose above the header (z-index 100) and
+     covered the "その他" menu that opens from it, so its items could not be tapped */
+  isolation: isolate;
   height: calc(100dvh - 52px - 56px - env(safe-area-inset-bottom, 0px));
   margin: calc(var(--mantine-spacing-md) * -1);
   width: calc(100% + var(--mantine-spacing-md) * 2);
@@ -264,12 +272,37 @@ a:focus-visible {
 /*
  * Saturday in blue, Sunday / holidays in red, as on Japanese calendars (SHIG 71). Mantine's
  * weekendDays paints both weekend days red; calendar.tsx puts `is-saturday` on Saturdays that
- * are not holidays. blue-7 / blue-3 keep 4.5:1 on the light / dark surfaces.
+ * are not holidays and `is-holiday` on holidays. Mantine's own shades (blue-7 4.1:1, red-6
+ * 3.2:1) fall short of 4.5:1 on the light surface, so light uses blue-8 (5.0:1) / red-9
+ * (5.4:1) and dark uses blue-3 / red-4 (6.9:1 or more). Days of the neighbouring months use
+ * the secondary text colour instead of Mantine's faint grey (2.4:1), still one step lighter
+ * than the days of this month (SHIG 94).
  */
 .mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
-  color: var(--mantine-color-blue-7);
+  color: var(--mantine-color-blue-8);
 }
 [data-mantine-color-scheme='dark'] .mantine-MonthView-monthViewDay.is-saturday:not([data-outside]) {
+  color: var(--mantine-color-blue-3);
+}
+.mantine-MonthView-monthViewDay[data-weekend]:not(.is-saturday):not([data-outside]),
+.mantine-MonthView-monthViewDay.is-holiday:not([data-outside]) {
+  color: var(--mantine-color-red-9);
+}
+[data-mantine-color-scheme='dark']
+  .mantine-MonthView-monthViewDay[data-weekend]:not(.is-saturday):not([data-outside]),
+[data-mantine-color-scheme='dark'] .mantine-MonthView-monthViewDay.is-holiday:not([data-outside]) {
+  color: var(--mantine-color-red-4);
+}
+.mantine-MonthView-monthViewDay[data-outside] {
+  color: var(--mantine-color-dimmed);
+}
+
+/* Target names in the "最近の更新" (Recent updates) feed on home. blue-8 / blue-3 keep 4.5:1
+   on the light / dark ground (Mantine's blue-7 was 4.1:1) */
+.feed-link {
+  color: var(--mantine-color-blue-8);
+}
+[data-mantine-color-scheme='dark'] .feed-link {
   color: var(--mantine-color-blue-3);
 }
 

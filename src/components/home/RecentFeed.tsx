@@ -9,9 +9,8 @@ import { EmptyState } from '../EmptyState'
 import { MemberChip } from '../MemberChip'
 
 /** Only the target name inside the text becomes a link. Underlined so that it reads as
- * "pressable". */
+ * "pressable". The colour is `.feed-link` in styles.css (a different shade per colour scheme) */
 const linkStyle = {
-  color: 'var(--mantine-color-blue-7)',
   textDecoration: 'underline',
   textUnderlineOffset: '2px',
   fontWeight: 600,
@@ -31,31 +30,36 @@ function IdLink({ to, id, children }: { to: IdRouteTo; id: string; children: Rea
   switch (to) {
     case '/records/visits/$id':
       return (
-        <Link to="/records/visits/$id" params={{ id }} style={linkStyle}>
+        <Link to="/records/visits/$id" params={{ id }} className="feed-link" style={linkStyle}>
           {children}
         </Link>
       )
     case '/candidates/vendors/$id':
       return (
-        <Link to="/candidates/vendors/$id" params={{ id }} style={linkStyle}>
+        <Link to="/candidates/vendors/$id" params={{ id }} className="feed-link" style={linkStyle}>
           {children}
         </Link>
       )
     case '/candidates/properties/$id':
       return (
-        <Link to="/candidates/properties/$id" params={{ id }} style={linkStyle}>
+        <Link
+          to="/candidates/properties/$id"
+          params={{ id }}
+          className="feed-link"
+          style={linkStyle}
+        >
           {children}
         </Link>
       )
     case '/places/$id':
       return (
-        <Link to="/places/$id" params={{ id }} style={linkStyle}>
+        <Link to="/places/$id" params={{ id }} className="feed-link" style={linkStyle}>
           {children}
         </Link>
       )
     case '/records/videos/$id':
       return (
-        <Link to="/records/videos/$id" params={{ id }} style={linkStyle}>
+        <Link to="/records/videos/$id" params={{ id }} className="feed-link" style={linkStyle}>
           {children}
         </Link>
       )
@@ -109,7 +113,12 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
       // event in another month is not shown as selected (derive m from d, as in HomeAgenda)
       const d = item.href.search?.d ?? ''
       return (
-        <Link to="/calendar" search={{ m: d.slice(0, 7), d }} style={linkStyle}>
+        <Link
+          to="/calendar"
+          search={{ m: d.slice(0, 7), d }}
+          className="feed-link"
+          style={linkStyle}
+        >
           {children}
         </Link>
       )
@@ -117,7 +126,7 @@ function FeedRowLink({ item, children }: { item: FeedItem; children: React.React
     case 'source':
       // Sources have no detail page, so link to the list (/sources)
       return (
-        <Link to="/sources" style={linkStyle}>
+        <Link to="/sources" className="feed-link" style={linkStyle}>
           {children}
         </Link>
       )

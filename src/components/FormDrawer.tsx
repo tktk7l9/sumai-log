@@ -66,10 +66,12 @@ export function FormDrawer({
   const isMobile = useMediaQuery('(max-width: 48em)', true)
   useKeyboardSafeViewport(opened && isMobile)
   return (
-    <Drawer
+    // Composed from the parts so that the header can be a plain <div>: Mantine renders it
+    // as <header>, which inside a dialog counts as a second "banner" landmark next to the
+    // app header
+    <Drawer.Root
       opened={opened}
       onClose={onClose}
-      title={title}
       position={isMobile ? 'bottom' : 'right'}
       size={isMobile ? '100%' : 480}
       padding="md"
@@ -91,7 +93,14 @@ export function FormDrawer({
           : {}),
       }}
     >
-      {children}
-    </Drawer>
+      <Drawer.Overlay />
+      <Drawer.Content>
+        <Drawer.Header component="div">
+          <Drawer.Title>{title}</Drawer.Title>
+          <Drawer.CloseButton aria-label="閉じる" />
+        </Drawer.Header>
+        <Drawer.Body>{children}</Drawer.Body>
+      </Drawer.Content>
+    </Drawer.Root>
   )
 }

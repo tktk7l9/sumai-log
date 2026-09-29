@@ -16,6 +16,9 @@ import { createTheme } from '@mantine/core'
  * Everything else is derived from the palette here.
  */
 
+/** The "×" of clearable inputs is icon only, so give it a name for screen readers */
+const CLEAR_BUTTON = { 'aria-label': '入力を消す' }
+
 export const theme = createTheme({
   primaryColor: 'clay',
   /** Surface color. Every card / input / header / footer in light becomes this */
@@ -99,12 +102,23 @@ export const theme = createTheme({
     TextInput: { defaultProps: { size: 'md' } },
     NumberInput: { defaultProps: { size: 'md' } },
     Textarea: { defaultProps: { size: 'md' } },
-    Select: { defaultProps: { size: 'md' } },
+    Select: { defaultProps: { size: 'md', clearButtonProps: CLEAR_BUTTON } },
+    MultiSelect: { defaultProps: { clearButtonProps: CLEAR_BUTTON } },
+    DateInput: { defaultProps: { clearButtonProps: CLEAR_BUTTON } },
     TagsInput: { defaultProps: { size: 'md' } },
     Button: { defaultProps: { size: 'md' } },
     // 12px between cards. Lists line up with the same spacing on every tab
     SimpleGrid: { defaultProps: { spacing: 'sm', verticalSpacing: 'sm' } },
     // Pill-shaped badges look off-the-shelf, so make them labels with small corners
     Badge: { defaultProps: { radius: 'sm' } },
+    // The icon-only close button of sheets and full-screen dialogs needs a name for screen
+    // readers (SHIG 1: the label is plain Japanese, not "close button")
+    Drawer: { defaultProps: { closeButtonProps: { 'aria-label': '閉じる' } } },
+    Modal: { defaultProps: { closeButtonProps: { 'aria-label': '閉じる' } } },
+    Notification: { defaultProps: { closeButtonProps: { 'aria-label': '閉じる' } } },
+    // The empty focus placeholder (role="presentation") is not an allowed child of
+    // role="menu". Without it, opening the menu focuses the first item, which also lets
+    // keyboard users act right away
+    Menu: { defaultProps: { withInitialFocusPlaceholder: false } },
   },
 })

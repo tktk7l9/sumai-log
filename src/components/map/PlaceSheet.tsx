@@ -13,7 +13,9 @@ export function PlaceSheet({
   onClose: () => void
 }) {
   return (
-    <Drawer
+    // Composed from the parts so that the header is a <div>, not a second "banner" landmark
+    // (same as FormDrawer)
+    <Drawer.Root
       opened={place != null}
       onClose={onClose}
       position="bottom"
@@ -27,32 +29,42 @@ export function PlaceSheet({
       // (2 lines) address + the "詳細を見る" (See details) button all shown together.
       // No overflow occurs (confirmed scrollHeight === clientHeight === 300)
       size={300}
-      title={place?.name}
       padding="md"
       // Controls overlaid on the map (such as the current location button of the map tab)
       // are drawn at z-index: 1000, so with the Mantine default (modal: 200) the sheet
       // would be hidden under them
       zIndex={1300}
     >
-      {place ? (
-        <Stack gap="xs">
-          <Group gap="xs">
-            <Badge variant="default">{PLACE_KIND_LABEL[place.kind]}</Badge>
-          </Group>
-          {place.vendorName ? <Text size="sm">業者: {place.vendorName}</Text> : null}
-          {place.propertyName ? <Text size="sm">マンション物件: {place.propertyName}</Text> : null}
-          {place.address ? (
-            <Text size="sm" c="dimmed">
-              {place.address}
-            </Text>
+      <Drawer.Overlay />
+      <Drawer.Content>
+        <Drawer.Header component="div">
+          <Drawer.Title>{place?.name}</Drawer.Title>
+          <Drawer.CloseButton aria-label="閉じる" />
+        </Drawer.Header>
+        <Drawer.Body>
+          {place ? (
+            <Stack gap="xs">
+              <Group gap="xs">
+                <Badge variant="default">{PLACE_KIND_LABEL[place.kind]}</Badge>
+              </Group>
+              {place.vendorName ? <Text size="sm">業者: {place.vendorName}</Text> : null}
+              {place.propertyName ? (
+                <Text size="sm">マンション物件: {place.propertyName}</Text>
+              ) : null}
+              {place.address ? (
+                <Text size="sm" c="dimmed">
+                  {place.address}
+                </Text>
+              ) : null}
+              <Link to="/places/$id" params={{ id: place.id }}>
+                <Button component="span" fullWidth>
+                  詳細を見る
+                </Button>
+              </Link>
+            </Stack>
           ) : null}
-          <Link to="/places/$id" params={{ id: place.id }}>
-            <Button component="span" fullWidth>
-              詳細を見る
-            </Button>
-          </Link>
-        </Stack>
-      ) : null}
-    </Drawer>
+        </Drawer.Body>
+      </Drawer.Content>
+    </Drawer.Root>
   )
 }

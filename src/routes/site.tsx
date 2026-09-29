@@ -281,7 +281,7 @@ function Page() {
                 onChange={setHour}
                 label={formatHour}
                 disabled={!shadowOn}
-                aria-label="時刻"
+                thumbLabel="時刻"
               />
             </Stack>
           </Stack>
@@ -459,7 +459,7 @@ function Page() {
                     onChange={(v) => update({ sectionY: v })}
                     label={(v) => `${v}m`}
                     disabled={plan.landDepth - sDepth <= 0}
-                    aria-label="道路からの距離"
+                    thumbLabel="道路からの距離"
                   />
                 </Stack>
                 <Stack gap={4}>
@@ -474,7 +474,7 @@ function Page() {
                     onChange={(v) => update({ sectionX: v })}
                     label={(v) => `${v}m`}
                     disabled={xRange.max - xRange.min <= 0}
-                    aria-label="左端からの距離"
+                    thumbLabel="左端からの距離"
                   />
                 </Stack>
               </Stack>
