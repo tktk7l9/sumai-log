@@ -219,6 +219,10 @@ a:focus-visible {
  * (without cancelling, the top and bottom padding of main stacks twice and overflows 100dvh).
  */
 .map-page {
+  /* The controls over the map use z-index: 1000 to sit above the Google Maps layers. Keep
+     that inside the map page: without it they also rose above the header (z-index 100) and
+     covered the "その他" menu that opens from it, so its items could not be tapped */
+  isolation: isolate;
   height: calc(100dvh - 52px - 56px - env(safe-area-inset-bottom, 0px));
   margin: calc(var(--mantine-spacing-md) * -1);
   width: calc(100% + var(--mantine-spacing-md) * 2);
