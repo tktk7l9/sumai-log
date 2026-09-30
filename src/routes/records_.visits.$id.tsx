@@ -117,41 +117,45 @@ function Page() {
         </Group>
       }
     >
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          {place ? (
-            <Row
-              label="場所"
-              value={
-                <Link to="/places/$id" params={{ id: place.id }}>
-                  <Anchor component="span">{place.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-          {vendor ? (
-            <Row
-              label="業者"
-              value={
-                <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
-                  <Anchor component="span">{vendor.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-          {property ? (
-            <Row
-              label="マンション物件"
-              value={
-                <Link to="/candidates/properties/$id" params={{ id: property.id }}>
-                  <Anchor component="span">{property.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-          {event ? <Row label="予定" value={event.title} /> : null}
-        </Stack>
-      </Card>
+      {/* With no place, vendor, property or event linked the card would be an empty frame;
+          leave it out (SHIG 1) */}
+      {place || vendor || property || event ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {place ? (
+              <Row
+                label="場所"
+                value={
+                  <Link to="/places/$id" params={{ id: place.id }}>
+                    <Anchor component="span">{place.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+            {vendor ? (
+              <Row
+                label="業者"
+                value={
+                  <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
+                    <Anchor component="span">{vendor.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+            {property ? (
+              <Row
+                label="マンション物件"
+                value={
+                  <Link to="/candidates/properties/$id" params={{ id: property.id }}>
+                    <Anchor component="span">{property.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+            {event ? <Row label="予定" value={event.title} /> : null}
+          </Stack>
+        </Card>
+      ) : null}
 
       {/* Blocks left empty are not shown as 「—」 (SHIG 1, 37) */}
       {BLOCKS.filter((b) => visit[b.key]?.trim()).map((b) => (

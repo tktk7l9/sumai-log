@@ -44,6 +44,8 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run test:coverage
+      # UI layer (components and routes) on jsdom with Testing Library, with its own coverage gate
+      - run: npm run test:ui
       # Server-layer tests against the real Workers runtime + D1
       - run: npm run test:server
       # Tests for scripts/lib (the pure part of the seed.local.json -> D1/R2 import)

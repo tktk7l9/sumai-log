@@ -72,31 +72,35 @@ function Page() {
         </Group>
       }
     >
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          <Row label="住所" value={place.address} />
-          {vendor ? (
-            <Row
-              label="業者"
-              value={
-                <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
-                  <Anchor component="span">{vendor.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-          {property ? (
-            <Row
-              label="マンション物件"
-              value={
-                <Link to="/candidates/properties/$id" params={{ id: property.id }}>
-                  <Anchor component="span">{property.name}</Anchor>
-                </Link>
-              }
-            />
-          ) : null}
-        </Stack>
-      </Card>
+      {/* An unregistered address drops its row instead of showing "—", and with nothing to show
+          the card is left out (SHIG 1, 37) */}
+      {place.address || vendor || property ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {place.address ? <Row label="住所" value={place.address} /> : null}
+            {vendor ? (
+              <Row
+                label="業者"
+                value={
+                  <Link to="/candidates/vendors/$id" params={{ id: vendor.id }}>
+                    <Anchor component="span">{vendor.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+            {property ? (
+              <Row
+                label="マンション物件"
+                value={
+                  <Link to="/candidates/properties/$id" params={{ id: property.id }}>
+                    <Anchor component="span">{property.name}</Anchor>
+                  </Link>
+                }
+              />
+            ) : null}
+          </Stack>
+        </Card>
+      ) : null}
 
       <PlaceLocation place={place} visited={visited} mapConfig={mapConfig} />
 

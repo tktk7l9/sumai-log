@@ -62,10 +62,38 @@ function Page() {
       : (property.station ??
         (property.walkMinutes != null ? `徒歩${property.walkMinutes}分` : null))
 
-  const builtLabel =
-    property.builtYear != null ? '築年' : property.completionDate ? '竣工予定' : '築年 / 竣工予定'
+  const builtLabel = property.builtYear != null ? '築年' : '竣工予定'
   const builtValue =
     property.builtYear != null ? `${property.builtYear}年` : property.completionDate
+
+  // Monthly costs: show only the halves that are registered, with a label to match
+  const fees = [
+    property.managementFee != null ? { label: '管理費', value: property.managementFee } : null,
+    property.repairReserve != null ? { label: '修繕積立金', value: property.repairReserve } : null,
+  ].filter((f) => f !== null)
+
+  // A value that is not registered drops its whole row instead of showing "—", and with no
+  // row at all the card itself is left out (AGENTS.md; SHIG 1, 37)
+  const facts: { label: string; value: React.ReactNode }[] = [
+    { label: '所在地', value: property.address },
+    { label: '駅・徒歩', value: stationValue },
+    { label: '価格', value: property.price != null ? formatYen(property.price) : null },
+    { label: '専有面積', value: property.areaSqm != null ? formatSqm(property.areaSqm) : null },
+    { label: '間取り', value: property.layout },
+    { label: builtLabel, value: builtValue },
+    {
+      label: fees.map((f) => f.label).join('・'),
+      value: fees.length ? fees.map((f) => formatYen(f.value)).join(' / ') : null,
+    },
+    {
+      label: '掲載URL',
+      value: property.listingUrl ? (
+        <Anchor href={property.listingUrl} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={14} aria-hidden /> 開く
+        </Anchor>
+      ) : null,
+    },
+  ].filter((f) => f.value != null && f.value !== '')
 
   return (
     <PageShell
@@ -83,30 +111,15 @@ function Page() {
         </Group>
       }
     >
-      <Card withBorder padding="md">
-        <Stack gap="xs">
-          <Row label="所在地" value={property.address} />
-          <Row label="駅・徒歩" value={stationValue} />
-          <Row label="価格" value={formatYen(property.price)} />
-          <Row label="専有面積" value={formatSqm(property.areaSqm)} />
-          <Row label="間取り" value={property.layout} />
-          <Row label={builtLabel} value={builtValue} />
-          <Row
-            label="管理費・修繕積立金"
-            value={`${formatYen(property.managementFee)} / ${formatYen(property.repairReserve)}`}
-          />
-          {property.listingUrl ? (
-            <Row
-              label="掲載URL"
-              value={
-                <Anchor href={property.listingUrl} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={14} aria-hidden /> 開く
-                </Anchor>
-              }
-            />
-          ) : null}
-        </Stack>
-      </Card>
+      {facts.length ? (
+        <Card withBorder padding="md">
+          <Stack gap="xs">
+            {facts.map((f) => (
+              <Row key={f.label} label={f.label} value={f.value} />
+            ))}
+          </Stack>
+        </Card>
+      ) : null}
       {property.note ? <Text style={{ whiteSpace: 'pre-wrap' }}>{property.note}</Text> : null}
 
       <Stack gap="xs">
