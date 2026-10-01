@@ -197,6 +197,24 @@ A record app for a housing search, used only by one married couple. **The reposi
   or news URL, etc.) are not executed from Claude (production writes do not go through). Prepare
   the SQL file in `seed.local/out/` (gitignored. Do not commit it), and the owner executes it with
   `npx wrangler d1 execute sumai-log --remote --file <path> -y`
+- Built examples (`/works`, the `works` table) come only from the SQL that
+  `npm run import:works` (`scripts/import-works.ts`) writes to `seed.local/out/`; the owner runs
+  it. Which sites are read is in `seed.local/works-sites.json` (gitignored), and the parsers are
+  named `siteA`/`siteB`/`siteC` (`src/lib/works/`), never after a vendor: vendor names, site
+  URLs and example names are real data and are not written in code, tests or commit messages.
+  The upsert is keyed by `source_url` and never touches `watched_at`/`watched_by`, nor a video
+  pasted by hand (`video_source = 'manual'`); a work whose detail page failed is left out of
+  the SQL instead of being written half-empty, and works removed from a site are not deleted.
+  The watched flag is one per work for both users. The tour video plays in a
+  `youtube-nocookie.com` iframe without YouTube's script: the page reads the position from
+  `postMessage` (`src/lib/works/watch.ts`) and marks the work watched at the end or at 90%. The
+  iframe needs `referrerPolicy="strict-origin-when-cross-origin"` because the app-wide
+  `referrer-policy: no-referrer` makes YouTube refuse the embed (player error 153), and
+  `frame-src` in the CSP allows only that host (spec:
+  `docs/superpowers/specs/2026-10-01-works-list-design.md`). `npm run generate-routes` (plain
+  `tsr generate`) drops the `@tanstack/react-start` `Register` block at the end of
+  `src/routeTree.gen.ts`; after adding a route, let `npm run dev` or `npm run build` regenerate
+  the file, or restore that block
 
 ## When the schema changed
 

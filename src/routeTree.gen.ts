@@ -21,6 +21,7 @@ import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SiteRouteImport } from './routes/site'
 import { Route as SourcesRouteImport } from './routes/sources'
+import { Route as WorksRouteImport } from './routes/works'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as ApiOembedRouteImport } from './routes/api.oembed'
 import { Route as CandidatesCompareRouteImport } from './routes/candidates_.compare'
@@ -92,6 +93,11 @@ const SiteRoute = SiteRouteImport.update({
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorksRoute = WorksRouteImport.update({
+  id: '/works',
+  path: '/works',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiGeocodeRoute = ApiGeocodeRouteImport.update({
@@ -169,6 +175,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/candidates/compare': typeof CandidatesCompareRoute
@@ -195,6 +202,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/candidates/compare': typeof CandidatesCompareRoute
@@ -222,6 +230,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
   '/candidates_/compare': typeof CandidatesCompareRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/works'
     | '/api/geocode'
     | '/api/oembed'
     | '/candidates/compare'
@@ -276,6 +286,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/works'
     | '/api/geocode'
     | '/api/oembed'
     | '/candidates/compare'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/works'
     | '/api/geocode'
     | '/api/oembed'
     | '/candidates_/compare'
@@ -329,6 +341,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SiteRoute: typeof SiteRoute
   SourcesRoute: typeof SourcesRoute
+  WorksRoute: typeof WorksRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiOembedRoute: typeof ApiOembedRoute
   CandidatesCompareRoute: typeof CandidatesCompareRoute
@@ -427,6 +440,13 @@ declare module '@tanstack/react-router' {
       path: '/sources'
       fullPath: '/sources'
       preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/works': {
+      id: '/works'
+      path: '/works'
+      fullPath: '/works'
+      preLoaderRoute: typeof WorksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/geocode': {
@@ -529,6 +549,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SiteRoute: SiteRoute,
   SourcesRoute: SourcesRoute,
+  WorksRoute: WorksRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiOembedRoute: ApiOembedRoute,
   CandidatesCompareRoute: CandidatesCompareRoute,

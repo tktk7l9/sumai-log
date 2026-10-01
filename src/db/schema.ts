@@ -386,6 +386,47 @@ export const videos = sqliteTable(
   (t) => [index('videos_watched_idx').on(t.watchedOn)],
 )
 
+export const WORK_VIDEO_SOURCES = ['auto', 'manual'] as const
+
+/**
+ * Built examples published on vendors' sites (/works). Rows come from the SQL that
+ * scripts/import-works.ts generates; the app itself only changes the video and the
+ * watched columns. Areas are in tsubo.
+ */
+export const works = sqliteTable(
+  'works',
+  {
+    id: id(),
+    /** Detail page of the example. The key the import matches on */
+    sourceUrl: text('source_url').notNull().unique(),
+    /** Key of the site in seed.local/works-sites.json */
+    site: text('site').notNull(),
+    vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    category: text('category'),
+    location: text('location'),
+    /** 'YYYY-MM' or 'YYYY' */
+    completedOn: text('completed_on'),
+    points: jsonList('points'),
+    uaValue: real('ua_value'),
+    cValue: real('c_value'),
+    family: text('family'),
+    siteAreaTsubo: real('site_area_tsubo'),
+    floorAreaTsubo: real('floor_area_tsubo'),
+    totalAreaTsubo: real('total_area_tsubo'),
+    layout: text('layout'),
+    youtubeVideoId: text('youtube_video_id'),
+    /** Who set youtube_video_id. null is treated as 'auto'. A 'manual' one survives re-imports */
+    videoSource: text('video_source', { enum: WORK_VIDEO_SOURCES }),
+    /** ISO-8601. null = not watched yet. One flag shared by the two users */
+    watchedAt: text('watched_at'),
+    watchedBy: text('watched_by'),
+    sortOrder: integer('sort_order').notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [index('works_vendor_idx').on(t.vendorId)],
+)
+
 export const COMMENT_TARGETS = ['vendor', 'property', 'place', 'visit', 'video'] as const
 
 /** Both users can add a short comment to any record. targetId is not a foreign key (on
@@ -454,6 +495,8 @@ export type Photo = typeof photos.$inferSelect
 export type NewPhoto = typeof photos.$inferInsert
 export type Video = typeof videos.$inferSelect
 export type NewVideo = typeof videos.$inferInsert
+export type Work = typeof works.$inferSelect
+export type NewWork = typeof works.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
 

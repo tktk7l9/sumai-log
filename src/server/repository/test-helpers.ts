@@ -16,6 +16,7 @@ export async function reset() {
     'visits',
     'events',
     'videos',
+    'works',
     'comments',
     'tags',
     'sources',

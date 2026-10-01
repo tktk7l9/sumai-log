@@ -44,6 +44,12 @@ describe('applySecurityHeaders', () => {
     expect(headers.get('permissions-policy')).toContain('geolocation=(self)')
   })
 
+  it('allows frames only from the no-cookie YouTube embed host', () => {
+    const csp = SECURITY_HEADERS['content-security-policy']
+    expect(csp).toContain('frame-src https://www.youtube-nocookie.com;')
+    expect(csp).not.toContain('script-src')
+  })
+
   it('overwrites a header of the same name', () => {
     const headers = new Headers({ 'x-frame-options': 'SAMEORIGIN' })
     applySecurityHeaders(headers)
