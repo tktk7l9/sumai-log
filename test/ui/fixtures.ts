@@ -16,6 +16,7 @@ import type {
   VendorNews,
   Video,
   Visit,
+  Work,
 } from '../../src/db/schema'
 import type { Member } from '../../src/lib/members'
 
@@ -179,6 +180,35 @@ export function video(over: Partial<Video> = {}): Video {
     takeaways: 'UA値は0.46以下を目安にする',
     vendorId: null,
     createdBy: OWNER,
+    createdAt: STAMP,
+    updatedAt: STAMP,
+    ...over,
+  }
+}
+
+export function work(over: Partial<Work> = {}): Work {
+  return {
+    id: uid(900),
+    sourceUrl: 'https://example.com/works/p1/',
+    site: 'siteA',
+    vendorId: null,
+    title: 'テストの家',
+    category: '新築',
+    location: null,
+    completedOn: null,
+    points: [],
+    uaValue: null,
+    cValue: null,
+    family: null,
+    siteAreaTsubo: null,
+    floorAreaTsubo: null,
+    totalAreaTsubo: null,
+    layout: null,
+    youtubeVideoId: null,
+    videoSource: null,
+    watchedAt: null,
+    watchedBy: null,
+    sortOrder: 0,
     createdAt: STAMP,
     updatedAt: STAMP,
     ...over,

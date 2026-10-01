@@ -6,7 +6,8 @@
  * (only `frame-ancestors`, `object-src` and `base-uri`. `img-src`/`connect-src` were added
  * for Google Maps on the map tab (tiles, fonts and sprites come from maps.googleapis.com
  * and maps.gstatic.com, vector tiles go through connect-src) and for video thumbnails and
- * the avatars of sources (YouTube channels)).
+ * the avatars of sources (YouTube channels)). `frame-src` allows only the no-cookie YouTube
+ * embed, for the tour videos on the works page.
  * `geolocation=(self)` is allowed for the "現在地" (Current location) button on the map tab.
  */
 
@@ -17,7 +18,7 @@ export const SECURITY_HEADERS = {
   'permissions-policy': 'camera=(), microphone=(), geolocation=(self), payment=()',
   'cross-origin-opener-policy': 'same-origin',
   'content-security-policy':
-    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; img-src 'self' data: blob: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://maps.googleapis.com",
+    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; frame-src https://www.youtube-nocookie.com; img-src 'self' data: blob: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://maps.googleapis.com",
 } as const
 
 /** Sets them on an existing Headers, overwriting. */

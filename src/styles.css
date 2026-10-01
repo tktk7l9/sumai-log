@@ -740,3 +740,28 @@ a:focus-visible {
   border-radius: var(--mantine-radius-sm);
   background: var(--sumai-sunken);
 }
+
+/* Works page: the aligned "Data" block. Labels share one column so values line up across cards */
+.work-specs {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px 12px;
+  margin: 0;
+}
+.work-specs dt {
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 700;
+  margin-top: 6px;
+}
+.work-specs dd {
+  margin: 0;
+}
+@media (min-width: 48em) {
+  .work-specs {
+    grid-template-columns: 6em 1fr;
+  }
+  .work-specs dt {
+    font-size: var(--mantine-font-size-sm);
+    margin-top: 0;
+  }
+}

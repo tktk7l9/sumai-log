@@ -80,7 +80,7 @@ describe('app layout', () => {
     )
     await user.click(screen.getByRole('button', { name: 'その他のページ' }))
     const menu = await screen.findByRole('menu')
-    for (const label of ['用語集', '情報収集', '区画', '分析', '設定']) {
+    for (const label of ['用語集', '情報収集', '施工例', '区画', '分析', '設定']) {
       expect(within(menu).getByRole('menuitem', { name: label })).toBeInTheDocument()
     }
     await user.click(within(menu).getByRole('menuitem', { name: '用語集' }))
