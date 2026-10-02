@@ -42,6 +42,11 @@ export async function crawlSite(
     visited.add(pageUrl)
     try {
       const page = parser.parseList(await load(pageUrl), pageUrl)
+      // A real list page always has examples; none means an error page or changed markup
+      if (page.entries.length === 0) {
+        failed.push(pageUrl)
+        continue
+      }
       for (const entry of page.entries) {
         if (!entries.has(entry.url)) entries.set(entry.url, entry)
       }
@@ -56,7 +61,14 @@ export async function crawlSite(
   for (const entry of entries.values()) {
     const order = sortOrder++
     try {
-      const fields = merge(entry, parser.parseDetail(await load(entry.url)))
+      const detail = parser.parseDetail(await load(entry.url))
+      // The page loaded but the parser recognised nothing (the markup changed): writing the
+      // work would blank what the row already has, the same as a failed fetch
+      if (Object.keys(detail).length === 0) {
+        failed.push(entry.url)
+        continue
+      }
+      const fields = merge(entry, detail)
       works.push({
         ...fields,
         title: fields.title ?? entry.url,

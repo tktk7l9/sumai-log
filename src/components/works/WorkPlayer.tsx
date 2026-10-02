@@ -12,7 +12,8 @@ import {
 } from '../../lib/works/watch'
 import { canonicalYouTubeUrl } from '../../lib/youtube'
 
-/** The player may not be ready when the iframe loads: ask again until it answers, then stop */
+/** The player may not be ready when the iframe loads: ask again until it answers, then stop.
+ * Tries are counted only after the load, so a slow connection does not use them up */
 const LISTEN_INTERVAL_MS = 500
 const LISTEN_RETRIES = 20
 
@@ -31,6 +32,7 @@ export function WorkPlayer({
   onWatched: () => void
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
+  const loaded = useRef(false)
   const onWatchedRef = useRef(onWatched)
   useEffect(() => {
     onWatchedRef.current = onWatched
@@ -41,6 +43,7 @@ export function WorkPlayer({
     let heard = false
     let fired = false
     let tries = 0
+    loaded.current = false
 
     function onMessage(event: MessageEvent) {
       // Only the embedded player itself: any page can post a message to this window
@@ -58,6 +61,7 @@ export function WorkPlayer({
 
     window.addEventListener('message', onMessage)
     const timer = window.setInterval(() => {
+      if (!loaded.current) return
       tries += 1
       if (heard || tries > LISTEN_RETRIES) {
         window.clearInterval(timer)
@@ -82,6 +86,10 @@ export function WorkPlayer({
           // The app sends `referrer-policy: no-referrer` on every response, and YouTube refuses
           // to play an embed that arrives without a referrer (player error 153)
           referrerPolicy="strict-origin-when-cross-origin"
+          onLoad={(event) => {
+            loaded.current = true
+            event.currentTarget.contentWindow?.postMessage(LISTENING_MESSAGE, YOUTUBE_EMBED_ORIGIN)
+          }}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           style={{ border: 0 }}

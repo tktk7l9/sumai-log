@@ -14,10 +14,11 @@
  * hand are kept). Titles and values are never printed, only counts.
  */
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { toJstDateKey } from '../src/lib/jst.ts'
 import { parseSitesConfig } from '../src/lib/works/config.ts'
 import { crawlSite } from '../src/lib/works/crawl.ts'
 import { siteA } from '../src/lib/works/siteA.ts'
@@ -40,8 +41,12 @@ const USER_AGENT = 'Mozilla/5.0 (sumai-log works import; personal use)'
 const refresh = process.argv.includes('--refresh')
 let lastRequestAt = 0
 
+function cachePathOf(url: string): string {
+  return resolve(CACHE_DIR, `${createHash('sha1').update(url).digest('hex')}.html`)
+}
+
 async function load(url: string): Promise<string> {
-  const cachePath = resolve(CACHE_DIR, `${createHash('sha1').update(url).digest('hex')}.html`)
+  const cachePath = cachePathOf(url)
   if (!refresh && existsSync(cachePath)) return readFileSync(cachePath, 'utf8')
 
   const wait = lastRequestAt + REQUEST_GAP_MS - Date.now()
@@ -54,7 +59,9 @@ async function load(url: string): Promise<string> {
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const html = new TextDecoder('utf-8').decode(await res.arrayBuffer())
-  writeFileSync(cachePath, html)
+  // Write then rename, so a crash cannot leave a half-written page that later runs trust
+  writeFileSync(`${cachePath}.tmp`, html)
+  renameSync(`${cachePath}.tmp`, cachePath)
   return html
 }
 
@@ -106,10 +113,15 @@ async function main() {
       `failed pages: ${failed.length}`,
     )
     // The urls are real data but stay on the owner's terminal; they are needed to retry
-    for (const url of failed) console.log(`  failed: ${url}`)
+    for (const url of failed) {
+      console.log(`  failed: ${url}`)
+      // An error page served with 200 was cached too; drop it so the next run fetches again
+      rmSync(cachePathOf(url), { force: true })
+    }
   }
 
-  const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+  // The owner's date (JST), not UTC: before 9:00 the UTC date is still yesterday
+  const stamp = toJstDateKey(new Date().toISOString()).replaceAll('-', '')
   const outPath = resolve(OUT_DIR, `works-${stamp}.sql`)
   writeFileSync(outPath, `${lines.join('\n')}\n`)
   console.log(`wrote ${lines.length - 1} statements to ${outPath}`)

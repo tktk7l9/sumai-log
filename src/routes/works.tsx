@@ -17,11 +17,21 @@ import { listWorks, markWorkWatched } from '../server/works'
 /** Chip value for "no vendor filter" (not a vendor id) */
 const ALL = 'all'
 
+/** How long 「視聴済みにしました／取り消す」 stays */
+const UNDO_NOTICE_MS = 10_000
+
 export const Route = createFileRoute('/works')({
   component: Page,
   validateSearch: (s) => worksSearchSchema.parse(s),
   loader: async () => ({ works: await listWorks() }),
 })
+
+/** The latest non-null value, kept after the value goes back to null */
+function useLast<T>(value: T | null): T | null {
+  const [last, setLast] = useState(value)
+  if (value !== null && value !== last) setLast(value)
+  return value ?? last
+}
 
 function Page() {
   const { works } = Route.useLoaderData()
@@ -33,8 +43,13 @@ function Page() {
   const [editingVideo, setEditingVideo] = useState<WorkRow | null>(null)
 
   const vendors = vendorOptions(works)
+  // An id that matches no vendor (an old or hand-typed URL) is treated as no filter
+  const vendorId = vendors.some((vendor) => vendor.id === search.v) ? search.v : undefined
+  // Mantine keeps a closing Modal on screen for its transition; keep showing the last work
+  const shownPlaying = useLast(playing)
+  const shownEditing = useLast(editingVideo)
   const visible = filterWorks(works, {
-    vendorId: search.v,
+    vendorId,
     hasVideo: search.video,
     unwatched: search.unwatched,
   })
@@ -61,6 +76,8 @@ function Page() {
     const notificationId = `watched-${work.id}`
     notifications.show({
       id: notificationId,
+      // Longer than the 4 s default: the mark often happens while a video is still on screen
+      autoClose: UNDO_NOTICE_MS,
       message: (
         <Group justify="space-between" wrap="nowrap" gap="sm">
           <Text size="sm">視聴済みにしました</Text>
@@ -91,7 +108,7 @@ function Page() {
         <Stack gap="lg">
           <Stack gap="xs">
             <Chip.Group
-              value={search.v ?? ALL}
+              value={vendorId ?? ALL}
               onChange={(v) => setSearch({ v: v === ALL ? undefined : (v as string) })}
             >
               <Group gap={6}>
@@ -164,17 +181,17 @@ function Page() {
       <Modal
         opened={playing !== null}
         onClose={() => setPlaying(null)}
-        title={playing?.title}
+        title={shownPlaying?.title}
         size="xl"
         centered
       >
-        {playing?.youtubeVideoId ? (
+        {shownPlaying?.youtubeVideoId ? (
           <WorkPlayer
-            videoId={playing.youtubeVideoId}
-            title={playing.title}
+            videoId={shownPlaying.youtubeVideoId}
+            title={shownPlaying.title}
             onWatched={() => {
               // Reached the end (or 90%) in the embedded player; nothing to do when already watched
-              if (playing.watchedAt === null) void markWatchedWithUndo(playing)
+              if (shownPlaying.watchedAt === null) void markWatchedWithUndo(shownPlaying)
             }}
           />
         ) : null}
@@ -183,12 +200,14 @@ function Page() {
       <Modal
         opened={editingVideo !== null}
         onClose={() => setEditingVideo(null)}
-        title={editingVideo?.title}
+        title={shownEditing?.title}
         centered
       >
-        {editingVideo ? (
+        {shownEditing ? (
           <WorkVideoForm
-            work={editingVideo}
+            // A fresh form per work: the kept one must not carry the previous work's input
+            key={shownEditing.id}
+            work={shownEditing}
             onCancel={() => setEditingVideo(null)}
             onSaved={() => {
               setEditingVideo(null)

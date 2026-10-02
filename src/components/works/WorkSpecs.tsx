@@ -18,8 +18,9 @@ export function WorkSpecs({ work }: { work: WorkRow }) {
           <dt>ポイント</dt>
           <dd>
             <List size="sm" spacing={2}>
-              {spec.points.map((point) => (
-                <List.Item key={point}>{point}</List.Item>
+              {spec.points.map((point, i) => (
+                // A site may repeat a point, so the text alone is not a key
+                <List.Item key={`${i}:${point}`}>{point}</List.Item>
               ))}
             </List>
           </dd>

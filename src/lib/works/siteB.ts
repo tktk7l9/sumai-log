@@ -24,6 +24,9 @@ function parseList(html: string, pageUrl: string) {
 }
 
 function parseDetail(html: string): Partial<WorkFields> {
+  // Not a detail page (an error or maintenance page served with 200): recognise nothing, so
+  // the crawl counts it as failed instead of blanking the row
+  if (!html.includes('class="works_container"')) return {}
   const match = /竣工\s*[:：]\s*(\d{4})年(?:\s*(\d{1,2})月)?/.exec(html.normalize('NFKC'))
   if (!match) return { completedOn: null }
   const [, year, month] = match

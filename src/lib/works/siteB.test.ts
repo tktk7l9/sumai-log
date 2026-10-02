@@ -51,17 +51,23 @@ describe('siteB.parseList', () => {
   })
 })
 
+const detail = (body: string) => `<div class="works_container"><h1>テストの家</h1>${body}</div>`
+
 describe('siteB.parseDetail', () => {
   it('reads the completion month', () => {
-    expect(siteB.parseDetail('<p>竣工：2026年6月</p>')).toEqual({ completedOn: '2026-06' })
-    expect(siteB.parseDetail('<p>竣工:2025年12月</p>')).toEqual({ completedOn: '2025-12' })
+    expect(siteB.parseDetail(detail('<p>竣工：2026年6月</p>'))).toEqual({ completedOn: '2026-06' })
+    expect(siteB.parseDetail(detail('<p>竣工:2025年12月</p>'))).toEqual({ completedOn: '2025-12' })
   })
 
   it('keeps the year alone when there is no month', () => {
-    expect(siteB.parseDetail('<p>竣工：2024年</p>')).toEqual({ completedOn: '2024' })
+    expect(siteB.parseDetail(detail('<p>竣工：2024年</p>'))).toEqual({ completedOn: '2024' })
   })
 
   it('returns null when the page does not say', () => {
-    expect(siteB.parseDetail('<p>本文</p>')).toEqual({ completedOn: null })
+    expect(siteB.parseDetail(detail('<p>本文</p>'))).toEqual({ completedOn: null })
+  })
+
+  it('recognises nothing on a page that is not a detail page', () => {
+    expect(siteB.parseDetail('<h1>メンテナンス中</h1><p>竣工：2026年6月</p>')).toEqual({})
   })
 })
