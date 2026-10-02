@@ -103,15 +103,32 @@ describe('crawlSite', () => {
   it('stops after MAX_LIST_PAGES even when every page links to a new one', async () => {
     let n = 0
     const endless: SiteParser = {
-      parseList: () => ({ entries: [], pageUrls: [`https://example.com/works/page/${++n}/`] }),
-      parseDetail: () => ({}),
+      parseList: () => ({
+        entries: [{ url: 'd1', title: 'T' }],
+        pageUrls: [`https://example.com/works/page/${++n}/`],
+      }),
+      parseDetail: () => ({ layout: '1LDK' }),
     }
     const calls: string[] = []
     await crawlSite(site, endless, async (url) => {
       calls.push(url)
       return ''
     })
-    expect(calls).toHaveLength(MAX_LIST_PAGES)
+    expect(calls.filter((url) => url !== 'd1')).toHaveLength(MAX_LIST_PAGES)
+  })
+
+  it('reports a list page with no examples and does not follow its links', async () => {
+    const empty: SiteParser = {
+      parseList: () => ({ entries: [], pageUrls: ['https://example.com/works/page/2/'] }),
+      parseDetail: () => ({}),
+    }
+    const calls: string[] = []
+    const result = await crawlSite(site, empty, async (url) => {
+      calls.push(url)
+      return ''
+    })
+    expect(result).toEqual({ works: [], failed: ['https://example.com/works/'] })
+    expect(calls).toEqual(['https://example.com/works/'])
   })
 
   it('falls back to the url when neither page gives a title', async () => {

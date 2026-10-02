@@ -95,6 +95,13 @@ describe('works route', () => {
     expect(screen.queryByText('見終わった家')).not.toBeInTheDocument()
   })
 
+  it('treats an unknown vendor id as no filter', async () => {
+    await renderRoute('/works?v=nope')
+    expect(await screen.findByText('名前だけの家')).toBeInTheDocument()
+    expect(screen.getByText('全部そろった家')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'すべて' })).toBeChecked()
+  })
+
   it('falls back to no filter for an unknown search value', async () => {
     await renderRoute('/works?view=nope&video=maybe')
     expect(await screen.findByText('名前だけの家')).toBeInTheDocument()

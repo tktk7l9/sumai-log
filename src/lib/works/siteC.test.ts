@@ -71,13 +71,17 @@ describe('siteC.parseList', () => {
 describe('siteC.parseDetail', () => {
   it('finds the embedded tour video', () => {
     const html =
-      '<div class="wysiwyg"><p><iframe title="YouTube video player" src="https://www.youtube.com/embed/abcdefghijk?si=x"></iframe></p></div>'
+      '<h1 class="system-ttl">見本の家</h1><div class="wysiwyg"><p><iframe title="YouTube video player" src="https://www.youtube.com/embed/abcdefghijk?si=x"></iframe></p></div>'
     expect(siteC.parseDetail(html)).toEqual({ youtubeVideoId: 'abcdefghijk' })
   })
 
   it('returns null when there is no video', () => {
-    expect(siteC.parseDetail('<div class="wysiwyg"><p>本文</p></div>')).toEqual({
+    expect(siteC.parseDetail('<h1 class="system-ttl">見本の家</h1><p>本文</p>')).toEqual({
       youtubeVideoId: null,
     })
+  })
+
+  it('recognises nothing on a page that is not a detail page', () => {
+    expect(siteC.parseDetail('<h1>メンテナンス中</h1>')).toEqual({})
   })
 })

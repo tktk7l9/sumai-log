@@ -40,6 +40,9 @@ function parseList(html: string, pageUrl: string) {
 }
 
 function parseDetail(html: string): Partial<WorkFields> {
+  // Not a detail page (an error or maintenance page served with 200): recognise nothing, so
+  // the crawl counts it as failed instead of blanking the row
+  if (!html.includes('class="system-ttl"')) return {}
   return { youtubeVideoId: findYouTubeId(html) }
 }
 

@@ -3,7 +3,8 @@ import { asc, eq, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import { vendors, works, type Work } from '../../db/schema'
 
-export type WorkRow = Work & { vendorName: string | null }
+/** watchedBy (an e-mail) stays in the table as a record; the screen does not use it, so it is not sent */
+export type WorkRow = Omit<Work, 'watchedBy'> & { vendorName: string | null }
 
 /** All works with the vendor name: vendor -> site -> the order on the site's own list */
 export async function listWorksWithVendor(db: Db): Promise<WorkRow[]> {
@@ -12,7 +13,10 @@ export async function listWorksWithVendor(db: Db): Promise<WorkRow[]> {
     .from(works)
     .leftJoin(vendors, eq(works.vendorId, vendors.id))
     .orderBy(sql`${vendors.name} IS NULL`, asc(vendors.name), asc(works.site), asc(works.sortOrder))
-  return rows.map((r) => ({ ...r.work, vendorName: r.vendorName ?? null }))
+  return rows.map(({ work: { watchedBy: _watchedBy, ...work }, vendorName }) => ({
+    ...work,
+    vendorName: vendorName ?? null,
+  }))
 }
 
 /**

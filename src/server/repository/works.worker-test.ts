@@ -41,6 +41,7 @@ describe('works repository', () => {
       ['業者なし', null],
     ])
     expect(rows[0]?.points).toEqual([])
+    expect(rows[0]).not.toHaveProperty('watchedBy')
   })
 
   it('marks a work as watched with the time and the actor, and clears both again', async () => {

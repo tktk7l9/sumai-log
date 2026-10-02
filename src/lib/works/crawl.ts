@@ -42,6 +42,11 @@ export async function crawlSite(
     visited.add(pageUrl)
     try {
       const page = parser.parseList(await load(pageUrl), pageUrl)
+      // A real list page always has examples; none means an error page or changed markup
+      if (page.entries.length === 0) {
+        failed.push(pageUrl)
+        continue
+      }
       for (const entry of page.entries) {
         if (!entries.has(entry.url)) entries.set(entry.url, entry)
       }
