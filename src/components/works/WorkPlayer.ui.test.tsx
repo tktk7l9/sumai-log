@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderUi } from '../../../test/ui/render'
@@ -58,6 +58,17 @@ describe('WorkPlayer', () => {
     post(frame, { event: 'onStateChange', info: 0 }, { source: window })
     post(frame, 'not json')
     expect(onWatched).not.toHaveBeenCalled()
+  })
+
+  it('asks the player for its state as soon as the iframe has loaded', () => {
+    const { frame } = setup()
+    const postMessage = vi.spyOn(frame.contentWindow as Window, 'postMessage')
+    expect(postMessage).not.toHaveBeenCalled()
+    fireEvent.load(frame)
+    expect(postMessage).toHaveBeenCalledWith(
+      JSON.stringify({ event: 'listening', id: 'sumai-log', channel: 'widget' }),
+      ORIGIN,
+    )
   })
 
   it('stops listening after unmount', () => {

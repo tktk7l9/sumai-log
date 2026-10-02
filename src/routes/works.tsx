@@ -17,6 +17,9 @@ import { listWorks, markWorkWatched } from '../server/works'
 /** Chip value for "no vendor filter" (not a vendor id) */
 const ALL = 'all'
 
+/** How long 「視聴済みにしました／取り消す」 stays */
+const UNDO_NOTICE_MS = 10_000
+
 export const Route = createFileRoute('/works')({
   component: Page,
   validateSearch: (s) => worksSearchSchema.parse(s),
@@ -61,6 +64,8 @@ function Page() {
     const notificationId = `watched-${work.id}`
     notifications.show({
       id: notificationId,
+      // Longer than the 4 s default: the mark often happens while a video is still on screen
+      autoClose: UNDO_NOTICE_MS,
       message: (
         <Group justify="space-between" wrap="nowrap" gap="sm">
           <Text size="sm">視聴済みにしました</Text>

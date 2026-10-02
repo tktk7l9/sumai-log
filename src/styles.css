@@ -765,3 +765,12 @@ a:focus-visible {
     margin-top: 0;
   }
 }
+
+/* Filter chips are 23px tall at size="xs"; on touch screens give them a 7mm target (SHIG 78).
+   Mouse users keep the compact size */
+@media (pointer: coarse) {
+  .mantine-Chip-label {
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+}

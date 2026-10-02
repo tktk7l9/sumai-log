@@ -203,7 +203,7 @@ A record app for a housing search, used only by one married couple. **The reposi
   named `siteA`/`siteB`/`siteC` (`src/lib/works/`), never after a vendor: vendor names, site
   URLs and example names are real data and are not written in code, tests or commit messages.
   The upsert is keyed by `source_url` and never touches `watched_at`/`watched_by`, nor a video
-  pasted by hand (`video_source = 'manual'`); a work whose detail page failed is left out of
+  pasted by hand (`video_source = 'manual'`); a work whose detail page failed, or parsed to nothing, is left out of
   the SQL instead of being written half-empty, and works removed from a site are not deleted.
   The watched flag is one per work for both users. The tour video plays in a
   `youtube-nocookie.com` iframe without YouTube's script: the page reads the position from

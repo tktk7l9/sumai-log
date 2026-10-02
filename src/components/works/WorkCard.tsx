@@ -1,4 +1,14 @@
-import { Anchor, Badge, Button, Card, Group, Image, Stack, Text } from '@mantine/core'
+import {
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Image,
+  Stack,
+  Text,
+  UnstyledButton,
+} from '@mantine/core'
 import { Check, ExternalLink, Play } from 'lucide-react'
 
 import { formatTsubo } from '../../lib/works/filter'
@@ -70,14 +80,17 @@ export function WorkCard({
         </Group>
 
         {work.youtubeVideoId ? (
-          <Image
-            src={youtubeThumbnailUrl(work.youtubeVideoId)}
-            alt=""
-            radius="sm"
-            h={160}
-            fit="cover"
-            loading="lazy"
-          />
+          // People tap the picture, not only the button below it
+          <UnstyledButton onClick={onPlay} aria-label={`${work.title} の動画を見る`}>
+            <Image
+              src={youtubeThumbnailUrl(work.youtubeVideoId)}
+              alt=""
+              radius="sm"
+              h={160}
+              fit="cover"
+              loading="lazy"
+            />
+          </UnstyledButton>
         ) : null}
 
         {showSpecs ? (

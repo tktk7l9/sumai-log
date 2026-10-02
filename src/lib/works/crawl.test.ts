@@ -80,6 +80,16 @@ describe('crawlSite', () => {
     expect(result.failed).toEqual(['d1'])
   })
 
+  it('leaves out a work whose detail page parsed to nothing', async () => {
+    const blank: SiteParser = {
+      parseList: () => ({ entries: [{ url: 'd1', title: 'T' }], pageUrls: [] }),
+      parseDetail: () => ({}),
+    }
+    const result = await crawlSite(site, blank, async () => '')
+    expect(result.works).toEqual([])
+    expect(result.failed).toEqual(['d1'])
+  })
+
   it('reports a failed list page and keeps going', async () => {
     const { load } = loader({
       'https://example.com/works/': 'list:d1|https://example.com/works/page/2/',

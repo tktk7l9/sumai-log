@@ -205,6 +205,12 @@ describe('works route', () => {
     )
   })
 
+  it('plays the video from its thumbnail too', async () => {
+    const { user } = await renderRoute('/works')
+    await user.click(await screen.findByRole('button', { name: '全部そろった家 の動画を見る' }))
+    expect(await screen.findByTitle('全部そろった家 のルームツアー動画')).toBeInTheDocument()
+  })
+
   it('plays the video in the app, marks it watched automatically and offers to take it back', async () => {
     const { user } = await renderRoute('/works')
     const full = within(await screen.findByRole('article', { name: '全部そろった家' }))

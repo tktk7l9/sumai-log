@@ -56,7 +56,14 @@ export async function crawlSite(
   for (const entry of entries.values()) {
     const order = sortOrder++
     try {
-      const fields = merge(entry, parser.parseDetail(await load(entry.url)))
+      const detail = parser.parseDetail(await load(entry.url))
+      // The page loaded but the parser recognised nothing (the markup changed): writing the
+      // work would blank what the row already has, the same as a failed fetch
+      if (Object.keys(detail).length === 0) {
+        failed.push(entry.url)
+        continue
+      }
+      const fields = merge(entry, detail)
       works.push({
         ...fields,
         title: fields.title ?? entry.url,

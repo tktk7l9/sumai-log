@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { toJstDateKey } from '../src/lib/jst.ts'
 import { parseSitesConfig } from '../src/lib/works/config.ts'
 import { crawlSite } from '../src/lib/works/crawl.ts'
 import { siteA } from '../src/lib/works/siteA.ts'
@@ -109,7 +110,8 @@ async function main() {
     for (const url of failed) console.log(`  failed: ${url}`)
   }
 
-  const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+  // The owner's date (JST), not UTC: before 9:00 the UTC date is still yesterday
+  const stamp = toJstDateKey(new Date().toISOString()).replaceAll('-', '')
   const outPath = resolve(OUT_DIR, `works-${stamp}.sql`)
   writeFileSync(outPath, `${lines.join('\n')}\n`)
   console.log(`wrote ${lines.length - 1} statements to ${outPath}`)
