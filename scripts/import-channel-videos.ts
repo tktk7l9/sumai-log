@@ -36,9 +36,11 @@ const OUT_DIR = resolve(root, 'seed.local/out')
 
 /** videoId -> ISO date. Kept across runs and --refresh: a published date does not change */
 const DATES_PATH = resolve(CACHE_DIR, 'published.json')
-/** Watch pages fetched at the same time, and the pause each worker takes between two */
-const DATE_WORKERS = 4
-const DATE_GAP_MS = 300
+/**
+ * One watch page at a time, slowly: about 300 pages fetched 4 at a time got this machine
+ * rate-limited by YouTube (HTTP 429, a redirect to google.com/sorry) for hours
+ */
+const DATE_GAP_MS = 2000
 const REQUEST_TIMEOUT_MS = 30_000
 
 const refresh = process.argv.includes('--refresh')
@@ -76,36 +78,44 @@ function loadTab(channelId: string, tab: string): unknown {
 
 /**
  * Reads the published date of every video not in the date cache from its watch page (the flat
- * list has none). A page that fails is left out and tried again on the next run
+ * list has none). A page that fails, or is not reached, is tried again on the next run
  */
 async function fillPublishedDates(videoIds: string[]): Promise<Record<string, string>> {
   const dates: Record<string, string> = existsSync(DATES_PATH)
     ? JSON.parse(readFileSync(DATES_PATH, 'utf8'))
     : {}
   const missing = videoIds.filter((id) => !(id in dates))
+  let read = 0
   let failed = 0
-  let next = 0
-  async function worker() {
-    while (next < missing.length) {
-      const id = missing[next++] as string
-      try {
-        const res = await fetch(`https://www.youtube.com/watch?v=${id}`, {
-          headers: { 'accept-language': 'ja-JP,ja;q=0.9' },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        })
-        const date = res.ok ? publishedAtFromWatchPage(await res.text()) : null
-        if (date) dates[id] = date
-        else failed += 1
-      } catch {
-        failed += 1
-      }
-      await new Promise((done) => setTimeout(done, DATE_GAP_MS))
+  for (const id of missing) {
+    let res: Response
+    try {
+      res = await fetch(`https://www.youtube.com/watch?v=${id}`, {
+        headers: { 'accept-language': 'ja-JP,ja;q=0.9' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+    } catch {
+      failed += 1
+      continue
     }
+    // Rate-limited: stop at once (asking again only makes the block longer). What was read is
+    // kept, and the next run carries on from there
+    if (res.status === 429 || res.url.includes('google.com/sorry')) {
+      console.warn('YouTube is rate-limiting this machine; stopped. Run again later to continue.')
+      break
+    }
+    const date = res.ok ? publishedAtFromWatchPage(await res.text()) : null
+    if (date) {
+      dates[id] = date
+      read += 1
+    } else failed += 1
+    await new Promise((done) => setTimeout(done, DATE_GAP_MS))
   }
-  await Promise.all(Array.from({ length: DATE_WORKERS }, worker))
   writeFileSync(`${DATES_PATH}.tmp`, JSON.stringify(dates))
   renameSync(`${DATES_PATH}.tmp`, DATES_PATH)
-  console.log(`published dates: ${missing.length - failed} read, ${failed} failed`)
+  console.log(
+    `published dates: ${read} read, ${failed} failed, ${missing.length - read - failed} left for the next run`,
+  )
   return dates
 }
 
