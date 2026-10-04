@@ -17,6 +17,7 @@ export async function reset() {
     'events',
     'videos',
     'works',
+    'channel_videos',
     'comments',
     'tags',
     'sources',

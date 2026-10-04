@@ -50,10 +50,10 @@ describe('watchedSummary', () => {
 })
 
 describe('vendorOptions', () => {
-  it('lists each vendor once in first-seen order, leaving out works without a vendor', () => {
+  it('lists each vendor once in first-seen order with its count, leaving out works without a vendor', () => {
     expect(vendorOptions(works)).toEqual([
-      { id: 'v1', name: '甲工務店' },
-      { id: 'v2', name: '乙建設' },
+      { id: 'v1', name: '甲工務店', count: 2 },
+      { id: 'v2', name: '乙建設', count: 1 },
     ])
   })
 

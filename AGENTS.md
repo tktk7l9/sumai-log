@@ -215,6 +215,18 @@ A record app for a housing search, used only by one married couple. **The reposi
   `tsr generate`) drops the `@tanstack/react-start` `Register` block at the end of
   `src/routeTree.gen.ts`; after adding a route, let `npm run dev` or `npm run build` regenerate
   the file, or restore that block
+- Channel videos (`/works?tab=videos`, the `channel_videos` table) come only from the SQL that
+  `npm run import:channel-videos` (`scripts/import-channel-videos.ts`, needs `yt-dlp` on PATH)
+  writes to `seed.local/out/`; the owner runs it. Which channels are read is in
+  `seed.local/channel-videos.json` (gitignored), and the yt-dlp output is cached in
+  `seed.local/cache/channel-videos/` (`-- --refresh` asks YouTube again). yt-dlp is called with
+  `youtube:lang=ja` and a Japanese `Accept-Language`, or YouTube returns machine-translated
+  English titles. The upsert is keyed by `video_id` and never touches the watched columns. A
+  channel video and a work with the same tour video share one watched flag: marking either
+  updates both (`setChannelVideoWatched` / `setWorkWatched`), and a newly imported video starts
+  watched when that work already was. The shorts tab gives no length, so a short shows none.
+  Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
+  keys only), while the works stay filtered on the page
 
 ## When the schema changed
 

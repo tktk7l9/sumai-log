@@ -28,15 +28,18 @@ export function watchedSummary(works: Pick<Filterable, 'youtubeVideoId' | 'watch
   }
 }
 
-/** Vendors that have at least one work, in the order they first appear */
+/** Vendors that have at least one work, in the order they first appear, with their number of works */
 export function vendorOptions(
   works: { vendorId: string | null; vendorName: string | null }[],
-): { id: string; name: string }[] {
-  const options = new Map<string, string>()
+): { id: string; name: string; count: number }[] {
+  const options = new Map<string, { id: string; name: string; count: number }>()
   for (const { vendorId, vendorName } of works) {
-    if (vendorId && vendorName && !options.has(vendorId)) options.set(vendorId, vendorName)
+    if (!vendorId || !vendorName) continue
+    const option = options.get(vendorId) ?? { id: vendorId, name: vendorName, count: 0 }
+    option.count += 1
+    options.set(vendorId, option)
   }
-  return [...options].map(([id, name]) => ({ id, name }))
+  return [...options.values()]
 }
 
 /** 50.5 -> '50.5坪' (at most 2 decimals, no trailing zeros) */

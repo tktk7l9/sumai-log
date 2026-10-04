@@ -427,6 +427,43 @@ export const works = sqliteTable(
   (t) => [index('works_vendor_idx').on(t.vendorId)],
 )
 
+export const CHANNEL_VIDEO_KINDS = ['video', 'short', 'live'] as const
+export const CHANNEL_VIDEO_KIND_LABEL: Record<(typeof CHANNEL_VIDEO_KINDS)[number], string> = {
+  video: '動画',
+  short: 'ショート',
+  live: 'ライブ',
+}
+
+/**
+ * Every video of the vendors' YouTube channels (/works?tab=videos). Rows come from the SQL that
+ * scripts/import-channel-videos.ts generates; the app itself only changes the watched columns.
+ * A video that is also a work's tour video shares the watched flag with that work.
+ */
+export const channelVideos = sqliteTable(
+  'channel_videos',
+  {
+    id: id(),
+    /** The 11-character YouTube id. The key the import matches on */
+    videoId: text('video_id').notNull().unique(),
+    /** YouTube channel id ('UC…') */
+    channelId: text('channel_id').notNull(),
+    /** Display name of the channel, from seed.local/channel-videos.json */
+    channel: text('channel').notNull(),
+    vendorId: text('vendor_id').references(() => vendors.id, { onDelete: 'set null' }),
+    kind: text('kind', { enum: CHANNEL_VIDEO_KINDS }).notNull(),
+    title: text('title').notNull(),
+    durationSec: integer('duration_sec'),
+    viewCount: integer('view_count'),
+    /** Position in the channel, newest first (videos, then live, then shorts) */
+    sortOrder: integer('sort_order').notNull().default(0),
+    /** ISO-8601. null = not watched yet. One flag shared by the two users */
+    watchedAt: text('watched_at'),
+    watchedBy: text('watched_by'),
+    ...timestamps,
+  },
+  (t) => [index('channel_videos_channel_idx').on(t.channelId, t.sortOrder)],
+)
+
 export const COMMENT_TARGETS = ['vendor', 'property', 'place', 'visit', 'video'] as const
 
 /** Both users can add a short comment to any record. targetId is not a foreign key (on
@@ -497,6 +534,8 @@ export type Video = typeof videos.$inferSelect
 export type NewVideo = typeof videos.$inferInsert
 export type Work = typeof works.$inferSelect
 export type NewWork = typeof works.$inferInsert
+export type ChannelVideo = typeof channelVideos.$inferSelect
+export type NewChannelVideo = typeof channelVideos.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
 

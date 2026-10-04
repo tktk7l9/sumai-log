@@ -11,6 +11,7 @@ import {
 } from '@mantine/core'
 import { Check, ExternalLink, Play } from 'lucide-react'
 
+import { formatDuration } from '../../lib/channelVideos/format'
 import { formatTsubo } from '../../lib/works/filter'
 import { youtubeThumbnailUrl } from '../../lib/youtube'
 import type { WorkRow } from '../../server/repository/works'
@@ -34,6 +35,11 @@ function headlineOf(work: WorkRow): string {
     .join('　')
 }
 
+/** Family and layout on one line, for the plain list (the aligned view has them as blocks) */
+function householdOf(work: WorkRow): string {
+  return [work.family, work.layout].filter(Boolean).join('・')
+}
+
 export function WorkCard({
   work,
   showSpecs,
@@ -51,6 +57,7 @@ export function WorkCard({
   const watched = work.watchedAt !== null
   const meta = metaOf(work)
   const headline = headlineOf(work)
+  const household = householdOf(work)
   return (
     <Card withBorder padding="md" component="article" aria-label={work.title}>
       <Stack gap="sm">
@@ -95,9 +102,17 @@ export function WorkCard({
 
         {showSpecs ? (
           <WorkSpecs work={work} />
-        ) : headline ? (
-          <Text size="sm">{headline}</Text>
-        ) : null}
+        ) : (
+          <>
+            {headline ? <Text size="sm">{headline}</Text> : null}
+            {household ? <Text size="sm">{household}</Text> : null}
+            {work.points.length > 0 ? (
+              <Text size="xs" c="dimmed" lineClamp={2}>
+                {work.points.join('／')}
+              </Text>
+            ) : null}
+          </>
+        )}
 
         <Group gap="xs">
           {work.youtubeVideoId ? (
@@ -107,7 +122,9 @@ export function WorkCard({
               leftSection={<Play size={16} aria-hidden />}
               onClick={onPlay}
             >
-              動画を見る
+              {work.videoDurationSec === null
+                ? '動画を見る'
+                : `動画を見る（${formatDuration(work.videoDurationSec)}）`}
             </Button>
           ) : null}
           <Button size="sm" mih={44} variant="default" onClick={onToggleWatched}>

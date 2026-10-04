@@ -1,4 +1,4 @@
-import { Button, Chip, Group, Modal, SegmentedControl, Stack, Text } from '@mantine/core'
+import { Chip, Group, Modal, SegmentedControl, Stack, Text } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
@@ -6,24 +6,51 @@ import { useState } from 'react'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
+import { ChannelVideosPanel } from '../components/works/ChannelVideosPanel'
+import { showWatchedNotice } from '../components/works/watchedNotice'
 import { WorkCard } from '../components/works/WorkCard'
 import { WorkPlayer } from '../components/works/WorkPlayer'
 import { WorkVideoForm } from '../components/works/WorkVideoForm'
 import { worksSearchSchema, type WorksSearch } from '../components/works/worksSearch'
 import { filterWorks, vendorOptions, watchedSummary } from '../lib/works/filter'
+import { listChannelVideosPage } from '../server/channelVideos'
+import { CHANNEL_VIDEO_PAGE } from '../server/channelVideos.schema'
 import type { WorkRow } from '../server/repository/works'
 import { listWorks, markWorkWatched } from '../server/works'
 
 /** Chip value for "no vendor filter" (not a vendor id) */
 const ALL = 'all'
 
-/** How long 「視聴済みにしました／取り消す」 stays */
-const UNDO_NOTICE_MS = 10_000
-
 export const Route = createFileRoute('/works')({
   component: Page,
   validateSearch: (s) => worksSearchSchema.parse(s),
-  loader: async () => ({ works: await listWorks() }),
+  // The works are filtered on the page; the videos (thousands) are filtered and paged by the server
+  loaderDeps: ({ search }) =>
+    search.tab === 'videos'
+      ? {
+          tab: 'videos' as const,
+          ch: search.ch,
+          kind: search.kind,
+          unwatched: search.unwatched,
+          q: search.q,
+          n: search.n,
+        }
+      : { tab: 'works' as const },
+  loader: async ({ deps }) =>
+    deps.tab === 'videos'
+      ? {
+          works: null,
+          videos: await listChannelVideosPage({
+            data: {
+              channelId: deps.ch,
+              kind: deps.kind,
+              unwatched: deps.unwatched,
+              q: deps.q,
+              limit: deps.n ?? CHANNEL_VIDEO_PAGE,
+            },
+          }),
+        }
+      : { works: await listWorks(), videos: null },
 })
 
 /** The latest non-null value, kept after the value goes back to null */
@@ -34,9 +61,45 @@ function useLast<T>(value: T | null): T | null {
 }
 
 function Page() {
-  const { works } = Route.useLoaderData()
+  const { works, videos } = Route.useLoaderData()
   const search = Route.useSearch()
   const navigate = useNavigate({ from: '/works' })
+
+  function setSearch(patch: Partial<WorksSearch>) {
+    void navigate({ search: (s) => ({ ...s, ...patch }), replace: true })
+  }
+
+  return (
+    <PageShell title="施工例" description="候補の会社の施工例と動画をまとめて見る">
+      <Stack gap="lg">
+        <SegmentedControl
+          aria-label="見るもの"
+          value={search.tab ?? 'works'}
+          onChange={(v) => setSearch({ tab: v === 'videos' ? 'videos' : undefined })}
+          data={[
+            { value: 'works', label: '施工例' },
+            { value: 'videos', label: '動画' },
+          ]}
+        />
+        {videos ? (
+          <ChannelVideosPanel page={videos} search={search} setSearch={setSearch} />
+        ) : (
+          <WorksPanel works={works ?? []} search={search} setSearch={setSearch} />
+        )}
+      </Stack>
+    </PageShell>
+  )
+}
+
+function WorksPanel({
+  works,
+  search,
+  setSearch,
+}: {
+  works: WorkRow[]
+  search: WorksSearch
+  setSearch: (patch: Partial<WorksSearch>) => void
+}) {
   const router = useRouter()
   const mark = useServerFn(markWorkWatched)
   const [playing, setPlaying] = useState<WorkRow | null>(null)
@@ -53,11 +116,8 @@ function Page() {
     hasVideo: search.video,
     unwatched: search.unwatched,
   })
-  const summary = watchedSummary(works)
-
-  function setSearch(patch: Partial<WorksSearch>) {
-    void navigate({ search: (s) => ({ ...s, ...patch }), replace: true })
-  }
+  // The count follows the vendor chip: "44 件中 3 件" for one vendor, all works otherwise
+  const summary = watchedSummary(filterWorks(works, { vendorId }))
 
   async function setWatched(work: WorkRow, watched: boolean): Promise<boolean> {
     try {
@@ -72,32 +132,11 @@ function Page() {
 
   /** Mark as watched with no confirm dialog: say it, and offer the undo (SHIG 57, 54) */
   async function markWatchedWithUndo(work: WorkRow) {
-    if (!(await setWatched(work, true))) return
-    const notificationId = `watched-${work.id}`
-    notifications.show({
-      id: notificationId,
-      // Longer than the 4 s default: the mark often happens while a video is still on screen
-      autoClose: UNDO_NOTICE_MS,
-      message: (
-        <Group justify="space-between" wrap="nowrap" gap="sm">
-          <Text size="sm">視聴済みにしました</Text>
-          <Button
-            variant="subtle"
-            size="sm"
-            onClick={() => {
-              notifications.hide(notificationId)
-              void setWatched(work, false)
-            }}
-          >
-            取り消す
-          </Button>
-        </Group>
-      ),
-    })
+    if (await setWatched(work, true)) showWatchedNotice(work.id, () => void setWatched(work, false))
   }
 
   return (
-    <PageShell title="施工例" description="候補の会社の施工例をまとめて見る">
+    <>
       {works.length === 0 ? (
         <EmptyState
           emoji="🏡"
@@ -113,11 +152,11 @@ function Page() {
             >
               <Group gap={6}>
                 <Chip value={ALL} size="xs">
-                  すべて
+                  すべて {works.length}
                 </Chip>
                 {vendors.map((vendor) => (
                   <Chip key={vendor.id} value={vendor.id} size="xs">
-                    {vendor.name}
+                    {vendor.name} {vendor.count}
                   </Chip>
                 ))}
               </Group>
@@ -216,6 +255,6 @@ function Page() {
           />
         ) : null}
       </Modal>
-    </PageShell>
+    </>
   )
 }
