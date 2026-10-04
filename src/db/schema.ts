@@ -454,6 +454,8 @@ export const channelVideos = sqliteTable(
     title: text('title').notNull(),
     durationSec: integer('duration_sec'),
     viewCount: integer('view_count'),
+    /** ISO-8601 (UTC). When YouTube published the video; null until the import could read it */
+    publishedAt: text('published_at'),
     /** Position in the channel, newest first (videos, then live, then shorts) */
     sortOrder: integer('sort_order').notNull().default(0),
     /** ISO-8601. null = not watched yet. One flag shared by the two users */

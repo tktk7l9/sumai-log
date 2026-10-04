@@ -37,6 +37,8 @@ export type ParsedChannelVideo = FlatEntry & {
   vendorId: string | null
   kind: ChannelVideoKind
   sortOrder: number
+  /** ISO-8601 (UTC), read from the video's own page; null when it could not be read */
+  publishedAt: string | null
 }
 
 function fail(reason: string): never {
@@ -117,11 +119,32 @@ export function channelVideosOf(
         vendorId: channel.vendorId,
         kind,
         sortOrder: out.length,
+        publishedAt: null,
       })
     }
   }
   return out
 }
+
+/**
+ * When the video was published, from its watch page (the flat channel list has no dates). The
+ * page writes it in YouTube's own time zone with an offset, e.g. 2026-09-22T02:00:07-07:00.
+ */
+export function publishedAtFromWatchPage(html: string): string | null {
+  const raw =
+    /itemprop="datePublished" content="([^"]+)"/.exec(html)?.[1] ??
+    /"publishDate":"([^"]+)"/.exec(html)?.[1]
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString()
+}
+
+/**
+ * The watched time a video record stands for, as SQL: its watched date at 00:00 JST, or when it
+ * was recorded when the date is empty. Also used by the one-off backfill in the import script
+ */
+export const RECORD_WATCHED_AT =
+  "COALESCE(watched_on || 'T00:00:00+09:00', replace(created_at, ' ', 'T') || 'Z')"
 
 /** Columns the channel decides. id, created_at and watched_* are the app's */
 const CHANNEL_COLUMNS = [
@@ -137,7 +160,9 @@ const CHANNEL_COLUMNS = [
 
 /**
  * Upsert of one video keyed by video_id. Re-running never touches the watched flag. A new row
- * starts as watched when the same video is a work's tour video that was already watched.
+ * starts as watched when the same video is a work's tour video that was already watched, or
+ * is already in the video records (動画の記録: being recorded means it was watched). A date
+ * that could not be read this time does not erase the one read before.
  */
 export function channelVideoUpsertSql(video: ParsedChannelVideo, id: string): string {
   const values: Record<(typeof CHANNEL_COLUMNS)[number], string | number | null> = {
@@ -150,22 +175,44 @@ export function channelVideoUpsertSql(video: ParsedChannelVideo, id: string): st
     view_count: video.viewCount,
     sort_order: video.sortOrder,
   }
-  const watchedFrom = (column: string) =>
-    `(SELECT ${column} FROM works WHERE youtube_video_id = ${sqlValue(video.videoId)} AND watched_at IS NOT NULL LIMIT 1)`
-  const columns = ['id', 'video_id', ...CHANNEL_COLUMNS, 'watched_at', 'watched_by']
+  const vid = sqlValue(video.videoId)
+  const fromWork = (column: string) =>
+    `(SELECT ${column} FROM works WHERE youtube_video_id = ${vid} AND watched_at IS NOT NULL LIMIT 1)`
+  const fromRecord = (expression: string) =>
+    `(SELECT ${expression} FROM videos WHERE video_id = ${vid} ORDER BY created_at LIMIT 1)`
+  const columns = ['id', 'video_id', ...CHANNEL_COLUMNS, 'published_at', 'watched_at', 'watched_by']
   const literals = [
     sqlValue(id),
-    sqlValue(video.videoId),
+    vid,
     ...CHANNEL_COLUMNS.map((c) => sqlValue(values[c])),
-    watchedFrom('watched_at'),
-    watchedFrom('watched_by'),
+    sqlValue(video.publishedAt),
+    `COALESCE(${fromWork('watched_at')}, ${fromRecord(RECORD_WATCHED_AT)})`,
+    `COALESCE(${fromWork('watched_by')}, ${fromRecord('created_by')})`,
   ]
   const updates = [
     ...CHANNEL_COLUMNS.map((c) => `${c} = excluded.${c}`),
+    'published_at = COALESCE(excluded.published_at, channel_videos.published_at)',
     "updated_at = datetime('now')",
   ]
   return (
     `INSERT INTO channel_videos (${columns.join(', ')}) VALUES (${literals.join(', ')}) ` +
     `ON CONFLICT(video_id) DO UPDATE SET ${updates.join(', ')};`
   )
+}
+
+/**
+ * Rows imported before they were recorded: marks every channel video and work whose video is
+ * in the video records and is not watched yet. Safe to run again; appended to every import
+ */
+export function recordedWatchedBackfillSql(): string[] {
+  const target = (table: string, column: string) => {
+    const record = (expression: string) =>
+      `(SELECT ${expression} FROM videos WHERE videos.video_id = ${table}.${column} ORDER BY created_at LIMIT 1)`
+    return (
+      `UPDATE ${table} SET watched_at = ${record(RECORD_WATCHED_AT)}, ` +
+      `watched_by = ${record('created_by')}, updated_at = datetime('now') ` +
+      `WHERE watched_at IS NULL AND ${column} IN (SELECT video_id FROM videos);`
+    )
+  }
+  return [target('channel_videos', 'video_id'), target('works', 'youtube_video_id')]
 }

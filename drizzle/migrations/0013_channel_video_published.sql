@@ -1,0 +1,1 @@
+ALTER TABLE `channel_videos` ADD `published_at` text;

@@ -3,16 +3,20 @@ import { Check, Play } from 'lucide-react'
 
 import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
 import { formatDuration, formatViews } from '../../lib/channelVideos/format'
+import { toJstDateKey } from '../../lib/jst'
 import { youtubeThumbnailUrl } from '../../lib/youtube'
 import type { ChannelVideoRow } from '../../server/repository/channelVideos'
 
-/** Channel, kind, length and views on one line; only what YouTube gave */
+/** Channel, kind, length, views and the published date (JST) on one line; only what YouTube gave */
 function metaOf(video: ChannelVideoRow): string {
   return [
     video.channel,
     CHANNEL_VIDEO_KIND_LABEL[video.kind],
     video.durationSec === null ? null : formatDuration(video.durationSec),
     video.viewCount === null ? null : formatViews(video.viewCount),
+    video.publishedAt === null
+      ? null
+      : `${toJstDateKey(video.publishedAt).replaceAll('-', '/')} 公開`,
   ]
     .filter(Boolean)
     .join('・')

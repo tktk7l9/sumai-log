@@ -225,6 +225,12 @@ A record app for a housing search, used only by one married couple. **The reposi
   channel video and a work with the same tour video share one watched flag: marking either
   updates both (`setChannelVideoWatched` / `setWorkWatched`), and a newly imported video starts
   watched when that work already was. The shorts tab gives no length, so a short shows none.
+  The flat list has no dates either: the script reads `published_at` from each watch page
+  (one at a time, 2 s apart, stopping at the first HTTP 429) and keeps them in `seed.local/cache/channel-videos/published.json` across runs
+  and `--refresh`; a date that failed stays as it was in D1. A video in the video records
+  (`videos`) counts as watched: a new record marks the channel video and the work
+  (`markRecordedVideoWatched`, on create only, so a mark taken back stays back), and every
+  import ends with `recordedWatchedBackfillSql` for rows imported before they were recorded.
   Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
   keys only), while the works stay filtered on the page
 
