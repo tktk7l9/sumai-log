@@ -28,7 +28,8 @@
     "db:export": "wrangler d1 export sumai-log --remote --output backups/sumai-log-$(date +%Y%m%d).sql",
     "import:seed": "node scripts/import-seed.mjs",
     "import:mbox": "tsx scripts/import-mbox.ts",
-    "import:works": "tsx scripts/import-works.ts"
+    "import:works": "tsx scripts/import-works.ts",
+    "import:channel-videos": "tsx scripts/import-channel-videos.ts"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.60.0",

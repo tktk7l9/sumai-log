@@ -1,12 +1,18 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { listChannelVideosPage, markChannelVideoWatched } from '../server/channelVideos'
+import type { ChannelVideoRow } from '../server/repository/channelVideos'
 import { listWorks, markWorkWatched, saveWorkVideo } from '../server/works'
 import { mockOf, stub, uid, work } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
-function row(over: Parameters<typeof work>[0], vendorName: string | null = null) {
-  return { ...work(over), vendorName }
+function row(
+  over: Parameters<typeof work>[0],
+  vendorName: string | null = null,
+  videoDurationSec: number | null = null,
+) {
+  return { ...work(over), vendorName, videoDurationSec }
 }
 
 const FULL = row(
@@ -25,6 +31,7 @@ const FULL = row(
     youtubeVideoId: 'abcdefghijk',
   },
   '甲工務店',
+  754,
 )
 const WATCHED = row(
   {
@@ -71,6 +78,25 @@ describe('works route', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('shows the count per vendor, and the watched count follows the chosen vendor', async () => {
+    const { user } = await renderRoute('/works')
+    expect(await screen.findByRole('radio', { name: '甲工務店 2' })).toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: '甲工務店 2' }))
+    expect(await screen.findByText('2 件中 1 件を視聴済み')).toBeInTheDocument()
+  })
+
+  it('shows family, layout, points and the video length in the plain list too', async () => {
+    await renderRoute('/works')
+    const full = within(await screen.findByRole('article', { name: '全部そろった家' }))
+    expect(full.getByText(/^延床 30.2坪\s+UA値 0.31\s+C値 0.6$/)).toBeInTheDocument()
+    expect(full.getByText('大人2人、子供1人・2LDK＋書斎')).toBeInTheDocument()
+    expect(full.getByText('断熱性能：UA値0.31／耐震等級3')).toBeInTheDocument()
+    expect(full.getByRole('button', { name: '動画を見る（12:34）' })).toBeInTheDocument()
+    // No length known: the plain wording
+    const watched = within(screen.getByRole('article', { name: '見終わった家' }))
+    expect(watched.getByRole('button', { name: '動画を見る' })).toBeInTheDocument()
+  })
+
   it('shows the empty state when nothing has been imported', async () => {
     stub(listWorks, [])
     await renderRoute('/works')
@@ -79,14 +105,14 @@ describe('works route', () => {
 
   it('filters by vendor, by video and by unwatched, keeping the filter in the URL', async () => {
     const { user, router } = await renderRoute('/works')
-    await user.click(await screen.findByRole('radio', { name: '乙建設' }))
+    await user.click(await screen.findByRole('radio', { name: '乙建設 1' }))
     await waitFor(() => expect(router.state.location.search).toEqual({ v: 'v2' }))
     expect(screen.queryByText('全部そろった家')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('checkbox', { name: '動画あり' }))
     expect(await screen.findByText('条件に合う施工例がありません')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('radio', { name: 'すべて' }))
+    await user.click(screen.getByRole('radio', { name: 'すべて 3' }))
     await user.click(screen.getByRole('checkbox', { name: 'まだ見ていない' }))
     await waitFor(() =>
       expect(router.state.location.search).toEqual({ video: true, unwatched: true }),
@@ -99,7 +125,7 @@ describe('works route', () => {
     await renderRoute('/works?v=nope')
     expect(await screen.findByText('名前だけの家')).toBeInTheDocument()
     expect(screen.getByText('全部そろった家')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'すべて' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'すべて 3' })).toBeChecked()
   })
 
   it('falls back to no filter for an unknown search value', async () => {
@@ -221,7 +247,7 @@ describe('works route', () => {
   it('plays the video in the app, marks it watched automatically and offers to take it back', async () => {
     const { user } = await renderRoute('/works')
     const full = within(await screen.findByRole('article', { name: '全部そろった家' }))
-    await user.click(full.getByRole('button', { name: '動画を見る' }))
+    await user.click(full.getByRole('button', { name: '動画を見る（12:34）' }))
 
     const frame = (await screen.findByTitle(
       '全部そろった家 のルームツアー動画',
@@ -260,5 +286,164 @@ describe('works route', () => {
     )
     await new Promise((done) => setTimeout(done, 50))
     expect(mockOf(markWorkWatched)).not.toHaveBeenCalled()
+  })
+})
+
+const CH_A = 'UCaaaaaaaaaaaaaaaaaaaaaa'
+const CH_B = 'UCbbbbbbbbbbbbbbbbbbbbbb'
+
+function clip(n: number, over: Partial<ChannelVideoRow> = {}): ChannelVideoRow {
+  return {
+    id: uid(100 + n),
+    videoId: `video${String(n).padStart(6, '0')}`,
+    channelId: CH_A,
+    channel: '甲工務店',
+    vendorId: 'v1',
+    kind: 'video',
+    title: `動画${n}`,
+    durationSec: 95,
+    viewCount: 12_345,
+    sortOrder: n,
+    watchedAt: null,
+    ...over,
+  }
+}
+
+const CHANNELS = [
+  { channelId: CH_A, channel: '甲工務店', total: 40, watched: 1 },
+  { channelId: CH_B, channel: '乙の会', total: 2, watched: 0 },
+]
+
+describe('works route, videos tab', () => {
+  beforeEach(() => {
+    stub(listWorks, [FULL])
+    stub(listChannelVideosPage, {
+      rows: [clip(1), clip(2, { watchedAt: '2026-10-01T00:00:00.000Z', kind: 'short' })],
+      matched: 42,
+      channels: CHANNELS,
+    })
+    stub(markChannelVideoWatched, { ok: true })
+  })
+
+  it('switches to the videos and back, keeping the choice in the URL', async () => {
+    const { user, router } = await renderRoute('/works')
+    await user.click(await screen.findByRole('radio', { name: '動画' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ tab: 'videos' }))
+    expect(await screen.findByRole('article', { name: '動画1' })).toBeInTheDocument()
+    expect(mockOf(listChannelVideosPage)).toHaveBeenCalledWith({ data: { limit: 30 } })
+
+    await user.click(screen.getByRole('radio', { name: '施工例' }))
+    expect(await screen.findByRole('article', { name: '全部そろった家' })).toBeInTheDocument()
+  })
+
+  it('shows the count per channel, the watched count, and length and views per video', async () => {
+    await renderRoute('/works?tab=videos')
+    expect(await screen.findByRole('radio', { name: 'すべて 42' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: '甲工務店 40' })).toBeInTheDocument()
+    expect(screen.getByText('42 本中 1 本を視聴済み')).toBeInTheDocument()
+    const first = within(screen.getByRole('article', { name: '動画1' }))
+    expect(first.getByText('甲工務店・動画・1:35・1.2万回')).toBeInTheDocument()
+    const second = within(screen.getByRole('article', { name: '動画2' }))
+    expect(second.getByText('視聴済み')).toBeInTheDocument()
+    expect(second.getByText(/ショート/)).toBeInTheDocument()
+  })
+
+  it('passes the filters to the server and counts only the chosen channel', async () => {
+    const { user, router } = await renderRoute('/works?tab=videos')
+    await user.click(await screen.findByRole('radio', { name: '乙の会 2' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ ch: CH_B }))
+    expect(await screen.findByText('2 本中 0 本を視聴済み')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: 'ライブ' }))
+    await user.click(screen.getByRole('checkbox', { name: 'まだ見ていない' }))
+    await user.type(screen.getByRole('textbox', { name: 'タイトルで検索' }), ' 平屋 ')
+    await waitFor(() =>
+      expect(mockOf(listChannelVideosPage)).toHaveBeenLastCalledWith({
+        data: { channelId: CH_B, kind: 'live', unwatched: true, q: '平屋', limit: 30 },
+      }),
+    )
+
+    await user.click(screen.getByRole('radio', { name: '全種類' }))
+    await user.click(screen.getByRole('radio', { name: 'すべて 42' }))
+    await waitFor(() =>
+      expect(router.state.location.search).toEqual({ tab: 'videos', unwatched: true, q: '平屋' }),
+    )
+  })
+
+  it('treats an unknown channel id as no filter', async () => {
+    await renderRoute('/works?tab=videos&ch=UCnope')
+    expect(await screen.findByRole('radio', { name: 'すべて 42' })).toBeChecked()
+  })
+
+  it('shows 30 more with the "show more" button', async () => {
+    const { user, router } = await renderRoute('/works?tab=videos')
+    await user.click(await screen.findByRole('button', { name: 'もっと見る（残り 40 本）' }))
+    await waitFor(() => expect(router.state.location.search).toEqual({ tab: 'videos', n: 60 }))
+    await waitFor(() =>
+      expect(mockOf(listChannelVideosPage)).toHaveBeenLastCalledWith({ data: { limit: 60 } }),
+    )
+  })
+
+  it('marks a video watched with an undo, and takes a watched one back', async () => {
+    const { user } = await renderRoute('/works?tab=videos')
+    const first = within(await screen.findByRole('article', { name: '動画1' }))
+    await user.click(first.getByRole('button', { name: '視聴済みにする' }))
+    await waitFor(() =>
+      expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+        data: { id: uid(101), watched: true },
+      }),
+    )
+    await user.click(await screen.findByRole('button', { name: '取り消す' }))
+    await waitFor(() =>
+      expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+        data: { id: uid(101), watched: false },
+      }),
+    )
+
+    const second = within(screen.getByRole('article', { name: '動画2' }))
+    await user.click(second.getByRole('button', { name: '視聴済みを取り消す' }))
+    await waitFor(() =>
+      expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+        data: { id: uid(102), watched: false },
+      }),
+    )
+  })
+
+  it('says so when saving fails', async () => {
+    mockOf(markChannelVideoWatched).mockRejectedValue(new Error('boom'))
+    const { user } = await renderRoute('/works?tab=videos')
+    const first = within(await screen.findByRole('article', { name: '動画1' }))
+    await user.click(first.getByRole('button', { name: '視聴済みにする' }))
+    expect(await screen.findByText('保存できませんでした')).toBeInTheDocument()
+  })
+
+  it('plays a video in the app and marks it watched at the end', async () => {
+    const { user } = await renderRoute('/works?tab=videos')
+    await user.click(await screen.findByRole('button', { name: '動画1 を見る' }))
+    const frame = (await screen.findByTitle('動画1 のルームツアー動画')) as HTMLIFrameElement
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: 'https://www.youtube-nocookie.com',
+        source: frame.contentWindow,
+        data: JSON.stringify({ event: 'onStateChange', info: 0 }),
+      }),
+    )
+    await waitFor(() =>
+      expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+        data: { id: uid(101), watched: true },
+      }),
+    )
+  })
+
+  it('says when nothing matches, and when nothing has been imported', async () => {
+    stub(listChannelVideosPage, { rows: [], matched: 0, channels: CHANNELS })
+    await renderRoute('/works?tab=videos&q=nothing')
+    expect(await screen.findByText('条件に合う動画がありません')).toBeInTheDocument()
+  })
+
+  it('shows the empty state before the first import', async () => {
+    stub(listChannelVideosPage, { rows: [], matched: 0, channels: [] })
+    await renderRoute('/works?tab=videos')
+    expect(await screen.findByText('動画がまだありません')).toBeInTheDocument()
   })
 })
