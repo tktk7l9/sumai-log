@@ -742,6 +742,41 @@ a:focus-visible {
 }
 
 /* Works page: the aligned "Data" block. Labels share one column so values line up across cards */
+.channel-video-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'thumb text'
+    'actions actions';
+  gap: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+}
+.channel-video-thumb {
+  grid-area: thumb;
+}
+.channel-video-text {
+  grid-area: text;
+}
+.channel-video-actions {
+  grid-area: actions;
+}
+@media (min-width: 48em) {
+  .channel-video-head {
+    grid-template-areas:
+      'thumb text'
+      'thumb actions';
+    grid-template-rows: auto 1fr;
+    row-gap: var(--mantine-spacing-xs);
+  }
+  .channel-video-actions {
+    align-self: start;
+  }
+}
+
+.channel-video-work {
+  border-top: 1px solid var(--mantine-color-default-border);
+  padding-top: var(--mantine-spacing-sm);
+}
+
 .work-specs {
   display: grid;
   grid-template-columns: 1fr;
