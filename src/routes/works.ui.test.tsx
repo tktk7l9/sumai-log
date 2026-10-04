@@ -303,6 +303,7 @@ function clip(n: number, over: Partial<ChannelVideoRow> = {}): ChannelVideoRow {
     title: `動画${n}`,
     durationSec: 95,
     viewCount: 12_345,
+    publishedAt: '2026-09-21T16:00:00.000Z',
     sortOrder: n,
     watchedAt: null,
     ...over,
@@ -342,7 +343,7 @@ describe('works route, videos tab', () => {
     expect(screen.getByRole('radio', { name: '甲工務店 40' })).toBeInTheDocument()
     expect(screen.getByText('42 本中 1 本を視聴済み')).toBeInTheDocument()
     const first = within(screen.getByRole('article', { name: '動画1' }))
-    expect(first.getByText('甲工務店・動画・1:35・1.2万回')).toBeInTheDocument()
+    expect(first.getByText('甲工務店・動画・1:35・1.2万回・2026/09/22 公開')).toBeInTheDocument()
     const second = within(screen.getByRole('article', { name: '動画2' }))
     expect(second.getByText('視聴済み')).toBeInTheDocument()
     expect(second.getByText(/ショート/)).toBeInTheDocument()

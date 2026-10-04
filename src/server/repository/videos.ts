@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { comments, vendors, videos, type NewVideo, type Video } from '../../db/schema'
+import { markRecordedVideoWatched } from './channelVideos'
 import { assertUpdated } from './stale'
 
 type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
@@ -9,12 +10,17 @@ type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>
   expectedUpdatedAt?: string | null
 }
 
-/** Creates when there is no id, updates when there is. The creator is recorded only on the first save */
+/**
+ * Creates when there is no id, updates when there is. The creator is recorded only on the first
+ * save. A newly recorded video counts as watched on /works too (markRecordedVideoWatched); an
+ * edit does not mark again, so a mark taken back on /works stays taken back
+ */
 export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string): Promise<string> {
   const { id, expectedUpdatedAt, ...values } = input
   if (!id) {
     const newId = crypto.randomUUID()
     await db.insert(videos).values({ ...values, id: newId, createdBy: actorEmail })
+    await markRecordedVideoWatched(db, values.videoId, actorEmail)
     return newId
   }
   const rows = await db

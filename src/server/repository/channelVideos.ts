@@ -53,6 +53,7 @@ export async function listChannelVideos(
         title: channelVideos.title,
         durationSec: channelVideos.durationSec,
         viewCount: channelVideos.viewCount,
+        publishedAt: channelVideos.publishedAt,
         sortOrder: channelVideos.sortOrder,
         watchedAt: channelVideos.watchedAt,
       })
@@ -107,4 +108,29 @@ export async function setChannelVideoWatched(
   if (!videoId) return false
   await db.update(works).set(patch).where(eq(works.youtubeVideoId, videoId))
   return true
+}
+
+/**
+ * A video that was just written in the video records (動画の記録) has been watched: mark the
+ * same channel video and the work with that tour video, unless they already are. Called by
+ * upsertVideo; the import does the same for videos recorded before they were imported
+ */
+export async function markRecordedVideoWatched(
+  db: Db,
+  videoId: string,
+  actorEmail: string,
+): Promise<void> {
+  const patch = {
+    watchedAt: new Date().toISOString(),
+    watchedBy: actorEmail,
+    updatedAt: sql`(datetime('now'))`,
+  }
+  await db
+    .update(channelVideos)
+    .set(patch)
+    .where(and(eq(channelVideos.videoId, videoId), isNull(channelVideos.watchedAt)))
+  await db
+    .update(works)
+    .set(patch)
+    .where(and(eq(works.youtubeVideoId, videoId), isNull(works.watchedAt)))
 }

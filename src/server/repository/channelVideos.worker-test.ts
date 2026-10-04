@@ -2,10 +2,15 @@ import { env } from 'cloudflare:test'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { channelVideos, vendors, works, type NewChannelVideo } from '../../db/schema'
-import { channelVideoUpsertSql, type ParsedChannelVideo } from '../../lib/channelVideos/import'
+import { channelVideos, vendors, videos, works, type NewChannelVideo } from '../../db/schema'
+import {
+  channelVideoUpsertSql,
+  recordedWatchedBackfillSql,
+  type ParsedChannelVideo,
+} from '../../lib/channelVideos/import'
 import { channelSummaries, listChannelVideos, setChannelVideoWatched } from './channelVideos'
 import { actor, db, reset } from './test-helpers'
+import { upsertVideo } from './videos'
 import { listWorksWithVendor, setWorkWatched } from './works'
 
 beforeEach(reset)
@@ -116,6 +121,7 @@ describe('channelVideoUpsertSql against D1', () => {
     vendorId: null,
     kind: 'video',
     sortOrder: 0,
+    publishedAt: '2026-09-22T09:00:07.000Z',
   }
 
   it('inserts, then updates the channel columns and keeps the watched flag', async () => {
@@ -146,5 +152,105 @@ describe('channelVideoUpsertSql against D1', () => {
     await env.DB.prepare(channelVideoUpsertSql(parsed, crypto.randomUUID())).run()
     const [row] = await db.select().from(channelVideos)
     expect([row?.watchedAt, row?.watchedBy]).toEqual(['2026-10-01T00:00:00.000Z', actor])
+  })
+})
+
+async function addRecord(videoId: string, watchedOn: string | null) {
+  await db.insert(videos).values({
+    id: crypto.randomUUID(),
+    url: `https://www.youtube.com/watch?v=${videoId}`,
+    videoId,
+    title: '記録した動画',
+    watchedOn,
+    createdBy: actor,
+  })
+}
+
+describe('published date and the video records', () => {
+  const parsed: ParsedChannelVideo = {
+    videoId: 'aaaaaaaaaaa',
+    title: '一本目',
+    durationSec: 60,
+    viewCount: 5,
+    channelId: CH_A,
+    channel: '甲工務店',
+    vendorId: null,
+    kind: 'video',
+    sortOrder: 0,
+    publishedAt: '2026-09-22T09:00:07.000Z',
+  }
+
+  it('keeps a date read before when this run could not read it', async () => {
+    await env.DB.prepare(channelVideoUpsertSql(parsed, crypto.randomUUID())).run()
+    await env.DB.prepare(
+      channelVideoUpsertSql({ ...parsed, publishedAt: null }, crypto.randomUUID()),
+    ).run()
+    const [row] = await db.select().from(channelVideos)
+    expect(row?.publishedAt).toBe('2026-09-22T09:00:07.000Z')
+    expect((await listChannelVideos(db, { limit: 1 })).rows[0]?.publishedAt).toBe(
+      '2026-09-22T09:00:07.000Z',
+    )
+  })
+
+  it('starts a new video as watched when it is already in the records', async () => {
+    await addRecord('aaaaaaaaaaa', '2026-09-30')
+    await env.DB.prepare(channelVideoUpsertSql(parsed, crypto.randomUUID())).run()
+    const [row] = await db.select().from(channelVideos)
+    expect([row?.watchedAt, row?.watchedBy]).toEqual(['2026-09-30T00:00:00+09:00', actor])
+  })
+
+  it('backfills videos and works imported before they were recorded, and only those', async () => {
+    await addVideo({ videoId: 'aaaaaaaaaaa' })
+    await addVideo({ videoId: 'bbbbbbbbbbb' })
+    await addVideo({ videoId: 'ccccccccccc', watchedAt: '2026-01-01T00:00:00.000Z' })
+    await db.insert(works).values({
+      id: crypto.randomUUID(),
+      sourceUrl: 'https://example.com/works/p1/',
+      site: 'siteA',
+      title: 'テストの家',
+      youtubeVideoId: 'aaaaaaaaaaa',
+    })
+    await addRecord('aaaaaaaaaaa', null)
+    await addRecord('ccccccccccc', '2026-09-30')
+    for (const statement of recordedWatchedBackfillSql()) await env.DB.prepare(statement).run()
+
+    const byId = Object.fromEntries(
+      (await db.select().from(channelVideos)).map((r) => [r.videoId, r.watchedAt]),
+    )
+    expect(byId.aaaaaaaaaaa).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/)
+    expect(byId.bbbbbbbbbbb).toBeNull()
+    // Already watched: left as it was
+    expect(byId.ccccccccccc).toBe('2026-01-01T00:00:00.000Z')
+    const [work] = await db.select().from(works)
+    expect(work?.watchedBy).toBe(actor)
+  })
+
+  it('marks the channel video and the work when a video is recorded in the app', async () => {
+    await addVideo({ videoId: 'aaaaaaaaaaa' })
+    await db.insert(works).values({
+      id: crypto.randomUUID(),
+      sourceUrl: 'https://example.com/works/p1/',
+      site: 'siteA',
+      title: 'テストの家',
+      youtubeVideoId: 'aaaaaaaaaaa',
+    })
+    const id = await upsertVideo(
+      db,
+      { url: 'https://youtu.be/aaaaaaaaaaa', videoId: 'aaaaaaaaaaa', title: '記録した動画' },
+      actor,
+    )
+    const [video] = await db.select().from(channelVideos)
+    const [work] = await db.select().from(works)
+    expect([video?.watchedBy, work?.watchedBy]).toEqual([actor, actor])
+
+    // Editing the record does not mark again a video whose mark was taken back on /works
+    await setChannelVideoWatched(db, video!.id, false, actor)
+    await upsertVideo(
+      db,
+      { id, url: 'https://youtu.be/aaaaaaaaaaa', videoId: 'aaaaaaaaaaa', title: '改題' },
+      actor,
+    )
+    const [again] = await db.select().from(channelVideos)
+    expect(again?.watchedAt).toBeNull()
   })
 })

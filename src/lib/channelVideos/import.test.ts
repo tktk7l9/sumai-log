@@ -6,6 +6,8 @@ import {
   channelVideosOf,
   parseChannelsConfig,
   parseFlatPlaylist,
+  publishedAtFromWatchPage,
+  recordedWatchedBackfillSql,
   type ChannelConfig,
 } from './import'
 
@@ -90,7 +92,12 @@ describe('channelVideosOf', () => {
       ['bbbbbbbbbbb', 'video', 1],
       ['ccccccccccc', 'live', 2],
     ])
-    expect(rows[0]).toMatchObject({ channelId: CHANNEL_ID, channel: '甲工務店', vendorId: 'v1' })
+    expect(rows[0]).toMatchObject({
+      channelId: CHANNEL_ID,
+      channel: '甲工務店',
+      vendorId: 'v1',
+      publishedAt: null,
+    })
   })
 
   it('reads the tabs in the order videos, live, shorts', () => {
@@ -99,7 +106,7 @@ describe('channelVideosOf', () => {
 })
 
 describe('channelVideoUpsertSql', () => {
-  it('upserts by video_id, keeps the watched flag and takes it from a watched work when new', () => {
+  it('upserts by video_id, keeps the watched flag and takes it from a work or a record when new', () => {
     const sql = channelVideoUpsertSql(
       {
         videoId: 'aaaaaaaaaaa',
@@ -111,14 +118,49 @@ describe('channelVideoUpsertSql', () => {
         vendorId: null,
         kind: 'short',
         sortOrder: 4,
+        publishedAt: '2026-09-22T09:00:07.000Z',
       },
       'id-1',
     )
     expect(sql).toContain(
-      `VALUES ('id-1', 'aaaaaaaaaaa', '${CHANNEL_ID}', '甲工務店', NULL, 'short', '甲''の家', NULL, 10, 4, (SELECT watched_at FROM works WHERE youtube_video_id = 'aaaaaaaaaaa'`,
+      `VALUES ('id-1', 'aaaaaaaaaaa', '${CHANNEL_ID}', '甲工務店', NULL, 'short', '甲''の家', NULL, 10, 4, '2026-09-22T09:00:07.000Z', COALESCE((SELECT watched_at FROM works WHERE youtube_video_id = 'aaaaaaaaaaa'`,
+    )
+    expect(sql).toContain("FROM videos WHERE video_id = 'aaaaaaaaaaa'")
+    expect(sql).toContain(
+      'published_at = COALESCE(excluded.published_at, channel_videos.published_at)',
     )
     expect(sql).toContain('ON CONFLICT(video_id) DO UPDATE SET channel_id = excluded.channel_id')
     expect(sql).not.toMatch(/watched_at = excluded/)
     expect(sql.endsWith(';')).toBe(true)
+  })
+})
+
+describe('publishedAtFromWatchPage', () => {
+  it('reads the date with its offset and returns it in UTC', () => {
+    expect(
+      publishedAtFromWatchPage(
+        '<meta itemprop="datePublished" content="2026-09-22T02:00:07-07:00">',
+      ),
+    ).toBe('2026-09-22T09:00:07.000Z')
+    expect(publishedAtFromWatchPage('{"publishDate":"2025-01-31T23:30:00-08:00"}')).toBe(
+      '2025-02-01T07:30:00.000Z',
+    )
+  })
+
+  it('returns null when the page has no date or an unreadable one', () => {
+    expect(publishedAtFromWatchPage('<html></html>')).toBeNull()
+    expect(publishedAtFromWatchPage('{"publishDate":"someday"}')).toBeNull()
+  })
+})
+
+describe('recordedWatchedBackfillSql', () => {
+  it('marks unwatched channel videos and works that are in the video records', () => {
+    const [channel, work] = recordedWatchedBackfillSql()
+    expect(channel).toMatch(/^UPDATE channel_videos SET watched_at = /)
+    expect(channel).toContain(
+      'WHERE watched_at IS NULL AND video_id IN (SELECT video_id FROM videos)',
+    )
+    expect(work).toContain('videos.video_id = works.youtube_video_id')
+    expect(work).toContain('youtube_video_id IN (SELECT video_id FROM videos)')
   })
 })
