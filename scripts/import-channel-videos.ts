@@ -4,7 +4,8 @@
  *   npm run import:channel-videos               # uses the cached lists when there are any
  *   npm run import:channel-videos -- --refresh  # asks YouTube again
  *
- * Needs yt-dlp on PATH (brew install yt-dlp). Which channels are read is in
+ * Needs yt-dlp on PATH (brew install yt-dlp). Published dates come from the YouTube Data API when
+ * YOUTUBE_API_KEY is set (in the environment or in .dev.vars), else from each watch page. Which channels are read is in
  * seed.local/channel-videos.json (gitignored: it is real data):
  *   { "channels": [{ "channelId": "UC…", "name": "…", "vendorId": "<vendors.id or null>" }] }
  *
@@ -24,8 +25,11 @@ import {
   channelVideosOf,
   parseChannelsConfig,
   parseFlatPlaylist,
+  publishedAtFromVideosList,
   publishedAtFromWatchPage,
   recordedWatchedBackfillSql,
+  VIDEOS_LIST_BATCH,
+  videosListUrl,
 } from '../src/lib/channelVideos/import.ts'
 import { toJstDateKey } from '../src/lib/jst.ts'
 
@@ -85,6 +89,47 @@ async function fillPublishedDates(videoIds: string[]): Promise<Record<string, st
     ? JSON.parse(readFileSync(DATES_PATH, 'utf8'))
     : {}
   const missing = videoIds.filter((id) => !(id in dates))
+  const apiKey = youtubeApiKey()
+  if (apiKey) {
+    await fillFromDataApi(missing, apiKey, dates)
+  } else {
+    await fillFromWatchPages(missing, dates)
+  }
+  writeFileSync(`${DATES_PATH}.tmp`, JSON.stringify(dates))
+  renameSync(`${DATES_PATH}.tmp`, DATES_PATH)
+  return dates
+}
+
+/** YOUTUBE_API_KEY from the environment, else from .dev.vars (gitignored). Never printed */
+function youtubeApiKey(): string | null {
+  if (!process.env.YOUTUBE_API_KEY && existsSync(resolve(root, '.dev.vars'))) {
+    process.loadEnvFile(resolve(root, '.dev.vars'))
+  }
+  return process.env.YOUTUBE_API_KEY?.trim() || null
+}
+
+/** 50 ids per call: about 40 calls (40 quota units of the free 10,000 a day) for every video */
+async function fillFromDataApi(missing: string[], apiKey: string, dates: Record<string, string>) {
+  let read = 0
+  for (let i = 0; i < missing.length; i += VIDEOS_LIST_BATCH) {
+    const batch = missing.slice(i, i + VIDEOS_LIST_BATCH)
+    const res = await fetch(videosListUrl(batch, apiKey), {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      // The body names the reason (key not valid, API not enabled, quota); the URL carries the key
+      const reason = await res.text().catch(() => '')
+      console.warn(`YouTube Data API: HTTP ${res.status}; stopped.\n${reason.slice(0, 500)}`)
+      break
+    }
+    const found = publishedAtFromVideosList(await res.json())
+    Object.assign(dates, found)
+    read += Object.keys(found).length
+  }
+  console.log(`published dates (Data API): ${read} read of ${missing.length}`)
+}
+
+async function fillFromWatchPages(missing: string[], dates: Record<string, string>) {
   let read = 0
   let failed = 0
   for (const id of missing) {
@@ -111,12 +156,9 @@ async function fillPublishedDates(videoIds: string[]): Promise<Record<string, st
     } else failed += 1
     await new Promise((done) => setTimeout(done, DATE_GAP_MS))
   }
-  writeFileSync(`${DATES_PATH}.tmp`, JSON.stringify(dates))
-  renameSync(`${DATES_PATH}.tmp`, DATES_PATH)
   console.log(
     `published dates: ${read} read, ${failed} failed, ${missing.length - read - failed} left for the next run`,
   )
-  return dates
 }
 
 async function main() {
