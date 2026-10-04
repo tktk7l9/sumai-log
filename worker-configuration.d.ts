@@ -14,6 +14,7 @@ interface __BaseEnv_Env {
 	GOOGLE_MAPS_MAP_ID: string;
 	MAIL_ALLOWED_SENDERS: string;
 	MAIL_INBOX_ADDRESS: string;
+	YOUTUBE_API_KEY: string;
 }
 declare namespace Cloudflare {
 	interface GlobalProps {
@@ -26,7 +27,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "DEV_IDENTITY_EMAIL" | "ACCESS_ALLOWED_EMAILS" | "MEMBERS" | "ACCESS_TEAM_DOMAIN" | "ACCESS_POLICY_AUD" | "GOOGLE_MAPS_API_KEY" | "GOOGLE_MAPS_MAP_ID" | "MAIL_ALLOWED_SENDERS" | "MAIL_INBOX_ADDRESS">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "ENVIRONMENT" | "DEV_IDENTITY_EMAIL" | "ACCESS_ALLOWED_EMAILS" | "MEMBERS" | "ACCESS_TEAM_DOMAIN" | "ACCESS_POLICY_AUD" | "GOOGLE_MAPS_API_KEY" | "GOOGLE_MAPS_MAP_ID" | "MAIL_ALLOWED_SENDERS" | "MAIL_INBOX_ADDRESS" | "YOUTUBE_API_KEY">> {}
 }
 
 // Begin runtime types

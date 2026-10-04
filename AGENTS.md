@@ -184,8 +184,8 @@ A record app for a housing search, used only by one married couple. **The reposi
   configuration where `main` points directly at the TanStack Start default
   `@tanstack/react-start/server-entry`). The result of
   `createServerEntry({ fetch: createStartHandler(defaultStreamHandler) })` is spread, `fetch` is
-  used as it is, and only `scheduled` is added, which calls `fetchAllVendorNews` from Cron
-  (`triggers.crons` in `wrangler.jsonc` = `"0 21 * * *"` = 06:00 JST). `scheduled` runs inside
+  used as it is, and only `scheduled` is added, which calls `fetchAllVendorNews`, the inbound
+  cleanup and `refreshChannelVideos` from Cron (`triggers.crons` in `wrangler.jsonc` = `"0 21 * * *"` = 06:00 JST). `scheduled` runs inside
   `ctx.waitUntil`, and an exception that could not be caught inside it is not thrown to the
   outside either (nobody would catch it even if thrown)
 - `routes` in `wrangler.jsonc` (the custom domain `sumai-log.app`) reflects, on the configuration
@@ -237,7 +237,15 @@ A record app for a housing search, used only by one married couple. **The reposi
   work claims it; it is stored as `video_source = 'title'`, which `import:works` keeps while
   the site still has no video. A video shows a link to its work's page. The names cannot match
   for every vendor (some channels title videos differently from their works), so some stay
-  unlinked. Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
+  unlinked. After that first import, the daily Cron keeps the channels up to date
+  (`src/server/channelVideosFetcher.ts`, secret `YOUTUBE_API_KEY`; skipped without it): for each
+  channel already in `channel_videos` it reads the newest 50 of the uploads playlists per kind
+  (`UULF…` videos, `UULV…` live, `UUSH…` shorts, so shorts get a length too) and `videos.list`
+  for length and views. A new video goes above the channel's current top (`MIN(sort_order) - 1`)
+  and starts watched the same way as in the import; an existing one gets its title, length,
+  views and date refreshed and keeps its watched flag and place. Then works without a video are
+  linked by name again. About 25 quota units a day. A new channel still needs the import script
+  once. Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
   keys only), while the works stay filtered on the page
 
 ## When the schema changed
