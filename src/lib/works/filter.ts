@@ -57,7 +57,7 @@ export type WorkSpec = {
   isEmpty: boolean
 }
 
-type SpecSource = {
+export type SpecSource = {
   points: string[]
   family: string | null
   siteAreaTsubo: number | null

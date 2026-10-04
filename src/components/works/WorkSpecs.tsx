@@ -1,14 +1,13 @@
 import { List, Text } from '@mantine/core'
 
-import { specOf } from '../../lib/works/filter'
-import type { WorkRow } from '../../server/repository/works'
+import { specOf, type SpecSource } from '../../lib/works/filter'
 
 /**
  * The "Data" block of one work, always in the same order (points, family, area, layout) so
  * that works from different sites line up. A block the site did not give is left out entirely
  * rather than shown as "—" (SHIG 47).
  */
-export function WorkSpecs({ work }: { work: WorkRow }) {
+export function WorkSpecs({ work }: { work: SpecSource }) {
   const spec = specOf(work)
   if (spec.isEmpty) return null
   return (

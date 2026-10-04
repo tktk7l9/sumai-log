@@ -323,7 +323,22 @@ describe('works route, videos tab', () => {
     stub(listWorks, [FULL])
     stub(listChannelVideosPage, {
       rows: [
-        clip(1, { work: { title: '全部そろった家', sourceUrl: 'https://example.com/works/p1/' } }),
+        clip(1, {
+          work: {
+            title: '全部そろった家',
+            sourceUrl: 'https://example.com/works/p1/',
+            category: '新築',
+            completedOn: '2025-03',
+            uaValue: 0.46,
+            cValue: 0.3,
+            family: '夫婦＋子ども1人',
+            siteAreaTsubo: 50,
+            floorAreaTsubo: 30.5,
+            totalAreaTsubo: null,
+            layout: '2LDK',
+            points: ['薪ストーブ', '回遊できる家事動線'],
+          },
+        }),
         clip(2, { watchedAt: '2026-10-01T00:00:00.000Z', kind: 'short' }),
       ],
       matched: 42,
@@ -351,8 +366,14 @@ describe('works route, videos tab', () => {
     expect(
       first.getByRole('link', { name: '施工例「全部そろった家」を会社のページで開く' }),
     ).toHaveAttribute('href', 'https://example.com/works/p1/')
+    expect(first.getByText('新築・2025/03 完成・UA値 0.46・C値 0.3')).toBeInTheDocument()
+    expect(first.getByText('夫婦＋子ども1人')).toBeInTheDocument()
+    expect(first.getByText('2LDK')).toBeInTheDocument()
+    expect(first.getByText('薪ストーブ')).toBeInTheDocument()
+    expect(first.getByText(/延床面積/)).toBeInTheDocument()
     const second = within(screen.getByRole('article', { name: '動画2' }))
     expect(second.queryByRole('link')).not.toBeInTheDocument()
+    expect(second.queryByText('間取り')).not.toBeInTheDocument()
   })
 
   it('shows the count per channel, the watched count, and length and views per video', async () => {
