@@ -216,3 +216,31 @@ export function recordedWatchedBackfillSql(): string[] {
   }
   return [target('channel_videos', 'video_id'), target('works', 'youtube_video_id')]
 }
+
+/** Ids per videos.list call of the YouTube Data API (its maximum) */
+export const VIDEOS_LIST_BATCH = 50
+
+/** videos.list for up to 50 ids, asking only for the published date (1 quota unit per call) */
+export function videosListUrl(videoIds: string[], apiKey: string): string {
+  const params = new URLSearchParams({
+    part: 'snippet',
+    id: videoIds.join(','),
+    fields: 'items(id,snippet/publishedAt)',
+    maxResults: String(VIDEOS_LIST_BATCH),
+    key: apiKey,
+  })
+  return `https://www.googleapis.com/youtube/v3/videos?${params}`
+}
+
+/** videoId -> ISO date (UTC) from a videos.list response. A deleted or private video is simply absent */
+export function publishedAtFromVideosList(json: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!isRecord(json) || !Array.isArray(json.items)) return out
+  for (const item of json.items) {
+    if (!isRecord(item) || typeof item.id !== 'string' || !isRecord(item.snippet)) continue
+    const raw = item.snippet.publishedAt
+    const ms = typeof raw === 'string' ? Date.parse(raw) : Number.NaN
+    if (!Number.isNaN(ms)) out[item.id] = new Date(ms).toISOString()
+  }
+  return out
+}

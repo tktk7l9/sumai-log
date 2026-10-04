@@ -6,8 +6,11 @@ import {
   channelVideosOf,
   parseChannelsConfig,
   parseFlatPlaylist,
+  publishedAtFromVideosList,
   publishedAtFromWatchPage,
   recordedWatchedBackfillSql,
+  VIDEOS_LIST_BATCH,
+  videosListUrl,
   type ChannelConfig,
 } from './import'
 
@@ -162,5 +165,34 @@ describe('recordedWatchedBackfillSql', () => {
     )
     expect(work).toContain('videos.video_id = works.youtube_video_id')
     expect(work).toContain('youtube_video_id IN (SELECT video_id FROM videos)')
+  })
+})
+
+describe('YouTube Data API videos.list', () => {
+  it('asks for up to 50 ids and only the published date', () => {
+    const url = new URL(videosListUrl(['aaaaaaaaaaa', 'bbbbbbbbbbb'], 'test-key'))
+    expect(url.origin + url.pathname).toBe('https://www.googleapis.com/youtube/v3/videos')
+    expect(url.searchParams.get('id')).toBe('aaaaaaaaaaa,bbbbbbbbbbb')
+    expect(url.searchParams.get('part')).toBe('snippet')
+    expect(url.searchParams.get('fields')).toBe('items(id,snippet/publishedAt)')
+    expect(url.searchParams.get('key')).toBe('test-key')
+    expect(VIDEOS_LIST_BATCH).toBe(50)
+  })
+
+  it('reads the dates, skipping items without a usable one', () => {
+    expect(
+      publishedAtFromVideosList({
+        items: [
+          { id: 'aaaaaaaaaaa', snippet: { publishedAt: '2026-09-22T09:00:07Z' } },
+          { id: 'bbbbbbbbbbb', snippet: { publishedAt: 'someday' } },
+          { id: 'ccccccccccc', snippet: {} },
+          { id: 'ddddddddddd' },
+          { snippet: { publishedAt: '2026-01-01T00:00:00Z' } },
+          'not an item',
+        ],
+      }),
+    ).toEqual({ aaaaaaaaaaa: '2026-09-22T09:00:07.000Z' })
+    expect(publishedAtFromVideosList({ error: { code: 403 } })).toEqual({})
+    expect(publishedAtFromVideosList(null)).toEqual({})
   })
 })
