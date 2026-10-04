@@ -24,7 +24,7 @@ function channelHtml(overrides: Partial<Record<'title' | 'description' | 'image'
       <meta property="og:description" content="${description}">
       <meta property="og:image" content="${image}">
     </head><body>
-      <script>var x = {"channelId":"${CHANNEL_ID}"};</script>
+      <script>var x = {"externalId":"${CHANNEL_ID}"};</script>
     </body></html>
   `
 }

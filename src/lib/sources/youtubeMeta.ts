@@ -1,6 +1,6 @@
 /**
- * Extracts og:title / og:description / og:image and the channelId embedded in the page
- * (`"channelId":"UC…"`) from the HTML of a YouTube channel page with linear-time regexes.
+ * Extracts og:title / og:description / og:image and the channel's own id from the HTML of a
+ * YouTube channel page with linear-time regexes.
  * Following the policy in design.md, no external HTML parser is added (the same style as
  * pickFaviconCandidates in src/lib/favicon.ts: match the whole `<meta>` tag first, then
  * read its attributes).
@@ -16,7 +16,24 @@ import { decodeEntities, MAX_INPUT_LENGTH, truncate } from '../news/text'
 export const DESCRIPTION_MAX = 200
 
 const META_TAG = /<meta\b[^>]*>/gi
-const CHANNEL_ID_PATTERN = /"channelId":"(UC[\w-]{10,32})"/
+/**
+ * Where the page names its own channel, in order of trust. The bare `"channelId":"UC…"` is not
+ * one of them: a channel page also carries the ids of featured and related channels, and the
+ * first of those is often not the page's own (a source was saved with another channel's id).
+ */
+const OWN_CHANNEL_ID_PATTERNS = [
+  /<link\b[^>]*\bhref="https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{10,32})"/,
+  /"externalId":"(UC[\w-]{10,32})"/,
+  /<meta\b[^>]*\bitemprop="identifier"[^>]*\bcontent="(UC[\w-]{10,32})"/,
+]
+
+function ownChannelId(html: string): string | null {
+  for (const pattern of OWN_CHANNEL_ID_PATTERNS) {
+    const id = pattern.exec(html)?.[1]
+    if (id) return id
+  }
+  return null
+}
 
 /** Reads any of the forms `name="value"` / `name='value'` / `name=value` (the same as
  * getAttr in favicon.ts) */
@@ -67,7 +84,7 @@ export function extractYoutubeMeta(html: string): YoutubeMeta {
   const title = trimmedOrNull(metaContent(html, 'og:title'))
   const rawDescription = trimmedOrNull(metaContent(html, 'og:description'))
   const imageUrl = trimmedOrNull(metaContent(html, 'og:image'))
-  const channelId = CHANNEL_ID_PATTERN.exec(html)?.[1] ?? null
+  const channelId = ownChannelId(html)
 
   return {
     title,
