@@ -31,3 +31,9 @@ GOOGLE_MAPS_MAP_ID=
 # login allowlist. Comma separated)
 MAIL_ALLOWED_SENDERS=
 MAIL_INBOX_ADDRESS=
+# YouTube Data API key (videos.list / playlistItems.list only; restrict it to the YouTube Data
+# API v3 in the Google Cloud console). Used by `npm run import:channel-videos` for the published
+# dates and by the daily Cron for new channel videos.
+# In production: `printf '%s' '<key>' | npx wrangler secret put YOUTUBE_API_KEY`.
+# If empty, the Cron skips the refresh.
+YOUTUBE_API_KEY=

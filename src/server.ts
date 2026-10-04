@@ -8,7 +8,7 @@
  * of our own.
  *
  * `scheduled` fetches the vendor news every morning at 6 (JST. triggers.crons =
- * "0 21 * * *" in wrangler.jsonc) as design.md §1 says. It does not pass through
+ * "0 21 * * *" in wrangler.jsonc) as design.md §1 says, then the new channel videos. It does not pass through
  * authentication, but it accepts no external input (only the D1 of env).
  */
 import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
@@ -17,6 +17,7 @@ import { drizzle } from 'drizzle-orm/d1'
 
 import * as schema from './db/schema'
 import { parseAllowlist } from './lib/access'
+import { refreshChannelVideos } from './server/channelVideosFetcher'
 import { handleInboundMail } from './server/mailHandler'
 import { fetchAllVendorNews } from './server/newsFetcher'
 import { cleanupInboundMails } from './server/repository/mails'
@@ -53,6 +54,31 @@ async function runScheduledNewsFetch(env: Env): Promise<void> {
     )
   } catch (e) {
     console.log(`news: scheduled fetch failed error=${e instanceof Error ? e.message : String(e)}`)
+  }
+}
+
+/**
+ * New videos of the vendors' channels (YouTube Data API). Skipped without the secret
+ * YOUTUBE_API_KEY; one channel failing is a log line, the others still run.
+ */
+async function runChannelVideosRefresh(env: Env): Promise<void> {
+  if (!env.YOUTUBE_API_KEY) {
+    console.log('channel-videos: skipped, no YOUTUBE_API_KEY')
+    return
+  }
+  try {
+    const db = drizzle(env.DB, { schema })
+    const { channels, linked } = await refreshChannelVideos(db, env.YOUTUBE_API_KEY)
+    const added = channels.reduce((sum, c) => sum + c.added, 0)
+    const failed = channels.filter((c) => c.error !== null)
+    console.log(
+      `channel-videos: refreshed channels=${channels.length} added=${added} linked=${linked} errors=${failed.length}` +
+        failed.map((c) => ` [${c.error}]`).join(''),
+    )
+  } catch (e) {
+    console.log(
+      `channel-videos: refresh failed error=${e instanceof Error ? e.message : String(e)}`,
+    )
   }
 }
 
@@ -101,7 +127,11 @@ async function onEmail(message: ForwardableEmailMessage, env: Env): Promise<void
 export default {
   fetch: workerFetch,
   scheduled: async (_controller: ScheduledController, env: Env, ctx: ExecutionContext) => {
-    ctx.waitUntil(runScheduledNewsFetch(env).then(() => runInboundCleanup(env)))
+    ctx.waitUntil(
+      runScheduledNewsFetch(env)
+        .then(() => runInboundCleanup(env))
+        .then(() => runChannelVideosRefresh(env)),
+    )
   },
   email: onEmail,
 } satisfies ExportedHandler<Env>
