@@ -339,10 +339,15 @@ describe('works route, videos tab', () => {
             points: ['薪ストーブ', '回遊できる家事動線'],
           },
         }),
-        clip(2, { watchedAt: '2026-10-01T00:00:00.000Z', kind: 'short' }),
+        clip(2, {
+          watchedAt: '2026-10-01T00:00:00.000Z',
+          kind: 'short',
+          publishedAt: '2026-08-01T00:00:00.000Z',
+        }),
       ],
       matched: 42,
       channels: CHANNELS,
+      todayKey: '2026-09-25',
     })
     stub(markChannelVideoWatched, { ok: true })
   })
@@ -383,9 +388,12 @@ describe('works route, videos tab', () => {
     expect(screen.getByText('42 本中 1 本を視聴済み')).toBeInTheDocument()
     const first = within(screen.getByRole('article', { name: '動画1' }))
     expect(first.getByText('甲工務店・動画・1:35・1.2万回・2026/09/22 公開')).toBeInTheDocument()
+    // Published 3 days before today (2026-09-25 by the server)
+    expect(first.getByText('New')).toBeInTheDocument()
     const second = within(screen.getByRole('article', { name: '動画2' }))
     expect(second.getByText('視聴済み')).toBeInTheDocument()
     expect(second.getByText(/ショート/)).toBeInTheDocument()
+    expect(second.queryByText('New')).not.toBeInTheDocument()
   })
 
   it('passes the filters to the server and counts only the chosen channel', async () => {
@@ -476,7 +484,12 @@ describe('works route, videos tab', () => {
   })
 
   it('says when nothing matches, and when nothing has been imported', async () => {
-    stub(listChannelVideosPage, { rows: [], matched: 0, channels: CHANNELS })
+    stub(listChannelVideosPage, {
+      rows: [],
+      matched: 0,
+      channels: CHANNELS,
+      todayKey: '2026-09-25',
+    })
     await renderRoute('/works?q=nothing')
     expect(await screen.findByText('条件に合う動画がありません')).toBeInTheDocument()
   })

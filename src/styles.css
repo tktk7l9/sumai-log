@@ -742,6 +742,21 @@ a:focus-visible {
 }
 
 /* Works page: the aligned "Data" block. Labels share one column so values line up across cards */
+/* "今週" sits at the right end of the agenda row (HomeAgenda); the row is a block otherwise */
+.mantine-AgendaView-agendaViewEvent[data-this-week] {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  height: auto;
+}
+.mantine-AgendaView-agendaViewEvent[data-this-week] > .mantine-AgendaView-agendaViewEventBody {
+  flex: 1;
+  min-width: 0;
+}
+.home-agenda-tag {
+  flex: none;
+}
+
 .channel-video-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -752,6 +767,7 @@ a:focus-visible {
 }
 .channel-video-thumb {
   grid-area: thumb;
+  align-self: start;
 }
 .channel-video-text {
   grid-area: text;

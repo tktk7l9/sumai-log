@@ -16,6 +16,7 @@ import { formatDuration, formatViews } from '../../lib/channelVideos/format'
 import { toJstDateKey } from '../../lib/jst'
 import { youtubeThumbnailUrl } from '../../lib/youtube'
 import type { ChannelVideoRow, ChannelVideoWork } from '../../server/repository/channelVideos'
+import { NewBadge } from '../FreshBadge'
 import { WorkSpecs } from './WorkSpecs'
 
 /** Channel, kind, length, views and the published date (JST) on one line; only what YouTube gave */
@@ -47,10 +48,13 @@ function workMetaOf(work: ChannelVideoWork): string {
 
 export function ChannelVideoCard({
   video,
+  fresh = false,
   onPlay,
   onToggleWatched,
 }: {
   video: ChannelVideoRow
+  /** Published in the last 7 days: the "New" tag */
+  fresh?: boolean
   onPlay: () => void
   onToggleWatched: () => void
 }) {
@@ -84,6 +88,7 @@ export function ChannelVideoCard({
               <Text size="xs" c="dimmed">
                 {metaOf(video)}
               </Text>
+              {fresh ? <NewBadge /> : null}
               {/* Not colour alone: an icon and the word (SHIG 96, 70) */}
               {watched ? (
                 <Badge
