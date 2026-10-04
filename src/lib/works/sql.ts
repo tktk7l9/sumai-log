@@ -57,7 +57,7 @@ export function workUpsertSql(work: ParsedWork, id: string): string {
   ]
   const updates = [
     ...SITE_COLUMNS.map((c) => `${c} = excluded.${c}`),
-    "youtube_video_id = CASE WHEN works.video_source = 'manual' THEN works.youtube_video_id ELSE excluded.youtube_video_id END",
+    "youtube_video_id = CASE WHEN works.video_source = 'manual' OR (works.video_source = 'title' AND excluded.youtube_video_id IS NULL) THEN works.youtube_video_id ELSE excluded.youtube_video_id END",
     "updated_at = datetime('now')",
   ]
   return (

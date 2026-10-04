@@ -215,7 +215,7 @@ A record app for a housing search, used only by one married couple. **The reposi
   `tsr generate`) drops the `@tanstack/react-start` `Register` block at the end of
   `src/routeTree.gen.ts`; after adding a route, let `npm run dev` or `npm run build` regenerate
   the file, or restore that block
-- Channel videos (`/works?tab=videos`, the `channel_videos` table) come only from the SQL that
+- Channel videos (`/works`, the default tab; the works are `/works?tab=works`. The `channel_videos` table) come only from the SQL that
   `npm run import:channel-videos` (`scripts/import-channel-videos.ts`, needs `yt-dlp` on PATH)
   writes to `seed.local/out/`; the owner runs it. Which channels are read is in
   `seed.local/channel-videos.json` (gitignored), and the yt-dlp output is cached in
@@ -231,7 +231,13 @@ A record app for a housing search, used only by one married couple. **The reposi
   (`videos`) counts as watched: a new record marks the channel video and the work
   (`markRecordedVideoWatched`, on create only, so a mark taken back stays back), and every
   import ends with `recordedWatchedBackfillSql` for rows imported before they were recorded.
-  Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
+  A work whose site page embeds no video is linked by name (`src/lib/channelVideos/match.ts`):
+  the same vendor's non-short video whose title contains the work's name (「」 contents, or the
+  title up to its reading), tour videos first, and only when exactly one video fits and no other
+  work claims it; it is stored as `video_source = 'title'`, which `import:works` keeps while
+  the site still has no video. A video shows a link to its work's page. The names cannot match
+  for every vendor (some channels title videos differently from their works), so some stay
+  unlinked. Thousands of rows: the list is filtered and paged by the server (`loaderDeps` on the videos
   keys only), while the works stay filtered on the page
 
 ## When the schema changed

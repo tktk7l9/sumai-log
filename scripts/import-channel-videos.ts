@@ -15,6 +15,7 @@
  * never printed, only counts.
  */
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -31,12 +32,21 @@ import {
   VIDEOS_LIST_BATCH,
   videosListUrl,
 } from '../src/lib/channelVideos/import.ts'
+import { matchWorksToVideos, workVideoLinkSql } from '../src/lib/channelVideos/match.ts'
 import { toJstDateKey } from '../src/lib/jst.ts'
+import { parseSitesConfig } from '../src/lib/works/config.ts'
+import { crawlSite } from '../src/lib/works/crawl.ts'
+import { siteA } from '../src/lib/works/siteA.ts'
+import { siteB } from '../src/lib/works/siteB.ts'
+import { siteC } from '../src/lib/works/siteC.ts'
+import type { ParsedWork } from '../src/lib/works/types.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const CONFIG_PATH = resolve(root, 'seed.local/channel-videos.json')
 const CACHE_DIR = resolve(root, 'seed.local/cache/channel-videos')
 const OUT_DIR = resolve(root, 'seed.local/out')
+const WORKS_CONFIG_PATH = resolve(root, 'seed.local/works-sites.json')
+const WORKS_CACHE_DIR = resolve(root, 'seed.local/cache/works')
 
 /** videoId -> ISO date. Kept across runs and --refresh: a published date does not change */
 const DATES_PATH = resolve(CACHE_DIR, 'published.json')
@@ -161,6 +171,25 @@ async function fillFromWatchPages(missing: string[], dates: Record<string, strin
   )
 }
 
+/**
+ * The works as `npm run import:works` last read them, from its page cache only (no network).
+ * Used to link works without a video to a channel video that names them; empty when the works
+ * were never imported
+ */
+async function cachedWorks(): Promise<ParsedWork[]> {
+  if (!existsSync(WORKS_CONFIG_PATH)) return []
+  const sites = parseSitesConfig(JSON.parse(readFileSync(WORKS_CONFIG_PATH, 'utf8')))
+  const parsers = { siteA, siteB, siteC }
+  const load = async (url: string) => {
+    const path = resolve(WORKS_CACHE_DIR, `${createHash('sha1').update(url).digest('hex')}.html`)
+    if (!existsSync(path)) throw new Error('not cached')
+    return readFileSync(path, 'utf8')
+  }
+  const works: ParsedWork[] = []
+  for (const site of sites) works.push(...(await crawlSite(site, parsers[site.parser], load)).works)
+  return works
+}
+
 async function main() {
   if (!existsSync(CONFIG_PATH)) {
     console.error(
@@ -192,6 +221,10 @@ async function main() {
     lines.push(channelVideoUpsertSql({ ...video, publishedAt }, crypto.randomUUID()))
   }
   lines.push(...recordedWatchedBackfillSql())
+
+  const pairs = matchWorksToVideos(await cachedWorks(), perChannel.flat())
+  lines.push(...workVideoLinkSql(pairs))
+  console.log(`works linked to a channel video by name: ${pairs.length}`)
 
   const stamp = toJstDateKey(new Date().toISOString()).replaceAll('-', '')
   const outPath = resolve(OUT_DIR, `channel-videos-${stamp}.sql`)

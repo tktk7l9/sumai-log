@@ -1,5 +1,15 @@
-import { Badge, Button, Card, Group, Image, Stack, Text, UnstyledButton } from '@mantine/core'
-import { Check, Play } from 'lucide-react'
+import {
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Image,
+  Stack,
+  Text,
+  UnstyledButton,
+} from '@mantine/core'
+import { Check, ExternalLink, Play } from 'lucide-react'
 
 import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
 import { formatDuration, formatViews } from '../../lib/channelVideos/format'
@@ -70,6 +80,17 @@ export function ChannelVideoCard({
               </Badge>
             ) : null}
           </Group>
+          {video.work ? (
+            <Anchor
+              href={video.work.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              size="sm"
+              aria-label={`施工例「${video.work.title}」を会社のページで開く`}
+            >
+              施工例: {video.work.title} <ExternalLink size={12} aria-hidden />
+            </Anchor>
+          ) : null}
           <Group gap="xs">
             <Button
               size="sm"
