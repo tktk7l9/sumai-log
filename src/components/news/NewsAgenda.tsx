@@ -3,11 +3,13 @@ import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 
 import { dateKey, formatDateSlash, formatDateWithWeekday } from '../../lib/calendar'
+import { isRecent } from '../../lib/freshness'
 import { isMailNews } from '../../lib/mail/toNews'
 import { groupNewsByDate } from '../../lib/scheduleEvents'
 import type { NewsEventRow } from '../../server/repository'
 import { EventBadge } from './EventBadge'
 import { FormDrawer } from '../FormDrawer'
+import { NewBadge } from '../FreshBadge'
 import { NewsEventDrawer } from './NewsEventDrawer'
 
 /**
@@ -52,7 +54,7 @@ function agendaRange(items: readonly NewsEventRow[]): { start: string; end: stri
  * When `todayKey` is passed, the row text color is dimmed for news whose event dates have
  * ended (the open house is over, etc.) (owner's request, 2026-09-21). News without event
  * dates has only a publish date, and the publish date is always in the past, so it is
- * not dimmed.
+ * not dimmed. It also puts "New" on news published in the last 7 days.
  */
 export function NewsAgenda({
   items,
@@ -122,45 +124,49 @@ export function NewsAgenda({
               <Text size="sm" fw={600} className="news-agenda-date">
                 {formatDateWithWeekday(g.date)}
               </Text>
-              {g.items.map(({ news: item, past }) => (
-                // For news whose dates have ended, the title is also dimmed to the secondary
-                // color (the badge color does not change. Reading the date in
-                // "見学会 2026/09/12(土)" (Open house, Sat) tells that it has ended)
-                <UnstyledButton
-                  key={item.id}
-                  className="news-agenda-row"
-                  data-past={past ? true : undefined}
-                  onClick={() => setDrawerNewsId(item.id)}
-                >
-                  <Stack gap={4} py={8} px="sm">
-                    <Text size="sm" c="dimmed">
-                      {item.vendorName}
-                    </Text>
-                    <Text size="sm" fw={600} c={past ? 'dimmed' : undefined}>
-                      {item.title}
-                    </Text>
-                    {item.eventKind || item.plannedEventId || isMailNews(item.url) ? (
-                      <Group gap={6} wrap="wrap" align="center">
-                        {isMailNews(item.url) ? (
-                          <Badge size="xs" variant="outline" color="gray">
-                            メール
-                          </Badge>
-                        ) : null}
-                        <EventBadge
-                          eventKind={item.eventKind}
-                          eventStart={item.eventStart}
-                          eventEnd={item.eventEnd}
-                        />
-                        {item.plannedEventId ? (
-                          <Badge size="xs" variant="light">
-                            予定あり
-                          </Badge>
-                        ) : null}
-                      </Group>
-                    ) : null}
-                  </Stack>
-                </UnstyledButton>
-              ))}
+              {g.items.map(({ news: item, past }) => {
+                const fresh = todayKey !== undefined && isRecent(item.publishedOn, todayKey)
+                return (
+                  // For news whose dates have ended, the title is also dimmed to the secondary
+                  // color (the badge color does not change. Reading the date in
+                  // "見学会 2026/09/12(土)" (Open house, Sat) tells that it has ended)
+                  <UnstyledButton
+                    key={item.id}
+                    className="news-agenda-row"
+                    data-past={past ? true : undefined}
+                    onClick={() => setDrawerNewsId(item.id)}
+                  >
+                    <Stack gap={4} py={8} px="sm">
+                      <Text size="sm" c="dimmed">
+                        {item.vendorName}
+                      </Text>
+                      <Text size="sm" fw={600} c={past ? 'dimmed' : undefined}>
+                        {item.title}
+                      </Text>
+                      {fresh || item.eventKind || item.plannedEventId || isMailNews(item.url) ? (
+                        <Group gap={6} wrap="wrap" align="center">
+                          {fresh ? <NewBadge /> : null}
+                          {isMailNews(item.url) ? (
+                            <Badge size="xs" variant="outline" color="gray">
+                              メール
+                            </Badge>
+                          ) : null}
+                          <EventBadge
+                            eventKind={item.eventKind}
+                            eventStart={item.eventStart}
+                            eventEnd={item.eventEnd}
+                          />
+                          {item.plannedEventId ? (
+                            <Badge size="xs" variant="light">
+                              予定あり
+                            </Badge>
+                          ) : null}
+                        </Group>
+                      ) : null}
+                    </Stack>
+                  </UnstyledButton>
+                )
+              })}
             </section>
           ))
         )}

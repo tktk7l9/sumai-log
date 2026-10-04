@@ -11,6 +11,7 @@ import { markChannelVideoWatched } from '../../server/channelVideos'
 import { CHANNEL_VIDEO_PAGE } from '../../server/channelVideos.schema'
 import type { ChannelSummary, ChannelVideoRow } from '../../server/repository/channelVideos'
 import { EmptyState } from '../EmptyState'
+import { isRecent } from '../../lib/freshness'
 import { ChannelVideoCard } from './ChannelVideoCard'
 import { showWatchedNotice } from './watchedNotice'
 import { WorkPlayer } from './WorkPlayer'
@@ -24,6 +25,8 @@ export type ChannelVideosPage = {
   rows: ChannelVideoRow[]
   matched: number
   channels: ChannelSummary[]
+  /** Today (JST, 'YYYY-MM-DD') by the server, for the "New" tag */
+  todayKey: string
 }
 
 /** The latest non-null value, kept after the value goes back to null (for a closing Modal) */
@@ -181,6 +184,7 @@ export function ChannelVideosPanel({
             <ChannelVideoCard
               key={video.id}
               video={video}
+              fresh={isRecent(video.publishedAt, page.todayKey)}
               onPlay={() => setPlaying(video)}
               onToggleWatched={() =>
                 void (video.watchedAt === null
