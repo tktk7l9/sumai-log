@@ -56,59 +56,48 @@ export function ChannelVideoCard({
 }) {
   const watched = video.watchedAt !== null
   return (
-    <Card withBorder padding="sm" component="article" aria-label={video.title}>
-      <Group align="flex-start" wrap="nowrap" gap="sm">
-        <UnstyledButton
-          onClick={onPlay}
-          aria-label={`${video.title} を見る`}
-          style={{ flex: 'none' }}
-        >
-          <Image
-            src={youtubeThumbnailUrl(video.videoId)}
-            alt=""
-            radius="sm"
-            w={128}
-            h={72}
-            fit="cover"
-            loading="lazy"
-          />
-        </UnstyledButton>
-        <Stack gap={6} style={{ flex: 1, minWidth: 0 }}>
-          <Text size="sm" fw={600} lineClamp={2}>
-            {video.title}
-          </Text>
-          <Group gap={6}>
-            <Text size="xs" c="dimmed">
-              {metaOf(video)}
+    <Card withBorder padding="md" component="article" aria-label={video.title}>
+      <Stack gap="sm">
+        {/* Picture, text and buttons on a grid: the buttons sit beside the picture on a wide
+            screen and take their own row on a phone (styles.css .channel-video-head) */}
+        <div className="channel-video-head">
+          <UnstyledButton
+            onClick={onPlay}
+            aria-label={`${video.title} を見る`}
+            className="channel-video-thumb"
+          >
+            <Image
+              src={youtubeThumbnailUrl(video.videoId)}
+              alt=""
+              radius="sm"
+              w={{ base: 128, sm: 160 }}
+              h={{ base: 72, sm: 90 }}
+              fit="cover"
+              loading="lazy"
+            />
+          </UnstyledButton>
+          <Stack gap={4} className="channel-video-text">
+            <Text size="sm" fw={600} lineClamp={2}>
+              {video.title}
             </Text>
-            {/* Not colour alone: an icon and the word (SHIG 96, 70) */}
-            {watched ? (
-              <Badge
-                size="sm"
-                color="teal"
-                variant="light"
-                leftSection={<Check size={12} aria-hidden />}
-              >
-                視聴済み
-              </Badge>
-            ) : null}
-          </Group>
-          {video.work ? (
-            <Stack gap={4}>
-              <Anchor
-                href={video.work.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                size="sm"
-                aria-label={`施工例「${video.work.title}」を会社のページで開く`}
-              >
-                施工例: {video.work.title} <ExternalLink size={12} aria-hidden />
-              </Anchor>
-              {workMetaOf(video.work) ? <Text size="xs">{workMetaOf(video.work)}</Text> : null}
-              <WorkSpecs work={video.work} />
-            </Stack>
-          ) : null}
-          <Group gap="xs">
+            <Group gap={6}>
+              <Text size="xs" c="dimmed">
+                {metaOf(video)}
+              </Text>
+              {/* Not colour alone: an icon and the word (SHIG 96, 70) */}
+              {watched ? (
+                <Badge
+                  size="sm"
+                  color="teal"
+                  variant="light"
+                  leftSection={<Check size={12} aria-hidden />}
+                >
+                  視聴済み
+                </Badge>
+              ) : null}
+            </Group>
+          </Stack>
+          <Group gap="xs" className="channel-video-actions">
             <Button
               size="sm"
               mih={44}
@@ -121,8 +110,25 @@ export function ChannelVideoCard({
               {watched ? '視聴済みを取り消す' : '視聴済みにする'}
             </Button>
           </Group>
-        </Stack>
-      </Group>
+        </div>
+        {/* The work gets the full width under a rule, not the narrow column beside the picture */}
+        {video.work ? (
+          <Stack gap={6} className="channel-video-work">
+            <Anchor
+              href={video.work.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              size="sm"
+              fw={600}
+              aria-label={`施工例「${video.work.title}」を会社のページで開く`}
+            >
+              施工例: {video.work.title} <ExternalLink size={12} aria-hidden />
+            </Anchor>
+            {workMetaOf(video.work) ? <Text size="xs">{workMetaOf(video.work)}</Text> : null}
+            <WorkSpecs work={video.work} />
+          </Stack>
+        ) : null}
+      </Stack>
     </Card>
   )
 }
