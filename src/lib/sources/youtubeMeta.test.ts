@@ -10,7 +10,7 @@ describe('extractYoutubeMeta', () => {
         <meta property="og:description" content="架空チャンネルの説明です">
         <meta property="og:image" content="https://yt3.googleusercontent.com/fake=s900">
       </head><body>
-        <script>var ytInitialData = {"channelId":"UCabcdefghijklmnopqrst"};</script>
+        <script>var ytInitialData = {"externalId":"UCabcdefghijklmnopqrst"};</script>
       </body></html>
     `
     expect(extractYoutubeMeta(html)).toEqual({
@@ -86,9 +86,26 @@ describe('extractYoutubeMeta', () => {
     expect(extractYoutubeMeta(html).title).toBe('1件目')
   })
 
-  it('does not pick up a channelId that does not start with UC', () => {
-    const html = `<script>{"channelId":"XXabcdefghijklmnopqrst"}</script>`
+  it('does not pick up a channel id that does not start with UC', () => {
+    const html = `<script>{"externalId":"XXabcdefghijklmnopqrst"}</script>`
     expect(extractYoutubeMeta(html).channelId).toBeNull()
+  })
+
+  it("takes the page's own channel, not the first featured or related channel on it", () => {
+    const own = 'UCownownownownownownown'
+    const other = 'UCotherotherotherother1'
+    const related = `<script>{"channelId":"${other}"}</script>`
+    expect(
+      extractYoutubeMeta(
+        `${related}<link rel="canonical" href="https://www.youtube.com/channel/${own}">`,
+      ).channelId,
+    ).toBe(own)
+    expect(extractYoutubeMeta(`${related}{"externalId":"${own}"}`).channelId).toBe(own)
+    expect(
+      extractYoutubeMeta(`${related}<meta itemprop="identifier" content="${own}">`).channelId,
+    ).toBe(own)
+    // Only other channels' ids: better no id than a wrong one
+    expect(extractYoutubeMeta(related).channelId).toBeNull()
   })
 
   it('ignores unrelated meta tags', () => {
