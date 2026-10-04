@@ -4,7 +4,10 @@ import type { Db } from '../../db/client'
 import { channelVideos, works, type ChannelVideo } from '../../db/schema'
 
 /** watchedBy (an e-mail) stays in the table as a record; the screen does not use it */
-export type ChannelVideoRow = Omit<ChannelVideo, 'watchedBy' | 'createdAt' | 'updatedAt'>
+export type ChannelVideoRow = Omit<ChannelVideo, 'watchedBy' | 'createdAt' | 'updatedAt'> & {
+  /** The work whose tour video this is (works.youtube_video_id), for the link to its page */
+  work: { title: string; sourceUrl: string } | null
+}
 
 export type ChannelVideoFilter = {
   channelId?: string
@@ -56,6 +59,13 @@ export async function listChannelVideos(
         publishedAt: channelVideos.publishedAt,
         sortOrder: channelVideos.sortOrder,
         watchedAt: channelVideos.watchedAt,
+        // A subquery, not a join: two works sharing a video must not repeat the row
+        workTitle: sql<
+          string | null
+        >`(SELECT ${works.title} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
+        workUrl: sql<
+          string | null
+        >`(SELECT ${works.sourceUrl} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
       })
       .from(channelVideos)
       .where(where)
@@ -67,7 +77,13 @@ export async function listChannelVideos(
       .limit(filter.limit),
     db.select({ n: count() }).from(channelVideos).where(where),
   ])
-  return { rows, matched: total?.n ?? 0 }
+  return {
+    rows: rows.map(({ workTitle, workUrl, ...row }) => ({
+      ...row,
+      work: workTitle && workUrl ? { title: workTitle, sourceUrl: workUrl } : null,
+    })),
+    matched: total?.n ?? 0,
+  }
 }
 
 /** Videos and watched videos per channel, in the same order as the list */

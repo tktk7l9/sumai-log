@@ -26,7 +26,7 @@ export const Route = createFileRoute('/works')({
   validateSearch: (s) => worksSearchSchema.parse(s),
   // The works are filtered on the page; the videos (thousands) are filtered and paged by the server
   loaderDeps: ({ search }) =>
-    search.tab === 'videos'
+    search.tab !== 'works'
       ? {
           tab: 'videos' as const,
           ch: search.ch,
@@ -74,11 +74,11 @@ function Page() {
       <Stack gap="lg">
         <SegmentedControl
           aria-label="見るもの"
-          value={search.tab ?? 'works'}
-          onChange={(v) => setSearch({ tab: v === 'videos' ? 'videos' : undefined })}
+          value={search.tab ?? 'videos'}
+          onChange={(v) => setSearch({ tab: v === 'works' ? 'works' : undefined })}
           data={[
-            { value: 'works', label: '施工例' },
             { value: 'videos', label: '動画' },
+            { value: 'works', label: '施工例' },
           ]}
         />
         {videos ? (

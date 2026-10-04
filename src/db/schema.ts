@@ -386,7 +386,9 @@ export const videos = sqliteTable(
   (t) => [index('videos_watched_idx').on(t.watchedOn)],
 )
 
-export const WORK_VIDEO_SOURCES = ['auto', 'manual'] as const
+/** auto = embedded on the site's page; manual = pasted by hand; title = a channel video whose title
+ * names the work (scripts/import-channel-videos.ts) */
+export const WORK_VIDEO_SOURCES = ['auto', 'manual', 'title'] as const
 
 /**
  * Built examples published on vendors' sites (/works). Rows come from the SQL that
@@ -416,7 +418,8 @@ export const works = sqliteTable(
     totalAreaTsubo: real('total_area_tsubo'),
     layout: text('layout'),
     youtubeVideoId: text('youtube_video_id'),
-    /** Who set youtube_video_id. null is treated as 'auto'. A 'manual' one survives re-imports */
+    /** Who set youtube_video_id. null is treated as 'auto'. A 'manual' one survives re-imports, and
+     * so does a 'title' one while the site itself still has no video */
     videoSource: text('video_source', { enum: WORK_VIDEO_SOURCES }),
     /** ISO-8601. null = not watched yet. One flag shared by the two users */
     watchedAt: text('watched_at'),

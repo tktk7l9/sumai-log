@@ -42,6 +42,7 @@ describe('channel videos repository', () => {
     expect(all.rows.map((r) => r.videoId)).toEqual(['a1aaaaaaaaa', 'a2aaaaaaaaa', 'b1aaaaaaaaa'])
     expect(all.matched).toBe(3)
     expect(all.rows[0]).not.toHaveProperty('watchedBy')
+    expect(all.rows[0]?.work).toBeNull()
 
     const firstTwo = await listChannelVideos(db, { limit: 2 })
     expect([firstTwo.rows.length, firstTwo.matched]).toEqual([2, 3])
@@ -103,6 +104,11 @@ describe('channel videos repository', () => {
 
     const [listed] = await listWorksWithVendor(db)
     expect(listed?.videoDurationSec).toBe(754)
+    const [video0] = (await listChannelVideos(db, { limit: 1 })).rows
+    expect(video0?.work).toEqual({
+      title: 'テストの家',
+      sourceUrl: 'https://example.com/works/p1/',
+    })
   })
 
   it('returns false when the video does not exist', async () => {
@@ -252,5 +258,36 @@ describe('published date and the video records', () => {
     )
     const [again] = await db.select().from(channelVideos)
     expect(again?.watchedAt).toBeNull()
+  })
+})
+
+describe('workVideoLinkSql against D1', () => {
+  it('links a work without a video, leaves one with a video, and carries over the watched mark', async () => {
+    const { workVideoLinkSql } = await import('../../lib/channelVideos/match')
+    await addVideo({
+      videoId: 'aaaaaaaaaaa',
+      watchedAt: '2026-10-01T00:00:00.000Z',
+      watchedBy: actor,
+    })
+    const insert = (sourceUrl: string, youtubeVideoId: string | null) =>
+      db
+        .insert(works)
+        .values({ id: crypto.randomUUID(), sourceUrl, site: 'siteB', title: '家', youtubeVideoId })
+    await insert('https://example.com/works/a', null)
+    await insert('https://example.com/works/b', 'zzzzzzzzzzz')
+    for (const statement of workVideoLinkSql([
+      { sourceUrl: 'https://example.com/works/a', videoId: 'aaaaaaaaaaa' },
+      { sourceUrl: 'https://example.com/works/b', videoId: 'aaaaaaaaaaa' },
+    ])) {
+      await env.DB.prepare(statement).run()
+    }
+    const rows = Object.fromEntries((await db.select().from(works)).map((w) => [w.sourceUrl, w]))
+    expect(rows['https://example.com/works/a']).toMatchObject({
+      youtubeVideoId: 'aaaaaaaaaaa',
+      videoSource: 'title',
+      watchedAt: '2026-10-01T00:00:00.000Z',
+      watchedBy: actor,
+    })
+    expect(rows['https://example.com/works/b']?.youtubeVideoId).toBe('zzzzzzzzzzz')
   })
 })

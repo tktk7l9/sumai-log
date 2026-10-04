@@ -50,9 +50,9 @@ describe('workUpsertSql', () => {
     expect(updated).toContain('title')
   })
 
-  it('keeps a manual video on conflict', () => {
+  it('keeps a manual video, and a title-matched one while the site has none, on conflict', () => {
     expect(sql).toContain(
-      "youtube_video_id = CASE WHEN works.video_source = 'manual' THEN works.youtube_video_id ELSE excluded.youtube_video_id END",
+      "youtube_video_id = CASE WHEN works.video_source = 'manual' OR (works.video_source = 'title' AND excluded.youtube_video_id IS NULL) THEN works.youtube_video_id ELSE excluded.youtube_video_id END",
     )
   })
 })

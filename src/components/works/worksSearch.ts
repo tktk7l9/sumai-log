@@ -8,8 +8,9 @@ import { CHANNEL_VIDEO_KINDS } from '../../db/schema'
  * instead of the error screen.
  */
 export const worksSearchSchema = z.object({
-  /** 'videos' = every video of the channels. Absent = the works */
-  tab: z.literal('videos').optional().catch(undefined),
+  /** 'works' = the built examples. Absent = every video of the channels (the default: most works
+   * are also a tour video, and the video links to its work) */
+  tab: z.literal('works').optional().catch(undefined),
   /** vendors.id */
   v: z.string().max(60).optional().catch(undefined),
   /** Only works with a tour video */
