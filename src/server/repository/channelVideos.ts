@@ -1,13 +1,33 @@
 import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 
 import type { Db } from '../../db/client'
-import { channelVideos, works, type ChannelVideo } from '../../db/schema'
+import { channelVideos, works, type ChannelVideo, type Work } from '../../db/schema'
 
 /** watchedBy (an e-mail) stays in the table as a record; the screen does not use it */
 export type ChannelVideoRow = Omit<ChannelVideo, 'watchedBy' | 'createdAt' | 'updatedAt'> & {
-  /** The work whose tour video this is (works.youtube_video_id), for the link to its page */
-  work: { title: string; sourceUrl: string } | null
+  /** The work whose tour video this is (works.youtube_video_id): the link to its page and its data */
+  work: ChannelVideoWork | null
 }
+
+export type ChannelVideoWork = Pick<
+  Work,
+  | 'title'
+  | 'sourceUrl'
+  | 'category'
+  | 'completedOn'
+  | 'uaValue'
+  | 'cValue'
+  | 'family'
+  | 'siteAreaTsubo'
+  | 'floorAreaTsubo'
+  | 'totalAreaTsubo'
+  | 'layout'
+  | 'points'
+>
+
+/** The work side of the join; the inner copy picks one work when two share a video */
+const tourWork = alias(works, 'tour_work')
 
 export type ChannelVideoFilter = {
   channelId?: string
@@ -59,15 +79,27 @@ export async function listChannelVideos(
         publishedAt: channelVideos.publishedAt,
         sortOrder: channelVideos.sortOrder,
         watchedAt: channelVideos.watchedAt,
-        // A subquery, not a join: two works sharing a video must not repeat the row
-        workTitle: sql<
-          string | null
-        >`(SELECT ${works.title} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
-        workUrl: sql<
-          string | null
-        >`(SELECT ${works.sourceUrl} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
+        work: {
+          title: tourWork.title,
+          sourceUrl: tourWork.sourceUrl,
+          category: tourWork.category,
+          completedOn: tourWork.completedOn,
+          uaValue: tourWork.uaValue,
+          cValue: tourWork.cValue,
+          family: tourWork.family,
+          siteAreaTsubo: tourWork.siteAreaTsubo,
+          floorAreaTsubo: tourWork.floorAreaTsubo,
+          totalAreaTsubo: tourWork.totalAreaTsubo,
+          layout: tourWork.layout,
+          points: tourWork.points,
+        },
       })
       .from(channelVideos)
+      // Joined on the first work by sort order, so two works sharing a video do not repeat the row
+      .leftJoin(
+        tourWork,
+        sql`${tourWork.id} = (SELECT ${works.id} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
+      )
       .where(where)
       .orderBy(
         sql`${channelVideos.vendorId} IS NULL`,
@@ -78,10 +110,7 @@ export async function listChannelVideos(
     db.select({ n: count() }).from(channelVideos).where(where),
   ])
   return {
-    rows: rows.map(({ workTitle, workUrl, ...row }) => ({
-      ...row,
-      work: workTitle && workUrl ? { title: workTitle, sourceUrl: workUrl } : null,
-    })),
+    rows,
     matched: total?.n ?? 0,
   }
 }

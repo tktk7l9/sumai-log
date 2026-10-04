@@ -87,6 +87,9 @@ describe('channel videos repository', () => {
       sourceUrl: 'https://example.com/works/p1/',
       site: 'siteA',
       title: 'テストの家',
+      uaValue: 0.5,
+      layout: '3LDK',
+      points: ['広い土間'],
       youtubeVideoId: 'aaaaaaaaaaa',
     })
     const work = async () => (await db.select().from(works).where(eq(works.id, workId)))[0]
@@ -108,6 +111,16 @@ describe('channel videos repository', () => {
     expect(video0?.work).toEqual({
       title: 'テストの家',
       sourceUrl: 'https://example.com/works/p1/',
+      category: null,
+      completedOn: null,
+      uaValue: 0.5,
+      cValue: null,
+      family: null,
+      siteAreaTsubo: null,
+      floorAreaTsubo: null,
+      totalAreaTsubo: null,
+      layout: '3LDK',
+      points: ['広い土間'],
     })
   })
 
