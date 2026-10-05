@@ -32,7 +32,7 @@ function channelHtml(overrides: Partial<Record<'title' | 'description' | 'image'
 describe('resolveSourceCore', () => {
   it('a URL that is not a YouTube channel is an error (no fetch)', async () => {
     const fetchImpl = fakeFetch(() => {
-      throw new Error('fetch されるべきではない')
+      throw new Error('fetch must not be called')
     })
     const result = await resolveSourceCore('https://example.com/blog', fetchImpl)
     expect(result.ok).toBe(false)
