@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { listVendorNewsInput, newsEventsBetweenInput, planVisitInput } from './news.schema'
+import { listVendorNewsInput, newsEventsBetweenInput } from './news.schema'
 
 /**
- * fetchNewsNow / planVisitFromNews are wrapped in createServerFn, so calling them
+ * fetchNewsNow / linkNewsToEvent are wrapped in createServerFn, so calling them
  * directly from a plain vitest workers test without the TanStack Start server runtime
  * (the Start context of AsyncLocalStorage) fails with "No Start context found"
  * (before it even reaches the validator). Looking at the schemas in news.schema.ts, which
@@ -67,16 +67,5 @@ describe('newsEventsBetweenInput', () => {
     expect(newsEventsBetweenInput.safeParse({ from: '2026/09/01', to: '2026-09-30' }).success).toBe(
       false,
     )
-  })
-})
-
-describe('planVisitInput', () => {
-  it('rejects an id that is not in UUID form', () => {
-    expect(planVisitInput.safeParse({ newsId: 'not-a-uuid' }).success).toBe(false)
-  })
-
-  it('passes for a UUID', () => {
-    const result = planVisitInput.safeParse({ newsId: '11111111-1111-1111-1111-111111111111' })
-    expect(result.success).toBe(true)
   })
 })

@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 import { getDb } from '../db/client'
 import { events } from '../db/schema'
-import { dateKey, monthKeys } from '../lib/calendar'
+import { dateKey } from '../lib/calendar'
 import { pendingVisitEvents } from '../lib/pending'
 import { eventInput } from './events.schema'
 import { currentActorEmail } from './members'
@@ -34,32 +34,9 @@ export function nowJstIso(): string {
   return `${d.toISOString().slice(0, 19)}+09:00`
 }
 
-export const listMonthEvents = createServerFn()
-  .validator(
-    z.object({
-      year: z.number().int().min(2000).max(2100),
-      month: z.number().int().min(1).max(12),
-    }),
-  )
-  .handler(async ({ data }) => {
-    const db = getDb()
-    const keys = monthKeys(data.year, data.month)
-    const [rows, recorded] = await Promise.all([
-      listEventsWithLinks(db, keys[0], keys[keys.length - 1]),
-      listRecordedEventIds(db),
-    ])
-    const now = nowJstIso()
-    return {
-      events: rows,
-      recordedEventIds: [...recorded],
-      todayKey: dateKey(now),
-      nowIso: now,
-    }
-  })
-
 /**
  * For the events tab (Mantine Schedule). Fetches any period that the day/week/month views may
- * span. Unlike listMonthEvents it receives the date range itself instead of a year and month.
+ * span, so it receives the date range itself instead of a year and month.
  */
 export const listEventsBetween = createServerFn()
   .validator(z.object({ from: dateField, to: dateField }))

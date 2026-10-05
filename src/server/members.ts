@@ -1,8 +1,7 @@
 import { env } from 'cloudflare:workers'
-import { createServerFn } from '@tanstack/react-start'
 import { getRequest } from '@tanstack/react-start/server'
 
-import { findMember, parseMembers, type Member } from '../lib/members'
+import { parseMembers, type Member } from '../lib/members'
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { authenticateRequest } from './auth'
 
@@ -32,9 +31,3 @@ export async function currentActorEmail(): Promise<string> {
   }
   return result.identity.email
 }
-
-export const getCurrentMember = createServerFn().handler(async () => {
-  const members = allMembers()
-  const email = await currentActorEmail()
-  return { me: findMember(members, email), members }
-})

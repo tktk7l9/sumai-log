@@ -2,17 +2,13 @@ import { createServerFn } from '@tanstack/react-start'
 import { eq } from 'drizzle-orm'
 
 import { getDb } from '../db/client'
-import { events, vendorNews, vendors } from '../db/schema'
-import { isMailNews } from '../lib/mail/toNews'
-import { truncate } from '../lib/news/text'
-import { currentActorEmail } from './members'
+import { events, vendorNews } from '../db/schema'
 import { fetchAllVendorNews } from './newsFetcher'
 import {
   linkNewsEventInput,
   listVendorNewsInput,
   newsEventsBetweenInput,
   newsIdInput,
-  planVisitInput,
 } from './news.schema'
 import {
   getNewsById,
@@ -21,21 +17,11 @@ import {
   listNewsEventsBetween,
   listNewsSources,
   reparseNewsEventDates,
-  upsertEvent,
 } from './repository'
 
 // The validators come from news.schema.ts (see there for why they were split for the sake of
 // tests). The public import path (available from './news') does not change.
-export {
-  linkNewsEventInput,
-  listVendorNewsInput,
-  newsEventsBetweenInput,
-  newsIdInput,
-  planVisitInput,
-}
-
-// The same limit as eventInput in events.schema.ts (an event title is at most 200 characters).
-const EVENT_TITLE_MAX = 200
+export { linkNewsEventInput, listVendorNewsInput, newsEventsBetweenInput, newsIdInput }
 
 /**
  * For the `/news` page (per month. Filtered by from/to) and the "お知らせ" (vendor news) block
@@ -82,48 +68,6 @@ export const fetchNewsNow = createServerFn({ method: 'POST' }).handler(async () 
 export const reparseNewsEvents = createServerFn({ method: 'POST' }).handler(async () => {
   return await reparseNewsEventDates(getDb())
 })
-
-/**
- * "行く" (Go) on a vendor news item. As design.md §2 says, creates an event with kind='visit'
- * in events and links it to vendor_news.planned_event_id. When already linked, nothing new
- * is created and that eventId is returned as is (however many presses, it points to the same
- * event).
- */
-export const planVisitFromNews = createServerFn({ method: 'POST' })
-  .validator(planVisitInput)
-  .handler(async ({ data }) => {
-    const db = getDb()
-    const [news] = await db.select().from(vendorNews).where(eq(vendorNews.id, data.newsId)).limit(1)
-    if (!news) throw new Response('Not Found', { status: 404 })
-    if (news.plannedEventId) return { eventId: news.plannedEventId }
-    if (!news.eventStart) {
-      throw new Response('この見出しには日程がありません。', { status: 400 })
-    }
-
-    const [vendor] = await db.select().from(vendors).where(eq(vendors.id, news.vendorId)).limit(1)
-    const title = truncate(`${vendor?.name ?? ''} ${news.title}`.trim(), EVENT_TITLE_MAX)
-
-    const eventId = await upsertEvent(
-      db,
-      {
-        title,
-        kind: 'visit',
-        startsAt: news.eventStart,
-        endsAt: null,
-        allDay: true,
-        placeId: null,
-        vendorId: news.vendorId,
-        propertyId: null,
-        // The url of vendor news that came from mail is `mail:<Message-ID>` (an internal
-        // identifier that cannot be opened), so it is not put into the note of the event. The
-        // body can be read from the settings page / the vendor news drawer.
-        note: isMailNews(news.url) ? null : news.url,
-      },
-      await currentActorEmail(),
-    )
-    await linkPlannedEvent(db, news.id, eventId)
-    return { eventId }
-  })
 
 /** Fetches 1 item so that "行く" can open the event form (/calendar?plan=<newsId>) */
 export const getVendorNews = createServerFn()
