@@ -1,0 +1,1 @@
+CREATE INDEX `works_youtube_video_idx` ON `works` (`youtube_video_id`,`sort_order`);
