@@ -92,8 +92,8 @@ export function NewsAgenda({
   /** "予定を見る" in the drawer ("行く" already done). Moves to that day in the calendar
    * (the same behavior NewsRow had in the old NewsList. There is no screen here to edit
    * EventForm, so editing the event itself is left to the calendar).
-   * plannedEventId is set only on events that planVisitFromNews creates with eventStart
-   * required (src/server/news.ts), so normally eventStart always exists too. Even so,
+   * plannedEventId is set only when "行く" opens the event form from a dated news item
+   * (linkNewsToEvent in src/server/news.ts), so normally eventStart always exists too. Even so,
    * when there is a mismatch (data inconsistency etc.) where plannedEventId exists but
    * eventStart does not, avoid doing nothing just because the date cannot be identified,
    * and take the user to today's calendar (pointed out in fix round 1). */

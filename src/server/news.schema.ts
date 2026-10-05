@@ -4,8 +4,7 @@ import { dateField, idField } from './zod'
 
 /**
  * Why this is split from news.ts: the same as events.schema.ts / videos.schema.ts
- * (see the comments there for details). news.ts uses currentActorEmail (which statically
- * imports getRequest of `@tanstack/react-start/server`) inside planVisitFromNews, and
+ * (see the comments there for details). news.ts wraps its handlers in createServerFn, and
  * loading news.ts through import from a plain vitest workers test fails to resolve the
  * virtual specifier provided by the TanStack Start Vite plugin and crashes. The schemas
  * placed here are pure zod schemas that need neither D1 nor members, so
@@ -39,9 +38,7 @@ export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
 export const newsEventsBetweenInput = z.object({ from: dateField, to: dateField })
 export type NewsEventsBetweenInput = z.input<typeof newsEventsBetweenInput>
 
-export const planVisitInput = z.object({ newsId: idField })
 /** Looks up just 1 item when "行く" (Go) opens the event form (/calendar?plan=<newsId>) */
 export const newsIdInput = z.object({ id: idField })
 /** Links the event saved in the form to the vendor news item (plannedEventId) */
 export const linkNewsEventInput = z.object({ newsId: idField, eventId: idField })
-export type PlanVisitInput = z.input<typeof planVisitInput>
