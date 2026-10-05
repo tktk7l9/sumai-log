@@ -9,9 +9,10 @@ import {
   Text,
   UnstyledButton,
 } from '@mantine/core'
-import { Check, ExternalLink, Play } from 'lucide-react'
+import { Check, ExternalLink, Footprints, Play } from 'lucide-react'
 
 import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
+import { formatDateSlash } from '../../lib/calendar'
 import { formatDuration, formatViews } from '../../lib/channelVideos/format'
 import { toJstDateKey } from '../../lib/jst'
 import { youtubeThumbnailUrl } from '../../lib/youtube'
@@ -98,6 +99,18 @@ export function ChannelVideoCard({
                   leftSection={<Check size={12} aria-hidden />}
                 >
                   視聴済み
+                </Badge>
+              ) : null}
+              {/* A house we went to, and when. The word and an icon, not colour alone (SHIG 96) */}
+              {video.visit ? (
+                <Badge
+                  size="sm"
+                  color="clay"
+                  variant="light"
+                  tt="none"
+                  leftSection={<Footprints size={12} aria-hidden />}
+                >
+                  {formatDateSlash(video.visit.visitedOn)} 見学
                 </Badge>
               ) : null}
             </Group>
