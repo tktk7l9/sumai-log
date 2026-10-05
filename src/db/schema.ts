@@ -427,7 +427,12 @@ export const works = sqliteTable(
     sortOrder: integer('sort_order').notNull().default(0),
     ...timestamps,
   },
-  (t) => [index('works_vendor_idx').on(t.vendorId)],
+  (t) => [
+    index('works_vendor_idx').on(t.vendorId),
+    // The video tab looks up each channel video's tour work by this; without it every
+    // channel video row scans all works (2,534 x 161 rows read per page load)
+    index('works_youtube_video_idx').on(t.youtubeVideoId, t.sortOrder),
+  ],
 )
 
 export const CHANNEL_VIDEO_KINDS = ['video', 'short', 'live'] as const
