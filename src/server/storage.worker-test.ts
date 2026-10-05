@@ -17,7 +17,7 @@ function fakeBucket(deleteImpl: (keys: string | string[]) => Promise<void>) {
 
 describe('cleanupFailedUpload', () => {
   it('even when the cleanup succeeds, what is rethrown is the original error', async () => {
-    const originalError = new Error('put に失敗')
+    const originalError = new Error('put failed')
     const { bucket, del } = fakeBucket(async () => {})
     await expect(
       cleanupFailedUpload(
@@ -30,9 +30,9 @@ describe('cleanupFailedUpload', () => {
   })
 
   it('even when the cleanup itself fails, swallows the cleanup failure and rethrows the original error', async () => {
-    const originalError = new Error('put に失敗')
+    const originalError = new Error('put failed')
     const { bucket, del } = fakeBucket(async () => {
-      throw new Error('R2 delete も失敗')
+      throw new Error('R2 delete failed too')
     })
     await expect(
       cleanupFailedUpload(

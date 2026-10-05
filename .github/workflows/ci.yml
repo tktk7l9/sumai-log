@@ -42,7 +42,7 @@ jobs:
       # Check for real data mixed in. CI has no seed.local.json, so here we can only
       # see "whether the script is broken". The actual protection is passing
       # `npm run check:pii` locally (see AGENTS.md).
-      - name: 実データの混入検査（スクリプトの健全性のみ）
+      - name: Real-data leak check (script health only)
         run: npm run check:pii
 
       - run: npm run format:check
@@ -62,7 +62,7 @@ jobs:
         run: |
           npm run db:generate -- --name ci_check
           if [ -n "$(git status --porcelain drizzle)" ]; then
-            echo "::error::schema.ts の変更に対してマイグレーションが未生成です。'npm run db:generate' を実行してコミットしてください。"
+            echo "::error::schema.ts changed but no migration was generated. Run 'npm run db:generate' and commit the result."
             git status --porcelain drizzle
             exit 1
           fi
