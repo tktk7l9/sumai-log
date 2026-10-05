@@ -2,12 +2,23 @@ import { and, asc, count, eq, isNull, sql, type SQL } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 
 import type { Db } from '../../db/client'
-import { channelVideos, works, type ChannelVideo, type Work } from '../../db/schema'
+import {
+  channelVideos,
+  events,
+  places,
+  visits,
+  works,
+  type ChannelVideo,
+  type Work,
+} from '../../db/schema'
+import { visitedHouses, visitOfVideo } from '../../lib/channelVideos/visited'
 
 /** watchedBy (an e-mail) stays in the table as a record; the screen does not use it */
 export type ChannelVideoRow = Omit<ChannelVideo, 'watchedBy' | 'createdAt' | 'updatedAt'> & {
   /** The work whose tour video this is (works.youtube_video_id): the link to its page and its data */
   work: ChannelVideoWork | null
+  /** When we visited the house this video shows (lib/channelVideos/visited.ts) */
+  visit: { visitedOn: string } | null
 }
 
 export type ChannelVideoWork = Pick<
@@ -64,7 +75,7 @@ export async function listChannelVideos(
   filter: ChannelVideoFilter,
 ): Promise<{ rows: ChannelVideoRow[]; matched: number }> {
   const where = whereOf(filter)
-  const [rows, [total]] = await Promise.all([
+  const [rows, [total], houses] = await Promise.all([
     db
       .select({
         id: channelVideos.id,
@@ -108,11 +119,36 @@ export async function listChannelVideos(
       )
       .limit(filter.limit),
     db.select({ n: count() }).from(channelVideos).where(where),
+    listVisitedHouses(db),
   ])
   return {
-    rows,
+    rows: rows.map((row) => ({
+      ...row,
+      visit: visitOfVideo({ ...row, workTitle: row.work?.title ?? null }, houses),
+    })),
     matched: total?.n ?? 0,
   }
+}
+
+/** Works named by a visit of the same vendor: a few visits against a couple of hundred works */
+async function listVisitedHouses(db: Db) {
+  const [visitRows, workRows] = await Promise.all([
+    db
+      .select({
+        visitedOn: visits.visitedOn,
+        vendorId: visits.vendorId,
+        place: places.name,
+        event: events.title,
+      })
+      .from(visits)
+      .leftJoin(places, eq(places.id, visits.placeId))
+      .leftJoin(events, eq(events.id, visits.eventId)),
+    db.select({ title: works.title, vendorId: works.vendorId }).from(works),
+  ])
+  return visitedHouses(
+    workRows,
+    visitRows.map((v) => ({ ...v, names: [v.place, v.event] })),
+  )
 }
 
 /** Videos and watched videos per channel, in the same order as the list */

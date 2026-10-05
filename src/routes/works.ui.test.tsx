@@ -310,6 +310,7 @@ function clip(n: number, over: Partial<ChannelVideoRow> = {}): ChannelVideoRow {
     watchedAt: null,
     ...over,
     work: over.work ?? null,
+    visit: over.visit ?? null,
   }
 }
 
@@ -338,6 +339,7 @@ describe('works route, videos tab', () => {
             layout: '2LDK',
             points: ['薪ストーブ', '回遊できる家事動線'],
           },
+          visit: { visitedOn: '2026-03-28' },
         }),
         clip(2, {
           watchedAt: '2026-10-01T00:00:00.000Z',
@@ -376,8 +378,11 @@ describe('works route, videos tab', () => {
     expect(first.getByText('2LDK')).toBeInTheDocument()
     expect(first.getByText('薪ストーブ')).toBeInTheDocument()
     expect(first.getByText(/延床面積/)).toBeInTheDocument()
+    // The house we went to: the visit date
+    expect(first.getByText('2026/03/28 見学')).toBeInTheDocument()
     const second = within(screen.getByRole('article', { name: '動画2' }))
     expect(second.queryByRole('link')).not.toBeInTheDocument()
+    expect(second.queryByText(/見学/)).not.toBeInTheDocument()
     expect(second.queryByText('間取り')).not.toBeInTheDocument()
   })
 

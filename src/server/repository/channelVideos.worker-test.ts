@@ -2,7 +2,14 @@ import { env } from 'cloudflare:test'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { channelVideos, vendors, videos, works, type NewChannelVideo } from '../../db/schema'
+import {
+  channelVideos,
+  vendors,
+  videos,
+  visits,
+  works,
+  type NewChannelVideo,
+} from '../../db/schema'
 import {
   channelVideoUpsertSql,
   recordedWatchedBackfillSql,
@@ -10,6 +17,7 @@ import {
 } from '../../lib/channelVideos/import'
 import { channelSummaries, listChannelVideos, setChannelVideoWatched } from './channelVideos'
 import { actor, db, reset } from './test-helpers'
+import { upsertPlace } from './places'
 import { upsertVideo } from './videos'
 import { listWorksWithVendor, setWorkWatched } from './works'
 
@@ -122,6 +130,50 @@ describe('channel videos repository', () => {
       layout: '3LDK',
       points: ['広い土間'],
     })
+  })
+
+  it('dates the videos of a house we visited, found by its name in the visited place', async () => {
+    await db.insert(vendors).values({ id: VENDOR_ID, name: '甲工務店', createdBy: actor })
+    await db.insert(works).values({
+      id: crypto.randomUUID(),
+      sourceUrl: 'https://example.com/works/p1/',
+      site: 'siteA',
+      vendorId: VENDOR_ID,
+      title: '架空の家',
+      youtubeVideoId: 'tourAaaaaaa',
+    })
+    const placeId = await upsertPlace(
+      db,
+      { name: '甲工務店「架空の家」完成見学会@横浜市', kind: 'other', vendorId: VENDOR_ID },
+      actor,
+    )
+    await db.insert(visits).values({
+      id: crypto.randomUUID(),
+      placeId,
+      vendorId: VENDOR_ID,
+      visitedOn: '2026-03-28',
+      createdBy: actor,
+    })
+    await addVideo({
+      videoId: 'tourAaaaaaa',
+      vendorId: VENDOR_ID,
+      title: 'ルームツアー',
+      sortOrder: 0,
+    })
+    await addVideo({
+      videoId: 'talkAaaaaaa',
+      vendorId: VENDOR_ID,
+      title: '架空の家を解説',
+      sortOrder: 1,
+    })
+    await addVideo({ videoId: 'otherAaaaaa', vendorId: VENDOR_ID, title: '別の家', sortOrder: 2 })
+
+    const { rows } = await listChannelVideos(db, { limit: 9 })
+    expect(rows.map((r) => [r.videoId, r.visit])).toEqual([
+      ['tourAaaaaaa', { visitedOn: '2026-03-28' }],
+      ['talkAaaaaaa', { visitedOn: '2026-03-28' }],
+      ['otherAaaaaa', null],
+    ])
   })
 
   it('returns false when the video does not exist', async () => {
