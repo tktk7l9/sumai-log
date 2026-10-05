@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege for GITHUB_TOKEN: CI only reads the repository
+permissions:
+  contents: read
+
 env:
   GITLEAKS_VERSION: 8.30.1
 

@@ -118,6 +118,29 @@ export function sniffImageType(
   return null
 }
 
+/** Raster types the app ever stores (photos, vendor portraits and favicons). Never SVG or HTML */
+const SERVABLE_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+])
+
+/**
+ * The content-type used when streaming an R2 object back to the browser.
+ *
+ * Every write path sniffs the bytes first, so the stored type should always be a raster
+ * image. This is defence in depth: if an object ever carries another type (SVG, HTML, a
+ * hand-run `wrangler r2 object put`), it is served as an opaque download type instead of
+ * something the browser would render as a document on this origin.
+ */
+export function servableImageType(stored: string | null | undefined): string {
+  const type = (stored ?? '').split(';')[0].trim().toLowerCase()
+  if (type === '') return 'image/jpeg'
+  return SERVABLE_IMAGE_TYPES.has(type) ? type : 'application/octet-stream'
+}
+
 export function validatePhotoUpload(input: {
   displaySize: number
   thumbSize: number

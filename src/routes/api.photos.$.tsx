@@ -4,7 +4,13 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../db/client'
 import { visits } from '../db/schema'
 import { isIdLike } from '../lib/ids'
-import { isManagedPhotoKey, photoKeys, sniffImageType, validatePhotoUpload } from '../lib/photos'
+import {
+  isManagedPhotoKey,
+  photoKeys,
+  servableImageType,
+  sniffImageType,
+  validatePhotoUpload,
+} from '../lib/photos'
 import { securityHeadersInit } from '../lib/securityHeaders'
 import { currentActorEmail } from '../server/members'
 import { insertPhoto } from '../server/repository'
@@ -122,7 +128,7 @@ export const Route = createFileRoute('/api/photos/$')({
         }
         return new Response(object.body, {
           headers: securityHeadersInit({
-            'content-type': object.httpMetadata?.contentType ?? 'image/jpeg',
+            'content-type': servableImageType(object.httpMetadata?.contentType),
             'content-length': String(object.size),
             'cache-control': 'private, max-age=31536000, immutable',
             etag,
