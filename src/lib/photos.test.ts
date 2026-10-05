@@ -7,6 +7,7 @@ import {
   photoKeys,
   photoUrl,
   representativeThumbKeyFromDisplayKey,
+  servableImageType,
   sniffImageType,
   validatePhotoUpload,
   vendorFaviconKey,
@@ -118,6 +119,22 @@ describe('sniffImageType', () => {
       sniffImageType(new Uint8Array([0x25, 0x50, 0x44, 0x46, 0, 0, 0, 0, 0, 0, 0, 0])),
     ).toBeNull()
     expect(sniffImageType(new Uint8Array([0xff, 0xd8]))).toBeNull()
+  })
+})
+
+describe('servableImageType', () => {
+  it('passes the stored raster types through and defaults a missing type to JPEG', () => {
+    expect(servableImageType('image/jpeg')).toBe('image/jpeg')
+    expect(servableImageType('IMAGE/PNG; charset=binary')).toBe('image/png')
+    expect(servableImageType('image/webp')).toBe('image/webp')
+    expect(servableImageType('image/x-icon')).toBe('image/x-icon')
+    expect(servableImageType(undefined)).toBe('image/jpeg')
+    expect(servableImageType('')).toBe('image/jpeg')
+  })
+
+  it('never serves SVG or HTML as such', () => {
+    expect(servableImageType('image/svg+xml')).toBe('application/octet-stream')
+    expect(servableImageType('text/html')).toBe('application/octet-stream')
   })
 })
 
