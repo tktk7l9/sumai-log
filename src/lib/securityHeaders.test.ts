@@ -39,6 +39,16 @@ describe('applySecurityHeaders', () => {
     expect(csp).toContain('https://yt3.googleusercontent.com')
   })
 
+  it('sends HSTS for one year without includeSubDomains or preload', () => {
+    const headers = applySecurityHeaders(new Headers())
+    expect(headers.get('strict-transport-security')).toBe('max-age=31536000')
+  })
+
+  it('limits form submission targets to this origin', () => {
+    const csp = SECURITY_HEADERS['content-security-policy']
+    expect(csp).toContain("form-action 'self';")
+  })
+
   it('allows geolocation for self only', () => {
     const headers = applySecurityHeaders(new Headers())
     expect(headers.get('permissions-policy')).toContain('geolocation=(self)')

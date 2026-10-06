@@ -9,6 +9,11 @@
  * the avatars of sources (YouTube channels)). `frame-src` allows only the no-cookie YouTube
  * embed, for the tour videos on the works page.
  * `geolocation=(self)` is allowed for the "現在地" (Current location) button on the map tab.
+ * `form-action 'self'` keeps a form from being posted to another origin (there is no
+ * cross-origin form in the app; Access logs in by redirect, not by a form from this page).
+ * HSTS: both hosts are https only, so the browser is told to never try plain http (1 year,
+ * this host only: subdomains are not ours to promise). Browsers ignore the header over the
+ * plain-http dev server, so local development is unaffected.
  */
 
 export const SECURITY_HEADERS = {
@@ -17,8 +22,9 @@ export const SECURITY_HEADERS = {
   'referrer-policy': 'no-referrer',
   'permissions-policy': 'camera=(), microphone=(), geolocation=(self), payment=()',
   'cross-origin-opener-policy': 'same-origin',
+  'strict-transport-security': 'max-age=31536000',
   'content-security-policy':
-    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; frame-src https://www.youtube-nocookie.com; img-src 'self' data: blob: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://maps.googleapis.com",
+    "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src https://www.youtube-nocookie.com; img-src 'self' data: blob: https://i.ytimg.com https://yt3.ggpht.com https://yt3.googleusercontent.com https://maps.googleapis.com https://maps.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://maps.googleapis.com",
 } as const
 
 /** Sets them on an existing Headers, overwriting. */
