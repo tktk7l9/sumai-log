@@ -70,10 +70,15 @@ export function VideoForm({
   const save = useServerFn(saveVideo)
   const [saving, setSaving] = useState(false)
   const [fetchState, setFetchState] = useState<FetchState>('idle')
-  // When an existing video is opened (or a memo starts from a channel video) the title is
-  // already filled, so the oEmbed auto-fill does not overwrite it
-  const [titleTouched, setTitleTouched] = useState(Boolean(initial ?? defaults?.title))
-  const lastFetchedUrl = useRef<string | null>(initial?.url ?? defaults?.url ?? null)
+  // When an existing video is opened the title is already filled, so the oEmbed auto-fill
+  // does not overwrite it. A title that came with `defaults` is not "touched": pasting another
+  // video's URL over it replaces the title with that video's
+  const [titleTouched, setTitleTouched] = useState(Boolean(initial))
+  // No fetch for a URL whose title is already known (an existing memo, or a memo started from a
+  // channel video). A URL alone (a video that is not a channel video) still fetches on blur
+  const lastFetchedUrl = useRef<string | null>(
+    initial?.url ?? (defaults?.title ? defaults.url : null) ?? null,
+  )
   // oEmbed can send several requests on repeated presses or re-pasting. So that an old
   // response returning later does not overwrite newer input, each request gets a number
   // and only the latest one is applied.

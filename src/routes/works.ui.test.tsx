@@ -430,6 +430,8 @@ describe('works route, videos tab', () => {
     await user.click(await screen.findByRole('radio', { name: '乙の会 2' }))
     await waitFor(() => expect(router.state.location.search).toMatchObject({ ch: CH_B }))
     expect(await screen.findByText('該当 42 本・視聴済み 0/2 本')).toBeInTheDocument()
+    // 「すべて」 keeps counting every channel while one is selected
+    expect(screen.getByRole('radio', { name: 'すべて 32' })).not.toBeChecked()
 
     await user.click(screen.getByRole('radio', { name: 'ライブ 0' }))
     await user.click(screen.getByRole('checkbox', { name: 'まだ見ていない' }))

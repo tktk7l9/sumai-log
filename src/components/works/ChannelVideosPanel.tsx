@@ -94,6 +94,9 @@ export function ChannelVideosPanel({
   const watched = scope.reduce((sum, c) => sum + countOf(c, kind).watched, 0)
   const kindTotal = (k: ChannelVideoKind | null) =>
     scope.reduce((sum, c) => sum + countOf(c, k).total, 0)
+  // 「すべて」 is every channel (of the chosen kind), whichever channel is selected; allTotal
+  // (every video of every kind) only tells whether anything was imported at all
+  const allOfKind = page.channels.reduce((sum, c) => sum + countOf(c, kind).total, 0)
   const allTotal = page.channels.reduce((sum, c) => sum + c.total, 0)
   const limit = search.n ?? CHANNEL_VIDEO_PAGE
 
@@ -135,7 +138,7 @@ export function ChannelVideosPanel({
         >
           <ChipRow label="チャンネル">
             <Chip value={ALL} size="xs">
-              すべて {kind ? kindTotal(kind) : allTotal}
+              すべて {allOfKind}
             </Chip>
             {page.channels.map((c) => (
               <Chip key={c.channelId} value={c.channelId} size="xs">

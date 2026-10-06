@@ -161,14 +161,28 @@ describe('records route', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/works'))
   })
 
-  it('still fills in the URL for a video that is not a channel video, and drops the id when closed', async () => {
+  it('still fills in the URL for a video that is not a channel video, fetches its title, and drops the id when closed', async () => {
     stub(getChannelVideoForMemo, { video: null })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          videoId: 'zyxwvutsrqp',
+          title: '取得した題名',
+          channel: 'サンプル住宅ch',
+          thumbnailUrl: 'https://i.ytimg.com/vi/zyxwvutsrqp/hqdefault.jpg',
+          canonicalUrl: 'https://www.youtube.com/watch?v=zyxwvutsrqp',
+        }),
+      ),
+    )
     const { user, router } = await renderRoute('/records?tab=videos&video=zyxwvutsrqp')
     const drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
-    expect(within(drawer).getByRole('textbox', { name: 'URL' })).toHaveValue(
-      'https://www.youtube.com/watch?v=zyxwvutsrqp',
-    )
+    const url = within(drawer).getByRole('textbox', { name: 'URL' })
+    expect(url).toHaveValue('https://www.youtube.com/watch?v=zyxwvutsrqp')
     expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('')
+    // The URL alone is not "already fetched": leaving the field fills the title from YouTube
+    fireEvent.blur(url)
+    expect(await screen.findByText('取得しました')).toBeInTheDocument()
+    expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('取得した題名')
     await user.click(within(drawer).getByRole('button', { name: '閉じる' }))
     await waitFor(() => expect(router.state.location.search).not.toHaveProperty('video'))
   })
