@@ -5,7 +5,7 @@ import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
-import { getSettings } from '../server/settings'
+import { getMembers } from '../server/settings'
 import { MEMBERS, event, news, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
@@ -35,7 +35,7 @@ describe('home route', () => {
         href: { to: '/records/visits/$id', params: { id: 'vi1' } },
       },
     ])
-    stub(getSettings, { members: MEMBERS })
+    stub(getMembers, { members: MEMBERS })
     stub(listVendorNews, { news: [{ ...news(), vendorName: 'テスト工務店' }] })
     stub(pickGlossaryTerm, {
       id: 'ua',

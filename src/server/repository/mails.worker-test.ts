@@ -10,6 +10,7 @@ import {
   getInboundMailBody,
   importMailAsNews,
   insertInboundMail,
+  LIST_BODY_PREVIEW_CHARS,
   listInboundMails,
   reviveRejectedInboundMail,
 } from './mails'
@@ -158,11 +159,33 @@ describe('listInboundMails / getInboundMailBody / deleteInboundMail / cleanupInb
     )
     const all = await listInboundMails(db, { limit: 10 })
     expect(all.map((m) => m.messageId)).toEqual(['<b>', '<a>'])
+    expect(all[1].bodyText).toBe('9月27日(土) 完成見学会を開催します。')
     expect(await listInboundMails(db, { status: 'unassigned', limit: 10 })).toHaveLength(1)
     expect(await getInboundMailBody(db, all[1].id)).toBe('9月27日(土) 完成見学会を開催します。')
     expect(await getInboundMailBody(db, 'nope')).toBeNull()
     await deleteInboundMail(db, b)
     expect(await listInboundMails(db, { limit: 10 })).toHaveLength(1)
+  })
+  it('lists a body preview only, except for system mail', async () => {
+    const long = 'あ'.repeat(LIST_BODY_PREVIEW_CHARS + 50)
+    await insertInboundMail(
+      db,
+      row({ messageId: '<long>', receivedAt: '2026-09-03T00:00:00.000Z', bodyText: long }),
+    )
+    await insertInboundMail(
+      db,
+      row({
+        messageId: '<sys>',
+        receivedAt: '2026-09-04T00:00:00.000Z',
+        status: 'system',
+        bodyText: long,
+      }),
+    )
+    const byId = new Map((await listInboundMails(db, { limit: 10 })).map((m) => [m.messageId, m]))
+    expect(byId.get('<long>')?.bodyText).toBe('あ'.repeat(LIST_BODY_PREVIEW_CHARS))
+    expect(byId.get('<sys>')?.bodyText).toBe(long)
+    // The full text is still there
+    expect(await getInboundMailBody(db, byId.get('<long>')!.id)).toBe(long)
   })
   it('cleanup deletes only old rejected/system rows', async () => {
     await insertInboundMail(

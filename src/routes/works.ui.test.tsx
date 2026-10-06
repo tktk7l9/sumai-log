@@ -314,9 +314,22 @@ function clip(n: number, over: Partial<ChannelVideoRow> = {}): ChannelVideoRow {
   }
 }
 
+const ZERO = { total: 0, watched: 0 }
 const CHANNELS = [
-  { channelId: CH_A, channel: '甲工務店', total: 40, watched: 1 },
-  { channelId: CH_B, channel: '乙の会', total: 2, watched: 0 },
+  {
+    channelId: CH_A,
+    channel: '甲工務店',
+    total: 40,
+    watched: 1,
+    kinds: { video: { total: 30, watched: 1 }, short: { total: 10, watched: 0 }, live: ZERO },
+  },
+  {
+    channelId: CH_B,
+    channel: '乙の会',
+    total: 2,
+    watched: 0,
+    kinds: { video: { total: 2, watched: 0 }, short: ZERO, live: ZERO },
+  },
 ]
 
 describe('works route, videos tab', () => {

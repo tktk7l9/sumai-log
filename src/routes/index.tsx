@@ -14,10 +14,10 @@ import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
-// Get members through getSettings() (importing server/members.ts directly from a route puts
-// currentActorEmail and others in that file that are not createServerFn into the client
+// Get members through a server function (importing server/members.ts directly from a route
+// puts currentActorEmail and others in that file that are not createServerFn into the client
 // bundle and breaks the build. Same workaround pattern as settings.tsx)
-import { getSettings } from '../server/settings'
+import { getMembers } from '../server/settings'
 
 // The "お知らせ" (vendor news) block on the home page shows only the latest 5 items
 // (design.md §4 "ホーム" (Home))
@@ -31,7 +31,7 @@ export const Route = createFileRoute('/')({
     const [home, feed, { members }, { news }, glossaryPick] = await Promise.all([
       listHomeEvents(),
       recentFeed(),
-      getSettings(),
+      getMembers(),
       listVendorNews({ data: { limit: HOME_NEWS_LIMIT } }),
       pickGlossaryTerm(),
     ])

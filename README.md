@@ -431,14 +431,22 @@ Workers Builds が無音で止まる既知の事故があるため（他プロ�
 
 ### 9. バックアップ
 
-月次: `npm run db:export`（`backups/sumai-log-YYYYMMDD.sql` を出力・gitignore 済み）→
-Google Drive の `backups/sumai-log` へコピー。
-
-**R2 の写真は `db:export` の対象外。** D1 のバックアップとは別に、取込スクリプトが変換した
-JPEG（`seed.local/out/*.jpg`・gitignore 済み）と、アプリから追加した写真を月次で同じ Drive
-フォルダへコピーする。1 件だけ取り出す例:
+月次に 1 コマンド（読み取りだけ。本番には何も書かない）:
 
 ```bash
-npx wrangler r2 object get sumai-log-photos/photos/<visitId>/<photoId>-display.jpg \
-  --file ./backups/<photoId>-display.jpg --remote
+npm run backup -- --dest "$HOME/Library/CloudStorage/GoogleDrive-<アカウント>/マイドライブ/backups/sumai-log"
 ```
+
+- D1 を `backups/<YYYYMMDD>/d1.sql` に export し、復元用に並べ替えた `d1.sql.restore/`（`0-drop` → `3-rest`）も書く
+- R2 の写真（見学の写真・代表者の写真・サイトのアイコン。キーは D1 から引く）を `backups/r2/<key>` に取る。取得済みのものは飛ばす
+- `--dest` のフォルダへ `backups/<YYYYMMDD>` と `backups/r2` をコピーする（省略するとコピーのコマンドを表示）。`--skip-photos` で D1 だけ
+
+**export の出力はそのままでは復元できない**（テーブルごとに CREATE と INSERT が並ぶため、親テーブルより先に
+子テーブルの INSERT が走り `no such table` で止まる。2026-10-06 に実測）。復元は並べ替えた 4 ファイルを順に流す:
+
+```bash
+npm run db:restore:local -- backups/<YYYYMMDD>/d1.sql   # ローカル D1 を dump の内容に入れ替える
+```
+
+本番へ戻すときは同じ 4 ファイルを所有者が `--remote` で順に実行する（`npx wrangler d1 execute sumai-log --remote --file backups/<YYYYMMDD>/d1.sql.restore/0-drop.sql` …）。
+取った直後に `db:restore:local` を一度通し、復元できるバックアップであることを確かめておく。

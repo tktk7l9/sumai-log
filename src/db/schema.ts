@@ -471,7 +471,13 @@ export const channelVideos = sqliteTable(
     watchedBy: text('watched_by'),
     ...timestamps,
   },
-  (t) => [index('channel_videos_channel_idx').on(t.channelId, t.sortOrder)],
+  (t) => [
+    index('channel_videos_channel_idx').on(t.channelId, t.sortOrder),
+    // The order of the videos tab (vendors' channels first, then by channel and position):
+    // without it every page of 30 sorted the whole table through a temp b-tree (about 4,100
+    // rows read per open; 2,300 with it, measured 2026-10-06)
+    index('channel_videos_order_idx').on(sql`(${t.vendorId} IS NULL)`, t.channel, t.sortOrder),
+  ],
 )
 
 export const COMMENT_TARGETS = ['vendor', 'property', 'place', 'visit', 'video'] as const

@@ -11,20 +11,37 @@
  * "0 21 * * *" in wrangler.jsonc) as design.md §1 says, then the new channel videos. It does not pass through
  * authentication, but it accepts no external input (only the D1 of env).
  */
-import { createStartHandler, defaultStreamHandler } from '@tanstack/react-start/server'
+import {
+  createStartHandler,
+  defaultStreamHandler,
+  defineHandlerCallback,
+} from '@tanstack/react-start/server'
 import { createServerEntry } from '@tanstack/react-start/server-entry'
 import { drizzle } from 'drizzle-orm/d1'
 
 import * as schema from './db/schema'
 import { parseAllowlist } from './lib/access'
+import { renderErrorLines } from './lib/errorLog'
 import { refreshChannelVideos } from './server/channelVideosFetcher'
 import { handleInboundMail } from './server/mailHandler'
 import { fetchAllVendorNews } from './server/newsFetcher'
 import { cleanupInboundMails } from './server/repository/mails'
 
+/**
+ * The default stream handler, with one addition: a loader that failed during the server render
+ * is written to the log before the page (with its error screen and status 500) streams out.
+ * Without this the Workers log held only `GET https://…/` for the 500s of 2026-10-05
+ */
+const streamHandler = defineHandlerCallback((ctx) => {
+  for (const line of renderErrorLines(ctx.router.state.matches, ctx.request.url)) {
+    console.error(line)
+  }
+  return defaultStreamHandler(ctx)
+})
+
 // Named startFetch so as not to shadow the global fetch (this avoids calling the SSR handler
 // by carelessly writing fetch(...) inside this module).
-const startFetch = createStartHandler(defaultStreamHandler)
+const startFetch = createStartHandler(streamHandler)
 const entry = createServerEntry({ fetch: startFetch })
 
 /**

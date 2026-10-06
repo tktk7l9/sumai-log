@@ -1,0 +1,1 @@
+CREATE INDEX `channel_videos_order_idx` ON `channel_videos` (("vendor_id" IS NULL),`channel`,`sort_order`);

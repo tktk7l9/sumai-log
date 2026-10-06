@@ -1,6 +1,7 @@
 import { createMiddleware, createStart } from '@tanstack/react-start'
 
 import { isTrustedMutation } from './lib/csrf'
+import { formatError, isLoggableError } from './lib/errorLog'
 import { applySecurityHeaders, securityHeadersInit } from './lib/securityHeaders'
 import { recordSeen } from './server/activity'
 import { requireUser } from './server/auth'
@@ -41,12 +42,37 @@ const authMiddleware = createMiddleware().server(async ({ next, request }) => {
       applySecurityHeaders(e.headers)
       throw e
     }
+    // Anything else is a failure nobody rendered: leave its cause in the Workers log
+    // (lib/errorLog.ts). Render-time failures are logged by src/server.ts instead
+    if (isLoggableError(e)) {
+      console.error(
+        `request error ${request.method} ${new URL(request.url).pathname} ${formatError(e)}`,
+      )
+    }
     throw e
   }
 })
 
+/**
+ * A server function that throws answers the client with 500 and, before 2026-10-06, left no
+ * trace of why. Logged here once per call, by the function's name, without its input
+ */
+const logFunctionErrors = createMiddleware({ type: 'function' }).server(
+  async ({ next, serverFnMeta }) => {
+    try {
+      return await next()
+    } catch (e) {
+      if (isLoggableError(e)) {
+        console.error(`server function error fn=${serverFnMeta.name} ${formatError(e)}`)
+      }
+      throw e
+    }
+  },
+)
+
 export const startInstance = createStart(() => {
   return {
     requestMiddleware: [authMiddleware],
+    functionMiddleware: [logFunctionErrors],
   }
 })

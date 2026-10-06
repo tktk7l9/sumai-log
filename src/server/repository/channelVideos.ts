@@ -11,6 +11,7 @@ import {
   type ChannelVideo,
   type Work,
 } from '../../db/schema'
+import type { ChannelSummary } from '../../lib/channelVideos/summary'
 import { visitedHouses, visitOfVideo } from '../../lib/channelVideos/visited'
 
 /** watchedBy (an e-mail) stays in the table as a record; the screen does not use it */
@@ -49,12 +50,7 @@ export type ChannelVideoFilter = {
   limit: number
 }
 
-export type ChannelSummary = {
-  channelId: string
-  channel: string
-  total: number
-  watched: number
-}
+export type { ChannelSummary }
 
 function whereOf(filter: Omit<ChannelVideoFilter, 'limit'>): SQL | undefined {
   return and(
@@ -74,22 +70,69 @@ export async function listChannelVideos(
   db: Db,
   filter: ChannelVideoFilter,
 ): Promise<{ rows: ChannelVideoRow[]; matched: number }> {
-  const where = whereOf(filter)
-  const [rows, [total], houses] = await Promise.all([
+  const [rows, matched] = await Promise.all([
+    listChannelVideoRows(db, filter),
+    countChannelVideos(db, filter),
+  ])
+  return { rows, matched }
+}
+
+/** How many videos the filter matches. The page only needs this for a title search (lib/channelVideos/summary.ts) */
+export async function countChannelVideos(
+  db: Db,
+  filter: Omit<ChannelVideoFilter, 'limit'>,
+): Promise<number> {
+  const [total] = await db.select({ n: count() }).from(channelVideos).where(whereOf(filter))
+  return total?.n ?? 0
+}
+
+/** The rows of listChannelVideos, without the count */
+export async function listChannelVideoRows(
+  db: Db,
+  filter: ChannelVideoFilter,
+): Promise<ChannelVideoRow[]> {
+  // The page is chosen first (filter, order, limit) and only those rows look up their work:
+  // joined before the limit, every row of the table ran the work lookup for a 30-row page
+  // (4,200 rows read per open instead of 2,100, measured 2026-10-06)
+  const page = db
+    .select({
+      id: channelVideos.id,
+      videoId: channelVideos.videoId,
+      channelId: channelVideos.channelId,
+      channel: channelVideos.channel,
+      vendorId: channelVideos.vendorId,
+      kind: channelVideos.kind,
+      title: channelVideos.title,
+      durationSec: channelVideos.durationSec,
+      viewCount: channelVideos.viewCount,
+      publishedAt: channelVideos.publishedAt,
+      sortOrder: channelVideos.sortOrder,
+      watchedAt: channelVideos.watchedAt,
+    })
+    .from(channelVideos)
+    .where(whereOf(filter))
+    .orderBy(
+      sql`${channelVideos.vendorId} IS NULL`,
+      asc(channelVideos.channel),
+      asc(channelVideos.sortOrder),
+    )
+    .limit(filter.limit)
+    .as('page')
+  const [rows, houses] = await Promise.all([
     db
       .select({
-        id: channelVideos.id,
-        videoId: channelVideos.videoId,
-        channelId: channelVideos.channelId,
-        channel: channelVideos.channel,
-        vendorId: channelVideos.vendorId,
-        kind: channelVideos.kind,
-        title: channelVideos.title,
-        durationSec: channelVideos.durationSec,
-        viewCount: channelVideos.viewCount,
-        publishedAt: channelVideos.publishedAt,
-        sortOrder: channelVideos.sortOrder,
-        watchedAt: channelVideos.watchedAt,
+        id: page.id,
+        videoId: page.videoId,
+        channelId: page.channelId,
+        channel: page.channel,
+        vendorId: page.vendorId,
+        kind: page.kind,
+        title: page.title,
+        durationSec: page.durationSec,
+        viewCount: page.viewCount,
+        publishedAt: page.publishedAt,
+        sortOrder: page.sortOrder,
+        watchedAt: page.watchedAt,
         work: {
           title: tourWork.title,
           sourceUrl: tourWork.sourceUrl,
@@ -105,29 +148,19 @@ export async function listChannelVideos(
           points: tourWork.points,
         },
       })
-      .from(channelVideos)
+      .from(page)
       // Joined on the first work by sort order, so two works sharing a video do not repeat the row
       .leftJoin(
         tourWork,
-        sql`${tourWork.id} = (SELECT ${works.id} FROM ${works} WHERE ${works.youtubeVideoId} = ${channelVideos.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
+        sql`${tourWork.id} = (SELECT ${works.id} FROM ${works} WHERE ${works.youtubeVideoId} = ${page.videoId} ORDER BY ${works.sortOrder} LIMIT 1)`,
       )
-      .where(where)
-      .orderBy(
-        sql`${channelVideos.vendorId} IS NULL`,
-        asc(channelVideos.channel),
-        asc(channelVideos.sortOrder),
-      )
-      .limit(filter.limit),
-    db.select({ n: count() }).from(channelVideos).where(where),
+      .orderBy(sql`${page.vendorId} IS NULL`, asc(page.channel), asc(page.sortOrder)),
     listVisitedHouses(db),
   ])
-  return {
-    rows: rows.map((row) => ({
-      ...row,
-      visit: visitOfVideo({ ...row, workTitle: row.work?.title ?? null }, houses),
-    })),
-    matched: total?.n ?? 0,
-  }
+  return rows.map((row) => ({
+    ...row,
+    visit: visitOfVideo({ ...row, workTitle: row.work?.title ?? null }, houses),
+  }))
 }
 
 /** Works named by a visit of the same vendor: a few visits against a couple of hundred works */
@@ -151,18 +184,39 @@ async function listVisitedHouses(db: Db) {
   )
 }
 
-/** Videos and watched videos per channel, in the same order as the list */
+/** sum(kind = ?) and the watched part of it, per kind, inside the one GROUP BY over the table */
+function kindCounts(kind: ChannelVideo['kind']) {
+  return {
+    total: sql<number>`sum(${channelVideos.kind} = ${kind})`.mapWith(Number),
+    watched:
+      sql<number>`sum(${channelVideos.kind} = ${kind} AND ${channelVideos.watchedAt} IS NOT NULL)`.mapWith(
+        Number,
+      ),
+  }
+}
+
+/**
+ * Videos and watched videos per channel, and per kind inside the channel, in the same order as
+ * the list. One query over the table; the page derives the match count of its filter from it
+ */
 export async function channelSummaries(db: Db): Promise<ChannelSummary[]> {
-  return db
+  const rows = await db
     .select({
       channelId: channelVideos.channelId,
       channel: sql<string>`min(${channelVideos.channel})`,
       total: count(),
       watched: count(channelVideos.watchedAt),
+      video: kindCounts('video'),
+      short: kindCounts('short'),
+      live: kindCounts('live'),
     })
     .from(channelVideos)
     .groupBy(channelVideos.channelId)
     .orderBy(sql`min(${channelVideos.vendorId} IS NULL)`, sql`min(${channelVideos.channel})`)
+  return rows.map(({ video, short, live, ...channel }) => ({
+    ...channel,
+    kinds: { video, short, live },
+  }))
 }
 
 /**

@@ -180,6 +180,33 @@ A record app for a housing search, used only by one married couple. **The reposi
   `vendors.news_fetched_at`/`news_fetch_error` on both success and failure, and **does not move
   `vendors.updated_at`** (moving it would make the vendor surface in the 「最近の更新」 (Recent
   updates) feed on the home screen on every automatic fetch each morning)
+- The router keeps loader data fresh for 30 s (`defaultStaleTime` / `defaultPreloadStaleTime` in
+  `src/router.tsx`): a tab tapped on the phone runs its loader once (touchstart preloads, the
+  tap navigates), and going back shows the page at once. Every write must still call
+  `router.invalidate()` (pull to refresh does the same), which is what makes the 30 s safe
+- Failures leave their cause in the Workers log (`src/lib/errorLog.ts`): a loader that failed
+  during the server render is written by the stream handler in `src/server.ts`
+  (`render error path=… route=… …`), a server function that threw by the function middleware
+  in `src/start.ts` (`server function error fn=…`), and anything else by the request
+  middleware. A Response, `notFound()` and `redirect()` are answers, not failures, and are not
+  logged. Never log request data
+- A deploy renames the chunks under /assets/; a page left open gets 404 for the old names and
+  Vite raises `vite:preloadError`. `AppLayout` reloads once per minute on that event
+  (`src/lib/staleChunk.ts`) instead of showing the error screen
+- The videos tab (`listChannelVideosPage`) gets its counts from one GROUP BY per channel with
+  the three kinds inside (`channelSummaries`); the number of matches of the current filter is
+  derived from it (`matchedFromSummaries` in `src/lib/channelVideos/summary.ts`) and only a
+  title search runs `countChannelVideos`. The page of rows is chosen before the work join
+  (`listChannelVideoRows`), and `channel_videos_order_idx` serves the list order
+- The home page reads only `getMembers()`; `getSettings()` measures the usage (count(*) of
+  every table and an R2 list) and belongs to the settings page alone
+- Backup is `npm run backup` (`scripts/backup.mjs`: D1 export, the restore pieces, the R2
+  objects the database points at, optional copy to a folder) and the restore check is
+  `npm run db:restore:local -- <dump>` (`scripts/db-restore-local.mjs`). The export cannot be
+  loaded as it is (parent tables are created after the INSERTs of their children fail), so
+  `scripts/lib/dump.mjs` regroups it: tables, then rows parents first under
+  `PRAGMA defer_foreign_keys`, then indexes. Production restores are run by the owner with the
+  same files and `--remote`
 - `src/server.ts` is the Worker's own entry (`main` in `wrangler.jsonc` points here. It is not a
   configuration where `main` points directly at the TanStack Start default
   `@tanstack/react-start/server-entry`). The result of

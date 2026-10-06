@@ -7,7 +7,7 @@ import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
-import { getSettings } from '../server/settings'
+import { getMembers } from '../server/settings'
 import { MEMBERS, event, mockOf, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
@@ -59,7 +59,7 @@ function stubHome(feed: FeedItem[] = []) {
     nowIso: '2099-10-01T09:00:00+09:00',
   })
   stub(recentFeed, feed)
-  stub(getSettings, { members: MEMBERS })
+  stub(getMembers, { members: MEMBERS })
   stub(listVendorNews, { news: [] })
   stub(pickGlossaryTerm, null)
 }
