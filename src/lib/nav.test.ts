@@ -28,12 +28,12 @@ describe('NAV_ITEMS', () => {
       '/calendar',
       '/records',
       '/candidates',
-      '/map',
+      '/works',
     ])
   })
 
   it('selects the "候補" (Candidates) tab on a candidate detail page too', () => {
     expect(isNavItemActive('/candidates/vendors/abc', '/candidates')).toBe(true)
-    expect(isNavItemActive('/places/abc', '/map')).toBe(false)
+    expect(isNavItemActive('/places/abc', '/works')).toBe(false)
   })
 })

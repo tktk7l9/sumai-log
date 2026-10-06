@@ -825,3 +825,33 @@ a:focus-visible {
     padding-inline: 14px;
   }
 }
+
+/* A row of filter chips that scrolls sideways on a phone instead of wrapping into four
+   rows above the list (the videos tab had 430px of chips before the first video,
+   2026-10-06). Full-bleed so the last chip peeks out as a hint that there is more
+   (SHIG 52). Wide screens wrap as before */
+.chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-inline: calc(var(--mantine-spacing-md) * -1);
+  padding-inline: var(--mantine-spacing-md);
+  /* Room for the focus ring, which the overflow box would otherwise clip */
+  padding-block: 2px;
+}
+.chip-row::-webkit-scrollbar {
+  display: none;
+}
+.chip-row > * {
+  flex: 0 0 auto;
+}
+@media (min-width: 48em) {
+  .chip-row {
+    flex-wrap: wrap;
+    overflow: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+}

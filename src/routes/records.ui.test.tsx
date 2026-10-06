@@ -1,6 +1,7 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { getChannelVideoForMemo } from '../server/channelVideos'
 import { getEvent } from '../server/events'
 import { listVideos, saveVideo, videoFormOptions } from '../server/videos'
 import { listVisits, saveVisit, visitFormOptions } from '../server/visits'
@@ -83,9 +84,107 @@ describe('records route', () => {
     await waitFor(() => expect(router.state.location.search).toMatchObject({ tab: 'videos' }))
     const card = screen.getByRole('link', { name: /断熱の基本を解説/ })
     expect(card).toHaveAttribute('href', '/records/videos/vd1')
-    expect(within(card).getByText('テストチャンネル')).toBeInTheDocument()
+    expect(within(card).getByText('テストチャンネル・2026/09/15')).toBeInTheDocument()
     expect(within(card).getByText('断熱')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '動画メモを追加' })).toBeInTheDocument()
+  })
+
+  it('narrows the memos by tag, by vendor and by a search, and says when nothing matches', async () => {
+    stub(listVideos, [
+      { ...video(), vendorName: null },
+      {
+        ...video({
+          id: 'vd2',
+          title: '平屋のルームツアー',
+          channel: '甲工務店',
+          tags: ['間取り'],
+          vendorId: 'v1',
+        }),
+        vendorName: 'テスト工務店',
+      },
+    ])
+    const { user, router } = await renderRoute('/records?tab=videos')
+    expect(await screen.findByRole('radio', { name: 'すべて 2' })).toBeChecked()
+
+    await user.click(screen.getByRole('radio', { name: '間取り 1' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ tag: '間取り' }))
+    expect(screen.getByText('該当 1 本')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /断熱の基本を解説/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /平屋のルームツアー/ })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: 'すべて 2' }))
+    await user.click(screen.getByRole('radio', { name: 'テスト工務店 1' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ vendor: 'v1' }))
+    expect(screen.queryByRole('link', { name: /断熱の基本を解説/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: '全業者' }))
+    await user.type(screen.getByRole('textbox', { name: '題名・チャンネルで検索' }), 'ちゃんねる')
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ q: 'ちゃんねる' }))
+    expect(screen.getByRole('link', { name: /断熱の基本を解説/ })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /平屋のルームツアー/ })).not.toBeInTheDocument()
+
+    await user.clear(screen.getByRole('textbox', { name: '題名・チャンネルで検索' }))
+    await user.type(screen.getByRole('textbox', { name: '題名・チャンネルで検索' }), '該当なし')
+    expect(await screen.findByText('条件に合う動画メモがありません')).toBeInTheDocument()
+  })
+
+  it('opens a memo filled in from a channel video and goes back to the videos once saved', async () => {
+    stub(getChannelVideoForMemo, {
+      video: {
+        videoId: 'zyxwvutsrqp',
+        title: '平屋のルームツアー',
+        channel: '甲工務店',
+        vendorId: 'v1',
+      },
+    })
+    const save = stub(saveVideo, { id: 'vd9' })
+    const { user, router } = await renderRoute('/records?tab=videos&video=zyxwvutsrqp')
+    const drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
+    expect(getChannelVideoForMemo).toHaveBeenCalledWith({ data: { videoId: 'zyxwvutsrqp' } })
+    expect(within(drawer).getByRole('textbox', { name: 'URL' })).toHaveValue(
+      'https://www.youtube.com/watch?v=zyxwvutsrqp',
+    )
+    expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('平屋のルームツアー')
+    expect(within(drawer).getByRole('textbox', { name: 'チャンネル' })).toHaveValue('甲工務店')
+    // The vendor Select shows the chosen vendor's name (the label is also the chip row's name)
+    expect(within(drawer).getByDisplayValue('テスト工務店')).toBeInTheDocument()
+
+    await user.click(within(drawer).getByRole('button', { name: '動画メモを保存' }))
+    expect(save).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        url: 'https://www.youtube.com/watch?v=zyxwvutsrqp',
+        title: '平屋のルームツアー',
+        vendorId: 'v1',
+      }),
+    })
+    // Opened directly (no page before it): the videos tab is where to go
+    await waitFor(() => expect(router.state.location.pathname).toBe('/works'))
+  })
+
+  it('still fills in the URL for a video that is not a channel video, fetches its title, and drops the id when closed', async () => {
+    stub(getChannelVideoForMemo, { video: null })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          videoId: 'zyxwvutsrqp',
+          title: '取得した題名',
+          channel: 'サンプル住宅ch',
+          thumbnailUrl: 'https://i.ytimg.com/vi/zyxwvutsrqp/hqdefault.jpg',
+          canonicalUrl: 'https://www.youtube.com/watch?v=zyxwvutsrqp',
+        }),
+      ),
+    )
+    const { user, router } = await renderRoute('/records?tab=videos&video=zyxwvutsrqp')
+    const drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
+    const url = within(drawer).getByRole('textbox', { name: 'URL' })
+    expect(url).toHaveValue('https://www.youtube.com/watch?v=zyxwvutsrqp')
+    expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('')
+    // The URL alone is not "already fetched": leaving the field fills the title from YouTube
+    fireEvent.blur(url)
+    expect(await screen.findByText('取得しました')).toBeInTheDocument()
+    expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('取得した題名')
+    await user.click(within(drawer).getByRole('button', { name: '閉じる' }))
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('video'))
   })
 
   it('shows empty states for both tabs', async () => {

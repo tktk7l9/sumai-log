@@ -9,7 +9,8 @@ import {
   Text,
   UnstyledButton,
 } from '@mantine/core'
-import { Check, ExternalLink, Footprints, Play } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Check, ExternalLink, Footprints, NotebookPen, Play } from 'lucide-react'
 
 import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
 import { formatDateSlash } from '../../lib/calendar'
@@ -127,6 +128,33 @@ export function ChannelVideoCard({
             <Button size="sm" mih={44} variant="default" onClick={onToggleWatched}>
               {watched ? '視聴済みを取り消す' : '視聴済みにする'}
             </Button>
+            {/* The memo of this video (記録 > 動画). Writing one from here fills in the URL, title,
+                channel and vendor, so the video is no longer pasted twice (SHIG 20, 22) */}
+            {video.memoId ? (
+              <Button
+                size="sm"
+                mih={44}
+                variant="subtle"
+                leftSection={<NotebookPen size={16} aria-hidden />}
+                renderRoot={(props) => (
+                  <Link to="/records/videos/$id" params={{ id: video.memoId! }} {...props} />
+                )}
+              >
+                メモを見る
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                mih={44}
+                variant="subtle"
+                leftSection={<NotebookPen size={16} aria-hidden />}
+                renderRoot={(props) => (
+                  <Link to="/records" search={{ tab: 'videos', video: video.videoId }} {...props} />
+                )}
+              >
+                メモを書く
+              </Button>
+            )}
           </Group>
         </div>
         {/* The work gets the full width under a rule, not the narrow column beside the picture */}

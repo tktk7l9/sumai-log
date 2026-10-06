@@ -19,3 +19,6 @@ export const channelVideoListInput = z.object({
 })
 
 export const channelVideoWatchedInput = z.object({ id: idField, watched: z.boolean() })
+
+/** The 11-character YouTube id (what /records?video= carries) */
+export const youtubeIdInput = z.object({ videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/) })

@@ -15,7 +15,12 @@ import {
   recordedWatchedBackfillSql,
   type ParsedChannelVideo,
 } from '../../lib/channelVideos/import'
-import { channelSummaries, listChannelVideos, setChannelVideoWatched } from './channelVideos'
+import {
+  channelSummaries,
+  channelVideoForMemo,
+  listChannelVideos,
+  setChannelVideoWatched,
+} from './channelVideos'
 import { actor, db, reset } from './test-helpers'
 import { upsertPlace } from './places'
 import { upsertVideo } from './videos'
@@ -336,6 +341,32 @@ describe('published date and the video records', () => {
     )
     const [again] = await db.select().from(channelVideos)
     expect(again?.watchedAt).toBeNull()
+  })
+
+  it('lists the memo written for a video, and offers the channel video as the start of a memo', async () => {
+    await db.insert(vendors).values({ id: VENDOR_ID, name: '甲工務店', createdBy: actor })
+    await addVideo({ videoId: 'aaaaaaaaaaa', title: '平屋のルームツアー', vendorId: VENDOR_ID })
+    await addVideo({ videoId: 'bbbbbbbbbbb' })
+    expect((await listChannelVideos(db, { limit: 9 })).rows.map((r) => r.memoId)).toEqual([
+      null,
+      null,
+    ])
+    const memo = await upsertVideo(
+      db,
+      { url: 'https://youtu.be/aaaaaaaaaaa', videoId: 'aaaaaaaaaaa', title: 'メモ' },
+      actor,
+    )
+    const rows = (await listChannelVideos(db, { limit: 9 })).rows
+    expect(rows.find((r) => r.videoId === 'aaaaaaaaaaa')?.memoId).toBe(memo)
+    expect(rows.find((r) => r.videoId === 'bbbbbbbbbbb')?.memoId).toBeNull()
+
+    expect(await channelVideoForMemo(db, 'aaaaaaaaaaa')).toEqual({
+      videoId: 'aaaaaaaaaaa',
+      title: '平屋のルームツアー',
+      channel: '甲工務店',
+      vendorId: VENDOR_ID,
+    })
+    expect(await channelVideoForMemo(db, 'zzzzzzzzzzz')).toBeNull()
   })
 })
 

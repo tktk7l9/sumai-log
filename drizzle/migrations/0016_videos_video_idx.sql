@@ -1,0 +1,1 @@
+CREATE INDEX `videos_video_idx` ON `videos` (`video_id`);

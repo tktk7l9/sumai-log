@@ -11,7 +11,7 @@ import { showWatchedNotice } from '../components/works/watchedNotice'
 import { WorkCard } from '../components/works/WorkCard'
 import { WorkPlayer } from '../components/works/WorkPlayer'
 import { WorkVideoForm } from '../components/works/WorkVideoForm'
-import { worksSearchSchema, type WorksSearch } from '../components/works/worksSearch'
+import { videoKindOf, worksSearchSchema, type WorksSearch } from '../components/works/worksSearch'
 import { filterWorks, vendorOptions, watchedSummary } from '../lib/works/filter'
 import { listChannelVideosPage } from '../server/channelVideos'
 import { CHANNEL_VIDEO_PAGE } from '../server/channelVideos.schema'
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/works')({
       ? {
           tab: 'videos' as const,
           ch: search.ch,
-          kind: search.kind,
+          kind: videoKindOf(search.kind),
           unwatched: search.unwatched,
           q: search.q,
           n: search.n,
@@ -70,7 +70,9 @@ function Page() {
   }
 
   return (
-    <PageShell title="施工例" description="候補の会社の施工例と動画をまとめて見る">
+    // The h1 says what the bottom tab says (「動画」); the segmented control below is the
+    // visible heading, like 「記録」 with its 見学 / 動画
+    <PageShell title="動画" titleHidden>
       <Stack gap="lg">
         <SegmentedControl
           aria-label="見るもの"

@@ -55,10 +55,15 @@ A record app for a housing search, used only by one married couple. **The reposi
   `src/server/storage.ts`
 - Dates are TEXT in ISO-8601, amounts are integers in yen, areas are decimals, ids are text
   (`crypto.randomUUID()`)
-- Mobile first. Bottom tabs + FAB + full-screen Drawer. Desktop uses a left navigation. The mobile
-  header has only 2 items, 「お知らせ」 (vendor news) and 「…（その他）」 (… (More)), and the
-  remaining pages that are not in the bottom tabs go into `MoreMenu` (with names) in
-  `AppLayout.tsx` (do not line up unlabelled icons). Detail pages pass `BackButton` to `back` of
+- Mobile first. Bottom tabs + FAB + full-screen Drawer. Desktop uses a left navigation. The
+  bottom tabs (`NAV_ITEMS` in `src/lib/nav.ts`) are 「ホーム」「予定」「記録」「候補」「動画」
+  (/works; it replaced 「地図」 on 2026-10-06 because watching and marking the vendors'
+  videos is the most frequent task). The mobile header has only 2 items, 「お知らせ」 (vendor
+  news) and 「…（その他）」 (… (More)), and the remaining pages that are not in the bottom
+  tabs (用語集, 情報収集, 地図, 区画, 分析, 設定) go into `MoreMenu` (with names) in
+  `AppLayout.tsx` (do not line up unlabelled icons). Rows of filter chips use `ChipRow`
+  (`src/components/ChipRow.tsx`): one row that scrolls sideways on a phone, so a list starts
+  within the first screen. Detail pages pass `BackButton` to `back` of
   `PageShell` so that the user can return to the parent page (「候補」 (Candidates), 「記録」
   (Records), 「地図」 (Map), 「用語集」 (Glossary) = nouns). The wording of the add button (FAB) is
   unified as object + verb, like 「〜を追加」 (Add …) and 「記録を書く」 (Write a record). For a
@@ -197,7 +202,15 @@ A record app for a housing search, used only by one married couple. **The reposi
   the three kinds inside (`channelSummaries`); the number of matches of the current filter is
   derived from it (`matchedFromSummaries` in `src/lib/channelVideos/summary.ts`) and only a
   title search runs `countChannelVideos`. The page of rows is chosen before the work join
-  (`listChannelVideoRows`), and `channel_videos_order_idx` serves the list order
+  (`listChannelVideoRows`), and `channel_videos_order_idx` serves the list order. The tab opens
+  on `kind = 'video'` (`videoKindOf` in `worksSearch.ts`: absent = videos, `all` = every kind;
+  shorts and streams were never watched). Each row carries `memoId`, the memo (`videos`) of
+  that video, looked up through `videos_video_idx`: the card links to it, or to
+  `/records?tab=videos&video=<youtube id>`, which opens the memo form filled in from the
+  channel video (`getChannelVideoForMemo`, `memoDefaultsOf` in `src/lib/videoMemo.ts`) and
+  goes back to the videos tab after saving
+- The videos tab of 「記録」 narrows the memos on the page by `?tag=`, `?vendor=` and `?q=`
+  (`src/lib/videoFilter.ts`); an unknown tag or vendor counts as no filter
 - The home page reads only `getMembers()`; `getSettings()` measures the usage (count(*) of
   every table and an R2 list) and belongs to the settings page alone
 - Backup is `npm run backup` (`scripts/backup.mjs`: D1 export, the restore pieces, the R2

@@ -1,12 +1,17 @@
 import { createServerFn } from '@tanstack/react-start'
 
 import { getDb } from '../db/client'
-import { channelVideoListInput, channelVideoWatchedInput } from './channelVideos.schema'
+import {
+  channelVideoListInput,
+  channelVideoWatchedInput,
+  youtubeIdInput,
+} from './channelVideos.schema'
 import { nowJstIso } from './events'
 import { currentActorEmail } from './members'
 import { matchedFromSummaries } from '../lib/channelVideos/summary'
 import {
   channelSummaries,
+  channelVideoForMemo,
   countChannelVideos,
   listChannelVideoRows,
   setChannelVideoWatched,
@@ -28,6 +33,11 @@ export const listChannelVideosPage = createServerFn()
     // Today (JST) by the server, for the "New" tag: the page and its hydration agree
     return { rows, matched, channels, todayKey: nowJstIso().slice(0, 10) }
   })
+
+/** The channel video a memo is started from (「メモを書く」 on the videos tab); null when unknown */
+export const getChannelVideoForMemo = createServerFn()
+  .validator(youtubeIdInput)
+  .handler(async ({ data }) => ({ video: await channelVideoForMemo(getDb(), data.videoId) }))
 
 /** ok: false = the video is gone (a re-import does not delete, so this is only a stale tab) */
 export const markChannelVideoWatched = createServerFn({ method: 'POST' })
