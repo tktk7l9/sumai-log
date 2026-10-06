@@ -49,7 +49,7 @@
     "dayjs": "^1.11.21",
     "drizzle-orm": "^0.45.3",
     "jose": "^6.2.12",
-    "lucide-react": "^1.50.0",
+    "lucide-react": "^1.51.0",
     "postal-mime": "^4.0.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
