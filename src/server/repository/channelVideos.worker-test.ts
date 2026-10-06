@@ -81,9 +81,22 @@ describe('channel videos repository', () => {
     await addVideo({ videoId: 'bbbbbbbbbbb' })
     await addVideo({ videoId: 'ccccccccccc', channelId: CH_B, channel: '乙の会' })
     // Neither channel has a vendor, so the names decide: 乙 (U+4E59) before 甲 (U+7532)
+    const zero = { total: 0, watched: 0 }
     expect(await channelSummaries(db)).toEqual([
-      { channelId: CH_B, channel: '乙の会', total: 1, watched: 0 },
-      { channelId: CH_A, channel: '甲工務店', total: 2, watched: 1 },
+      {
+        channelId: CH_B,
+        channel: '乙の会',
+        total: 1,
+        watched: 0,
+        kinds: { video: { total: 1, watched: 0 }, short: zero, live: zero },
+      },
+      {
+        channelId: CH_A,
+        channel: '甲工務店',
+        total: 2,
+        watched: 1,
+        kinds: { video: { total: 2, watched: 1 }, short: zero, live: zero },
+      },
     ])
   })
 

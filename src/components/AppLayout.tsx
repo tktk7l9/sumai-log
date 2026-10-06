@@ -25,7 +25,10 @@ import {
   Settings,
 } from 'lucide-react'
 
+import { useEffect } from 'react'
+
 import { NAV_ITEMS, isNavItemActive, type NavIcon } from '../lib/nav'
+import { installStaleChunkReload } from '../lib/staleChunk'
 import { PullToRefresh } from './PullToRefresh'
 
 /** Links on the right side of the header (pages not in the bottom tabs). Listed in display order */
@@ -53,6 +56,13 @@ const ICONS: Record<NavIcon, typeof House> = {
  */
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation()
+
+  // A deploy renames the chunks; a page left open gets 404 for the old names on its next
+  // navigation. Reload once instead of showing 「表示できませんでした」 (lib/staleChunk.ts)
+  useEffect(
+    () => installStaleChunkReload(window, sessionStorage, () => window.location.reload()),
+    [],
+  )
 
   return (
     <AppShell

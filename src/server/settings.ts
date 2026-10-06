@@ -47,4 +47,11 @@ export const getSettings = createServerFn().handler(async () => {
   }
 })
 
+/**
+ * Only the members (for the colour band of the feed on the home page). getSettings also
+ * measures the usage (count(*) of every table and an R2 list), which the home page was
+ * paying for on every open until 2026-10-06
+ */
+export const getMembers = createServerFn().handler(async () => ({ members: allMembers() }))
+
 export const getHomeAreas = createServerFn().handler(async () => readHomeAreas(getDb()))

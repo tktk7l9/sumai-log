@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt } from 'drizzle-orm'
+import { and, desc, eq, getTableColumns, inArray, lt, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import {
@@ -115,12 +115,25 @@ export async function importMailAsNews(
   return { newsId }
 }
 
+/** How much of a newsletter body the receive log shows (the full text stays behind getInboundMailBody) */
+export const LIST_BODY_PREVIEW_CHARS = 200
+
+/**
+ * The receive log of the settings page. `bodyText` is cut to a preview, except for system
+ * mail (the Gmail forwarding confirmation, whose code is the whole point); 20 full newsletters
+ * weighed about 370 KB on every open of the settings page (2026-10-06)
+ */
 export async function listInboundMails(
   db: Db,
   opts: { status?: InboundStatus; limit: number },
 ): Promise<InboundMail[]> {
   return db
-    .select()
+    .select({
+      ...getTableColumns(inboundMails),
+      bodyText: sql<
+        string | null
+      >`CASE WHEN ${inboundMails.status} = 'system' THEN ${inboundMails.bodyText} ELSE substr(${inboundMails.bodyText}, 1, ${LIST_BODY_PREVIEW_CHARS}) END`,
+    })
     .from(inboundMails)
     .where(opts.status ? eq(inboundMails.status, opts.status) : undefined)
     .orderBy(desc(inboundMails.receivedAt))
