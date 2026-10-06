@@ -6,11 +6,16 @@
  */
 
 import type { NewsCandidate } from './rss'
-import { decodeEntities, MAX_INPUT_LENGTH, pad, stripTags, truncate } from './text'
+import {
+  decodeEntities,
+  extractElementBlocks,
+  MAX_INPUT_LENGTH,
+  pad,
+  stripTags,
+  truncate,
+} from './text'
 
 const TITLE_MAX = 200
-
-const LI_PATTERN = /<li\b[^>]*>([\s\S]*?)<\/li>/gi
 
 // One of "YYYY年M月D日", "YYYY.MM.DD", "YYYY/M/D". The leftmost match is taken.
 const DATE_PATTERN =
@@ -71,9 +76,9 @@ export function parseHtmlList(html: string, baseUrl: string): NewsCandidate[] {
 
   const candidates: NewsCandidate[] = []
 
-  for (const liMatch of html.matchAll(LI_PATTERN)) {
-    const block = liMatch[1]
-
+  // A linear scan (not `/<li\b[^>]*>([\s\S]*?)<\/li>/g`, which is O(n^2) on a page full of
+  // unclosed `<li>`. See extractElementBlocks)
+  for (const block of extractElementBlocks(html, 'li')) {
     const href = findHref(block)
     if (!href) continue
     const url = resolveHttpUrl(href, baseUrl)

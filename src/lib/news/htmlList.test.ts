@@ -98,4 +98,10 @@ describe('parseHtmlList', () => {
   it('gives an empty array for input longer than MAX_INPUT_LENGTH', () => {
     expect(parseHtmlList('a'.repeat(2_000_001), BASE_URL)).toEqual([])
   })
+
+  it('finishes in linear time on a page full of unclosed <li> (hostile or broken source)', () => {
+    const start = performance.now()
+    expect(parseHtmlList('<li>'.repeat(200_000), BASE_URL)).toEqual([])
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
 })

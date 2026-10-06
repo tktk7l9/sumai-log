@@ -21,3 +21,8 @@ updates:
       npm-major:
         update-types:
           - 'major'
+  # Keeps the commit-pinned actions in ci.yml current (the hash and the version comment)
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'

@@ -170,6 +170,48 @@ export function stripTags(html: string): string {
   return secondPass.replace(WHITESPACE, ' ').trim()
 }
 
+/** `\b` after a tag name: the next character is not a word character (or the input ends) */
+function isWordBoundary(ch: string | undefined): boolean {
+  return ch === undefined || !/[A-Za-z0-9_]/.test(ch)
+}
+
+/**
+ * Takes the contents of every `<tag …>…</tag>` element, in document order, with one linear
+ * scan. Same result as `/<tag\b[^>]*>([\s\S]*?)<\/tag>/gi` (case-insensitive, the first `>`
+ * ends the opening tag, the nearest `</tag>` ends the element, no nesting), but a regular
+ * expression with the global flag restarts from the next position every time a match fails,
+ * so on fetched input with a huge number of unclosed `<item>` / `<li>` (a hostile or broken
+ * vendor page; the fetch limit is 1 MB) it becomes O(n^2) (measured: 400ms for 20,000
+ * openers, 1.8 seconds for 40,000, and the 1 MB case exceeds the Worker CPU limit, which
+ * kills the whole Cron run). Here only `indexOf` is used and the scan position only grows.
+ *
+ * An opening tag with no `>` after it, or an element with no `</tag>` after it, ends the
+ * scan (nothing later could match either). At most `max` blocks are returned.
+ */
+export function extractElementBlocks(html: string, tag: string, max = Infinity): string[] {
+  const lower = html.toLowerCase()
+  const open = `<${tag.toLowerCase()}`
+  const close = `</${tag.toLowerCase()}>`
+  const blocks: string[] = []
+  let i = 0
+  while (blocks.length < max) {
+    const lt = lower.indexOf(open, i)
+    if (lt === -1) break
+    const nameEnd = lt + open.length
+    if (!isWordBoundary(lower[nameEnd])) {
+      i = nameEnd // `<items>` / `<link>` is a different tag; keep looking after it
+      continue
+    }
+    const gt = lower.indexOf('>', nameEnd)
+    if (gt === -1) break
+    const end = lower.indexOf(close, gt + 1)
+    if (end === -1) break
+    blocks.push(html.slice(gt + 1, end))
+    i = end + close.length
+  }
+  return blocks
+}
+
 /**
  * Cuts off what exceeds `max` characters (no ellipsis is added). It does not cut in the middle
  * of a surrogate pair (emoji etc., characters of 2 code units in UTF-16).

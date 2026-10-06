@@ -217,4 +217,11 @@ describe('parseRss', () => {
   it('gives an empty array for input longer than MAX_INPUT_LENGTH', () => {
     expect(parseRss('a'.repeat(2_000_001))).toEqual([])
   })
+
+  it('finishes in linear time on a feed full of unclosed <item> / <link> (hostile or broken source)', () => {
+    const start = performance.now()
+    expect(parseRss('<item>'.repeat(200_000))).toEqual([])
+    expect(parseRss('<item>' + '<link>'.repeat(200_000) + '</item>')).toEqual([])
+    expect(performance.now() - start).toBeLessThan(2000)
+  })
 })
