@@ -1,4 +1,4 @@
-import { Button, Chip, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
+import { Button, Chip, Modal, Stack, Text, TextInput } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useRouter } from '@tanstack/react-router'
@@ -10,12 +10,13 @@ import { CHANNEL_VIDEO_KINDS, CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
 import { markChannelVideoWatched } from '../../server/channelVideos'
 import { CHANNEL_VIDEO_PAGE } from '../../server/channelVideos.schema'
 import type { ChannelSummary, ChannelVideoRow } from '../../server/repository/channelVideos'
+import { ChipRow } from '../ChipRow'
 import { EmptyState } from '../EmptyState'
 import { isRecent } from '../../lib/freshness'
 import { ChannelVideoCard } from './ChannelVideoCard'
 import { showWatchedNotice } from './watchedNotice'
 import { WorkPlayer } from './WorkPlayer'
-import type { WorksSearch } from './worksSearch'
+import { videoKindOf, type ChannelVideoKind, type WorksSearch } from './worksSearch'
 
 /** Chip value for "no filter" (not a channel id or a kind) */
 const ALL = 'all'
@@ -85,8 +86,14 @@ export function ChannelVideosPanel({
   // A channel id that matches no channel (an old or hand-typed URL) is treated as no filter
   const channelId = page.channels.some((c) => c.channelId === search.ch) ? search.ch : undefined
   const scope = channelId ? page.channels.filter((c) => c.channelId === channelId) : page.channels
-  const total = scope.reduce((sum, c) => sum + c.total, 0)
-  const watched = scope.reduce((sum, c) => sum + c.watched, 0)
+  // null = every kind (an explicit value, so that a default parameter cannot slip in)
+  const kind = videoKindOf(search.kind) ?? null
+  // The counts follow the chosen channel and kind (the kind chips follow the channel alone)
+  const countOf = (c: ChannelSummary, k: ChannelVideoKind | null) => (k ? c.kinds[k] : c)
+  const total = scope.reduce((sum, c) => sum + countOf(c, kind).total, 0)
+  const watched = scope.reduce((sum, c) => sum + countOf(c, kind).watched, 0)
+  const kindTotal = (k: ChannelVideoKind | null) =>
+    scope.reduce((sum, c) => sum + countOf(c, k).total, 0)
   const allTotal = page.channels.reduce((sum, c) => sum + c.total, 0)
   const limit = search.n ?? CHANNEL_VIDEO_PAGE
 
@@ -119,43 +126,43 @@ export function ChannelVideosPanel({
 
   return (
     <Stack gap="lg">
+      {/* Two scrolling rows and the search: the first video starts within the first screen
+          of a phone (four wrapped rows of chips took 430px before, SHIG 20, 1) */}
       <Stack gap="xs">
         <Chip.Group
           value={channelId ?? ALL}
           onChange={(v) => setSearch({ ch: v === ALL ? undefined : (v as string), n: undefined })}
         >
-          <Group gap={6}>
+          <ChipRow label="チャンネル">
             <Chip value={ALL} size="xs">
-              すべて {allTotal}
+              すべて {kind ? kindTotal(kind) : allTotal}
             </Chip>
             {page.channels.map((c) => (
               <Chip key={c.channelId} value={c.channelId} size="xs">
-                {c.channel} {c.total}
+                {c.channel} {countOf(c, kind).total}
               </Chip>
             ))}
-          </Group>
+          </ChipRow>
         </Chip.Group>
-        <Chip.Group
-          value={search.kind ?? ALL}
-          onChange={(v) =>
-            setSearch({
-              kind: v === ALL ? undefined : (v as WorksSearch['kind']),
-              n: undefined,
-            })
-          }
-        >
-          <Group gap={6}>
+        <ChipRow label="種類と視聴の状態">
+          <Chip.Group
+            value={search.kind ?? 'video'}
+            onChange={(v) =>
+              setSearch({
+                kind: v === 'video' ? undefined : (v as WorksSearch['kind']),
+                n: undefined,
+              })
+            }
+          >
+            {CHANNEL_VIDEO_KINDS.map((k) => (
+              <Chip key={k} value={k} size="xs">
+                {CHANNEL_VIDEO_KIND_LABEL[k]} {kindTotal(k)}
+              </Chip>
+            ))}
             <Chip value={ALL} size="xs">
-              全種類
+              全種類 {kindTotal(null)}
             </Chip>
-            {CHANNEL_VIDEO_KINDS.map((kind) => (
-              <Chip key={kind} value={kind} size="xs">
-                {CHANNEL_VIDEO_KIND_LABEL[kind]}
-              </Chip>
-            ))}
-          </Group>
-        </Chip.Group>
-        <Group gap={6}>
+          </Chip.Group>
           <Chip
             size="xs"
             checked={search.unwatched === true}
@@ -163,13 +170,15 @@ export function ChannelVideosPanel({
           >
             まだ見ていない
           </Chip>
-        </Group>
+        </ChipRow>
         <TitleSearch
           q={search.q}
           onChange={(q) => setSearch({ q: q || undefined, n: undefined })}
         />
+        {/* One line: what the filter matched, and how far through the chosen channel and
+            kind we are */}
         <Text size="sm">
-          {total} 本中 {watched} 本を視聴済み
+          該当 {page.matched} 本・視聴済み {watched}/{total} 本
         </Text>
       </Stack>
 
@@ -177,9 +186,6 @@ export function ChannelVideosPanel({
         <EmptyState emoji="🔍" title="条件に合う動画がありません" />
       ) : (
         <Stack gap="sm">
-          <Text size="xs" c="dimmed">
-            該当 {page.matched} 本
-          </Text>
           {page.rows.map((video) => (
             <ChannelVideoCard
               key={video.id}

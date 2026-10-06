@@ -53,11 +53,15 @@ const empty: Omit<Values, 'watchedOn'> = {
 
 export function VideoForm({
   initial,
+  defaults,
   options,
   onSaved,
   onCancel,
 }: {
   initial?: Video
+  /** What a new memo starts with (「メモを書く」 on the videos tab passes the video's URL,
+   * title, channel, thumbnail and vendor). Ignored when `initial` is given */
+  defaults?: Partial<Omit<Values, 'watchedOn' | 'watchedBy'>>
   options: Options
   onSaved: (id: string) => void
   onCancel?: () => void
@@ -66,10 +70,10 @@ export function VideoForm({
   const save = useServerFn(saveVideo)
   const [saving, setSaving] = useState(false)
   const [fetchState, setFetchState] = useState<FetchState>('idle')
-  // When an existing video is opened the title is already filled, so the oEmbed
-  // auto-fill does not overwrite it
-  const [titleTouched, setTitleTouched] = useState(Boolean(initial))
-  const lastFetchedUrl = useRef<string | null>(initial?.url ?? null)
+  // When an existing video is opened (or a memo starts from a channel video) the title is
+  // already filled, so the oEmbed auto-fill does not overwrite it
+  const [titleTouched, setTitleTouched] = useState(Boolean(initial ?? defaults?.title))
+  const lastFetchedUrl = useRef<string | null>(initial?.url ?? defaults?.url ?? null)
   // oEmbed can send several requests on repeated presses or re-pasting. So that an old
   // response returning later does not overwrite newer input, each request gets a number
   // and only the latest one is applied.
@@ -101,7 +105,7 @@ export function VideoForm({
         takeaways: initial.takeaways,
         vendorId: initial.vendorId,
       }
-    : { ...empty, watchedOn: today }
+    : { ...empty, ...defaults, watchedOn: today }
   const form = useForm<Values>({
     initialValues,
     validate: {
@@ -113,10 +117,11 @@ export function VideoForm({
     },
   })
 
-  // Keep the unfinished input on the device (it survives closing the Drawer)
+  // Keep the unfinished input on the device (it survives closing the Drawer). A memo
+  // started from a channel video keeps its own draft, keyed by that video
   const draft = useFormDraft(
     form,
-    draftKey('video', initial?.id, initial?.updatedAt),
+    draftKey('video', initial?.id, initial?.updatedAt ?? defaults?.url),
     initialValues,
   )
   // Whether it was pressed via "保存して続けて追加" (Save and add another) (shown only

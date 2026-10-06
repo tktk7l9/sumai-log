@@ -16,9 +16,9 @@ import {
   CalendarDays,
   Ellipsis,
   House,
-  Images,
   LandPlot,
   Map,
+  MonitorPlay,
   Newspaper,
   NotebookPen,
   Radio,
@@ -36,7 +36,7 @@ const HEADER_LINKS = [
   { to: '/news', label: 'お知らせ', Icon: Newspaper },
   { to: '/glossary', label: '用語集', Icon: BookOpen },
   { to: '/sources', label: '情報収集', Icon: Radio },
-  { to: '/works', label: '施工例', Icon: Images },
+  { to: '/map', label: '地図', Icon: Map },
   { to: '/site', label: '区画', Icon: LandPlot },
   { to: '/analysis', label: '分析', Icon: ChartColumn },
   { to: '/settings', label: '設定', Icon: Settings },
@@ -47,7 +47,7 @@ const ICONS: Record<NavIcon, typeof House> = {
   calendar: CalendarDays,
   notebook: NotebookPen,
   building: Building2,
-  map: Map,
+  video: MonitorPlay,
 }
 
 /**

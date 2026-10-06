@@ -6,6 +6,7 @@ import {
   channelVideos,
   events,
   places,
+  videos,
   visits,
   works,
   type ChannelVideo,
@@ -20,6 +21,8 @@ export type ChannelVideoRow = Omit<ChannelVideo, 'watchedBy' | 'createdAt' | 'up
   work: ChannelVideoWork | null
   /** When we visited the house this video shows (lib/channelVideos/visited.ts) */
   visit: { visitedOn: string } | null
+  /** The video memo (videos) written for this video, the newest when there are two */
+  memoId: string | null
 }
 
 export type ChannelVideoWork = Pick<
@@ -133,6 +136,9 @@ export async function listChannelVideoRows(
         publishedAt: page.publishedAt,
         sortOrder: page.sortOrder,
         watchedAt: page.watchedAt,
+        memoId: sql<
+          string | null
+        >`(SELECT ${videos.id} FROM ${videos} WHERE ${videos.videoId} = ${page.videoId} ORDER BY ${videos.createdAt} DESC LIMIT 1)`,
         work: {
           title: tourWork.title,
           sourceUrl: tourWork.sourceUrl,
@@ -161,6 +167,24 @@ export async function listChannelVideoRows(
     ...row,
     visit: visitOfVideo({ ...row, workTitle: row.work?.title ?? null }, houses),
   }))
+}
+
+/** What a memo written from the videos tab starts with (null when the video is not a channel video) */
+export async function channelVideoForMemo(
+  db: Db,
+  videoId: string,
+): Promise<{ videoId: string; title: string; channel: string; vendorId: string | null } | null> {
+  const [row] = await db
+    .select({
+      videoId: channelVideos.videoId,
+      title: channelVideos.title,
+      channel: channelVideos.channel,
+      vendorId: channelVideos.vendorId,
+    })
+    .from(channelVideos)
+    .where(eq(channelVideos.videoId, videoId))
+    .limit(1)
+  return row ?? null
 }
 
 /** Works named by a visit of the same vendor: a few visits against a couple of hundred works */

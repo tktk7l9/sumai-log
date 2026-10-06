@@ -383,7 +383,11 @@ export const videos = sqliteTable(
     createdBy: createdBy(),
     ...timestamps,
   },
-  (t) => [index('videos_watched_idx').on(t.watchedOn)],
+  (t) => [
+    index('videos_watched_idx').on(t.watchedOn),
+    // The videos tab looks up the memo of each channel video on its page by this
+    index('videos_video_idx').on(t.videoId),
+  ],
 )
 
 /** auto = embedded on the site's page; manual = pasted by hand; title = a channel video whose title
