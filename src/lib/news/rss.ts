@@ -6,7 +6,14 @@
  */
 
 import { parseToUtcMs, toJstDateKey } from '../jst'
-import { decodeEntities, MAX_INPUT_LENGTH, pad, stripTags, truncate } from './text'
+import {
+  decodeEntities,
+  extractElementBlocks,
+  MAX_INPUT_LENGTH,
+  pad,
+  stripTags,
+  truncate,
+} from './text'
 
 export type NewsCandidate = {
   url: string
@@ -18,13 +25,13 @@ export type NewsCandidate = {
 const TITLE_MAX = 200
 const SUMMARY_MAX = 300
 
-const ITEM_PATTERN = /<item\b[^>]*>([\s\S]*?)<\/item>/gi
-
-/** Takes the contents (raw text) of an element from an item block. null when absent. */
+/**
+ * Takes the contents (raw text) of the first `<tag>` element in an item block. null when
+ * absent. A linear scan, not a regex: a block stuffed with unclosed `<link>` would otherwise
+ * be O(n^2) (see extractElementBlocks).
+ */
 function extractElementRaw(block: string, tag: string): string | null {
-  const pattern = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')
-  const match = pattern.exec(block)
-  return match ? match[1] : null
+  return extractElementBlocks(block, tag, 1)[0] ?? null
 }
 
 const CDATA_PATTERN = /^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/
@@ -103,9 +110,9 @@ export function parseRss(xml: string): NewsCandidate[] {
 
   const candidates: NewsCandidate[] = []
 
-  for (const itemMatch of xml.matchAll(ITEM_PATTERN)) {
-    const block = itemMatch[1]
-
+  // A linear scan (not `/<item\b[^>]*>([\s\S]*?)<\/item>/g`, which is O(n^2) on a feed
+  // full of unclosed `<item>`. See extractElementBlocks)
+  for (const block of extractElementBlocks(xml, 'item')) {
     const rawLink = extractElementRaw(block, 'link')
     if (!rawLink) continue
     const url = decodeEntities(unwrapCdata(rawLink)).trim()

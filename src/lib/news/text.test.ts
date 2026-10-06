@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { decodeEntities, stripTags, truncate } from './text'
+import { decodeEntities, extractElementBlocks, stripTags, truncate } from './text'
 
 describe('decodeEntities', () => {
   it('resolves the basic entities', () => {
@@ -148,5 +148,48 @@ describe('truncate', () => {
     expect(truncate(text, 3)).toBe('AB')
     // max=4 is right after the pair (no split) -> cut including the emoji
     expect(truncate(text, 4)).toBe('AB😀')
+  })
+})
+
+describe('extractElementBlocks', () => {
+  it('returns the contents of every element in document order, like the regex it replaces', () => {
+    const html = '<li class="a">one</li> x <LI>two</LI><li>three'
+    expect(extractElementBlocks(html, 'li')).toEqual(['one', 'two'])
+  })
+
+  it('checks the name boundary (<link> and <items> are not <li> / <item>)', () => {
+    expect(extractElementBlocks('<link>a</link><li>b</li>', 'li')).toEqual(['b'])
+    expect(extractElementBlocks('<items><item>c</item></items>', 'item')).toEqual(['c'])
+    expect(extractElementBlocks('<item-x>d</item>', 'item')).toEqual(['d'])
+  })
+
+  it('ends the opening tag at the first > and the element at the nearest closing tag', () => {
+    expect(extractElementBlocks('<item a="1">x<item>y</item>z</item>', 'item')).toEqual([
+      'x<item>y',
+    ])
+  })
+
+  it('stops at an opening tag with no > or an element with no closing tag', () => {
+    expect(extractElementBlocks('<item>a</item><item b="1', 'item')).toEqual(['a'])
+    expect(extractElementBlocks('<item>a</item><item>b', 'item')).toEqual(['a'])
+    expect(extractElementBlocks('', 'item')).toEqual([])
+  })
+
+  it('returns at most max blocks', () => {
+    expect(extractElementBlocks('<p>a</p><p>b</p><p>c</p>', 'p', 2)).toEqual(['a', 'b'])
+  })
+
+  it('finishes in linear time even with a huge number of unclosed openers', () => {
+    // 200,000 `<item>` (1.2MB, under the fetch limit). The regex
+    // `/<item\b[^>]*>([\s\S]*?)<\/item>/g` restarts from the next opener on every failed
+    // match, which is O(n^2) (measured: 400ms for 20,000, 1.8 seconds for 40,000) and would
+    // exceed the Worker CPU limit inside the daily Cron.
+    const html = '<item>'.repeat(200_000)
+    const start = performance.now()
+    const result = extractElementBlocks(html, 'item')
+    const elapsed = performance.now() - start
+    expect(result).toEqual([])
+    // Loose bound for CI jitter; locally this is a few milliseconds
+    expect(elapsed).toBeLessThan(2000)
   })
 })
