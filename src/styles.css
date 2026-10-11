@@ -45,6 +45,11 @@ body {
      separation and contrast were confirmed by the dataviz validation */
   --sumai-series-visit: #a3542f;
   --sumai-series-video: #2f6fb3;
+  /* The roadmap on the home page: the way travelled (accent) and the way ahead (gray-5,
+     3.1:1 on the surface) */
+  --sumai-road-done: var(--mantine-color-clay-6);
+  --sumai-road-rest: var(--mantine-color-gray-5);
+  --sumai-road-ink: var(--mantine-color-white);
   /* Mantine's error red (red-6) is 3.2:1 on the surface; red-9 is 5.4:1 (SHIG 94) */
   --mantine-color-error: var(--mantine-color-red-9);
 }
@@ -57,6 +62,10 @@ body {
   --sumai-lift: 0 6px 18px -6px rgba(0, 0, 0, 0.7);
   --sumai-series-visit: #bd7148;
   --sumai-series-video: #4f8fd8;
+  --sumai-road-done: var(--mantine-color-clay-4);
+  --sumai-road-rest: var(--mantine-color-dark-3);
+  /* Dark text on the light accent (white would be 2.5:1) */
+  --sumai-road-ink: var(--mantine-color-dark-7);
   /* Mantine's dark error red (red-8) is 3.5:1 on the dark surface; red-4 is 6.9:1 */
   --mantine-color-error: var(--mantine-color-red-4);
 }
@@ -854,4 +863,74 @@ a:focus-visible {
     margin-inline: 0;
     padding-inline: 0;
   }
+}
+
+/* Home: "家づくりのロードマップ" (House-building roadmap). The drawing is 360 units wide and
+   scales with the card, capped so that the labels do not grow past body text on desktop */
+.home-roadmap {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  margin-inline: auto;
+  font-family: inherit;
+}
+.home-roadmap-road,
+.home-roadmap-done {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home-roadmap-road {
+  stroke: var(--sumai-road-rest);
+  stroke-dasharray: 1 10;
+}
+.home-roadmap-done {
+  stroke: var(--sumai-road-done);
+}
+.home-roadmap-stage circle {
+  fill: var(--mantine-color-default);
+  stroke: var(--sumai-road-rest);
+  stroke-width: 2;
+}
+.home-roadmap-stage[data-state='done'] circle,
+.home-roadmap-stage[data-state='current'] circle {
+  fill: var(--sumai-road-done);
+  stroke: var(--mantine-color-default);
+}
+.home-roadmap-check {
+  fill: none;
+  stroke: var(--sumai-road-ink);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.home-roadmap-number {
+  font-size: 10px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--mantine-color-dimmed);
+}
+.home-roadmap-stage[data-state='current'] .home-roadmap-number {
+  font-size: 12px;
+  fill: var(--sumai-road-ink);
+}
+.home-roadmap-label {
+  font-size: 12px;
+  text-anchor: middle;
+  fill: var(--mantine-color-dimmed);
+}
+.home-roadmap-stage[data-state='current'] .home-roadmap-label {
+  font-weight: 700;
+  fill: var(--mantine-color-text);
+}
+.home-roadmap-pin path {
+  fill: var(--sumai-road-done);
+}
+.home-roadmap-pin text {
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+  fill: var(--sumai-road-ink);
 }
