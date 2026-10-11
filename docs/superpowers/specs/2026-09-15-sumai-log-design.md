@@ -37,7 +37,7 @@
 
 | タブ | ルート | 役割 |
 |---|---|---|
-| ホーム | `/` | 次の予定 3 件・「記録を書きませんか」（終わった予定で見学記録が無いもの）・二人の最近の更新フィード |
+| ホーム | `/` | 家づくりのロードマップ（8 段階の道の絵と「現在地」。2026-10-11 追加）・次の予定 3 件・「記録を書きませんか」（終わった予定で見学記録が無いもの）・二人の最近の更新フィード |
 | 予定 | `/calendar` | 月カレンダー（`@mantine/dates` の `renderDay` で予定ドット）＋選択日のリスト。種別=見学/打合せ/内覧/その他 |
 | 記録 | `/records`（`?tab=visits\|videos`） | 見学記録と YouTube メモを SegmentedControl で切替。サムネ付きカード一覧。FAB は 2 択メニューではなく、アクティブなタブに応じてラベルが変わる（見学記録タブ→「記録を書く」／YouTube タブ→「YouTube」） |
 | 候補 | `/candidates` | 戸建て業者とマンション物件を切替。業者は「施工エリアに建築予定地の市区町村（設定値）を含む」フィルタと状態フィルタ |
@@ -69,7 +69,7 @@
 | `videos` YouTube | url, videoId, title, channel, thumbnailUrl, watchedOn, watchedBy, tags(JSON), takeaways, vendorId? | title/channel/thumbnail は保存時に oEmbed で自動取得（編集可） |
 | `comments` | targetType(vendor/property/place/visit/video), targetId, body | 二人がどの記録にも一言足せる汎用の場 |
 | `tags` | name, sortOrder | 初期値: 断熱・気密・耐震・間取り・資金・ローン・土地・マンション・管理・設備・外構 |
-| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）、`buildPlan`（建築計画: floors/tsuboMin/tsuboMax/budgetManYen、JSON）、`sitePlan`（区画シミュレーターの寸法。`src/lib/sitePlan.ts` の SitePlan。長方形の寸法・区画・建物・法規の目安の数値だけで、所在地・地番・座標は持たない）など。画面から編集 |
+| `settings` | key, value | `homeAreas`（建築予定地の市区町村、JSON 配列）、`buildPlan`（建築計画: floors/tsuboMin/tsuboMax/budgetManYen、JSON）、`sitePlan`（区画シミュレーターの寸法。`src/lib/sitePlan.ts` の SitePlan。長方形の寸法・区画・建物・法規の目安の数値だけで、所在地・地番・座標は持たない）、`roadmap`（家づくりのロードマップの現在地。`src/lib/roadmap.ts` の Roadmap。段階の id だけで日付や金額は持たない。ホームの「現在地を変更」から編集）など。画面から編集 |
 | `geocode_cache` | query, lat, lng, fetchedAt | 同じ住所を二度引かない |
 
 `status` は業者・物件で共通: `interested` / `visited` / `consulting` / `shortlisted` / `dropped`。

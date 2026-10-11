@@ -211,7 +211,13 @@ A record app for a housing search, used only by one married couple. **The reposi
   goes back to the videos tab after saving
 - The videos tab of 「記録」 narrows the memos on the page by `?tag=`, `?vendor=` and `?q=`
   (`src/lib/videoFilter.ts`); an unknown tag or vendor counts as no filter
-- The home page reads only `getMembers()`; `getSettings()` measures the usage (count(*) of
+- 「家づくりのロードマップ」 (House-building roadmap) at the top of the home page is
+  `src/lib/roadmap.ts` (the 8 fixed stages, the setting `roadmap` = only the current stage
+  id, and the SVG geometry of the road that winds in 2 rows) drawn by
+  `src/components/home/HomeRoadmap.tsx`. 「現在地を変更」 (Move the current stage) writes
+  through `saveRoadmap` (`src/server/roadmap.ts`); a missing or broken setting shows the first
+  stage. It holds no dates or money (design.md §1)
+- The home page reads only `getMembers()`; `getSettings()` measures the usage (count(\*) of
   every table and an R2 list) and belongs to the settings page alone
 - Backup is `npm run backup` (`scripts/backup.mjs`: D1 export, the restore pieces, the R2
   objects the database points at, optional copy to a folder) and the restore check is

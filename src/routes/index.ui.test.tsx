@@ -5,8 +5,9 @@ import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
+import { getRoadmap, saveRoadmap } from '../server/roadmap'
 import { getMembers } from '../server/settings'
-import { MEMBERS, event, news, stub } from '../../test/ui/fixtures'
+import { MEMBERS, event, mockOf, news, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
 const NOW = '2026-10-01T09:00:00+09:00'
@@ -43,6 +44,35 @@ describe('home route', () => {
       reading: 'ユーエーち',
       summary: '断熱性能の指標',
     })
+    stub(getRoadmap, { roadmap: { version: 1, stage: 'vendor' } })
+  })
+
+  it('draws the roadmap above the agenda with the current stage marked', async () => {
+    await renderRoute('/')
+    const heading = await screen.findByRole('heading', { name: '家づくりのロードマップ' })
+    const agenda = screen.getByRole('heading', { name: 'これからの予定' })
+    expect(heading.compareDocumentPosition(agenda) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const figure = screen.getByRole('img', { name: /8 段階のうち、いまは 2 番目の「業者選び」/ })
+    const stages = figure.querySelectorAll('.home-roadmap-stage')
+    expect(stages).toHaveLength(8)
+    expect(stages[0]).toHaveAttribute('data-state', 'done')
+    expect(stages[1]).toHaveAttribute('data-state', 'current')
+    expect(stages[2]).toHaveAttribute('data-state', 'todo')
+    expect(within(figure).getByText('現在地')).toBeInTheDocument()
+    expect(screen.getByText('現在地（2 / 8）')).toBeInTheDocument()
+    expect(screen.getByText('候補を比べて相談する')).toBeInTheDocument()
+  })
+
+  it('moves the current stage from 現在地を変更', async () => {
+    stub(saveRoadmap, { ok: true, roadmap: { version: 1, stage: 'contract' } })
+    const { user } = await renderRoute('/')
+    await user.click(await screen.findByRole('button', { name: '現在地を変更' }))
+    const dialog = await screen.findByRole('dialog', { name: '現在地を変更' })
+    expect(within(dialog).getByRole('radio', { name: /2\. 業者選び/ })).toBeChecked()
+    await user.click(within(dialog).getByRole('radio', { name: /5\. 契約/ }))
+    await user.click(within(dialog).getByRole('button', { name: '現在地を保存' }))
+    expect(mockOf(saveRoadmap)).toHaveBeenCalledWith({ data: { stage: 'contract' } })
+    expect(await screen.findByText('現在地を変更しました')).toBeInTheDocument()
   })
 
   it('shows the agenda, the visit to write up, vendor news, a glossary term and the feed', async () => {

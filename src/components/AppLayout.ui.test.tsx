@@ -7,6 +7,7 @@ import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
+import { getRoadmap } from '../server/roadmap'
 import { getMembers } from '../server/settings'
 import { MEMBERS, event, mockOf, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
@@ -62,6 +63,7 @@ function stubHome(feed: FeedItem[] = []) {
   stub(getMembers, { members: MEMBERS })
   stub(listVendorNews, { news: [] })
   stub(pickGlossaryTerm, null)
+  stub(getRoadmap, { roadmap: { version: 1, stage: 'research' } })
 }
 
 describe('app layout', () => {
