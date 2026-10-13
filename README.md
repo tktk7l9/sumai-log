@@ -131,7 +131,7 @@ npm run dev                      # http://localhost:3000
 | `npm run check:pii`               | 実データの混入チェック（語は `.dev.vars`・座標は形で検出） |
 | `npm run db:generate`             | `src/db/schema.ts` からマイグレーション生成                |
 | `npm run db:migrate:local`        | ローカル D1 へ適用                                         |
-| `npm run db:migrate:remote`       | 本番 D1 へ適用                                             |
+| `npm run db:migrate:remote`       | 本番 D1 へ適用（通常は main へのデプロイで自動。§8）       |
 | `npm run deploy`                  | ビルドしてデプロイ                                         |
 
 ### メール受信のローカル確認
@@ -178,9 +178,10 @@ npm run db:migrate:remote                   # drizzle/migrations の全件を本
 （重複作成しない）。
 
 スキーマを変更したとき（`npm run db:generate` で新しいマイグレーションを生成したとき）は、
-`npm run db:migrate:remote` を手動で本番 D1 に適用する（自動適用の仕組みは無い。マージの前後
-どちらでもよいが、忘れると本番だけスキーマが古いままになる）。Phase 2 で追加した
-`0002_add_vendor_social_urls` は適用済み。
+main へのデプロイ（Workers Builds。§8）が `wrangler deploy` の前に
+`wrangler d1 migrations apply sumai-log --remote` を実行して本番 D1 に当てる（2026-10-13 から。
+それまでは手動の `npm run db:migrate:remote` だった）。手元から `npm run deploy` したときは
+自動では当たらないので、先に `npm run db:migrate:remote` を打つ。
 
 ### 2. 初回デプロイ（Access 設定前）
 
@@ -422,7 +423,9 @@ Workers & Pages → `sumai-log` → Settings → Build → Connect to GitHub:
 
 - Repository: `tktk7l9/sumai-log` ／ Branch: `main`
 - Build command: `npm run build`
-- Deploy command: `npx wrangler deploy`
+- Deploy command: `npx wrangler d1 migrations apply sumai-log --remote && npx wrangler deploy`
+  （未適用のマイグレーションを本番 D1 に当ててからデプロイする。当て損なうとデプロイも
+  止まるので、本番だけスキーマが古いまま新しいコードが動くことはない）
 
 接続後、空コミットを `main` に push して自動デプロイが動くことを確認する:
 
@@ -433,8 +436,8 @@ npx wrangler deployments list   # 先頭の Created が push 時刻（UTC）と�
 Workers Builds が無音で止まる既知の事故があるため（他プロジェクトで実例あり）、接続直後は
 必ずこの突合をする。ずれていたら手元から `npm run deploy` で応急し、原因を調べる。
 
-**✅ 接続済み。** `main` への push（PR マージ含む）で自動的にビルド・デプロイされる
-（GitHub の PR チェックにも `Workers Builds: sumai-log` として出る）。
+**✅ 接続済み。** `main` への push（PR マージ含む）で自動的にマイグレーション適用・ビルド・
+デプロイされる（GitHub の PR チェックにも `Workers Builds: sumai-log` として出る）。
 
 ### 9. バックアップ
 
