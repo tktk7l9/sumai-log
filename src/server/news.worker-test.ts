@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { listVendorNewsInput, newsEventsBetweenInput } from './news.schema'
+import {
+  listNewslettersInput,
+  listVendorNewsInput,
+  newsEventsBetweenInput,
+  newsReadInput,
+} from './news.schema'
 
 /**
  * fetchNewsNow / linkNewsToEvent are wrapped in createServerFn, so calling them
@@ -67,5 +72,31 @@ describe('newsEventsBetweenInput', () => {
     expect(newsEventsBetweenInput.safeParse({ from: '2026/09/01', to: '2026-09-30' }).success).toBe(
       false,
     )
+  })
+})
+
+describe('listNewslettersInput', () => {
+  it('defaults to one page of every vendor, read or not', () => {
+    const result = listNewslettersInput.safeParse({})
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data).toEqual({ limit: 50 })
+  })
+
+  it('takes a vendor, the unread flag and a larger limit, up to 1000', () => {
+    const id = '12345678-1234-4234-8234-123456789abc'
+    const result = listNewslettersInput.safeParse({ vendorId: id, unreadOnly: true, limit: 1000 })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data).toEqual({ vendorId: id, unreadOnly: true, limit: 1000 })
+    expect(listNewslettersInput.safeParse({ limit: 1001 }).success).toBe(false)
+    expect(listNewslettersInput.safeParse({ vendorId: 'x' }).success).toBe(false)
+  })
+})
+
+describe('newsReadInput', () => {
+  it('needs a uuid-shaped id and a boolean', () => {
+    const id = '12345678-1234-4234-8234-123456789abc'
+    expect(newsReadInput.safeParse({ id, read: true }).success).toBe(true)
+    expect(newsReadInput.safeParse({ id, read: 'yes' }).success).toBe(false)
+    expect(newsReadInput.safeParse({ id: 'n1', read: true }).success).toBe(false)
   })
 })

@@ -8,11 +8,14 @@ import { upsertEvent } from './events'
 import {
   insertNewsIfNew,
   linkPlannedEvent,
+  listMailNews,
   listNews,
   listNewsEventsBetween,
   listNewsSources,
   markNewsFetched,
   reparseNewsEventDates,
+  setNewsRead,
+  summarizeMailNews,
 } from './news'
 import { actor, db, reset } from './test-helpers'
 
@@ -669,5 +672,93 @@ describe('re-importing vendors (same shape as upsertStatement in scripts/lib/see
     // name is properly updated by the re-import (the upsert works)
     const [vendor] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
     expect(vendor.name).toBe('再取り込みテスト業者（更新後）')
+  })
+})
+
+describe('newsletters (vendor news from mail)', () => {
+  async function seed() {
+    const vendorA = await makeVendor('A工務店')
+    const vendorB = await makeVendor('B工務店')
+    await insertRow({
+      id: 'a-mail-new',
+      vendorId: vendorA,
+      url: 'mail:a-new@example.com',
+      title: 'A 新しいメルマガ',
+      publishedOn: '2026-09-20',
+      firstSeenAt: '2026-09-20 00:00:00',
+    })
+    await insertRow({
+      id: 'a-mail-old',
+      vendorId: vendorA,
+      url: 'mail:a-old@example.com',
+      title: 'A 古いメルマガ',
+      publishedOn: '2026-03-01',
+      firstSeenAt: '2026-03-01 00:00:00',
+    })
+    await insertRow({
+      id: 'a-web',
+      vendorId: vendorA,
+      url: 'https://news.example.com/a-web',
+      title: 'A サイトのお知らせ',
+      publishedOn: '2026-09-25',
+      firstSeenAt: '2026-09-25 00:00:00',
+    })
+    await insertRow({
+      id: 'b-mail',
+      vendorId: vendorB,
+      url: 'mail:b@example.com',
+      title: 'B メルマガ',
+      publishedOn: '2026-09-10',
+      firstSeenAt: '2026-09-10 00:00:00',
+    })
+    return { vendorA, vendorB }
+  }
+
+  it('lists only the mail news, every month, newest first, with the vendor name', async () => {
+    await seed()
+    const rows = await listMailNews(db, { limit: 10 })
+    expect(rows.map((r) => r.id)).toEqual(['a-mail-new', 'b-mail', 'a-mail-old'])
+    expect(rows[0].vendorName).toBe('A工務店')
+    expect(rows[0].readAt).toBeNull()
+  })
+
+  it('narrows to one vendor, to the unread ones, and stops at the limit', async () => {
+    const { vendorA } = await seed()
+    expect((await listMailNews(db, { vendorId: vendorA, limit: 10 })).map((r) => r.id)).toEqual([
+      'a-mail-new',
+      'a-mail-old',
+    ])
+    expect((await listMailNews(db, { limit: 1 })).map((r) => r.id)).toEqual(['a-mail-new'])
+
+    expect(await setNewsRead(db, 'a-mail-new', true, actor)).toBe(true)
+    expect((await listMailNews(db, { unreadOnly: true, limit: 10 })).map((r) => r.id)).toEqual([
+      'b-mail',
+      'a-mail-old',
+    ])
+  })
+
+  it('counts the newsletters and the unread ones per vendor, vendors without any left out', async () => {
+    const { vendorA, vendorB } = await seed()
+    await makeVendor('C工務店')
+    await setNewsRead(db, 'a-mail-old', true, actor)
+    expect(await summarizeMailNews(db)).toEqual([
+      { vendorId: vendorA, vendorName: 'A工務店', total: 2, unread: 1 },
+      { vendorId: vendorB, vendorName: 'B工務店', total: 1, unread: 1 },
+    ])
+  })
+
+  it('sets and clears the read flag with who read it, and says when the item is gone', async () => {
+    await seed()
+    expect(await setNewsRead(db, 'b-mail', true, actor)).toBe(true)
+    let [row] = await db.select().from(vendorNews).where(eq(vendorNews.id, 'b-mail'))
+    expect(row.readAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(row.readBy).toBe(actor)
+
+    expect(await setNewsRead(db, 'b-mail', false, actor)).toBe(true)
+    ;[row] = await db.select().from(vendorNews).where(eq(vendorNews.id, 'b-mail'))
+    expect(row.readAt).toBeNull()
+    expect(row.readBy).toBeNull()
+
+    expect(await setNewsRead(db, 'missing', true, actor)).toBe(false)
   })
 })

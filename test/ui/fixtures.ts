@@ -242,6 +242,8 @@ export function news(over: Partial<VendorNews> = {}): VendorNews {
     plannedEventId: null,
     mailId: null,
     firstSeenAt: STAMP,
+    readAt: null,
+    readBy: null,
     createdAt: STAMP,
     updatedAt: STAMP,
     ...over,
