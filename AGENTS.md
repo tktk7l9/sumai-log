@@ -209,6 +209,15 @@ A record app for a housing search, used only by one married couple. **The reposi
   `/records?tab=videos&video=<youtube id>`, which opens the memo form filled in from the
   channel video (`getChannelVideoForMemo`, `memoDefaultsOf` in `src/lib/videoMemo.ts`) and
   goes back to the videos tab after saving
+- Newsletters are the `vendor_news` rows whose `url` starts with `mail:` (the mail import,
+  spec `docs/superpowers/specs/2026-09-19-mail-import-design.md`). `/news?tab=mail` lists them
+  across every month (`listMailNews` / `summarizeMailNews` in `src/server/repository/news.ts`,
+  `MailNewsList.tsx`), one vendor or all, with `?unread=true` and `?n=` for 「さらに表示」. The
+  read flag is `vendor_news.read_at` / `read_by`, one flag shared by the two users like the
+  watched flag of the works (`setNewsRead`). Opening a newsletter in the drawer marks it read
+  (`useNewsRead` in `src/components/news/`, used by the newsletter list and by `NewsAgenda`
+  on the home page and the monthly list), and 「未読に戻す」 in the drawer takes it back. The
+  calendar's information layer does not touch the flag
 - The videos tab of 「記録」 narrows the memos on the page by `?tag=`, `?vendor=` and `?q=`
   (`src/lib/videoFilter.ts`); an unknown tag or vendor counts as no filter
 - 「家づくりのロードマップ」 (House-building roadmap) at the top of the home page is

@@ -120,6 +120,13 @@
       "when": 1791255207593,
       "tag": "0016_videos_video_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1791869261898,
+      "tag": "0017_vendor_news_read",
+      "breakpoints": true
     }
   ]
 }

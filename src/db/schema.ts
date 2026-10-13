@@ -268,6 +268,11 @@ export const vendorNews = sqliteTable(
     firstSeenAt: text('first_seen_at')
       .notNull()
       .default(sql`(datetime('now'))`),
+    /** ISO-8601. null = not read yet. One flag shared by the two users, like works.watched_at.
+     * Set when a newsletter (url is mail:) is opened, or by hand in its drawer */
+    readAt: text('read_at'),
+    /** The e-mail of whoever read it (shown as the member's name) */
+    readBy: text('read_by'),
     ...timestamps,
   },
   (t) => [index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn)],

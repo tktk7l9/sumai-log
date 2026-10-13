@@ -11,6 +11,7 @@ import { EventBadge } from './EventBadge'
 import { FormDrawer } from '../FormDrawer'
 import { NewBadge } from '../FreshBadge'
 import { NewsEventDrawer } from './NewsEventDrawer'
+import { useNewsRead } from './useNewsRead'
 
 /**
  * The date range shown in the header (YYYY/MM/DD – YYYY/MM/DD). With 0 items it only
@@ -74,6 +75,7 @@ export function NewsAgenda({
   todayKey?: string
 }) {
   const navigate = useNavigate()
+  const { setRead, openRead } = useNewsRead()
   const [drawerNewsId, setDrawerNewsId] = useState<string | null>(null)
 
   const groups = groupNewsByDate(items, todayKey)
@@ -134,7 +136,11 @@ export function NewsAgenda({
                     key={item.id}
                     className="news-agenda-row"
                     data-past={past ? true : undefined}
-                    onClick={() => setDrawerNewsId(item.id)}
+                    onClick={() => {
+                      // Opening a newsletter marks it read (the 「メルマガ」 tab of /news shows the flag)
+                      openRead(item)
+                      setDrawerNewsId(item.id)
+                    }}
                   >
                     <Stack gap={4} py={8} px="sm">
                       <Text size="sm" c="dimmed">
@@ -182,6 +188,7 @@ export function NewsAgenda({
             planning={false}
             onPlan={() => handlePlan(drawerNews)}
             onViewEvent={() => handleViewEvent(drawerNews)}
+            onSetRead={(read) => void setRead(drawerNews, read)}
           />
         ) : null}
       </FormDrawer>

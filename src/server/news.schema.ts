@@ -38,6 +38,20 @@ export type ListVendorNewsInput = z.input<typeof listVendorNewsInput>
 export const newsEventsBetweenInput = z.object({ from: dateField, to: dateField })
 export type NewsEventsBetweenInput = z.input<typeof newsEventsBetweenInput>
 
+/** How many newsletters one load of the 「メルマガ」 tab shows; 「さらに表示」 adds the same again */
+export const MAIL_NEWS_PAGE = 50
+
+/** The 「メルマガ」 (newsletters) tab of /news: one vendor or all, every month, optionally unread only */
+export const listNewslettersInput = z.object({
+  vendorId: idField.optional(),
+  unreadOnly: z.boolean().optional(),
+  limit: z.number().int().min(1).max(1000).default(MAIL_NEWS_PAGE),
+})
+export type ListNewslettersInput = z.input<typeof listNewslettersInput>
+
+/** The read flag of one news item (set when a newsletter is opened, or by hand in its drawer) */
+export const newsReadInput = z.object({ id: idField, read: z.boolean() })
+
 /** Looks up just 1 item when "行く" (Go) opens the event form (/calendar?plan=<newsId>) */
 export const newsIdInput = z.object({ id: idField })
 /** Links the event saved in the form to the vendor news item (plannedEventId) */

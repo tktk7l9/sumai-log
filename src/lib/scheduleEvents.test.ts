@@ -130,6 +130,8 @@ const newsBase: NewsEventRow = {
   plannedEventId: null,
   mailId: null,
   firstSeenAt: '2030-01-01 00:00:00',
+  readAt: null,
+  readBy: null,
   createdAt: '2030-01-01 00:00:00',
   updatedAt: '2030-01-01 00:00:00',
 }

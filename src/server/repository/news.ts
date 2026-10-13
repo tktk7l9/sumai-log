@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, isNotNull, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import {
@@ -8,6 +8,7 @@ import {
   vendorNews,
   vendors,
 } from '../../db/schema'
+import { MAIL_URL_PREFIX } from '../../lib/mail/toNews'
 import { extractEvent } from '../../lib/news/eventDate'
 
 /**
@@ -196,4 +197,76 @@ export async function linkPlannedEvent(db: Db, newsId: string, eventId: string):
     .update(vendorNews)
     .set({ plannedEventId: eventId, updatedAt: sql`(datetime('now'))` })
     .where(eq(vendorNews.id, newsId))
+}
+
+/** Only the newsletters (vendor news that came from mail, design 2026-09-19: url is `mail:`) */
+const isNewsletter = like(vendorNews.url, `${MAIL_URL_PREFIX}%`)
+
+/**
+ * The newsletter list of /news (the 「メルマガ」 tab): every month, newest first, one vendor or
+ * all, optionally only the unread ones. `limit` grows with 「さらに表示」 (Show more)
+ */
+export async function listMailNews(
+  db: Db,
+  opts: { vendorId?: string; unreadOnly?: boolean; limit: number },
+): Promise<NewsEventRow[]> {
+  const conditions = [
+    isNewsletter,
+    opts.vendorId ? eq(vendorNews.vendorId, opts.vendorId) : undefined,
+    opts.unreadOnly ? isNull(vendorNews.readAt) : undefined,
+  ].filter((c) => c !== undefined)
+  const rows = await db
+    .select({ news: vendorNews, vendorName: vendors.name })
+    .from(vendorNews)
+    .innerJoin(vendors, eq(vendorNews.vendorId, vendors.id))
+    .where(and(...conditions))
+    .orderBy(desc(vendorNews.publishedOn), desc(vendorNews.firstSeenAt))
+    .limit(opts.limit)
+  return rows.map((r) => ({ ...r.news, vendorName: r.vendorName }))
+}
+
+export type MailNewsSummary = {
+  vendorId: string
+  vendorName: string
+  total: number
+  unread: number
+}
+
+/** How many newsletters each vendor has, and how many are still unread. Vendors without any are left out */
+export async function summarizeMailNews(db: Db): Promise<MailNewsSummary[]> {
+  return db
+    .select({
+      vendorId: vendorNews.vendorId,
+      vendorName: vendors.name,
+      total: sql<number>`count(*)`.mapWith(Number),
+      unread: sql<number>`sum(${vendorNews.readAt} is null)`.mapWith(Number),
+    })
+    .from(vendorNews)
+    .innerJoin(vendors, eq(vendorNews.vendorId, vendors.id))
+    .where(isNewsletter)
+    .groupBy(vendorNews.vendorId, vendors.name)
+    .orderBy(asc(vendors.name))
+}
+
+/**
+ * One read flag shared by the two users (like the watched flag of works). No stale-write
+ * check: both setting it at the same time ends in the same state. Returns false when the
+ * news item is gone
+ */
+export async function setNewsRead(
+  db: Db,
+  id: string,
+  read: boolean,
+  actorEmail: string,
+): Promise<boolean> {
+  const rows = await db
+    .update(vendorNews)
+    .set({
+      readAt: read ? new Date().toISOString() : null,
+      readBy: read ? actorEmail : null,
+      updatedAt: sql`(datetime('now'))`,
+    })
+    .where(eq(vendorNews.id, id))
+    .returning({ id: vendorNews.id })
+  return rows.length > 0
 }

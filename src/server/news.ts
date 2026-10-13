@@ -3,25 +3,38 @@ import { eq } from 'drizzle-orm'
 
 import { getDb } from '../db/client'
 import { events, vendorNews } from '../db/schema'
+import { currentActorEmail } from './members'
 import { fetchAllVendorNews } from './newsFetcher'
 import {
   linkNewsEventInput,
+  listNewslettersInput,
   listVendorNewsInput,
   newsEventsBetweenInput,
   newsIdInput,
+  newsReadInput,
 } from './news.schema'
 import {
   getNewsById,
   linkPlannedEvent,
+  listMailNews,
   listNews,
   listNewsEventsBetween,
   listNewsSources,
   reparseNewsEventDates,
+  setNewsRead,
+  summarizeMailNews,
 } from './repository'
 
 // The validators come from news.schema.ts (see there for why they were split for the sake of
 // tests). The public import path (available from './news') does not change.
-export { linkNewsEventInput, listVendorNewsInput, newsEventsBetweenInput, newsIdInput }
+export {
+  linkNewsEventInput,
+  listNewslettersInput,
+  listVendorNewsInput,
+  newsEventsBetweenInput,
+  newsIdInput,
+  newsReadInput,
+}
 
 /**
  * For the `/news` page (per month. Filtered by from/to) and the "お知らせ" (vendor news) block
@@ -33,6 +46,25 @@ export const listVendorNews = createServerFn()
     const news = await listNews(getDb(), data)
     return { news }
   })
+
+/**
+ * The 「メルマガ」 (newsletters) tab of /news: the rows of the chosen vendor (or all) and, for the
+ * chips and the unread count, how many every vendor has
+ */
+export const listNewsletters = createServerFn()
+  .validator(listNewslettersInput)
+  .handler(async ({ data }) => {
+    const db = getDb()
+    const [news, vendors] = await Promise.all([listMailNews(db, data), summarizeMailNews(db)])
+    return { news, vendors }
+  })
+
+/** ok: false = the news item is gone (only a stale tab) */
+export const markNewsRead = createServerFn({ method: 'POST' })
+  .validator(newsReadInput)
+  .handler(async ({ data }) => ({
+    ok: await setNewsRead(getDb(), data.id, data.read, await currentActorEmail()),
+  }))
 
 /**
  * For the information layer of the calendar (any period). The month view takes a wider range

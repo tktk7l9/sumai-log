@@ -21,18 +21,25 @@ import { EventBadge } from './EventBadge'
  *
  * News that comes from mail (url is mail:) has no external link, so the title is shown as
  * text and the body is shown below (design 2026-09-19 §5). The body is fetched when
- * opened (the list payload does not include the body).
+ * opened (the list payload does not include the body). Such a newsletter also carries a
+ * read flag (vendor_news.read_at), toggled by the button above the body when `onSetRead`
+ * is given.
  */
 export function NewsEventDrawer({
   news,
   planning,
   onPlan,
   onViewEvent,
+  onSetRead,
 }: {
   news: NewsEventRow
   planning: boolean
   onPlan: () => void
   onViewEvent: () => void
+  /** The read flag of a newsletter (useNewsRead). Opening already marked it read, so the
+   * button mostly takes that back. Absent on the calendar, whose information layer is about
+   * the dates, not about reading the mail */
+  onSetRead?: (read: boolean) => void
 }) {
   const mail = isMailNews(news.url)
   // "行く" is shown only for upcoming news whose dates could be determined
@@ -73,6 +80,15 @@ export function NewsEventDrawer({
         <Text size="sm" c="dimmed">
           この日程は終了しました
         </Text>
+      ) : null}
+      {mail && onSetRead ? (
+        <Button
+          variant="default"
+          onClick={() => onSetRead(news.readAt === null)}
+          style={{ alignSelf: 'flex-start' }}
+        >
+          {news.readAt === null ? '既読にする' : '未読に戻す'}
+        </Button>
       ) : null}
       {mail && news.mailId ? <MailBody mailId={news.mailId} /> : null}
     </Stack>
