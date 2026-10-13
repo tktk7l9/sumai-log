@@ -313,6 +313,10 @@ npm run db:migrate:local
 npm run cf-typegen   # when bindings or vars were added
 ```
 
+Production gets the migration from the deploy of `main` (Workers Builds runs
+`wrangler d1 migrations apply sumai-log --remote` before `wrangler deploy`, README §8), so a PR
+does not need to ask the owner to run it by hand.
+
 ## Language
 
 - Code, comments, test titles, log messages and CLI output of scripts are written in English.
