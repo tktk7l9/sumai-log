@@ -889,6 +889,24 @@ a:focus-visible {
 .home-roadmap-done {
   stroke: var(--sumai-road-done);
 }
+.home-roadmap-stage {
+  cursor: pointer;
+  outline: none;
+}
+/* The hit area is invisible but must still take the tap */
+.home-roadmap-hit {
+  fill: transparent;
+  stroke: none;
+}
+.home-roadmap-stage:hover .home-roadmap-hit {
+  fill: var(--sumai-sunken);
+  /* The road dots under the hovered stage stay visible */
+  fill-opacity: 0.6;
+}
+.home-roadmap-stage:focus-visible .home-roadmap-hit {
+  stroke: var(--sumai-ring);
+  stroke-width: 2;
+}
 .home-roadmap-stage circle {
   fill: var(--mantine-color-default);
   stroke: var(--sumai-road-rest);
@@ -924,6 +942,9 @@ a:focus-visible {
 .home-roadmap-stage[data-state='current'] .home-roadmap-label {
   font-weight: 700;
   fill: var(--mantine-color-text);
+}
+.home-roadmap-pin {
+  pointer-events: none;
 }
 .home-roadmap-pin path {
   fill: var(--sumai-road-done);

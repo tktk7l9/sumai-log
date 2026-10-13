@@ -52,7 +52,7 @@ describe('home route', () => {
     const heading = await screen.findByRole('heading', { name: '家づくりのロードマップ' })
     const agenda = screen.getByRole('heading', { name: 'これからの予定' })
     expect(heading.compareDocumentPosition(agenda) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    const figure = screen.getByRole('img', { name: /8 段階のうち、いまは 2 番目の「業者選び」/ })
+    const figure = screen.getByRole('group', { name: /8 段階のうち、いまは 2 番目の「業者選び」/ })
     const stages = figure.querySelectorAll('.home-roadmap-stage')
     expect(stages).toHaveLength(8)
     expect(stages[0]).toHaveAttribute('data-state', 'done')
@@ -61,6 +61,37 @@ describe('home route', () => {
     expect(within(figure).getByText('現在地')).toBeInTheDocument()
     expect(screen.getByText('現在地（2 / 8）')).toBeInTheDocument()
     expect(screen.getByText('候補を比べて相談する')).toBeInTheDocument()
+  })
+
+  it('opens what a tapped stage involves and can make it the current stage', async () => {
+    stub(saveRoadmap, { ok: true, roadmap: { version: 1, stage: 'contract' } })
+    const { user } = await renderRoute('/')
+    await user.click(await screen.findByRole('button', { name: '5. 契約（これから）の説明を見る' }))
+    const dialog = await screen.findByRole('dialog', { name: '5. 契約' })
+    expect(within(dialog).getByText('これから')).toBeInTheDocument()
+    expect(
+      within(dialog).getByText('金額・工期・支払いの約束', { exact: false }),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText('この段階でやること')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: '重要事項説明・手付金' })).toHaveAttribute(
+      'href',
+      '/glossary/important-matters',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'ここを現在地にする' }))
+    expect(mockOf(saveRoadmap)).toHaveBeenCalledWith({ data: { stage: 'contract' } })
+    expect(await screen.findByText('現在地を変更しました')).toBeInTheDocument()
+  })
+
+  it('does not offer to move to the stage that is already current', async () => {
+    const { user } = await renderRoute('/')
+    await user.click(
+      await screen.findByRole('button', { name: '2. 業者選び（いまここ）の説明を見る' }),
+    )
+    const dialog = await screen.findByRole('dialog', { name: '2. 業者選び' })
+    expect(within(dialog).getByText('いまここ')).toBeInTheDocument()
+    expect(
+      within(dialog).queryByRole('button', { name: 'ここを現在地にする' }),
+    ).not.toBeInTheDocument()
   })
 
   it('moves the current stage from 現在地を変更', async () => {

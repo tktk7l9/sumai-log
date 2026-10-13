@@ -216,7 +216,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   id, and the SVG geometry of the road that winds in 2 rows) drawn by
   `src/components/home/HomeRoadmap.tsx`. 「現在地を変更」 (Move the current stage) writes
   through `saveRoadmap` (`src/server/roadmap.ts`); a missing or broken setting shows the first
-  stage. It holds no dates or money (design.md §1)
+  stage. It holds no dates or money (design.md §1). Tapping a stage in the drawing opens what
+  that stage generally involves (`src/content/roadmap.ts`, data only and general, with glossary
+  ids checked by `src/content/roadmap.test.ts`), and 「ここを現在地にする」 there moves the pin
 - The home page reads only `getMembers()`; `getSettings()` measures the usage (count(\*) of
   every table and an R2 list) and belongs to the settings page alone
 - Backup is `npm run backup` (`scripts/backup.mjs`: D1 export, the restore pieces, the R2
