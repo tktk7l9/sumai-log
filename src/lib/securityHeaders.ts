@@ -2,12 +2,13 @@
  * Defensive headers for the browser, attached to every response.
  *
  * Even behind Cloudflare Access, the app itself stops clickjacking and MIME sniffing.
- * The CSP stays within a range that does not break the inline code of Vite / Mantine
- * (only `frame-ancestors`, `object-src` and `base-uri`. `img-src`/`connect-src` were added
- * for Google Maps on the map tab (tiles, fonts and sprites come from maps.googleapis.com
- * and maps.gstatic.com, vector tiles go through connect-src) and for video thumbnails and
- * the avatars of sources (YouTube channels)). `frame-src` allows only the no-cookie YouTube
- * embed, for the tour videos on the works page.
+ * This CSP has no `script-src`: the inline scripts of Mantine and TanStack need a nonce per
+ * response, which the Worker adds to HTML pages with the script policy (src/lib/scriptNonce.ts,
+ * report-only first). Besides `frame-ancestors`, `object-src` and `base-uri`, it has
+ * `img-src`/`connect-src` for Google Maps on the map tab (tiles, fonts and sprites come from
+ * maps.googleapis.com and maps.gstatic.com, vector tiles go through connect-src) and for video
+ * thumbnails and the avatars of sources (YouTube channels). `frame-src` allows only the
+ * no-cookie YouTube embed, for the tour videos on the works page.
  * `geolocation=(self)` is allowed for the "現在地" (Current location) button on the map tab.
  * `form-action 'self'` keeps a form from being posted to another origin (there is no
  * cross-origin form in the app; Access logs in by redirect, not by a form from this page).
