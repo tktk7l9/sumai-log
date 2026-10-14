@@ -22,6 +22,7 @@ import { drizzle } from 'drizzle-orm/d1'
 import * as schema from './db/schema'
 import { parseAllowlist } from './lib/access'
 import { renderErrorLines } from './lib/errorLog'
+import { applyScriptNonce } from './lib/scriptNonce'
 import { refreshChannelVideos } from './server/channelVideosFetcher'
 import { handleInboundMail } from './server/mailHandler'
 import { fetchAllVendorNews } from './server/newsFetcher'
@@ -52,8 +53,12 @@ const entry = createServerEntry({ fetch: startFetch })
  * unrelated), so an adapter is inserted that matches only the type to the Workers shape while
  * keeping the runtime behaviour (env/ctx are not used; bindings are read from the env of
  * `cloudflare:workers`) as is.
+ *
+ * Every HTML page gets a fresh script nonce and the script policy here (src/lib/scriptNonce.ts),
+ * after the request middleware has set the other security headers. Do not bypass this wrapper.
  */
-const workerFetch: ExportedHandlerFetchHandler<Env> = (request) => entry.fetch(request)
+const workerFetch: ExportedHandlerFetchHandler<Env> = async (request) =>
+  applyScriptNonce(await entry.fetch(request))
 
 /**
  * Called inside `ctx.waitUntil`. fetchAllVendorNews itself swallows the failure of 1 vendor,

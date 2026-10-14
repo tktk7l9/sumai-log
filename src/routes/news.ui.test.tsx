@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { getMailBody } from '../server/mails'
 import { listNewsletters, listVendorNews, markNewsRead, newsSources } from '../server/news'
 import { getMembers } from '../server/settings'
 import { MEMBERS, mockOf, news, stub, uid } from '../../test/ui/fixtures'
@@ -236,6 +237,19 @@ describe('news route, newsletters tab', () => {
     await waitFor(() =>
       expect(markNewsRead).toHaveBeenCalledWith({ data: { id: READ, read: false } }),
     )
+  })
+
+  it('shows the body of a newsletter as text, never as markup', async () => {
+    // The trust boundary of the script nonce (src/lib/trustBoundary.test.ts): markup in an
+    // imported mail must reach the page as text
+    const hostile =
+      '<script>alert(1)</script><img src=x onerror="alert(2)"><a href="javascript:alert(3)">ここ</a>'
+    stub(getMailBody, { body: `ご案内です。${hostile}` })
+    const { user } = await renderRoute('/news?tab=mail')
+    await user.click(await screen.findByText('今月の見学会のご案内'))
+    const drawer = await screen.findByRole('dialog', { name: 'お知らせ' })
+    expect(await within(drawer).findByText(`ご案内です。${hostile}`)).toBeInTheDocument()
+    expect(drawer.querySelector('script, img, a[href^="javascript:"]')).toBeNull()
   })
 
   it('says so when the write fails', async () => {

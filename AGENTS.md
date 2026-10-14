@@ -245,6 +245,35 @@ A record app for a housing search, used only by one married couple. **The reposi
   cleanup and `refreshChannelVideos` from Cron (`triggers.crons` in `wrangler.jsonc` = `"0 21 * * *"` = 06:00 JST). `scheduled` runs inside
   `ctx.waitUntil`, and an exception that could not be caught inside it is not thrown to the
   outside either (nobody would catch it even if thrown)
+- Script policy (CSP), staged since 2026-10-14: `src/lib/scriptNonce.ts`, applied to every
+  response by `workerFetch` in `src/server.ts` (the dev server runs it too). The enforced CSP
+  (`SECURITY_HEADERS` in `src/lib/securityHeaders.ts`) has no `script-src`. For each text/html
+  response the Worker makes a nonce, HTMLRewriter stamps it on every inline JavaScript
+  `<script>` (Mantine's colour scheme script, the zod setting, TanStack's hydration scripts;
+  not `src`, SVG `href` or data blocks), and the policy
+  `script-src 'self' 'nonce-…' 'wasm-unsafe-eval' https://maps.googleapis.com https://static.cloudflareinsights.com; worker-src blob:`
+  is sent. Stage 1 (`SCRIPT_POLICY_MODE = 'report-only'`): as
+  `content-security-policy-report-only`, beside the enforced CSP left as it was. Stage 2, once
+  the owner's DevTools console has shown no `[Report Only]` message on every screen, is the
+  one-line change to `'enforce'`, which appends the same directives to the enforced header.
+  Either way each kind of header appears once. The Maps loader copies the nonce of the first
+  `script[nonce]` (Mantine's) onto everything it loads, so the Maps host is only a fallback; the
+  Web Analytics beacon is injected by Cloudflare at the edge on sumai-log.app, after the
+  Worker and without a nonce (a host, because its path carries a version). `'wasm-unsafe-eval'`
+  and `worker-src blob:` are for the vector renderer of the Maps API (a vector Map ID in
+  `GOOGLE_MAPS_MAP_ID`; DEMO_MAP_ID is raster and needs neither). **Never add
+  `'strict-dynamic'`** (the beacon has no nonce), **`'unsafe-eval'`** or Google's wildcard hosts
+  (they serve content anyone can upload). Zod probes `new Function` when it builds its first
+  object schema, a violation on every page; `ZOD_JITLESS_SCRIPT` (`src/lib/zodJitless.ts`),
+  written by `ScriptOnce` at the top of `<head>`, switches that off before any module runs
+  (`z.config()` in a module runs too late: the shared chunks run before the entry). Do not put
+  inline code in a route's `head().scripts`: its client effect looks for the script by its
+  `nonce` attribute, which the browser blanks, and adds a second copy without a nonce. Trust
+  boundary: every inline `<script>` that reaches the HTML gets the nonce, so data must never
+  reach the page as markup. `src/lib/trustBoundary.test.ts` fails on a raw-HTML sink
+  (`dangerouslySetInnerHTML`, `innerHTML`, `srcdoc`, `document.write`, …) anywhere in `src/`
+  (its allowlist is empty) and on a `<script>` writer outside `SCRIPT_ALLOWED` (the two constant
+  scripts of `__root.tsx`); imported mail bodies stay text (`src/routes/news.ui.test.tsx`)
 - `routes` in `wrangler.jsonc` (the custom domain `sumai-log.app`) reflects, on the configuration
   file side as well, the entity that the owner attached in the dashboard (the operation in the
   dashboard comes first, and the configuration file follows afterwards to align the source of

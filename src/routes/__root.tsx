@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+import { HeadContent, ScriptOnce, Scripts, createRootRoute } from '@tanstack/react-router'
 import { ColorSchemeScript, MantineProvider, mantineHtmlProps } from '@mantine/core'
 import { DatesProvider } from '@mantine/dates'
 import { Notifications } from '@mantine/notifications'
@@ -6,6 +6,7 @@ import 'dayjs/locale/ja'
 
 import { AppLayout } from '../components/AppLayout'
 import { RouteErrorState, RouteNotFoundState } from '../components/ErrorStates'
+import { ZOD_JITLESS_SCRIPT } from '../lib/zodJitless'
 import { theme } from '../theme'
 
 import mantineCoreCss from '@mantine/core/styles.css?url'
@@ -54,6 +55,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="ja" {...mantineHtmlProps}>
       <head>
         <ColorSchemeScript defaultColorScheme="auto" />
+        {/* Zod without eval, set before any module script runs (src/lib/zodJitless.ts). It runs
+            once while the page is parsed and removes itself, so hydration finds nothing here */}
+        <ScriptOnce>{ZOD_JITLESS_SCRIPT}</ScriptOnce>
         {/* The background colour matches --mantine-color-body in src/styles.css and dark[7] in src/theme.ts */}
         <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#1c1917" media="(prefers-color-scheme: dark)" />
