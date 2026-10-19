@@ -247,18 +247,19 @@ A record app for a housing search, used only by one married couple. **The reposi
   cleanup and `refreshChannelVideos` from Cron (`triggers.crons` in `wrangler.jsonc` = `"0 21 * * *"` = 06:00 JST). `scheduled` runs inside
   `ctx.waitUntil`, and an exception that could not be caught inside it is not thrown to the
   outside either (nobody would catch it even if thrown)
-- Script policy (CSP), staged since 2026-10-14: `src/lib/scriptNonce.ts`, applied to every
-  response by `workerFetch` in `src/server.ts` (the dev server runs it too). The enforced CSP
-  (`SECURITY_HEADERS` in `src/lib/securityHeaders.ts`) has no `script-src`. For each text/html
-  response the Worker makes a nonce, HTMLRewriter stamps it on every inline JavaScript
-  `<script>` (Mantine's colour scheme script, the zod setting, TanStack's hydration scripts;
-  not `src`, SVG `href` or data blocks), and the policy
+- Script policy (CSP), report-only from 2026-10-14 and enforced since 2026-10-19:
+  `src/lib/scriptNonce.ts`, applied to every response by `workerFetch` in `src/server.ts` (the
+  dev server runs it too). The enforced CSP (`SECURITY_HEADERS` in
+  `src/lib/securityHeaders.ts`) has no `script-src`. For each text/html response the Worker
+  makes a nonce, HTMLRewriter stamps it on every inline JavaScript `<script>` (Mantine's colour
+  scheme script, the zod setting, TanStack's hydration scripts; not `src`, SVG `href` or data
+  blocks), and the policy
   `script-src 'self' 'nonce-…' 'wasm-unsafe-eval' https://maps.googleapis.com https://static.cloudflareinsights.com; worker-src blob:`
-  is sent. Stage 1 (`SCRIPT_POLICY_MODE = 'report-only'`): as
-  `content-security-policy-report-only`, beside the enforced CSP left as it was. Stage 2, once
-  the owner's DevTools console has shown no `[Report Only]` message on every screen, is the
-  one-line change to `'enforce'`, which appends the same directives to the enforced header.
-  Either way each kind of header appears once. The Maps loader copies the nonce of the first
+  is appended to that `content-security-policy` (`SCRIPT_POLICY_MODE = 'enforce'`). The other
+  mode, `'report-only'`, sends it as `content-security-policy-report-only` beside the enforced
+  CSP left as it was: the way back if a screen breaks, and the way to try a changed policy
+  (the owner's DevTools console must show no `[Report Only]` message on every screen for a day
+  or two before enforcing). Either way each kind of header appears once. The Maps loader copies the nonce of the first
   `script[nonce]` (Mantine's) onto everything it loads, so the Maps host is only a fallback; the
   Web Analytics beacon is injected by Cloudflare at the edge on sumai-log.app, after the
   Worker and without a nonce (a host, because its path carries a version). `'wasm-unsafe-eval'`

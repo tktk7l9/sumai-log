@@ -62,10 +62,10 @@ describe('applyScriptNonce with the real HTMLRewriter', () => {
     ])
   })
 
-  it('sends one report-only header with the same nonce and keeps the enforced one', async () => {
+  it('joins the policy with the same nonce to the one enforced CSP, no report-only', async () => {
     const res = applyScriptNonce(htmlResponse(PAGE), { nonce: 'TESTNONCE' })
-    expect(res.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('TESTNONCE'))
-    expect(res.headers.get(CSP_HEADER)).toBe(ENFORCED)
+    expect(res.headers.get(CSP_HEADER)).toBe(`${ENFORCED}; ${scriptPolicy('TESTNONCE')}`)
+    expect(res.headers.get(CSP_REPORT_ONLY_HEADER)).toBeNull()
     expect(res.headers.get('etag')).toBeNull()
     await res.text()
   })

@@ -285,19 +285,18 @@ Cloudflare Access の背後ではあるが、アプリ側 allowlist は通らな
 `src/routes/api.photos.$.tsx` の TanStack Start server route（＝ミドルウェアを通る経路）
 として実装済み。
 
-### 5b. スクリプトの制限（CSP）の段階導入
+### 5b. スクリプトの制限（CSP）
 
 ページで動かせるスクリプトを「このアプリ自身」「Google マップ」「Cloudflare の解析
-ビーコン」に絞る設定（`src/lib/scriptNonce.ts`）。2026-10-14 から**報告だけ**の段階
-（`Content-Security-Policy-Report-Only`）で、何も止めない。
+ビーコン」に絞る設定（`src/lib/scriptNonce.ts`）。2026-10-14 から報告だけの段階
+（`Content-Security-Policy-Report-Only`）で様子を見て、コンソールに違反が出なかったので
+2026-10-19 から**本適用**（`SCRIPT_POLICY_MODE = 'enforce'`。許可外のスクリプトは動かない）。
 
-1. PC の Chrome で `https://sumai-log.app` を開き、DevTools（`⌥⌘I`）の Console を開いて
-   「Preserve log」に印を付け、フィルタ欄に `Report Only` と入れる
-2. ホーム・予定・記録（書く／下書き）・候補・動画（再生）・お知らせ（メルマガを開く）・
-   地図・区画（3D）・分析・設定を一通り開く。1〜2 日、普段どおり使うときも同じ画面を出しておく
-3. `[Report Only] Refused to …` が 1 件も出なければ、`src/lib/scriptNonce.ts` の
-   `SCRIPT_POLICY_MODE` を `'report-only'` から `'enforce'` に変える 1 行の PR で本適用する。
-   出たら、その行（ブロックされた URL と directive）を Claude に渡して直す
+画面が動かなくなったら、DevTools（`⌥⌘I`）の Console に出る `Refused to … Content Security
+Policy` の行（止められた URL と directive）を Claude に渡す。急ぐときは
+`src/lib/scriptNonce.ts` の `SCRIPT_POLICY_MODE` を `'report-only'` に戻す 1 行の PR で
+元に戻る（何も止めず、報告だけになる）。許可先を増やすときも、まず `'report-only'` で
+1〜2 日使って `[Report Only]` が出ないことを見てから `'enforce'` に戻す。
 
 ### メール取込（転送先アドレスは secret）
 

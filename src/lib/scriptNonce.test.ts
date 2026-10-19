@@ -88,8 +88,8 @@ describe('the enforced CSP it joins', () => {
 })
 
 describe('SCRIPT_POLICY_MODE', () => {
-  it('is report-only in stage 1', () => {
-    expect(SCRIPT_POLICY_MODE).toBe('report-only')
+  it('is enforce (stage 2, since 2026-10-19)', () => {
+    expect(SCRIPT_POLICY_MODE).toBe('enforce')
   })
 })
 
@@ -163,23 +163,9 @@ describe('isInlineJavaScript', () => {
   })
 })
 
-describe('applyScriptNonce, report-only (stage 1)', () => {
+describe('applyScriptNonce', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
-  })
-
-  it('adds the policy as report-only and leaves the enforced CSP exactly as it was', () => {
-    const out = applyScriptNonce(html(), { nonce: 'N', rewriter: fakeRewriter().rewriter })
-    expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('N'))
-    expect(out.headers.get(CSP_HEADER)).toBe(ENFORCED)
-  })
-
-  it('sends one report-only header even when the response already had one', () => {
-    const out = applyScriptNonce(html({ [CSP_REPORT_ONLY_HEADER]: "script-src 'none'" }), {
-      nonce: 'N',
-      rewriter: fakeRewriter().rewriter,
-    })
-    expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('N'))
   })
 
   it('stamps only inline JavaScript, keeps status and type, and drops the validators', () => {
@@ -216,7 +202,7 @@ describe('applyScriptNonce, report-only (stage 1)', () => {
     const fake = fakeRewriter()
     const a = applyScriptNonce(html(), { rewriter: fake.rewriter })
     const b = applyScriptNonce(html(), { rewriter: fake.rewriter })
-    expect(a.headers.get(CSP_REPORT_ONLY_HEADER)).not.toBe(b.headers.get(CSP_REPORT_ONLY_HEADER))
+    expect(a.headers.get(CSP_HEADER)).not.toBe(b.headers.get(CSP_HEADER))
   })
 
   it.each([
@@ -252,7 +238,7 @@ describe('applyScriptNonce, report-only (stage 1)', () => {
       new Response('<p>', { headers: { 'content-type': ' Text/HTML;charset=UTF-8' } }),
       { nonce: 'N', rewriter: fake.rewriter },
     )
-    expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('N'))
+    expect(out.headers.get(CSP_HEADER)).toBe(scriptPolicy('N'))
   })
 
   it('uses the Workers HTMLRewriter by default', () => {
@@ -274,12 +260,13 @@ describe('applyScriptNonce, report-only (stage 1)', () => {
   })
 })
 
-describe('applyScriptNonce, enforce (stage 2)', () => {
+describe('applyScriptNonce, enforce (stage 2, the default)', () => {
   it('appends the policy to the enforced CSP and sends no report-only header', () => {
+    // No mode given: the default is what production sends, and a stale report-only header
+    // from an earlier stage must not survive beside the enforced one
     const out = applyScriptNonce(html({ [CSP_REPORT_ONLY_HEADER]: "script-src 'none'" }), {
       nonce: 'N',
       rewriter: fakeRewriter().rewriter,
-      mode: 'enforce',
     })
     expect(out.headers.get(CSP_HEADER)).toBe(`${ENFORCED}; ${scriptPolicy('N')}`)
     expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBeNull()
@@ -288,12 +275,29 @@ describe('applyScriptNonce, enforce (stage 2)', () => {
   it('still sends the policy when the response had no CSP', () => {
     const out = applyScriptNonce(
       new Response('<p>', { headers: { 'content-type': 'text/html' } }),
-      {
-        nonce: 'N',
-        rewriter: fakeRewriter().rewriter,
-        mode: 'enforce',
-      },
+      { nonce: 'N', rewriter: fakeRewriter().rewriter },
     )
     expect(out.headers.get(CSP_HEADER)).toBe(scriptPolicy('N'))
+  })
+})
+
+describe('applyScriptNonce, report-only (stage 1, the way back)', () => {
+  it('sends the policy as report-only and leaves the enforced CSP exactly as it was', () => {
+    const out = applyScriptNonce(html(), {
+      nonce: 'N',
+      rewriter: fakeRewriter().rewriter,
+      mode: 'report-only',
+    })
+    expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('N'))
+    expect(out.headers.get(CSP_HEADER)).toBe(ENFORCED)
+  })
+
+  it('sends one report-only header even when the response already had one', () => {
+    const out = applyScriptNonce(html({ [CSP_REPORT_ONLY_HEADER]: "script-src 'none'" }), {
+      nonce: 'N',
+      rewriter: fakeRewriter().rewriter,
+      mode: 'report-only',
+    })
+    expect(out.headers.get(CSP_REPORT_ONLY_HEADER)).toBe(scriptPolicy('N'))
   })
 })

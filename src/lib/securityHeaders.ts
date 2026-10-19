@@ -4,7 +4,7 @@
  * Even behind Cloudflare Access, the app itself stops clickjacking and MIME sniffing.
  * This CSP has no `script-src`: the inline scripts of Mantine and TanStack need a nonce per
  * response, which the Worker adds to HTML pages with the script policy (src/lib/scriptNonce.ts,
- * report-only first). Besides `frame-ancestors`, `object-src` and `base-uri`, it has
+ * enforced since 2026-10-19). Besides `frame-ancestors`, `object-src` and `base-uri`, it has
  * `img-src`/`connect-src` for Google Maps on the map tab (tiles, fonts and sprites come from
  * maps.googleapis.com and maps.gstatic.com, vector tiles go through connect-src) and for video
  * thumbnails and the avatars of sources (YouTube channels). `frame-src` allows only the

@@ -1,17 +1,18 @@
 /**
- * The script policy of the HTML pages, rolled out in two stages (2026-10-14).
+ * The script policy of the HTML pages, rolled out in two stages (report-only 2026-10-14,
+ * enforced 2026-10-19).
  *
  * The enforced CSP (`SECURITY_HEADERS` in ./securityHeaders.ts) limits frames, objects, images
  * and connections but has no `script-src`, so the browser runs any script. This module adds
  * the script half: `script-src 'self' 'nonce-…'` plus the hosts the pages really load scripts
  * from (SCRIPT_HOSTS), with a fresh nonce for every response.
  *
- * Stage 1 (`SCRIPT_POLICY_MODE = 'report-only'`): the policy goes out as
- * `Content-Security-Policy-Report-Only` beside the enforced CSP, which stays as it was. The
- * browser blocks nothing and only reports, in the DevTools console, what it would block.
- * Stage 2 (`'enforce'`, once that console stays clean): the same directives join the enforced
- * `Content-Security-Policy` and the report-only header is no longer sent. Either way an HTML
- * response carries exactly one header of each kind it uses (`set`, never appended).
+ * Stage 1 (`SCRIPT_POLICY_MODE = 'report-only'`): the policy went out as
+ * `Content-Security-Policy-Report-Only` beside the enforced CSP, which stayed as it was. The
+ * browser blocks nothing in that mode and only reports, in the DevTools console, what it would
+ * block. Stage 2 (`'enforce'`, after that console stayed clean): the same directives join the
+ * enforced `Content-Security-Policy` and the report-only header is no longer sent. Either way
+ * an HTML response carries exactly one header of each kind it uses (`set`, never appended).
  *
  * The Worker entry (src/server.ts) passes every response through applyScriptNonce. Only
  * text/html with a body is touched: HTMLRewriter stamps the nonce, while streaming, on each
@@ -39,10 +40,11 @@ export const CSP_REPORT_ONLY_HEADER = 'content-security-policy-report-only'
 export type ScriptPolicyMode = 'report-only' | 'enforce'
 
 /**
- * Stage 1. Switch to 'enforce' only after the report-only console has stayed clean on every
- * screen (AGENTS.md, "Script policy").
+ * Stage 2 since 2026-10-19: five days of report-only use left the owner's console clean.
+ * 'report-only' is the way back if a screen ever breaks, and the way to try a changed policy
+ * before enforcing it (AGENTS.md, "Script policy").
  */
-export const SCRIPT_POLICY_MODE: ScriptPolicyMode = 'report-only'
+export const SCRIPT_POLICY_MODE: ScriptPolicyMode = 'enforce'
 
 /**
  * Where the pages load scripts from, besides 'self' and the nonce. Measured on every screen
