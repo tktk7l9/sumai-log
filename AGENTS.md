@@ -161,7 +161,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   `src/styles.css` (the `--sumai-*` CSS variables). Contrast must satisfy 4.5:1 for body text and
   3:1 for UI parts (borders etc.)
 - Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (extraction of `<item>`
-  of RSS 2.0), `htmlList.ts` (extraction of a `<li>` news list), `eventDate.ts` (extraction of
+  of RSS 2.0), `htmlList.ts` (extraction of a `<li>` news list: the date from the text, or
+  from the link when the text shows none — `index_20261114.php`, `20261212/`, `/2026/11/14/`;
+  comments and scripts are not read; one candidate per link), `eventDate.ts` (extraction of
   the event date from the title/summary), `text.ts` (tag removal and length limit), and in
   addition `url.ts` (decides whether a URL may be fetched. https only; rejects user info and
   non-default ports; rejects local/internal hosts and literal IPs. `fetch` of Workers has no

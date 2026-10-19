@@ -52,7 +52,7 @@ export function inferYear(month: number, publishedOn: string): number {
   return month < postMonth - 1 ? postYear + 1 : postYear
 }
 
-type FoundDate = { year: number; month: number; day: number }
+export type FoundDate = { year: number; month: number; day: number }
 
 function toIso(date: FoundDate): string {
   return `${date.year}-${pad(date.month)}-${pad(date.day)}`
@@ -70,9 +70,10 @@ function daysInMonth(year: number, month: number): number {
 /**
  * Whether the month is 1-12 and the day exists in that year and month (leap years considered).
  * The final filter that rejects days such as "1月32日" and "2月30日", which match the shape of
- * the regular expression but are not on the calendar.
+ * the regular expression but are not on the calendar (htmlList.ts uses it on the digits of a
+ * link as well).
  */
-function isRealDate(date: FoundDate): boolean {
+export function isRealDate(date: FoundDate): boolean {
   return (
     date.month >= 1 &&
     date.month <= 12 &&

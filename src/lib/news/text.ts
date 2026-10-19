@@ -170,6 +170,45 @@ export function stripTags(html: string): string {
   return secondPass.replace(WHITESPACE, ' ').trim()
 }
 
+/**
+ * Drops what a browser never shows: `<!-- … -->` comments, and `<script>` / `<style>` with
+ * their contents. Every other tag stays, so the result is still HTML for extractElementBlocks.
+ * stripTags drops the same things inside one block, but a commented-out `<li>` must not be
+ * taken for an item in the first place (vendor pages keep old entries and drafts in comments,
+ * and a script can hold a list template). One linear scan with `indexOf`, like stripTagsOnce;
+ * an unterminated comment or element discards the rest.
+ */
+export function removeInvisibleMarkup(html: string): string {
+  const lower = html.toLowerCase()
+  let result = ''
+  let i = 0
+  for (;;) {
+    const lt = html.indexOf('<', i)
+    if (lt === -1) return result + html.slice(i)
+    result += html.slice(i, lt)
+
+    let end: number
+    if (lower.startsWith('<!--', lt)) {
+      const close = html.indexOf('-->', lt + 4)
+      end = close === -1 ? -1 : close + 3
+    } else {
+      const isScript = lower.startsWith('<script', lt) && isTagNameBoundary(html[lt + 7])
+      const isStyle = !isScript && lower.startsWith('<style', lt) && isTagNameBoundary(html[lt + 6])
+      if (!isScript && !isStyle) {
+        result += '<'
+        i = lt + 1
+        continue
+      }
+      const closeStart = lower.indexOf(isScript ? '</script' : '</style', lt)
+      const gt = closeStart === -1 ? -1 : html.indexOf('>', closeStart)
+      end = gt === -1 ? -1 : gt + 1
+    }
+    if (end === -1) return result // Unterminated: discard the rest, as stripTagsOnce does
+    result += ' '
+    i = end
+  }
+}
+
 /** `\b` after a tag name: the next character is not a word character (or the input ends) */
 function isWordBoundary(ch: string | undefined): boolean {
   return ch === undefined || !/[A-Za-z0-9_]/.test(ch)

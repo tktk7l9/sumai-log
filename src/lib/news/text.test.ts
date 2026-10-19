@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { decodeEntities, extractElementBlocks, stripTags, truncate } from './text'
+import {
+  decodeEntities,
+  extractElementBlocks,
+  removeInvisibleMarkup,
+  stripTags,
+  truncate,
+} from './text'
 
 describe('decodeEntities', () => {
   it('resolves the basic entities', () => {
@@ -191,5 +197,44 @@ describe('extractElementBlocks', () => {
     expect(result).toEqual([])
     // Loose bound for CI jitter; locally this is a few milliseconds
     expect(elapsed).toBeLessThan(2000)
+  })
+})
+
+describe('removeInvisibleMarkup', () => {
+  it('drops comments and script/style with their contents and keeps every other tag', () => {
+    expect(
+      removeInvisibleMarkup(
+        '<ul><!--<li><a href="a">古い</a></li>--><li><a href="b">今の</a></li><script>var l = "<li>x</li>"</script><style>li { color: red }</style></ul>',
+      ),
+    ).toBe('<ul> <li><a href="b">今の</a></li>  </ul>')
+  })
+
+  it('does not end a comment at a > inside it', () => {
+    expect(removeInvisibleMarkup('a<!-- <b>x</b> -->c')).toBe('a c')
+  })
+
+  it('ignores the case of script/style and checks the tag name boundary', () => {
+    expect(removeInvisibleMarkup('<SCRIPT type="x">1</SCRIPT>a<Style>2</Style>b')).toBe(' a b')
+    expect(removeInvisibleMarkup('<scripts>1</scripts><styles>2</styles>')).toBe(
+      '<scripts>1</scripts><styles>2</styles>',
+    )
+  })
+
+  it('discards the rest from an unterminated comment, script or style', () => {
+    expect(removeInvisibleMarkup('a<!-- b<li>c')).toBe('a')
+    expect(removeInvisibleMarkup('a<script>b<li>c')).toBe('a')
+    expect(removeInvisibleMarkup('a<style>b</style')).toBe('a')
+  })
+
+  it('returns text without tags, and an empty string, as they are', () => {
+    expect(removeInvisibleMarkup('plain text')).toBe('plain text')
+    expect(removeInvisibleMarkup('')).toBe('')
+  })
+
+  it('finishes in linear time on a huge number of lone < and comment openers', () => {
+    const start = performance.now()
+    expect(removeInvisibleMarkup('<'.repeat(100_000))).toBe('<'.repeat(100_000))
+    expect(removeInvisibleMarkup('<!---->'.repeat(100_000))).toBe(' '.repeat(100_000))
+    expect(performance.now() - start).toBeLessThan(2000)
   })
 })

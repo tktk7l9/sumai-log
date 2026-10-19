@@ -104,4 +104,129 @@ describe('parseHtmlList', () => {
     expect(parseHtmlList('<li>'.repeat(200_000), BASE_URL)).toEqual([])
     expect(performance.now() - start).toBeLessThan(2000)
   })
+
+  it('takes the date from the link when the text has none, and keeps the whole text as the title', () => {
+    const html = `
+      <ul>
+        <li><h3><span>11</span>月開催</h3><a href="index_20261114.php">完成見学会(11/14-23) 架空の家 テスト市 甲様邸</a></li>
+        <li><a href="20261212/">完成見学会(12/12-20) 仮名の家 テスト市 乙様邸</a></li>
+        <li><a href="/2026/9/5/open-house/">構造見学会のご案内</a></li>
+        <li><a href="/news/?d=2026-10-03&amp;p=2">秋のセミナー</a></li>
+      </ul>
+    `
+    expect(parseHtmlList(html, `${BASE_URL}kengaku/`)).toEqual([
+      {
+        url: 'https://www.example-koumuten.co.jp/kengaku/index_20261114.php',
+        title: '11 月開催 完成見学会(11/14-23) 架空の家 テスト市 甲様邸',
+        summary: null,
+        publishedOn: '2026-11-14',
+      },
+      {
+        url: 'https://www.example-koumuten.co.jp/kengaku/20261212/',
+        title: '完成見学会(12/12-20) 仮名の家 テスト市 乙様邸',
+        summary: null,
+        publishedOn: '2026-12-12',
+      },
+      {
+        url: 'https://www.example-koumuten.co.jp/2026/9/5/open-house/',
+        title: '構造見学会のご案内',
+        summary: null,
+        publishedOn: '2026-09-05',
+      },
+      {
+        url: 'https://www.example-koumuten.co.jp/news/?d=2026-10-03&p=2',
+        title: '秋のセミナー',
+        summary: null,
+        publishedOn: '2026-10-03',
+      },
+    ])
+  })
+
+  it('prefers the date written in the text over the one in the link', () => {
+    const html = `<ul><li>2026年9月10日 <a href="./kengaku/20261114/">完成見学会のお知らせ</a></li></ul>`
+    expect(parseHtmlList(html, BASE_URL)).toEqual([
+      {
+        url: 'https://www.example-koumuten.co.jp/kengaku/20261114/',
+        title: '完成見学会のお知らせ',
+        summary: null,
+        publishedOn: '2026-09-10',
+      },
+    ])
+  })
+
+  it('does not take digits of the link that are not a calendar day of a 20xx year for a date', () => {
+    const html = `
+      <ul>
+        <li><a href="/items/?id=20261399">13月</a></li>
+        <li><a href="/items/20260230/">2月30日</a></li>
+        <li><a href="/items/12345678/">8桁の番号</a></li>
+        <li><a href="/items/19991231/">1999年</a></li>
+        <li><a href="/2026/13/01/">13月の固定リンク</a></li>
+        <li><a href="/2026/11/1400/">日に続く数字</a></li>
+        <li><a href="tel:0120202611140">電話</a></li>
+      </ul>
+    `
+    expect(parseHtmlList(html, BASE_URL)).toEqual([])
+  })
+
+  it('reads past a number that is not a date to one that is', () => {
+    const html = `<ul><li><a href="/items/20261399/20261114/">予約番号付き</a></li></ul>`
+    expect(parseHtmlList(html, BASE_URL)).toEqual([
+      {
+        url: 'https://www.example-koumuten.co.jp/items/20261399/20261114/',
+        title: '予約番号付き',
+        summary: null,
+        publishedOn: '2026-11-14',
+      },
+    ])
+  })
+
+  it('does not read li inside an HTML comment or a script', () => {
+    const html = `
+      <ul>
+        <!--<li><a href="old_20251213.php">去年の見学会</a></li>-->
+        <li><a href="now_20261114.php">今年の見学会</a></li>
+        <script>var t = '<li><a href="t_20261212.php">テンプレート</a></li>'</script>
+        <!-- <li>2026年9月10日 <a href="./draft.php">下書き</a></li>
+      </ul>
+    `
+    expect(parseHtmlList(html, BASE_URL)).toEqual([
+      {
+        url: 'https://www.example-koumuten.co.jp/now_20261114.php',
+        title: '今年の見学会',
+        summary: null,
+        publishedOn: '2026-11-14',
+      },
+    ])
+  })
+
+  it('keeps one candidate per link, the one with the most text, in the place of the first', () => {
+    const html = `
+      <nav><ul>
+        <li><a href="index_20261114.php">見学会</a></li>
+        <li><a href="../">HOME</a></li>
+      </ul></nav>
+      <ul>
+        <li><a href="index_20261114.php">完成見学会(11/14-23) 架空の家 テスト市 甲様邸</a></li>
+        <li><a href="20261212/">完成見学会(12/12-20) 仮名の家</a></li>
+      </ul>
+      <footer><ul>
+        <li><a href="index_20261114.php">見学会 【11/14～23】</a></li>
+      </ul></footer>
+    `
+    expect(parseHtmlList(html, `${BASE_URL}kengaku/`)).toEqual([
+      {
+        url: 'https://www.example-koumuten.co.jp/kengaku/index_20261114.php',
+        title: '完成見学会(11/14-23) 架空の家 テスト市 甲様邸',
+        summary: null,
+        publishedOn: '2026-11-14',
+      },
+      {
+        url: 'https://www.example-koumuten.co.jp/kengaku/20261212/',
+        title: '完成見学会(12/12-20) 仮名の家',
+        summary: null,
+        publishedOn: '2026-12-12',
+      },
+    ])
+  })
 })
