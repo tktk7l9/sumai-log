@@ -17,6 +17,7 @@
 - 取得は Worker の `scheduled` ハンドラ（Cron `0 21 * * *` = 06:00 JST）。TanStack Start の `src/server.ts`（`createServerEntry`）に `scheduled` を足し、`wrangler.jsonc` の `main` を `./src/server.ts` に変える。`fetch` は既定のハンドラをそのまま使う。
 - 1 ソースあたり 10 秒タイムアウト・1 MB 上限・User-Agent 明示。失敗しても他のソースは続行し、`news_fetch_error` に理由を残す。
 - 解析はすべて純粋関数（`src/lib/news/`）で、RSS は `<item>` の `title` / `link` / `pubDate` / `description`（タグ除去・最大 300 字）、HTML は `<li>` 内の日付・リンク・テキストを正規表現で抜く。外部 HTML パーサは入れない。
+- 2026-10-19 追記: HTML 側の業者がサイトを作り直し、見学会の一覧が「完成見学会(11/14-23) …」のように**年の無い**表記だけになった（日付は `index_20261114.php` `20261212/` のようにリンク先の名前にある）。`<li>` の文中に日付が無いときはリンク先の数字（`YYYYMMDD` / `YYYY-MM-DD` / `/YYYY/M/D/`。20xx 年の実在日だけ）を日付にし、文全体をタイトルにする。コメントアウトされた `<li>`（過去の案内が残っている）と `<script>` 内は読まない。同じリンクが複数の一覧（メニュー・バナー・本文）に出るときは文字数の多い方 1 件にする。
 
 ## 2. データ
 
