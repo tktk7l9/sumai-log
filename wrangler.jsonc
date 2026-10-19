@@ -5,10 +5,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "sumai-log",
-  // Pinned to 2026-08-22: this is the latest date supported by workerd@1.20260815.1, which
-  // @cloudflare/vitest-pool-workers@0.22.0 (the latest) locks internally.
-  // With any later date, `npm run test:server` (the tests on real D1) dies
-  // immediately with an error at runtime startup (found in Task 2).
+  // The date must not be later than the one supported by the workerd that
+  // @cloudflare/vitest-plugin locks internally (1.4.5 pins miniflare@5.20261019.0-beta ->
+  // workerd@1.20261019.1, so up to 2026-10-19). With a later date, `npm run test:server`
+  // (the tests on real D1) dies immediately with an error at runtime startup (found in
+  // Task 2). 2026-08-22 was the limit of the former @cloudflare/vitest-pool-workers
+  // (workerd@1.20260815.1); raising the date is a separate change.
   "compatibility_date": "2026-08-22",
   "compatibility_flags": ["nodejs_compat"],
   // Our own entry (to add the scheduled handler for Cron). Inside, it uses the same fetch

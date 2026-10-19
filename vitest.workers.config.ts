@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers'
+import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin'
 import { defineConfig } from 'vitest/config'
 
 /**
@@ -12,7 +12,9 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [
     cloudflareTest(async () => {
-      const migrations = await readD1Migrations(path.join(__dirname, 'drizzle/migrations'))
+      const migrations = await readD1Migrations(
+        path.join(import.meta.dirname, 'drizzle/migrations'),
+      )
       return {
         wrangler: { configPath: './wrangler.jsonc' },
         // main in wrangler.jsonc is an entry inside the TanStack package and cannot be

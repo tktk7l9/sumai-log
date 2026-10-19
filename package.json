@@ -57,7 +57,7 @@
     "zod": "^4.6.6"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.23.0",
+    "@cloudflare/vitest-plugin": "^1.4.5",
     "@tanstack/devtools-vite": "^0.8.5",
     "@tanstack/router-cli": "^1.167.41",
     "@testing-library/dom": "^10.4.2",
@@ -87,9 +87,6 @@
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.25.0"
     },
-    "sharp": "^0.35.4",
-    "miniflare": {
-      "undici": "7.30.0"
-    }
+    "sharp": "^0.35.4"
   }
 }
