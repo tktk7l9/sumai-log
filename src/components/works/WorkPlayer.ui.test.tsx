@@ -1,10 +1,11 @@
 import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { renderUi } from '../../../test/ui/render'
 import { WorkPlayer } from './WorkPlayer'
 
 const ORIGIN = 'https://www.youtube-nocookie.com'
+const LISTENING = JSON.stringify({ event: 'listening', id: 'sumai-log', channel: 'widget' })
 
 function post(frame: HTMLIFrameElement, data: unknown, over: Partial<MessageEventInit> = {}) {
   window.dispatchEvent(
@@ -65,10 +66,43 @@ describe('WorkPlayer', () => {
     const postMessage = vi.spyOn(frame.contentWindow as Window, 'postMessage')
     expect(postMessage).not.toHaveBeenCalled()
     fireEvent.load(frame)
-    expect(postMessage).toHaveBeenCalledWith(
-      JSON.stringify({ event: 'listening', id: 'sumai-log', channel: 'widget' }),
-      ORIGIN,
-    )
+    expect(postMessage).toHaveBeenCalledWith(LISTENING, ORIGIN)
+  })
+
+  // The retries run on a 500 ms interval; a fake clock makes them deterministic
+  describe('until the player answers', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('asks again every 500 ms after the load, 20 times at most, and a slow load uses none of them', () => {
+      const { frame } = setup()
+      const postMessage = vi.spyOn(frame.contentWindow as Window, 'postMessage')
+      vi.advanceTimersByTime(30_000)
+      expect(postMessage).not.toHaveBeenCalled()
+      fireEvent.load(frame)
+      expect(postMessage).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(500)
+      expect(postMessage).toHaveBeenCalledTimes(2)
+      expect(postMessage).toHaveBeenLastCalledWith(LISTENING, ORIGIN)
+      vi.advanceTimersByTime(30_000)
+      // The ask on load and 20 retries, then it gives up
+      expect(postMessage).toHaveBeenCalledTimes(21)
+    })
+
+    it('stops asking once the player has answered', () => {
+      const { frame } = setup()
+      const postMessage = vi.spyOn(frame.contentWindow as Window, 'postMessage')
+      fireEvent.load(frame)
+      vi.advanceTimersByTime(1_000)
+      expect(postMessage).toHaveBeenCalledTimes(3)
+      post(frame, { event: 'initialDelivery', info: { duration: 600 } })
+      vi.advanceTimersByTime(30_000)
+      expect(postMessage).toHaveBeenCalledTimes(3)
+    })
   })
 
   it('stops listening after unmount', () => {
