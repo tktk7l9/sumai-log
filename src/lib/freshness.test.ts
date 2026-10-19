@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isRecent, isWithinWeek } from './freshness'
+import { daysUntil, isRecent, upcomingLabel } from './freshness'
 
 const TODAY = '2026-10-05'
 
@@ -22,13 +22,36 @@ describe('isRecent', () => {
   })
 })
 
-describe('isWithinWeek', () => {
+describe('daysUntil', () => {
   it.each([
-    ['2026-10-05', true],
-    ['2026-10-11T18:00', true],
-    ['2026-10-12', false],
-    ['2026-10-04T23:00', false],
+    ['2026-10-05', 0],
+    ['2026-10-06', 1],
+    ['2026-10-05T23:30', 0],
+    ['2026-10-04T23:00', -1],
+    // Across a month end and a year end
+    ['2026-11-01', 27],
+    ['2027-01-01', 88],
   ])('%s -> %s', (value, expected) => {
-    expect(isWithinWeek(value, TODAY)).toBe(expected)
+    expect(daysUntil(value, TODAY)).toBe(expected)
+  })
+
+  it('counts calendar days, not 24-hour spans, across a leap day', () => {
+    expect(daysUntil('2028-03-01', '2028-02-28')).toBe(2)
+  })
+})
+
+describe('upcomingLabel', () => {
+  it.each([
+    ['2026-10-05', '今日'],
+    ['2026-10-05T18:00', '今日'],
+    ['2026-10-06', '明日'],
+    ['2026-10-07', '明後日'],
+    ['2026-10-08', 'あと3日'],
+    ['2026-10-11T18:00', 'あと6日'],
+    ['2026-10-12', 'あと7日'],
+    ['2026-10-13', null],
+    ['2026-10-04T23:00', null],
+  ])('%s -> %s', (value, expected) => {
+    expect(upcomingLabel(value, TODAY)).toBe(expected)
   })
 })
