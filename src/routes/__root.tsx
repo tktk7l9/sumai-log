@@ -30,6 +30,8 @@ export const Route = createRootRoute({
       { name: 'robots', content: 'noindex, nofollow, noarchive' },
       // theme-color: the 2 tags for light/dark are written directly in the <head> of RootDocument
       // (the meta array of head() merges tags with the same name into 1)
+      // The standard name first; the apple- one is still what iOS before 17.4 reads
+      { name: 'mobile-web-app-capable', content: 'yes' },
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
       { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
       { title: '住まいログ' },

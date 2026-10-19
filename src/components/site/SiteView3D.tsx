@@ -93,7 +93,9 @@ export function SiteView3D({
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    // PCFShadowMap: three.js removed PCFSoftShadowMap (it only logged a warning and fell back
+    // to this one)
+    renderer.shadowMap.type = THREE.PCFShadowMap
     host.appendChild(renderer.domElement)
 
     const labels = new CSS2DRenderer()
