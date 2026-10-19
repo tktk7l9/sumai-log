@@ -10,7 +10,7 @@ describe('describeFetchError', () => {
   it('rewords HTTP 403 into the blocked-by-site (Cloudflare refused) wording', () => {
     expect(describeFetchError('HTTP 403')).toEqual({
       label: 'サイト側が Cloudflare からのアクセスを拒否（HTTP 403）',
-      hint: 'このサイトはお知らせを自動取得できません。メール取り込み（予定）か URL を空にしてください',
+      hint: 'このサイトはお知らせを自動取得できません。メルマガをメール取り込みで受けるか、お知らせ URL を空にしてください',
     })
   })
 

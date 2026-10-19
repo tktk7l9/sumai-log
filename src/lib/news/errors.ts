@@ -18,7 +18,7 @@ const BLOCKED_STATUSES = new Set(['401', '403', '451'])
 const HTTP_STATUS_ERROR = /^HTTP (\d{3})$/
 
 const BLOCKED_HINT =
-  'このサイトはお知らせを自動取得できません。メール取り込み（予定）か URL を空にしてください'
+  'このサイトはお知らせを自動取得できません。メルマガをメール取り込みで受けるか、お知らせ URL を空にしてください'
 
 export type FetchErrorDescription = { label: string; hint?: string }
 

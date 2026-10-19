@@ -161,7 +161,9 @@ export function PlacesMap({
         title: m.name,
         gmpClickable: true,
       })
-      marker.addListener('gmp-click', () => onSelectRef.current?.(m.id))
+      // AdvancedMarkerElement is a DOM element: the Maps API deprecates addListener for the
+      // 'gmp-' events in favour of addEventListener. The listener goes away with the marker
+      marker.addEventListener('gmp-click', () => onSelectRef.current?.(m.id))
       layerRef.current.set(m.id, { marker, pin })
     }
     const b = boundsOf(markers)
