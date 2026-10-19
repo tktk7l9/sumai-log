@@ -4,11 +4,11 @@ import type { AgendaViewProps, ScheduleEventData } from '@mantine/schedule'
 import { useNavigate } from '@tanstack/react-router'
 
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
-import { isWithinWeek } from '../../lib/freshness'
+import { upcomingLabel } from '../../lib/freshness'
 import { toScheduleEvents, type OwnEventPayload } from '../../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../../lib/scheduleLabels'
 import type { EventWithLinks } from '../../server/repository'
-import { ThisWeekBadge } from '../FreshBadge'
+import { UpcomingBadge } from '../FreshBadge'
 
 /**
  * "これからの予定" (Upcoming events) on the home page. Shows **all** events from today
@@ -43,22 +43,22 @@ export function HomeAgenda({
   }
 
   // Use the default row content (rootProps.children) as is, add data-past only to rows of
-  // events that have ended (the text color is dimmed in CSS), and "今週" to events of the
-  // next 7 days
+  // events that have ended (the text color is dimmed in CSS), and the countdown ("今日",
+  // "明日", "明後日", "あとN日") to events of the next 7 days
   const todayKey = dateKey(nowIso)
   const renderEvent: AgendaViewProps['renderEvent'] = (event, rootProps) => {
     const payload = event.payload as OwnEventPayload | undefined
-    const thisWeek = isWithinWeek(String(event.start), todayKey)
+    const soon = upcomingLabel(String(event.start), todayKey)
     return (
       <UnstyledButton
         {...rootProps}
         data-past={payload?.past ? true : undefined}
-        data-this-week={thisWeek ? true : undefined}
+        data-upcoming={soon ? true : undefined}
       >
         {rootProps.children}
-        {thisWeek ? (
+        {soon ? (
           <span className="home-agenda-tag">
-            <ThisWeekBadge size="sm" />
+            <UpcomingBadge label={soon} size="sm" />
           </span>
         ) : null}
       </UnstyledButton>

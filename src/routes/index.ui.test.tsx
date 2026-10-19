@@ -118,12 +118,16 @@ describe('home route', () => {
     expect(screen.getByText('テスト展示場')).toBeInTheDocument()
   })
 
-  it('tags events of the next 7 days with 今週 and news of the last 7 days with New', async () => {
+  it('tags events of the next 7 days with a countdown and news of the last 7 days with New', async () => {
     stub(listHomeEvents, {
       pending: [],
       agenda: [
+        links(event({ id: 'today', title: '現場確認', startsAt: '2026-10-01T15:00' })),
+        links(event({ id: 'tomorrow', title: '資金相談', startsAt: '2026-10-02' })),
+        links(event({ id: 'after', title: '土地の下見', startsAt: '2026-10-03' })),
         links(event({ id: 'soon', title: '打合せ（間取り）', startsAt: '2026-10-05' })),
-        links(event({ id: 'later', title: '地鎮祭', startsAt: '2026-10-20T10:00' })),
+        links(event({ id: 'week', title: '上棟式', startsAt: '2026-10-08T10:00' })),
+        links(event({ id: 'later', title: '地鎮祭', startsAt: '2026-10-09T10:00' })),
       ],
       agendaFrom: '2026-10-01',
       agendaTo: '2026-10-20',
@@ -142,10 +146,17 @@ describe('home route', () => {
       ],
     })
     await renderRoute('/')
-    const soon = (await screen.findByText('打合せ（間取り）')).closest('button')
-    const later = screen.getByText('地鎮祭').closest('button')
-    expect(within(soon as HTMLElement).getByText('今週')).toBeInTheDocument()
-    expect(within(later as HTMLElement).queryByText('今週')).not.toBeInTheDocument()
+    await screen.findByText('打合せ（間取り）')
+    const tagOf = (title: string) => {
+      const row = screen.getByText(title).closest('button') as HTMLElement
+      return within(row).queryByText(/^(今日|明日|明後日|あと\d日)$/)?.textContent ?? null
+    }
+    expect(tagOf('現場確認')).toBe('今日')
+    expect(tagOf('資金相談')).toBe('明日')
+    expect(tagOf('土地の下見')).toBe('明後日')
+    expect(tagOf('打合せ（間取り）')).toBe('あと4日')
+    expect(tagOf('上棟式')).toBe('あと7日')
+    expect(tagOf('地鎮祭')).toBeNull()
     const fresh = screen.getByText('完成見学会のお知らせ').closest('button')
     const old = screen.getByText('古いお知らせ').closest('button')
     expect(within(fresh as HTMLElement).getByText('New')).toBeInTheDocument()
