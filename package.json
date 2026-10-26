@@ -87,6 +87,9 @@
     "@esbuild-kit/core-utils": {
       "esbuild": "^0.25.0"
     },
-    "sharp": "^0.35.4"
+    "sharp": "^0.35.4",
+    "@cloudflare/vitest-plugin": {
+      "zod": "^4.6.6"
+    }
   }
 }
