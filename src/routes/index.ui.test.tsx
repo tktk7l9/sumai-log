@@ -116,6 +116,8 @@ describe('home route', () => {
     expect(screen.getByRole('link', { name: 'すべて見る' })).toHaveAttribute('href', '/news')
     expect(screen.getByText('UA値')).toBeInTheDocument()
     expect(screen.getByText('テスト展示場')).toBeInTheDocument()
+    // The icon-only member circle of the feed row is announced by name
+    expect(screen.getByRole('img', { name: '乙' })).toBeInTheDocument()
   })
 
   it('tags events of the next 7 days with a countdown and news of the last 7 days with New', async () => {

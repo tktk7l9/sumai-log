@@ -219,6 +219,15 @@ describe('records route', () => {
     })
   })
 
+  it('names the month arrows of the date calendar', async () => {
+    const { user } = await renderRoute('/records')
+    await user.click(await screen.findByRole('button', { name: '記録を書く' }))
+    const drawer = await screen.findByRole('dialog', { name: '見学記録を書く' })
+    await user.click(within(drawer).getByRole('textbox', { name: '日付' }))
+    expect(await screen.findByRole('button', { name: '前の月' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '次の月' })).toBeInTheDocument()
+  })
+
   it('opens the form prefilled when arriving from an event outside the option range', async () => {
     stub(getEvent, { event: event({ id: EVENT_ID, startsAt: '2025-01-05', placeId: 'pl1' }) })
     const save = stub(saveVisit, { conflict: true })

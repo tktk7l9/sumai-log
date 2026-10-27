@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { FOCUS_RECLAIM_MS, attentionHandlers, focusUndo } from './undoAttention'
+import { FOCUS_RECLAIM_MS, attentionHandlers, focusPageHeading, focusUndo } from './undoAttention'
 
 function setup() {
   let active: unknown = null
@@ -141,5 +141,40 @@ describe('attentionHandlers', () => {
     expect(onChange.mock.calls).toEqual([[true]])
     h.onBlurCapture({ relatedTarget: { outside: true }, currentTarget: root })
     expect(onChange.mock.calls).toEqual([[true], [false]])
+  })
+})
+
+describe('focusPageHeading', () => {
+  function heading(attrs: Record<string, string> = {}) {
+    const el = {
+      attrs: { ...attrs },
+      focus: vi.fn(),
+      isConnected: true,
+      hasAttribute: (name: string) => name in el.attrs,
+      setAttribute: (name: string, value: string) => {
+        el.attrs[name] = value
+      },
+    }
+    return el
+  }
+
+  it('focuses the page heading, made focusable from code only', () => {
+    const h1 = heading()
+    const querySelector = vi.fn(() => h1)
+    focusPageHeading({ querySelector })
+    expect(querySelector).toHaveBeenCalledWith('main h1')
+    expect(h1.attrs).toEqual({ tabindex: '-1' })
+    expect(h1.focus).toHaveBeenCalledWith({ preventScroll: true })
+  })
+
+  it('keeps a tabindex the heading already has', () => {
+    const h1 = heading({ tabindex: '0' })
+    focusPageHeading({ querySelector: () => h1 })
+    expect(h1.attrs).toEqual({ tabindex: '0' })
+    expect(h1.focus).toHaveBeenCalled()
+  })
+
+  it('does nothing on a page without a heading', () => {
+    expect(() => focusPageHeading({ querySelector: () => null })).not.toThrow()
   })
 })

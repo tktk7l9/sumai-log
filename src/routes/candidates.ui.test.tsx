@@ -44,7 +44,13 @@ describe('candidates route', () => {
     expect(screen.getByRole('heading', { name: 'ハウスメーカー（1）' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'その他（1）' })).toBeInTheDocument()
     expect(screen.getByText('代表: 山田')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '用語集で UA値 を見る' })).toBeInTheDocument()
+    // The figure is part of the link name, followed by where it leads
+    expect(
+      screen.getByRole('link', { name: 'UA 0.46 （用語集で UA値 を見る）' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'C値公開 （用語集で C値 を見る）' }),
+    ).toBeInTheDocument()
     expect(screen.getByText('C値公開')).toBeInTheDocument()
     expect(screen.getByText('耐震等級 3')).toBeInTheDocument()
     expect(screen.getByText('長期優良')).toBeInTheDocument()
