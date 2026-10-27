@@ -44,6 +44,8 @@ export function MemberChip({
       fz={11}
       fw={700}
       title={iconOnly ? m.displayName : undefined}
+      // aria-label is ignored on a plain <div>; as an image the circle is announced by name
+      role={iconOnly ? 'img' : undefined}
       aria-label={iconOnly ? m.displayName : undefined}
     >
       {m.displayName.slice(0, 1)}

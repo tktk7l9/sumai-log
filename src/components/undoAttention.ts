@@ -37,6 +37,24 @@ export function focusUndo(button: Focusable, env: FocusEnv): void {
   }, FOCUS_RECLAIM_MS)
 }
 
+type Heading = Focusable & {
+  hasAttribute(name: string): boolean
+  setAttribute(name: string, value: string): void
+}
+
+/**
+ * After "元に戻す" (Undo) the notification and its button go away, which dropped focus to
+ * <body> and sent a keyboard user back to the top of the document. Put it on the page heading
+ * instead, above the list the item came back to (SHIG 54, 94). A heading is not focusable by
+ * itself, so it gets tabindex="-1" (reachable from code only, not by Tab)
+ */
+export function focusPageHeading(root: { querySelector(selectors: string): unknown }): void {
+  const heading = root.querySelector('main h1') as Heading | null
+  if (!heading) return
+  if (!heading.hasAttribute('tabindex')) heading.setAttribute('tabindex', '-1')
+  heading.focus({ preventScroll: true })
+}
+
 // Method syntax, so a DOM element (contains(other: Node | null)) fits
 type Contains = { contains(other: unknown): boolean }
 

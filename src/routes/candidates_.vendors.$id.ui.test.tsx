@@ -260,6 +260,8 @@ describe('vendor detail route', () => {
     expect(screen.queryByText('担当者の説明が丁寧だった')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '元に戻す' }))
     expect(await screen.findByText('担当者の説明が丁寧だった')).toBeInTheDocument()
+    // Focus does not fall to <body> when the notification goes away
+    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
     flushPendingDeletes()
     expect(remove).not.toHaveBeenCalled()
   })
