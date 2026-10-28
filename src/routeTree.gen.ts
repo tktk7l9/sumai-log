@@ -21,6 +21,7 @@ import { Route as RecordsRouteImport } from './routes/records'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SiteRouteImport } from './routes/site'
 import { Route as SourcesRouteImport } from './routes/sources'
+import { Route as TodosRouteImport } from './routes/todos'
 import { Route as WorksRouteImport } from './routes/works'
 import { Route as ApiGeocodeRouteImport } from './routes/api.geocode'
 import { Route as ApiOembedRouteImport } from './routes/api.oembed'
@@ -93,6 +94,11 @@ const SiteRoute = SiteRouteImport.update({
 const SourcesRoute = SourcesRouteImport.update({
   id: '/sources',
   path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TodosRoute = TodosRouteImport.update({
+  id: '/todos',
+  path: '/todos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorksRoute = WorksRouteImport.update({
@@ -175,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/todos': typeof TodosRoute
   '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/todos': typeof TodosRoute
   '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/site': typeof SiteRoute
   '/sources': typeof SourcesRoute
+  '/todos': typeof TodosRoute
   '/works': typeof WorksRoute
   '/api/geocode': typeof ApiGeocodeRoute
   '/api/oembed': typeof ApiOembedRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/todos'
     | '/works'
     | '/api/geocode'
     | '/api/oembed'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/todos'
     | '/works'
     | '/api/geocode'
     | '/api/oembed'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/site'
     | '/sources'
+    | '/todos'
     | '/works'
     | '/api/geocode'
     | '/api/oembed'
@@ -341,6 +353,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SiteRoute: typeof SiteRoute
   SourcesRoute: typeof SourcesRoute
+  TodosRoute: typeof TodosRoute
   WorksRoute: typeof WorksRoute
   ApiGeocodeRoute: typeof ApiGeocodeRoute
   ApiOembedRoute: typeof ApiOembedRoute
@@ -440,6 +453,13 @@ declare module '@tanstack/react-router' {
       path: '/sources'
       fullPath: '/sources'
       preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/todos': {
+      id: '/todos'
+      path: '/todos'
+      fullPath: '/todos'
+      preLoaderRoute: typeof TodosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/works': {
@@ -549,6 +569,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SiteRoute: SiteRoute,
   SourcesRoute: SourcesRoute,
+  TodosRoute: TodosRoute,
   WorksRoute: WorksRoute,
   ApiGeocodeRoute: ApiGeocodeRoute,
   ApiOembedRoute: ApiOembedRoute,

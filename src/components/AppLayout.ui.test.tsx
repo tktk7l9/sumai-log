@@ -9,6 +9,7 @@ import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
 import { getRoadmap } from '../server/roadmap'
 import { getMembers } from '../server/settings'
+import { listHomeTodos } from '../server/todos'
 import { MEMBERS, event, mockOf, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
@@ -63,6 +64,7 @@ function stubHome(feed: FeedItem[] = []) {
   stub(getMembers, { members: MEMBERS })
   stub(listVendorNews, { news: [] })
   stub(pickGlossaryTerm, null)
+  stub(listHomeTodos, { todos: [], todayKey: '2026-10-01' })
   stub(getRoadmap, { roadmap: { version: 1, stage: 'research' } })
 }
 
@@ -82,7 +84,7 @@ describe('app layout', () => {
     )
     await user.click(screen.getByRole('button', { name: 'その他のページ' }))
     const menu = await screen.findByRole('menu')
-    for (const label of ['用語集', '情報収集', '地図', '区画', '分析', '設定']) {
+    for (const label of ['やること', '用語集', '情報収集', '地図', '区画', '分析', '設定']) {
       expect(within(menu).getByRole('menuitem', { name: label })).toBeInTheDocument()
     }
     await user.click(within(menu).getByRole('menuitem', { name: '用語集' }))

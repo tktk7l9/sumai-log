@@ -6,6 +6,7 @@ import { GlossaryPick } from '../components/home/GlossaryPick'
 import { HomeAgenda } from '../components/home/HomeAgenda'
 import { HomeNews } from '../components/home/HomeNews'
 import { HomeRoadmap } from '../components/home/HomeRoadmap'
+import { HomeTodos } from '../components/home/HomeTodos'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
 import { usePendingDeletes } from '../components/undoableDelete'
@@ -16,6 +17,7 @@ import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
 import { getRoadmap } from '../server/roadmap'
+import { listHomeTodos } from '../server/todos'
 // Get members through a server function (importing server/members.ts directly from a route
 // puts currentActorEmail and others in that file that are not createServerFn into the client
 // bundle and breaks the build. Same workaround pattern as settings.tsx)
@@ -30,15 +32,17 @@ export const Route = createFileRoute('/')({
   loader: async () => {
     // The events for the agenda (upcoming events) are returned together by listHomeEvents as
     // agenda/agendaFrom/agendaTo (the same 90 day to 365 day range is not queried twice)
-    const [home, feed, { members }, { news }, glossaryPick, { roadmap }] = await Promise.all([
-      listHomeEvents(),
-      recentFeed(),
-      getMembers(),
-      listVendorNews({ data: { limit: HOME_NEWS_LIMIT } }),
-      pickGlossaryTerm(),
-      getRoadmap(),
-    ])
-    return { ...home, feed, members, news, glossaryPick, roadmap }
+    const [home, feed, { members }, { news }, glossaryPick, { roadmap }, homeTodos] =
+      await Promise.all([
+        listHomeEvents(),
+        recentFeed(),
+        getMembers(),
+        listVendorNews({ data: { limit: HOME_NEWS_LIMIT } }),
+        pickGlossaryTerm(),
+        getRoadmap(),
+        listHomeTodos(),
+      ])
+    return { ...home, feed, members, news, glossaryPick, roadmap, homeTodos }
   },
 })
 
@@ -57,6 +61,7 @@ function Home() {
     glossaryPick,
     nowIso,
     roadmap,
+    homeTodos,
   } = hidePendingOnHome(Route.useLoaderData(), pendingDeletes)
   return (
     // The Stack of PageShell (24px) takes care of the gap between sections. Do not nest here
@@ -73,6 +78,13 @@ function Home() {
       {/* "Now" uses the value decided by the server (listHomeEvents). Finished events and vendor
           news whose dates have passed are dimmed (owner's request, 2026-09-21) */}
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} nowIso={nowIso} />
+      {/* Household to-dos that are overdue or due this week, right after the dates (the move
+          and the account cleanup are what the two of them are doing now, 2026-10-28) */}
+      <HomeTodos
+        todos={homeTodos.todos.filter((t) => !pendingDeletes.has(t.id))}
+        members={members}
+        todayKey={homeTodos.todayKey}
+      />
       {/* The call to the major task (writing up a visit) comes right after the events, above
           vendor news, which grows with every fetch (SHIG 20) */}
       <PendingVisits events={pending} />
