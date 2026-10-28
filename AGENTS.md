@@ -137,6 +137,14 @@ A record app for a housing search, used only by one married couple. **The reposi
   (`PRAGMA page_count` cannot be used on D1), and R2 is `list` for at most 10 pages. The planned
   building site (`homeAreas`) is not changed from the screen (read-only. To change it, use SQL in
   `seed.local/out/`)
+- Household to-dos (`/todos`, table `todos`, 2026-10-28) are not linked to vendors, places or
+  events. `list` is `move | account | money | other`; `assignee` is a member e-mail or NULL for
+  "both"; ticking writes `done_at`/`done_by` through `setTodoDone` without the stale check (two
+  people ticking the same item is not a conflict), while the form save uses `expectedUpdatedAt`
+  like events. Sections, filters and the countdown tag are pure functions in `src/lib/todos.ts`
+  (today comes from the server). The home block shows overdue / today / this week only. The
+  initial items are real household data and live in `seed.local/out/todos.sql` (owner-run,
+  not committed). Design: `docs/superpowers/specs/2026-10-28-todos-design.md`
 - The saved value of the site plan simulator (`/site`) is the setting `sitePlan` (`SitePlan` in
   `src/lib/sitePlan.ts`). It holds only the dimensions of the land approximated as a rectangle,
   the plots, the building and the numbers of the regulatory rough guides, and it does not hold
