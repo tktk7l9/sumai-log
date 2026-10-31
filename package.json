@@ -34,7 +34,7 @@
     "import:channel-videos": "tsx scripts/import-channel-videos.ts"
   },
   "dependencies": {
-    "@cloudflare/vite-plugin": "^1.64.0",
+    "@cloudflare/vite-plugin": "^1.66.0",
     "@googlemaps/js-api-loader": "^2.1.3",
     "@mantine/core": "^9.7.3",
     "@mantine/dates": "^9.7.3",
@@ -57,7 +57,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@cloudflare/vitest-plugin": "^1.4.5",
+    "@cloudflare/vitest-plugin": "^1.4.11",
     "@tanstack/devtools-vite": "^0.8.5",
     "@tanstack/router-cli": "^1.167.45",
     "@testing-library/dom": "^10.4.2",
@@ -81,7 +81,7 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5",
-    "wrangler": "^4.151.1"
+    "wrangler": "^4.156.0"
   },
   "overrides": {
     "@esbuild-kit/core-utils": {
