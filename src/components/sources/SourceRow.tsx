@@ -78,7 +78,9 @@ export function SourceRow({
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item onClick={onEdit}>編集</Menu.Item>
-          <Menu.Item color="red" onClick={onDelete}>
+          {/* Menu.Item draws color="red" in shade 6 (3.2:1 on the light surface); the text
+              uses the red text color of styles.css instead (WCAG 1.4.3, SHIG 94) */}
+          <Menu.Item color="red" c="var(--mantine-color-red-text)" onClick={onDelete}>
             削除
           </Menu.Item>
         </Menu.Dropdown>

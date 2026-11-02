@@ -52,6 +52,16 @@ body {
   --sumai-road-ink: var(--mantine-color-white);
   /* Mantine's error red (red-6) is 3.2:1 on the surface; red-9 is 5.4:1 (SHIG 94) */
   --mantine-color-error: var(--mantine-color-red-9);
+  /* The same for red text outside forms (the 「削除」 (Delete) item of row menus) */
+  --mantine-color-red-text: var(--mantine-color-red-9);
+  /* Light-variant badges and avatars (status 「相談中」 (Consulting), member circles) are
+     shade-9 text on shade 1. For these palettes that is 2.7-4.3:1 at 11px bold; the values
+     below keep 4.5:1 on shade 1 and on the shade-2 hover (WCAG 1.4.3, SHIG 94) */
+  --mantine-color-orange-light-color: #ad3c09;
+  --mantine-color-teal-light-color: #086b51;
+  --mantine-color-green-light-color: #1c6f2e;
+  --mantine-color-yellow-light-color: #8a5a00;
+  --mantine-color-lime-light-color: #4a6b0b;
 }
 
 :root[data-mantine-color-scheme='dark'],

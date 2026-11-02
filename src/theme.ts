@@ -19,6 +19,19 @@ import { createTheme } from '@mantine/core'
 /** The "×" of clearable inputs is icon only, so give it a name for screen readers */
 const CLEAR_BUTTON = { 'aria-label': '入力を消す' }
 
+/**
+ * The "<" and ">" of the date picker's calendar are icon only too. Without names they are
+ * read as unnamed buttons once a keyboard user opens the calendar (WCAG 4.1.2, SHIG 1)
+ */
+export const CALENDAR_ARIA_LABELS = {
+  previousMonth: '前の月',
+  nextMonth: '次の月',
+  previousYear: '前の年',
+  nextYear: '次の年',
+  previousDecade: '前の10年',
+  nextDecade: '次の10年',
+}
+
 export const theme = createTheme({
   primaryColor: 'clay',
   /** Surface color. Every card / input / header / footer in light becomes this */
@@ -104,7 +117,9 @@ export const theme = createTheme({
     Textarea: { defaultProps: { size: 'md' } },
     Select: { defaultProps: { size: 'md', clearButtonProps: CLEAR_BUTTON } },
     MultiSelect: { defaultProps: { clearButtonProps: CLEAR_BUTTON } },
-    DateInput: { defaultProps: { clearButtonProps: CLEAR_BUTTON } },
+    DateInput: {
+      defaultProps: { clearButtonProps: CLEAR_BUTTON, ariaLabels: CALENDAR_ARIA_LABELS },
+    },
     TagsInput: { defaultProps: { size: 'md' } },
     Button: { defaultProps: { size: 'md' } },
     // 12px between cards. Lists line up with the same spacing on every tab

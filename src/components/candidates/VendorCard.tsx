@@ -1,4 +1,4 @@
-import { Avatar, Badge, Card, Group, Stack, Text } from '@mantine/core'
+import { Avatar, Badge, Card, Group, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
 
@@ -83,45 +83,47 @@ export function VendorCard({
           vendor.cValuePublished ||
           vendor.seismicGrade != null ||
           vendor.longTermCertified ? (
+            // The figure stays first in each link's name: an aria-label of only 「用語集で…を見る」
+            // (See … in the glossary) hid the value from screen readers (WCAG 2.5.3)
             <Group gap="xs" onClick={(e) => e.stopPropagation()}>
               {vendor.uaValue != null ? (
                 <Link
                   to="/glossary/$termId"
                   params={{ termId: termIdForMetric('ua') }}
-                  aria-label="用語集で UA値 を見る"
                   style={{ textDecoration: 'none' }}
                 >
                   <Badge variant="default">UA {vendor.uaValue}</Badge>
+                  <VisuallyHidden>（用語集で UA値 を見る）</VisuallyHidden>
                 </Link>
               ) : null}
               {vendor.cValuePublished ? (
                 <Link
                   to="/glossary/$termId"
                   params={{ termId: termIdForMetric('c') }}
-                  aria-label="用語集で C値 を見る"
                   style={{ textDecoration: 'none' }}
                 >
                   <Badge variant="default">C値公開</Badge>
+                  <VisuallyHidden>（用語集で C値 を見る）</VisuallyHidden>
                 </Link>
               ) : null}
               {vendor.seismicGrade != null ? (
                 <Link
                   to="/glossary/$termId"
                   params={{ termId: termIdForMetric('seismic') }}
-                  aria-label="用語集で 耐震等級 を見る"
                   style={{ textDecoration: 'none' }}
                 >
                   <Badge variant="default">耐震等級 {vendor.seismicGrade}</Badge>
+                  <VisuallyHidden>（用語集で 耐震等級 を見る）</VisuallyHidden>
                 </Link>
               ) : null}
               {vendor.longTermCertified ? (
                 <Link
                   to="/glossary/$termId"
                   params={{ termId: termIdForMetric('longTerm') }}
-                  aria-label="用語集で 長期優良 を見る"
                   style={{ textDecoration: 'none' }}
                 >
                   <Badge variant="default">長期優良</Badge>
+                  <VisuallyHidden>（用語集で 長期優良 を見る）</VisuallyHidden>
                 </Link>
               ) : null}
             </Group>

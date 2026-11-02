@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react'
 
 import { UNDO_WINDOW_MS, createDeferredQueue } from '../lib/deferredDelete'
 import { type FetchLike, withKeepalive } from '../lib/keepalive'
-import { attentionHandlers, focusUndo } from './undoAttention'
+import { attentionHandlers, focusPageHeading, focusUndo } from './undoAttention'
 
 /**
  * Delete without a confirm dialog, with "元に戻す" (Undo) in the notification (SHIG 57, 54).
@@ -105,6 +105,7 @@ export function deleteWithUndo({
             if (!queue.cancel(id)) return
             notifications.hide(notificationId)
             onUndo?.()
+            focusPageHeading(document)
           }}
         >
           元に戻す
