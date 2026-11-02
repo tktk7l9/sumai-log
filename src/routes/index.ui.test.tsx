@@ -7,6 +7,7 @@ import { pickGlossaryTerm } from '../server/glossary'
 import { listVendorNews } from '../server/news'
 import { getRoadmap, saveRoadmap } from '../server/roadmap'
 import { getMembers } from '../server/settings'
+import { listHomeTodos } from '../server/todos'
 import { MEMBERS, event, mockOf, news, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
@@ -45,6 +46,39 @@ describe('home route', () => {
       summary: '断熱性能の指標',
     })
     stub(getRoadmap, { roadmap: { version: 1, stage: 'vendor' } })
+    stub(listHomeTodos, { todos: [], todayKey: '2026-10-01' })
+  })
+
+  it('lists the to-dos that are overdue or due this week under the agenda, with a link to all', async () => {
+    stub(listHomeTodos, {
+      todayKey: '2026-10-01',
+      todos: [
+        {
+          id: '00000000-0000-4000-8000-000000000001',
+          title: '銀行のパスキー',
+          note: null,
+          list: 'account',
+          assignee: 'partner@example.com',
+          dueOn: '2026-09-29',
+          doneAt: null,
+          doneBy: null,
+          url: null,
+          createdBy: 'owner@example.com',
+          createdAt: '2026-09-01 00:00:00',
+          updatedAt: '2026-09-01 00:00:00',
+        },
+      ],
+    })
+    await renderRoute('/')
+    const heading = await screen.findByRole('heading', { name: 'やること' })
+    expect(heading).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '銀行のパスキー' })).toHaveAttribute(
+      'href',
+      '/todos?edit=00000000-0000-4000-8000-000000000001',
+    )
+    expect(screen.getByText('期限 2日過ぎ')).toBeInTheDocument()
+    const all = screen.getAllByRole('link', { name: 'すべて見る' })
+    expect(all.some((a) => a.getAttribute('href') === '/todos')).toBe(true)
   })
 
   it('draws the roadmap above the agenda with the current stage marked', async () => {

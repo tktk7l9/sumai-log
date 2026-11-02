@@ -28,6 +28,7 @@ export async function reset() {
     'properties',
     'settings',
     'geocode_cache',
+    'todos',
   ]) {
     await env.DB.exec(`DELETE FROM ${t}`)
   }
