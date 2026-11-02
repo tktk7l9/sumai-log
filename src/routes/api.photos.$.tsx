@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm'
 import { getDb } from '../db/client'
 import { visits } from '../db/schema'
 import { isIdLike } from '../lib/ids'
+import { UPLOAD_LENGTH_REQUIRED_ERROR, checkUploadLength } from '../lib/uploadLength'
 import {
   isManagedPhotoKey,
   photoKeys,
@@ -54,10 +55,13 @@ export const Route = createFileRoute('/api/photos/$')({
         // The upload URL is exactly `/api/photos`. Anything in the splat means a different thing
         if (params._splat) return notFound()
 
-        const contentLength = Number(request.headers.get('content-length'))
-        if (contentLength > MAX_UPLOAD_CONTENT_LENGTH) {
-          return json(413, { error: '画像が大きすぎます' })
-        }
+        const sizeProblem = checkUploadLength(
+          request.headers.get('content-length'),
+          MAX_UPLOAD_CONTENT_LENGTH,
+        )
+        if (sizeProblem === 'length-required')
+          return json(411, { error: UPLOAD_LENGTH_REQUIRED_ERROR })
+        if (sizeProblem === 'too-large') return json(413, { error: '画像が大きすぎます' })
 
         const form = await request.formData()
         const visitId = String(form.get('visitId') ?? '')

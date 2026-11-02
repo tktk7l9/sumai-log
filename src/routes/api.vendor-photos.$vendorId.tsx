@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { getDb } from '../db/client'
 import { isIdLike } from '../lib/ids'
+import { UPLOAD_LENGTH_REQUIRED_ERROR, checkUploadLength } from '../lib/uploadLength'
 import {
   representativeThumbKeyFromDisplayKey,
   sniffImageType,
@@ -35,10 +36,13 @@ export const Route = createFileRoute('/api/vendor-photos/$vendorId')({
         const vendorId = params.vendorId
         if (!isIdLike(vendorId)) return json(400, { error: '業者の指定が不正です' })
 
-        const contentLength = Number(request.headers.get('content-length'))
-        if (contentLength > MAX_UPLOAD_CONTENT_LENGTH) {
-          return json(413, { error: '画像が大きすぎます' })
-        }
+        const sizeProblem = checkUploadLength(
+          request.headers.get('content-length'),
+          MAX_UPLOAD_CONTENT_LENGTH,
+        )
+        if (sizeProblem === 'length-required')
+          return json(411, { error: UPLOAD_LENGTH_REQUIRED_ERROR })
+        if (sizeProblem === 'too-large') return json(413, { error: '画像が大きすぎます' })
 
         const form = await request.formData()
         const display = form.get('display')
