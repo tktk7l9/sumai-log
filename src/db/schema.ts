@@ -604,5 +604,40 @@ export const sources = sqliteTable(
   (t) => [index('sources_genre_idx').on(t.genre)],
 )
 
+/**
+ * Household to-dos shared by the two of them (the move, account security, money). Not linked
+ * to vendors/places/events. list groups them; assignee is a member e-mail or NULL for "both";
+ * done_at/done_by are set by ticking (and cleared by unticking). See
+ * docs/superpowers/specs/2026-10-28-todos-design.md
+ */
+export const TODO_LISTS = ['move', 'account', 'money', 'other'] as const
+export type TodoList = (typeof TODO_LISTS)[number]
+export const TODO_LIST_LABEL: Record<TodoList, string> = {
+  move: '引越し',
+  account: 'アカウント',
+  money: 'お金',
+  other: 'その他',
+}
+
+export const todos = sqliteTable(
+  'todos',
+  {
+    id: id(),
+    title: text('title').notNull(),
+    note: text('note'),
+    list: text('list', { enum: TODO_LISTS }).notNull().default('other'),
+    assignee: text('assignee'),
+    dueOn: text('due_on'),
+    doneAt: text('done_at'),
+    doneBy: text('done_by'),
+    url: text('url'),
+    createdBy: createdBy(),
+    ...timestamps,
+  },
+  (t) => [index('todos_due_idx').on(t.dueOn), index('todos_done_idx').on(t.doneAt)],
+)
+
 export type Source = typeof sources.$inferSelect
 export type NewSource = typeof sources.$inferInsert
+export type Todo = typeof todos.$inferSelect
+export type NewTodo = typeof todos.$inferInsert

@@ -956,3 +956,13 @@ a:focus-visible {
   text-anchor: middle;
   fill: var(--sumai-road-ink);
 }
+
+/* やること: the title button fills the row so the whole text is the tap target (SHIG 78) */
+.todo-row-main {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.todo-row[data-done] {
+  opacity: 0.75;
+}

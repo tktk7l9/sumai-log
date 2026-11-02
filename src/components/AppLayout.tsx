@@ -23,6 +23,7 @@ import {
   NotebookPen,
   Radio,
   Settings,
+  ListChecks,
 } from 'lucide-react'
 
 import { useEffect } from 'react'
@@ -34,6 +35,7 @@ import { PullToRefresh } from './PullToRefresh'
 /** Links on the right side of the header (pages not in the bottom tabs). Listed in display order */
 const HEADER_LINKS = [
   { to: '/news', label: 'お知らせ', Icon: Newspaper },
+  { to: '/todos', label: 'やること', Icon: ListChecks },
   { to: '/glossary', label: '用語集', Icon: BookOpen },
   { to: '/sources', label: '情報収集', Icon: Radio },
   { to: '/map', label: '地図', Icon: Map },
