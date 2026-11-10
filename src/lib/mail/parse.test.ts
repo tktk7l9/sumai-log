@@ -4,6 +4,7 @@ import { MAX_INPUT_LENGTH } from '../news/text'
 import {
   ADDRESS_MAX,
   MAX_BODY_CHARS,
+  MESSAGE_ID_MAX,
   SUBJECT_MAX,
   extractBody,
   fallbackMessageId,
@@ -178,5 +179,23 @@ describe('toParsedMail', () => {
   it('cuts the sender address at ADDRESS_MAX', async () => {
     const p = await toParsedMail({ from: { address: `${'a'.repeat(ADDRESS_MAX)}@example.com` } })
     expect(p.from.length).toBe(ADDRESS_MAX)
+  })
+  it('replaces a Message-ID over MESSAGE_ID_MAX with its hash (the same id gives the same hash)', async () => {
+    const long = `<${'x'.repeat(MESSAGE_ID_MAX)}@example.com>`
+    const a = await toParsedMail({ messageId: long })
+    const b = await toParsedMail({ messageId: long })
+    expect(a.messageId).toMatch(/^hash:[0-9a-f]{64}$/)
+    expect(a.messageId).toBe(b.messageId)
+    const atLimit = `<${'x'.repeat(MESSAGE_ID_MAX - 2)}>`
+    expect((await toParsedMail({ messageId: atLimit })).messageId).toBe(atLimit)
+  })
+  it('drops a Date header that postal-mime could not read (it passes the raw header through)', async () => {
+    const p = await toParsedMail({ messageId: '<d@example.com>', date: 'x'.repeat(50_000) })
+    expect(p.date).toBeNull()
+  })
+  it('the fallback id still hashes the raw Date, so ids stored before the check stay the same', async () => {
+    const p = await toParsedMail({ from: { address: 'a@b.com' }, subject: 's', date: 'garbage' })
+    expect(p.date).toBeNull()
+    expect(p.messageId).toBe(await fallbackMessageId('a@b.com', 's', 'garbage'))
   })
 })

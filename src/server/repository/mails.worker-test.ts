@@ -143,6 +143,23 @@ describe('importMailAsNews', () => {
     expect(second.newsId).toBe(first.newsId)
     expect(await db.select().from(vendorNews)).toHaveLength(1)
   })
+  it.each(['rejected', 'system'] as const)(
+    'never turns a %s row into vendor news',
+    async (status) => {
+      const vendorId = await upsertVendor(
+        db,
+        { name: 'テスト工務店', kind: 'koumuten', serviceAreas: [] },
+        actor,
+      )
+      const { id } = await insertInboundMail(db, row({ status }))
+      const { newsId } = await importMailAsNews(db, id, vendorId, '2026-09-17')
+      expect(newsId).toBeNull()
+      expect(await db.select().from(vendorNews)).toHaveLength(0)
+      const [mail] = await db.select().from(inboundMails).where(eq(inboundMails.id, id))
+      expect(mail.status).toBe(status)
+      expect(mail.vendorId).toBeNull()
+    },
+  )
 })
 
 describe('listInboundMails / getInboundMailBody / deleteInboundMail / cleanupInboundMails', () => {

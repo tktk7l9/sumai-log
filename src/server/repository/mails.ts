@@ -82,6 +82,11 @@ export async function reviveRejectedInboundMail(
  * inbound_mails to imported. This is the only place that sets inbound_mails to imported
  * and attaches newsId (handleInboundMail always inserts as unassigned). If the url
  * (mail:<messageId>) already exists, it does not create a new one and links to that id.
+ *
+ * Only an unassigned row is imported. A row already imported answers its newsId and is not
+ * touched (calling twice is harmless). A rejected row (anyone can send one, and it has no
+ * body) or a system row (the Gmail confirmation, whose body is the code) never becomes vendor
+ * news, whatever id the caller passes: newsId is null (security audit 2026-11-10).
  */
 export async function importMailAsNews(
   db: Db,
@@ -91,6 +96,8 @@ export async function importMailAsNews(
 ): Promise<{ newsId: string | null }> {
   const [mail] = await db.select().from(inboundMails).where(eq(inboundMails.id, mailId)).limit(1)
   if (!mail) return { newsId: null }
+  if (mail.status === 'imported') return { newsId: mail.newsId }
+  if (mail.status !== 'unassigned') return { newsId: null }
   const draft = inboundToNews(
     {
       messageId: mail.messageId,

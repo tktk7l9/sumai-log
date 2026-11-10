@@ -32,12 +32,16 @@ export const listMailImport = createServerFn().handler(async () => {
 export const assignMail = createServerFn({ method: 'POST' })
   .validator(assignMailInput)
   .handler(async ({ data }) => {
-    return importMailAsNews(
+    const result = await importMailAsNews(
       getDb(),
       data.mailId,
       data.vendorId,
       toJstDateKey(new Date().toISOString()),
     )
+    // Only unassigned rows are imported (rejected and system rows never become vendor news)
+    if (result.newsId === null)
+      throw new Error('このメールは取り込めません（未割当のメールだけ取り込めます）')
+    return result
   })
 
 export const deleteMail = createServerFn({ method: 'POST' })

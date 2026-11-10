@@ -53,7 +53,7 @@ async function vendor(domain: string | null) {
 describe('handleInboundMail', () => {
   it('auto forward + vendor match -> imported (gets a vendor news row and dates)', async () => {
     const vendorId = await vendor('vendor.example')
-    const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
+    const r = await handleInboundMail(msg(AUTO).message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('imported')
     expect(r.fromDomain).toBe('vendor.example')
     const [mail] = await db.select().from(inboundMails)
@@ -69,7 +69,7 @@ describe('handleInboundMail', () => {
 
   it('auto forward + no vendor match -> unassigned (the body is saved)', async () => {
     await vendor('other.example')
-    const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
+    const r = await handleInboundMail(msg(AUTO).message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('unassigned')
     const [mail] = await db.select().from(inboundMails)
     expect(mail.status).toBe('unassigned')
@@ -89,7 +89,7 @@ describe('handleInboundMail', () => {
       '<html><head><style>p{color:red}</style></head>',
       '<body><p>9月27日(土) <b>完成見学会</b>を開催します。</p></body></html>',
     ].join('\r\n')
-    const r = await handleInboundMail(msg(raw).message, db, allow, NOW)
+    const r = await handleInboundMail(msg(raw).message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('imported')
     const [mail] = await db.select().from(inboundMails)
     expect(mail.vendorId).toBe(vendorId)
@@ -102,8 +102,8 @@ describe('handleInboundMail', () => {
 
   it('returns duplicate when the same Message-ID is received 2 times', async () => {
     await vendor('vendor.example')
-    await handleInboundMail(msg(AUTO).message, db, allow, NOW)
-    const r = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
+    await handleInboundMail(msg(AUTO).message, db, allow, { nowIso: NOW })
+    const r = await handleInboundMail(msg(AUTO).message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('duplicate')
     expect(await db.select().from(inboundMails)).toHaveLength(1)
   })
@@ -113,7 +113,7 @@ describe('handleInboundMail', () => {
     // = forged). But the envelope (message.from, which Email Routing verifies) is the vendor's
     // own address and is not in the allowlist = this assumes an attack aimed directly at news@.
     const { message, state } = msg(AUTO, { from: 'news@vendor.example' })
-    const r = await handleInboundMail(message, db, allow, NOW)
+    const r = await handleInboundMail(message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('rejected')
     expect(state.rejected).toBe('envelope sender not allowed')
     const [mail] = await db.select().from(inboundMails)
@@ -128,11 +128,11 @@ describe('handleInboundMail', () => {
       msg(AUTO, { from: 'news@vendor.example' }).message,
       db,
       allow,
-      NOW,
+      { nowIso: NOW },
     )
     expect(first.status).toBe('rejected')
 
-    const second = await handleInboundMail(msg(AUTO).message, db, allow, NOW)
+    const second = await handleInboundMail(msg(AUTO).message, db, allow, { nowIso: NOW })
     expect(second.status).toBe('imported')
 
     const rows = await db.select().from(inboundMails)
@@ -145,12 +145,12 @@ describe('handleInboundMail', () => {
 
   it('returns duplicate for the 2nd reject and adds no row', async () => {
     const { message: m1, state: s1 } = msg(AUTO, { from: 'news@vendor.example' })
-    const first = await handleInboundMail(m1, db, allow, NOW)
+    const first = await handleInboundMail(m1, db, allow, { nowIso: NOW })
     expect(first.status).toBe('rejected')
     expect(s1.rejected).toBe('envelope sender not allowed')
 
     const { message: m2, state: s2 } = msg(AUTO, { from: 'news@vendor.example' })
-    const second = await handleInboundMail(m2, db, allow, NOW)
+    const second = await handleInboundMail(m2, db, allow, { nowIso: NOW })
     expect(second.status).toBe('duplicate')
     expect(s2.rejected).toBe('envelope sender not allowed')
 
@@ -179,7 +179,7 @@ describe('handleInboundMail', () => {
       msg(raw, { from: 'partner@example.com' }).message,
       db,
       allow,
-      NOW,
+      { nowIso: NOW },
     )
     expect(r.status).toBe('imported')
     const [mail] = await db.select().from(inboundMails)
@@ -204,7 +204,7 @@ describe('handleInboundMail', () => {
       msg(raw, { from: 'forwarding-noreply@google.com' }).message,
       db,
       allow,
-      NOW,
+      { nowIso: NOW },
     )
     expect(r.status).toBe('system')
     const [mail] = await db.select().from(inboundMails)
@@ -222,7 +222,7 @@ describe('handleInboundMail', () => {
       '確認コード: 000000',
     ].join('\r\n')
     const { message, state } = msg(raw, { from: 'attacker@evil.example' })
-    const r = await handleInboundMail(message, db, allow, NOW)
+    const r = await handleInboundMail(message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('rejected')
     expect(state.rejected).toBe('envelope sender not trusted')
     const [mail] = await db.select().from(inboundMails)
@@ -231,9 +231,33 @@ describe('handleInboundMail', () => {
     expect(mail.bodyText).toBeNull()
   })
 
+  it('rejects mail to any address but the forwarding address before reading it and leaves no record', async () => {
+    await vendor('vendor.example')
+    const { message, state } = msg(AUTO, { to: 'other@sumai.example' })
+    const r = await handleInboundMail(message, db, allow, {
+      nowIso: NOW,
+      inboxAddress: 'news@sumai.example',
+    })
+    expect(r.status).toBe('wrong-recipient')
+    expect(state.rejected).toBe('unknown recipient')
+    expect(await db.select().from(inboundMails)).toHaveLength(0)
+    expect(await db.select().from(vendorNews)).toHaveLength(0)
+  })
+
+  it('imports mail to the forwarding address (case does not matter)', async () => {
+    await vendor('vendor.example')
+    const { message, state } = msg(AUTO, { to: 'News@Sumai.Example' })
+    const r = await handleInboundMail(message, db, allow, {
+      nowIso: NOW,
+      inboxAddress: 'news@sumai.example',
+    })
+    expect(r.status).toBe('imported')
+    expect(state.rejected).toBeNull()
+  })
+
   it('rejects a mail that is too large without reading it and leaves no record', async () => {
     const { message, state } = msg(AUTO, { rawSize: 3_000_000 })
-    const r = await handleInboundMail(message, db, allow, NOW)
+    const r = await handleInboundMail(message, db, allow, { nowIso: NOW })
     expect(r.status).toBe('too-large')
     expect(state.rejected).toBe('too large')
     expect(await db.select().from(inboundMails)).toHaveLength(0)
