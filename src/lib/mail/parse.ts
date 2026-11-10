@@ -4,6 +4,7 @@
  * scripts call it and pass only the result), so this file can be tested with plain Node.
  */
 
+import { parseToUtcMs } from '../jst'
 import { MAX_INPUT_LENGTH, decodeEntities, truncate } from '../news/text'
 
 export const MAX_BODY_CHARS = 100_000
@@ -17,6 +18,13 @@ export const MAX_BODY_CHARS = 100_000
  */
 export const SUBJECT_MAX = 500
 export const ADDRESS_MAX = 320
+/**
+ * Upper limit of a stored Message-ID. RFC 5322 caps a header line at 998 characters and a real
+ * Message-ID is far shorter; a longer one (a folded header only a hostile sender writes, kept
+ * on a rejected row for 30 days) is stored as the hash of itself, which keeps it unique
+ * without bloating the row (security audit 2026-11-10).
+ */
+export const MESSAGE_ID_MAX = 998
 
 export type ParsedMail = {
   /** The Message-ID of the original mail (with <>). 'hash:<sha256>' when absent */
@@ -25,7 +33,7 @@ export type ParsedMail = {
   from: string
   /** Cut at SUBJECT_MAX */
   subject: string
-  /** ISO-8601. null when absent */
+  /** ISO-8601. null when absent or unreadable */
   date: string | null
   /**
    * The body is not built in toParsedMail (always '' / false). The HTML -> text conversion
@@ -193,15 +201,18 @@ export function normalizeBody(text: string): { text: string; truncated: boolean 
   return { text: truncate(collapsed, MAX_BODY_CHARS), truncated: true }
 }
 
+async function hashId(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return `hash:${hex}`
+}
+
 export async function fallbackMessageId(
   from: string,
   subject: string,
   date: string | null,
 ): Promise<string> {
-  const data = new TextEncoder().encode(`${from}\n${subject}\n${date ?? ''}`)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-  const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
-  return `hash:${hex}`
+  return hashId(`${from}\n${subject}\n${date ?? ''}`)
 }
 
 /**
@@ -226,13 +237,24 @@ export function extractBody(email: Pick<RawParsed, 'text' | 'html'>): {
 
 /**
  * Normalises only the headers into ParsedMail (the body is built separately by extractBody).
- * The subject and sender are cut at the stored limits (SUBJECT_MAX / ADDRESS_MAX).
+ * The subject and sender are cut at the stored limits (SUBJECT_MAX / ADDRESS_MAX), and a
+ * Message-ID over MESSAGE_ID_MAX is replaced by its hash.
  */
 export async function toParsedMail(email: RawParsed): Promise<ParsedMail> {
   const from = truncate((email.from?.address ?? '').trim().toLowerCase(), ADDRESS_MAX)
   const subject = truncate((email.subject ?? '').trim(), SUBJECT_MAX)
-  const date = email.date ?? null
-  const messageId = email.messageId?.trim() || (await fallbackMessageId(from, subject, date))
+  // postal-mime gives an ISO string for a readable Date header and the header as written
+  // otherwise. Only a readable one is kept, so sent_on is always a 'YYYY-MM-DD' key and never
+  // a raw header of any length (toJstDateKey returns what it cannot read as is)
+  const rawDate = email.date ?? null
+  const date = rawDate !== null && parseToUtcMs(rawDate) !== null ? rawDate : null
+  const rawId = email.messageId?.trim()
+  const messageId = rawId
+    ? rawId.length <= MESSAGE_ID_MAX
+      ? rawId
+      : await hashId(rawId)
+    : // The raw Date keeps the ids of mail stored before dates were checked the same
+      await fallbackMessageId(from, subject, rawDate)
   const xff = (email.headers ?? []).find((h) => h.key.toLowerCase() === 'x-forwarded-for')
   const forwardedFor = xff
     ? xff.value

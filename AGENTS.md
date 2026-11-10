@@ -188,7 +188,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   When adding a new outbound fetch, route it through here (do not call `fetch` directly yourself)
 - What actually fetches is `src/server/newsFetcher.ts`. A 10 second timeout per source
   (`AbortSignal.timeout`) and a 1 MB limit (when `content-length` exists it is rejected up
-  front; when it does not, the stream is counted and cut off at the moment it exceeds). Each
+  front; when it does not, the stream is counted and cut off at the moment it exceeds). At
+  most 100 candidates per fetch go on to D1, the newest by date (`newestCandidates` in
+  `src/lib/news/limit.ts`), so one oversized list cannot fill the daily Cron. Each
   vendor is made independent with try/catch, and the failure of 1 vendor (expected errors as well
   as unexpected exceptions) does not stop the fetch for other vendors. Recording the fetch result
   (`markNewsFetched` in `src/server/repository/news.ts`) updates only
@@ -220,7 +222,11 @@ A record app for a housing search, used only by one married couple. **The reposi
   channel video (`getChannelVideoForMemo`, `memoDefaultsOf` in `src/lib/videoMemo.ts`) and
   goes back to the videos tab after saving
 - Newsletters are the `vendor_news` rows whose `url` starts with `mail:` (the mail import,
-  spec `docs/superpowers/specs/2026-09-19-mail-import-design.md`). `/news?tab=mail` lists them
+  spec `docs/superpowers/specs/2026-09-19-mail-import-design.md`). `handleInboundMail`
+  rejects, before parsing, mail whose envelope recipient is not the secret
+  `MAIL_INBOX_ADDRESS` (`src/lib/mail/recipient.ts`; no check while it is unset), and
+  `importMailAsNews` imports only `unassigned` rows (rejected and system rows never become
+  news). `/news?tab=mail` lists them
   across every month (`listMailNews` / `summarizeMailNews` in `src/server/repository/news.ts`,
   `MailNewsList.tsx`), one vendor or all, with `?unread=true` and `?n=` for 「さらに表示」. The
   read flag is `vendor_news.read_at` / `read_by`, one flag shared by the two users like the

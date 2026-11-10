@@ -136,7 +136,9 @@ async function onEmail(message: ForwardableEmailMessage, env: Env): Promise<void
     const allowlist = parseAllowlist(
       [env.ACCESS_ALLOWED_EMAILS, env.MAIL_ALLOWED_SENDERS].filter(Boolean).join(','),
     )
-    const r = await handleInboundMail(message, db, allowlist)
+    const r = await handleInboundMail(message, db, allowlist, {
+      inboxAddress: env.MAIL_INBOX_ADDRESS,
+    })
     // The subject of system mail (Gmail forwarding address confirmation) contains the
     // confirmation code, so it is not written to the log
     const subject = r.status === 'system' ? '' : ` subject=${r.subject.slice(0, 40)}`

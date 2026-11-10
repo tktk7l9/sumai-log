@@ -7,6 +7,7 @@ import { toJstDateKey } from '../lib/jst'
 import { splitForwardedBlock } from '../lib/mail/forwarded'
 import { domainOf, matchVendorByDomain } from '../lib/mail/match'
 import { extractBody, toParsedMail } from '../lib/mail/parse'
+import { isInboxRecipient } from '../lib/mail/recipient'
 import { classifyRoute } from '../lib/mail/route'
 import { MAX_INPUT_LENGTH } from '../lib/news/text'
 import { importMailAsNews, insertInboundMail, reviveRejectedInboundMail } from './repository/mails'
@@ -21,7 +22,14 @@ export type InboundMessage = {
 }
 
 export type HandleResult = {
-  status: 'imported' | 'unassigned' | 'rejected' | 'system' | 'duplicate' | 'too-large'
+  status:
+    | 'imported'
+    | 'unassigned'
+    | 'rejected'
+    | 'system'
+    | 'duplicate'
+    | 'too-large'
+    | 'wrong-recipient'
   fromDomain: string | null
   subject: string
 }
@@ -56,13 +64,22 @@ export type HandleResult = {
  * duplicate would leave the rejected content (no body) with no way to recover it, so only a
  * row already rejected is overwritten with the new content by reviveRejectedInboundMail
  * before continuing (any other existing status is an ordinary duplicate).
+ *
+ * Mail whose envelope recipient is not the forwarding address (`inboxAddress`, the secret
+ * MAIL_INBOX_ADDRESS) is rejected first, before anything is read, and leaves no record
+ * (see src/lib/mail/recipient.ts; no check while the secret is not set).
  */
 export async function handleInboundMail(
   message: InboundMessage,
   db: Db,
   allowlist: readonly string[],
-  nowIso: string = new Date().toISOString(),
+  opts: { nowIso?: string; inboxAddress?: string | null } = {},
 ): Promise<HandleResult> {
+  const nowIso = opts.nowIso ?? new Date().toISOString()
+  if (!isInboxRecipient(message.to, opts.inboxAddress)) {
+    message.setReject('unknown recipient')
+    return { status: 'wrong-recipient', fromDomain: domainOf(message.from), subject: '' }
+  }
   if (message.rawSize > MAX_INPUT_LENGTH) {
     message.setReject('too large')
     return { status: 'too-large', fromDomain: domainOf(message.from), subject: '' }

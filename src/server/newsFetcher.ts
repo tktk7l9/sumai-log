@@ -12,6 +12,7 @@ import type { Vendor } from '../db/schema'
 import { detectCharset } from '../lib/news/charset'
 import { extractEvent } from '../lib/news/eventDate'
 import { parseHtmlList } from '../lib/news/htmlList'
+import { newestCandidates } from '../lib/news/limit'
 import { parseRss, type NewsCandidate } from '../lib/news/rss'
 import { truncate } from '../lib/news/text'
 import { isAllowedNewsUrl } from '../lib/news/url'
@@ -133,7 +134,8 @@ async function fetchCandidates(
 
   // Relative links are resolved against the final URL that actually returned the body (after redirects)
   const candidates = vendor.newsSource === 'rss' ? parseRss(body) : parseHtmlList(body, finalUrl)
-  return { candidates }
+  // At most MAX_CANDIDATES_PER_FETCH (the newest) go on to D1 (src/lib/news/limit.ts)
+  return { candidates: newestCandidates(candidates) }
 }
 
 /**

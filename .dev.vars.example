@@ -26,7 +26,8 @@ GOOGLE_MAPS_MAP_ID=
 # public repository).
 # A random local part is recommended, e.g. news-a1b2c3d4@sumai-log.app
 # In production: `printf '%s' '<that address>' | npx wrangler secret put MAIL_INBOX_ADDRESS`.
-# If empty, the settings page only shows "未設定" (Not set); receiving itself is not affected.
+# When set, mail whose envelope recipient is any other address is rejected before it is read.
+# If empty, the settings page only shows "未設定" (Not set) and the recipient is not checked.
 # Forwarding-source Gmail addresses accepted for mail import (allowed in addition to the
 # login allowlist. Comma separated)
 MAIL_ALLOWED_SENDERS=

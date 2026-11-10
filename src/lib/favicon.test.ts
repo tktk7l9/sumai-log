@@ -16,6 +16,28 @@ describe('pickFaviconCandidates', () => {
     ])
   })
 
+  it('finishes in linear time on a page of unclosed <link (one hostile site must not exhaust the CPU)', () => {
+    // 200,000 `<link ` (1.2MB, under the fetch limit). The regex `/<link\b[^>]*>/gi` read to
+    // the end of the input from every opener, which is O(n^2)
+    const html = '<link '.repeat(200_000)
+    const start = performance.now()
+    const result = pickFaviconCandidates(html, PAGE_URL)
+    const elapsed = performance.now() - start
+    expect(result).toEqual(['https://vendor.example.com/favicon.ico'])
+    // Loose bound for CI jitter; locally this is a few milliseconds
+    expect(elapsed).toBeLessThan(2000)
+  })
+
+  it('reads each <link> up to its first > and skips an unclosed one at the end', () => {
+    const html =
+      '<LINK rel="icon" href="/a.png"><link rel="apple-touch-icon" href="/b.png"><link rel="icon" href="/c.png"'
+    expect(pickFaviconCandidates(html, PAGE_URL)).toEqual([
+      'https://vendor.example.com/a.png',
+      'https://vendor.example.com/b.png',
+      'https://vendor.example.com/favicon.ico',
+    ])
+  })
+
   it('returns only the favicon.ico fallback when there is no <link>', () => {
     expect(pickFaviconCandidates('<html><body>no links</body></html>', PAGE_URL)).toEqual([
       'https://vendor.example.com/favicon.ico',
