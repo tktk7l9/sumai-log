@@ -58,7 +58,6 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.67.0",
     "@cloudflare/vitest-plugin": "^1.4.12",
-    "@tanstack/devtools-vite": "^0.8.6",
     "@tanstack/router-cli": "^1.167.46",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
