@@ -103,6 +103,21 @@ describe('insertNewsIfNew', () => {
     expect(dup?.title).toBe('最初のタイトル')
   })
 
+  it("the key is (vendor, url): the same url under another vendor is that vendor's own item", async () => {
+    const a = await makeVendor('テスト工務店A')
+    const b = await makeVendor('テスト工務店B')
+    const item = {
+      url: 'https://portal.example.com/event/1',
+      title: '見学会',
+      publishedOn: '2026-09-05',
+    }
+    expect(await insertNewsIfNew(db, [{ ...item, vendorId: a }])).toBe(1)
+    expect(await insertNewsIfNew(db, [{ ...item, vendorId: b }])).toBe(1)
+    expect(await insertNewsIfNew(db, [{ ...item, vendorId: b }])).toBe(0)
+    const rows = await db.select().from(vendorNews)
+    expect(rows.map((r) => r.vendorId).sort()).toEqual([a, b].sort())
+  })
+
   it('does nothing and returns 0 for an empty array', async () => {
     expect(await insertNewsIfNew(db, [])).toBe(0)
   })

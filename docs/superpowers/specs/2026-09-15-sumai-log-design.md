@@ -136,7 +136,7 @@
 `## 4. データモデル`（本紙）への追加分:
 
 - `vendor_news`（新規テーブル。migration 0003）: `vendor_id`（→ `vendors.id`、削除時 cascade）・
-  `url`（UNIQUE、新着判定のキー）・`title`・`summary`・`published_on`・`event_start`/
+  `url`（業者ごとに UNIQUE = `(vendor_id, url)`、新着判定のキー。migration 0019 で全体一意から変更）・`title`・`summary`・`published_on`・`event_start`/
   `event_end`/`event_kind`（イベントと判定したときだけ）・`planned_event_id`（→ `events.id`、
   「行く」で作った自分の予定。削除時 set null）・`first_seen_at`
 - `vendors` への追加列（migration 0003）: `news_url`・`news_source`（`rss` | `html-list`）・

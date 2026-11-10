@@ -25,7 +25,7 @@
 vendor_news
   id            text PK（crypto.randomUUID）
   vendor_id     text → vendors.id（削除時は cascade）
-  url           text UNIQUE（重複判定のキー）
+  url           text NOT NULL（重複判定のキー。(vendor_id, url) で UNIQUE。2026-11-10 の migration 0019 で全体一意から変更）
   title         text NOT NULL
   summary       text NULL（最大 300 字）
   published_on  text NOT NULL（YYYY-MM-DD。RSS は pubDate、HTML は表記の日付）
