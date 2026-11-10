@@ -5,6 +5,7 @@ import {
   real,
   sqliteTable,
   text,
+  uniqueIndex,
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 
@@ -243,7 +244,11 @@ export const vendorNews = sqliteTable(
     vendorId: text('vendor_id')
       .notNull()
       .references(() => vendors.id, { onDelete: 'cascade' }),
-    url: text('url').notNull().unique(),
+    /**
+     * Unique per vendor, not globally: an item URL may be on any host, so with a global key
+     * one vendor's list could take another vendor's item for good (security audit 2026-11-10)
+     */
+    url: text('url').notNull(),
     title: text('title').notNull(),
     /** Up to 300 characters (truncated by the caller) */
     summary: text('summary'),
@@ -275,7 +280,10 @@ export const vendorNews = sqliteTable(
     readBy: text('read_by'),
     ...timestamps,
   },
-  (t) => [index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn)],
+  (t) => [
+    index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn),
+    uniqueIndex('vendor_news_vendor_url_unique').on(t.vendorId, t.url),
+  ],
 )
 
 export const INBOUND_STATUSES = ['imported', 'unassigned', 'rejected', 'system'] as const

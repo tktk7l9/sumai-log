@@ -123,7 +123,7 @@ async function main() {
         ]
           .map(sqlString)
           .join(', ') +
-        `) ON CONFLICT(url) DO NOTHING;`
+        `) ON CONFLICT(vendor_id, url) DO NOTHING;`
       perVendor.set(vendor.name, (perVendor.get(vendor.name) ?? 0) + 1)
       if (draft.eventStart) withEvent++
     } else {
@@ -155,11 +155,12 @@ async function main() {
           .join(', ') +
         `) ON CONFLICT(message_id) DO NOTHING;`,
     )
-    if (newsSql && newsId) {
+    if (newsSql && newsId && vendor) {
       lines.push(newsSql)
-      // Even when a re-run made vendor_news DO NOTHING, look up the existing id by url and link it
+      // Even when a re-run made vendor_news DO NOTHING, look up the existing id by vendor and url
+      // (the unique key) and link it
       lines.push(
-        `UPDATE inbound_mails SET news_id = (SELECT id FROM vendor_news WHERE url = ${sqlString(newsUrl)}) WHERE id = ${sqlString(mailId)} AND news_id IS NULL;`,
+        `UPDATE inbound_mails SET news_id = (SELECT id FROM vendor_news WHERE vendor_id = ${sqlString(vendor.id)} AND url = ${sqlString(newsUrl)}) WHERE id = ${sqlString(mailId)} AND news_id IS NULL;`,
       )
     }
   }

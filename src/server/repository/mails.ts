@@ -81,7 +81,8 @@ export async function reviveRejectedInboundMail(
  * Converts an inbound mail into vendor news, puts it into vendor_news, and updates
  * inbound_mails to imported. This is the only place that sets inbound_mails to imported
  * and attaches newsId (handleInboundMail always inserts as unassigned). If the url
- * (mail:<messageId>) already exists, it does not create a new one and links to that id.
+ * (mail:<messageId>) already exists for that vendor, it does not create a new one and links to
+ * that id.
  *
  * Only an unassigned row is imported. A row already imported answers its newsId and is not
  * touched (calling twice is harmless). A rejected row (anyone can send one, and it has no
@@ -112,7 +113,7 @@ export async function importMailAsNews(
   const [news] = await db
     .select({ id: vendorNews.id })
     .from(vendorNews)
-    .where(eq(vendorNews.url, draft.url))
+    .where(and(eq(vendorNews.vendorId, vendorId), eq(vendorNews.url, draft.url)))
     .limit(1)
   const newsId = news?.id ?? null
   await db

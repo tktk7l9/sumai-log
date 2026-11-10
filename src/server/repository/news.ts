@@ -32,8 +32,9 @@ export type NewNews = Omit<
 const INSERT_CHUNK_SIZE = 10
 
 /**
- * INSERTs only new items. Does nothing if the url already exists (updates to the title
- * etc. are not tracked, per the policy in design.md §2). The return value is the number
+ * INSERTs only new items. Does nothing if the vendor already has the url (updates to the
+ * title etc. are not tracked, per the policy in design.md §2). The key is (vendor_id, url):
+ * the same url under another vendor is that vendor's own item. The return value is the number
  * actually added (the total over all chunks). `onConflictDoNothing` works on the same key
  * (url) across chunks too, so splitting does not change idempotency (0 items the 2nd time).
  */
@@ -45,7 +46,7 @@ export async function insertNewsIfNew(db: Db, rows: NewNews[]): Promise<number> 
     const inserted = await db
       .insert(vendorNews)
       .values(chunk.map((r) => ({ ...r, id: crypto.randomUUID() })))
-      .onConflictDoNothing({ target: vendorNews.url })
+      .onConflictDoNothing({ target: [vendorNews.vendorId, vendorNews.url] })
       .returning({ id: vendorNews.id })
     added += inserted.length
   }

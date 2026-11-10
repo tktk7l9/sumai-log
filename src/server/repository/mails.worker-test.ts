@@ -14,6 +14,7 @@ import {
   listInboundMails,
   reviveRejectedInboundMail,
 } from './mails'
+import { insertNewsIfNew } from './news'
 import { actor, db, reset } from './test-helpers'
 
 beforeEach(reset)
@@ -160,6 +161,27 @@ describe('importMailAsNews', () => {
       expect(mail.vendorId).toBeNull()
     },
   )
+  it("links to the news row of the chosen vendor, not to another vendor's row with the same url", async () => {
+    const other = await upsertVendor(
+      db,
+      { name: 'テスト工務店A', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    const chosen = await upsertVendor(
+      db,
+      { name: 'テスト工務店B', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    await insertNewsIfNew(db, [
+      { vendorId: other, url: 'mail:<m1@example.com>', title: '別業者', publishedOn: '2026-09-16' },
+    ])
+    const { id } = await insertInboundMail(db, row())
+    const { newsId } = await importMailAsNews(db, id, chosen, '2026-09-17')
+    const [news] = await db.select().from(vendorNews).where(eq(vendorNews.id, newsId!))
+    expect(news.vendorId).toBe(chosen)
+    expect(news.mailId).toBe(id)
+    expect(await db.select().from(vendorNews)).toHaveLength(2)
+  })
 })
 
 describe('listInboundMails / getInboundMailBody / deleteInboundMail / cleanupInboundMails', () => {
