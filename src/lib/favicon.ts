@@ -23,7 +23,23 @@ export const MAX_HTML_LENGTH = 2 * 1024 * 1024
 export type FaviconExt = 'png' | 'ico' | 'jpg' | 'webp'
 export type FaviconMimeType = 'image/png' | 'image/x-icon' | 'image/jpeg' | 'image/webp'
 
-const LINK_TAG = /<link\b[^>]*>/gi
+/**
+ * The `<link …>` tags of the HTML, each up to its first `>`. A linear scan: the regex
+ * `/<link\b[^>]*>/gi` it replaces restarts at every `<link` and reads to the end of the input
+ * when no `>` follows, which is O(n^2) on a page of unclosed `<link` (the same shape that
+ * extractElementBlocks removed from the news parsers; security audit 2026-11-10). It yields
+ * the same tags: once a `<link` has no `>` after it, no later one can have one either.
+ */
+function* linkTags(html: string): Generator<string> {
+  const start = /<link\b/gi
+  let match: RegExpExecArray | null
+  while ((match = start.exec(html)) !== null) {
+    const end = html.indexOf('>', match.index)
+    if (end === -1) return
+    yield html.slice(match.index, end + 1)
+    start.lastIndex = end + 1
+  }
+}
 
 /** Reads any of `name="value"` / `name='value'` / `name=value`. Entities are resolved. */
 function getAttr(tag: string, name: string): string | null {
@@ -98,8 +114,7 @@ export function pickFaviconCandidates(html: string, pageUrl: string): string[] {
   if (html.length > MAX_HTML_LENGTH) return [fallback]
 
   const candidates: Candidate[] = []
-  for (const match of html.matchAll(LINK_TAG)) {
-    const tag = match[0]
+  for (const tag of linkTags(html)) {
     const relRaw = getAttr(tag, 'rel')
     if (!relRaw) continue
     const rel = relRaw.toLowerCase().trim()
