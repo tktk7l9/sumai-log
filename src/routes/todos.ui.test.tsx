@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { Todo } from '../db/schema'
@@ -138,6 +138,88 @@ describe('todos route', () => {
     expect(remove).not.toHaveBeenCalled()
     flushPendingDeletes()
     await waitFor(() => expect(remove).toHaveBeenCalled())
+  })
+
+  describe('when the partner saved first', () => {
+    const NEWER = '2026-10-28 12:00:00'
+    // The server as it behaves: a save based on an old updatedAt is a conflict, not an overwrite
+    let current: Todo
+
+    beforeEach(() => {
+      current = KEYS
+      mockOf(listTodos).mockImplementation(async () => ({
+        todos: [current],
+        todayKey: TODAY,
+        viewer: ME,
+      }))
+      mockOf(saveTodo).mockImplementation(async (arg: unknown) => {
+        const { expectedUpdatedAt } = (arg as { data: { expectedUpdatedAt?: string } }).data
+        return expectedUpdatedAt === current.updatedAt
+          ? { id: current.id, conflict: false }
+          : { conflict: true }
+      })
+    })
+
+    async function editUntilConflict() {
+      const rendered = await renderRoute('/todos')
+      const { user } = rendered
+      await user.click(await screen.findByRole('button', { name: '鍵の受け取り を編集' }))
+      const dialog = await screen.findByRole('dialog', { name: 'やることを編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '管理会社に電話')
+      // The partner's save lands while the form is open
+      current = { ...KEYS, title: '鍵の受け取りと立会い', updatedAt: NEWER }
+      await user.click(within(dialog).getByRole('button', { name: '保存' }))
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      // The list behind the form now shows the partner's content
+      await screen.findByRole('button', { name: '鍵の受け取りと立会い を編集', hidden: true })
+      return { ...rendered, dialog }
+    }
+
+    it('overwrites with the input when saved again, as the notice says', async () => {
+      const { user, dialog } = await editUntilConflict()
+      expect(within(dialog).getByRole('textbox', { name: 'メモ' })).toHaveValue('管理会社に電話')
+      await user.click(within(dialog).getByRole('button', { name: '保存' }))
+      expect(await screen.findByText('やることを更新しました')).toBeInTheDocument()
+      expect(mockOf(saveTodo)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({
+          id: uid(1),
+          expectedUpdatedAt: NEWER,
+          title: '鍵の受け取り',
+          note: '管理会社に電話',
+        }),
+      })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      clearNotifications()
+    })
+
+    it('still refuses to overwrite when the list was reloaded behind the open form', async () => {
+      const { user, router } = await renderRoute('/todos')
+      await user.click(await screen.findByRole('button', { name: '鍵の受け取り を編集' }))
+      const dialog = await screen.findByRole('dialog', { name: 'やることを編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '管理会社に電話')
+      current = { ...KEYS, title: '鍵の受け取りと立会い', updatedAt: NEWER }
+      // e.g. the undo window of a delete ends and the page reloads its data
+      await act(() => router.invalidate())
+      await screen.findByRole('button', { name: '鍵の受け取りと立会い を編集', hidden: true })
+      await user.click(within(dialog).getByRole('button', { name: '保存' }))
+      // The form never showed the partner's content, so this save must not replace it silently
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      expect(mockOf(saveTodo)).toHaveBeenCalledTimes(1)
+      expect(mockOf(saveTodo)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ expectedUpdatedAt: KEYS.updatedAt }),
+      })
+    })
+
+    it('brings the input back when the form is closed and opened again', async () => {
+      const { user } = await editUntilConflict()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      clearNotifications()
+      await user.click(screen.getByRole('button', { name: '鍵の受け取りと立会い を編集' }))
+      const reopened = await screen.findByRole('dialog', { name: 'やることを編集' })
+      expect(await within(reopened).findByText('書きかけの下書きを戻しました')).toBeInTheDocument()
+      expect(within(reopened).getByRole('textbox', { name: 'メモ' })).toHaveValue('管理会社に電話')
+    })
   })
 
   it('says so when there is nothing to do', async () => {

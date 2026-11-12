@@ -84,6 +84,17 @@ export function EventForm({
       startTime: (v, values) => (!values.allDay && !v ? '開始時刻を入れてください' : null),
     },
   })
+  // The updatedAt a save is based on, and the draft is kept under: the row's as the form was
+  // opened. `event` follows the loader data, and a reload behind the open form must not move
+  // the base, or a save would replace the partner's change without the conflict notice. After
+  // that notice the reloaded row becomes the base: saving again overwrites, and the form
+  // opened again finds the draft (both promised by CONFLICT_MESSAGE)
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(event?.updatedAt)
+  const [rebasing, setRebasing] = useState(false)
+  if (rebasing && event && event.updatedAt !== baseUpdatedAt) {
+    setBaseUpdatedAt(event.updatedAt)
+    setRebasing(false)
+  }
   // Keep the unfinished input on the device. New entries are separated by "where it was
   // opened from" (date, vendor, place)
   const draft = useFormDraft(
@@ -92,7 +103,7 @@ export function EventForm({
       'event',
       event?.id,
       event
-        ? event.updatedAt
+        ? baseUpdatedAt
         : [defaults?.date, defaults?.vendorId, defaults?.placeId].filter(Boolean).join('|'),
     ),
     initial,
@@ -110,7 +121,7 @@ export function EventForm({
       }
       const res = await save({
         data: {
-          ...(event ? { id: event.id, expectedUpdatedAt: event.updatedAt } : {}),
+          ...(event ? { id: event.id, expectedUpdatedAt: baseUpdatedAt } : {}),
           ...normalized,
         },
       })
@@ -118,6 +129,7 @@ export function EventForm({
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
         // Reflect the partner's content on screen (the next save is based on the latest updated
         // time)
+        setRebasing(true)
         await router.invalidate()
         return
       }

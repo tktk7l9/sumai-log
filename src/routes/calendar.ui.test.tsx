@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteEvent, listEventsBetween, saveEvent } from '../server/events'
@@ -6,7 +6,7 @@ import { getMailBody } from '../server/mails'
 import { getVendorNews, linkNewsToEvent, newsEventsBetween } from '../server/news'
 import { listLinkTargets, listPlaces } from '../server/places'
 import { event, mockOf, news, place, stub, uid } from '../../test/ui/fixtures'
-import { flushPendingDeletes, renderRoute } from '../../test/ui/render'
+import { clearNotifications, flushPendingDeletes, renderRoute } from '../../test/ui/render'
 
 // Far in the future so that "行く" (Go) is offered whatever day the tests run on
 const MONTH = '2099-10'
@@ -228,6 +228,94 @@ describe('calendar route', () => {
     await user.type(within(drawer).getByRole('textbox', { name: 'タイトル' }), '銀行の相談')
     await user.click(within(drawer).getByRole('button', { name: '予定を保存' }))
     expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+  })
+
+  describe('when the partner saved the event first', () => {
+    const NEWER = '2099-10-01 12:00:00'
+    const MEETING = links(
+      event({
+        id: 'e1',
+        title: '打合せ（間取り）',
+        kind: 'meeting',
+        startsAt: '2099-10-10T10:00:00+09:00',
+      }),
+    )
+    // The server as it behaves: a save based on an old updatedAt is a conflict, not an overwrite
+    let current: typeof MEETING
+
+    beforeEach(() => {
+      current = MEETING
+      mockOf(listEventsBetween).mockImplementation(async () => ({
+        events: [current],
+        recordedEventIds: [],
+        todayKey: '2099-10-01',
+        nowIso: '2099-10-01T09:00:00+09:00',
+      }))
+      mockOf(saveEvent).mockImplementation(async (arg: unknown) => {
+        const { expectedUpdatedAt } = (arg as { data: { expectedUpdatedAt?: string } }).data
+        return expectedUpdatedAt === current.updatedAt ? { id: 'e1' } : { conflict: true }
+      })
+    })
+
+    async function editUntilConflict() {
+      const rendered = await renderRoute(`/calendar?m=${MONTH}`)
+      const { user } = rendered
+      await user.click(await screen.findByText('打合せ（間取り）'))
+      const dialog = await screen.findByRole('dialog', { name: '予定を編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '図面を持参')
+      // The partner's save lands while the form is open
+      current = { ...MEETING, title: '打合せ（仕様）', updatedAt: NEWER }
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      // The calendar behind the form now shows the partner's content
+      await screen.findByText('打合せ（仕様）')
+      return { ...rendered, dialog }
+    }
+
+    it('overwrites with the input when saved again, as the notice says', async () => {
+      const { user, dialog } = await editUntilConflict()
+      expect(within(dialog).getByRole('textbox', { name: 'メモ' })).toHaveValue('図面を持参')
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      expect(await screen.findByText('予定を更新しました')).toBeInTheDocument()
+      expect(mockOf(saveEvent)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({
+          id: 'e1',
+          expectedUpdatedAt: NEWER,
+          title: '打合せ（間取り）',
+          note: '図面を持参',
+        }),
+      })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('still refuses to overwrite when the calendar was reloaded behind the open form', async () => {
+      const { user, router } = await renderRoute(`/calendar?m=${MONTH}`)
+      await user.click(await screen.findByText('打合せ（間取り）'))
+      const dialog = await screen.findByRole('dialog', { name: '予定を編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '図面を持参')
+      current = { ...MEETING, title: '打合せ（仕様）', updatedAt: NEWER }
+      // e.g. the undo window of a delete ends and the page reloads its data
+      await act(() => router.invalidate())
+      await screen.findByText('打合せ（仕様）')
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      // The form never showed the partner's content, so this save must not replace it silently
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      expect(mockOf(saveEvent)).toHaveBeenCalledTimes(1)
+      expect(mockOf(saveEvent)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ expectedUpdatedAt: MEETING.updatedAt }),
+      })
+    })
+
+    it('brings the input back when the form is closed and opened again', async () => {
+      const { user } = await editUntilConflict()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      clearNotifications()
+      await user.click(screen.getByText('打合せ（仕様）'))
+      const reopened = await screen.findByRole('dialog', { name: '予定を編集' })
+      expect(await within(reopened).findByText('書きかけの下書きを戻しました')).toBeInTheDocument()
+      expect(within(reopened).getByRole('textbox', { name: 'メモ' })).toHaveValue('図面を持参')
+    })
   })
 
   it('tells when an event could not be saved', async () => {

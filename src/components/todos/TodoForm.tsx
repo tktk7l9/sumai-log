@@ -61,14 +61,25 @@ export function TodoForm({
         !v.trim() || /^https?:\/\//.test(v.trim()) ? null : 'URL は http(s):// で始めてください',
     },
   })
-  const draft = useFormDraft(form, draftKey('todo', todo?.id, todo?.updatedAt), initial)
+  // The updatedAt a save is based on, and the draft is kept under: the row's as the form was
+  // opened. `todo` follows the loader data, and a reload behind the open form must not move
+  // the base, or a save would replace the partner's change without the conflict notice. After
+  // that notice the reloaded row becomes the base: saving again overwrites, and the form
+  // opened again finds the draft (both promised by CONFLICT_MESSAGE)
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(todo?.updatedAt)
+  const [rebasing, setRebasing] = useState(false)
+  if (rebasing && todo && todo.updatedAt !== baseUpdatedAt) {
+    setBaseUpdatedAt(todo.updatedAt)
+    setRebasing(false)
+  }
+  const draft = useFormDraft(form, draftKey('todo', todo?.id, baseUpdatedAt), initial)
 
   async function submit(values: Values) {
     setSaving(true)
     try {
       const res = await save({
         data: {
-          ...(todo ? { id: todo.id, expectedUpdatedAt: todo.updatedAt } : {}),
+          ...(todo ? { id: todo.id, expectedUpdatedAt: baseUpdatedAt } : {}),
           title: values.title,
           list: values.list,
           assignee: values.assignee === BOTH ? null : values.assignee,
@@ -79,6 +90,7 @@ export function TodoForm({
       })
       if (res.conflict) {
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        setRebasing(true)
         await router.invalidate()
         return
       }

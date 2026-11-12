@@ -62,9 +62,13 @@ function Page() {
   // Ticks applied on the device before the server answers, so the row moves at once
   const [optimistic, setOptimistic] = useState<Record<string, string | null>>({})
   const [opened, setOpened] = useState(edit !== undefined)
-  const [editing, setEditing] = useState<Todo | null>(
+  const [editingRow, setEditing] = useState<Todo | null>(
     () => loaded.find((t) => t.id === edit) ?? null,
   )
+  // The form gets the row of the loader data, not the one it was opened with: after the
+  // conflict notice it bases the next save and its draft on the reloaded row (TodoForm). A row
+  // that is no longer listed (the partner deleted it) stays as it was opened
+  const editing = editingRow ? (loaded.find((t) => t.id === editingRow.id) ?? editingRow) : null
 
   const todos = loaded
     .filter((t) => !pendingDeletes.has(t.id))

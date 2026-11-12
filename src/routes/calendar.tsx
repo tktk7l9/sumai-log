@@ -132,7 +132,11 @@ function Page() {
   const router = useRouter()
   const remove = useServerFn(deleteEvent)
   const linkNews = useServerFn(linkNewsToEvent)
-  const [editing, setEditing] = useState<EventWithLinks | null>(null)
+  const [editingRow, setEditing] = useState<EventWithLinks | null>(null)
+  // The form gets the row of the loader data, not the one it was opened with: after the
+  // conflict notice it bases the next save and its draft on the reloaded row (EventForm). An
+  // event that is no longer in the loaded range stays as it was opened
+  const editing = editingRow ? (events.find((e) => e.id === editingRow.id) ?? editingRow) : null
   const [creating, setCreating] = useState(false)
   // The information layer drawer holds only the id (the news itself is looked up again from
   // the loader data every time). This way, when newsEvents is refreshed by router.invalidate()
