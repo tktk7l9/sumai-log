@@ -57,6 +57,7 @@ import {
   normalizePlan,
   parseLotLines,
   placeBuildingNorth,
+  samePlan,
   sectionDepth,
   type CheckStatus,
   type Floors,
@@ -133,9 +134,9 @@ function Page() {
   const [hour, setHour] = useState(10)
   const [view, setView] = useState<'2d' | '3d'>('2d')
   const sunNow = solarPosition(plan.latitude, SEASON_DECLINATION[season], hour)
-  const dirty = saved === null || JSON.stringify(saved) !== JSON.stringify(plan)
+  const dirty = saved === null || !samePlan(saved, plan)
   // Changed by the user in this session (the initial values before the first save do not count)
-  const edited = JSON.stringify(saved ?? startPlan) !== JSON.stringify(plan)
+  const edited = !samePlan(saved ?? startPlan, plan)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
   // The range the section can move left and right (avoids the strip of the access lane to the

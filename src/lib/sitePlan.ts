@@ -195,6 +195,34 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   neighbors: [],
 }
 
+/**
+ * Rebuilds a plan with its keys in the order of the type (and without keys it does not
+ * have). The page compares plans by their JSON, and a plan reaches it over three paths that
+ * each kept their own order (the validator's schema order from a save, the "defaults for
+ * later items first" order from a read, the order of the page's own state): the same values
+ * read as 「未保存の変更」 (unsaved changes) right after every save
+ */
+function inKeyOrder(plan: SitePlan): SitePlan {
+  const keys = Object.keys(DEFAULT_SITE_PLAN) as (keyof SitePlan)[]
+  return {
+    ...(Object.fromEntries(keys.map((k) => [k, plan[k]])) as SitePlan),
+    neighbors: plan.neighbors.map(({ label, kind, x, y, width, depth, height }) => ({
+      label,
+      kind,
+      x,
+      y,
+      width,
+      depth,
+      height,
+    })),
+  }
+}
+
+/** Whether two plans hold the same values, whatever order their keys are in */
+export function samePlan(a: SitePlan, b: SitePlan): boolean {
+  return JSON.stringify(inKeyOrder(a)) === JSON.stringify(inKeyOrder(b))
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
@@ -391,7 +419,7 @@ export function normalizePlan(plan: SitePlan): SitePlan {
   const bDepth = buildingDepth(next)
   next.buildingX = fitPosition(plan.buildingX, 0, sectionWidth - next.buildingWidth)
   next.buildingY = fitPosition(plan.buildingY, 0, sDepth - bDepth)
-  return next
+  return inKeyOrder(next)
 }
 
 export type Rect = { x: number; y: number; width: number; depth: number }

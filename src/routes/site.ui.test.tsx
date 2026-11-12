@@ -79,6 +79,25 @@ describe('site route', () => {
     })
   })
 
+  it('shows the saved state after a save, whatever key order the server answers in', async () => {
+    const rekeyed = (p: SitePlan) => Object.fromEntries(Object.entries(p).reverse()) as never
+    let stored: SitePlan | null = null
+    mockOf(getSitePlan).mockImplementation(async () => ({ plan: stored, buildPlan: null }))
+    mockOf(saveSitePlan).mockImplementation(async (arg) => {
+      stored = (arg as { data: SitePlan }).data
+      return { ok: true, plan: rekeyed(stored) }
+    })
+    const { user } = await renderRoute('/site')
+    await screen.findByText('初期値（まだ保存していません）')
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    expect(screen.getByText('未保存の変更')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+    expect(await screen.findByText('区画を保存しました')).toBeInTheDocument()
+    expect(await screen.findByText('保存済み（二人で共有）')).toBeInTheDocument()
+    expect(screen.queryByText('未保存の変更')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '区画を保存' })).toBeDisabled()
+  })
+
   it('reports a refused save', async () => {
     mockOf(saveSitePlan).mockRejectedValue(new Error('区画が土地からはみ出しています'))
     const { user } = await renderRoute('/site')

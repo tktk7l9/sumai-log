@@ -31,6 +31,7 @@ import {
   remainingPieces,
   sideDirections,
   round1,
+  samePlan,
   sectionDepth,
   sectionRect,
   southGap,
@@ -99,6 +100,39 @@ describe('parseSitePlan', () => {
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, quasiFireZone: 1 }))).toBeNull()
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, lotLines: 10.5 }))).toBeNull()
     expect(parseSitePlan(JSON.stringify({ ...DEFAULT_SITE_PLAN, lotLines: ['10.5'] }))).toBeNull()
+  })
+})
+
+describe('one key order for every plan', () => {
+  const reversed = (p: SitePlan): SitePlan =>
+    Object.fromEntries(Object.entries(p).reverse()) as unknown as SitePlan
+  const neighbor = { label: '北の家', kind: 'building', x: 0, y: 50, width: 8, depth: 6, height: 7 }
+
+  it('returns the keys in the order of the type from normalizePlan and parseSitePlan, whatever came in', () => {
+    const order = Object.keys(DEFAULT_SITE_PLAN)
+    const p = normalizePlan(reversed({ ...DEFAULT_SITE_PLAN, neighbors: [neighbor as never] }))
+    expect(Object.keys(p)).toEqual(order)
+    // A value saved before the later items were added: the filled-in keys do not come first
+    const { parkingAccess: _p, roadWidth: _r, neighbors: _n, ...old } = DEFAULT_SITE_PLAN
+    expect(Object.keys(parseSitePlan(JSON.stringify(old))!)).toEqual(order)
+    // What the server stores (keys as received) reads back in the same serialisation
+    const stored = JSON.stringify(reversed(p))
+    expect(JSON.stringify(parseSitePlan(stored))).toBe(JSON.stringify(p))
+    // Neighbours too, and a key the plan does not have is dropped
+    const odd = normalizePlan({
+      ...DEFAULT_SITE_PLAN,
+      extra: 1,
+      neighbors: [Object.fromEntries(Object.entries(neighbor).reverse()) as never],
+    } as SitePlan)
+    expect(Object.keys(odd.neighbors[0]!)).toEqual(Object.keys(neighbor))
+    expect(odd).not.toHaveProperty('extra')
+  })
+
+  it('compares plans by value with samePlan', () => {
+    const p = normalizePlan({ ...DEFAULT_SITE_PLAN, neighbors: [neighbor as never] })
+    expect(samePlan(p, reversed(p))).toBe(true)
+    expect(samePlan(p, { ...p, buildingX: p.buildingX + 0.5 })).toBe(false)
+    expect(samePlan(p, { ...p, neighbors: [{ ...p.neighbors[0]!, height: 9 }] })).toBe(false)
   })
 })
 
