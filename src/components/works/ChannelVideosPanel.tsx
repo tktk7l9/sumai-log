@@ -49,13 +49,23 @@ function TitleSearch({ q, onChange }: { q: string | undefined; onChange: (q: str
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
+  // What this box last wrote to `?q=`. q is a loader dependency, so it comes back only when
+  // the server has answered, and the user may have typed on by then (mid-conversion with the
+  // Japanese IME): the box follows q only when q is not what the box itself sent
+  const sentRef = useRef(q ?? '')
+
   useEffect(() => {
+    if ((q ?? '') === sentRef.current) return
+    sentRef.current = q ?? ''
     setInput(q ?? '')
   }, [q])
 
   useEffect(() => {
     if (debounced !== input) return
-    if (debounced.trim() !== (qRef.current ?? '')) onChangeRef.current(debounced.trim())
+    const next = debounced.trim()
+    if (next === (qRef.current ?? '')) return
+    sentRef.current = next
+    onChangeRef.current(next)
   }, [debounced])
 
   return (

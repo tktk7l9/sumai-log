@@ -48,13 +48,21 @@ export function GlossaryFilters({
   const onQueryChangeRef = useRef(onQueryChange)
   onQueryChangeRef.current = onQueryChange
 
+  // What this field last sent. The route applies it a moment later, and by then the user may
+  // have typed on: the field is realigned only when q is not the value it sent itself
+  const sentRef = useRef(q ?? '')
+
   useEffect(() => {
+    if ((q ?? '') === sentRef.current) return
+    sentRef.current = q ?? ''
     setInputValue(q ?? '')
   }, [q])
 
   useEffect(() => {
     if (debounced !== inputValue) return // drop values older than the input (e.g. right after an external change)
-    if (debounced !== (qRef.current ?? '')) onQueryChangeRef.current(debounced)
+    if (debounced === (qRef.current ?? '')) return
+    sentRef.current = debounced
+    onQueryChangeRef.current(debounced)
     // inputValue is always the latest in a render where debounced changes, so it is not a
     // dependency
   }, [debounced])

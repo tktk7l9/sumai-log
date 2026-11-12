@@ -61,13 +61,22 @@ function MemoSearch({ q, onChange }: { q: string | undefined; onChange: (q: stri
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
+  // What this box last wrote to `?q=`: its own value coming back must not replace what was
+  // typed in the meantime (same as the title search of /works)
+  const sentRef = useRef(q ?? '')
+
   useEffect(() => {
+    if ((q ?? '') === sentRef.current) return
+    sentRef.current = q ?? ''
     setInput(q ?? '')
   }, [q])
 
   useEffect(() => {
     if (debounced !== input) return
-    if (debounced.trim() !== (qRef.current ?? '')) onChangeRef.current(debounced.trim())
+    const next = debounced.trim()
+    if (next === (qRef.current ?? '')) return
+    sentRef.current = next
+    onChangeRef.current(next)
   }, [debounced])
 
   return (

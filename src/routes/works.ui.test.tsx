@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { listChannelVideosPage, markChannelVideoWatched } from '../server/channelVideos'
@@ -475,6 +475,65 @@ describe('works route, videos tab', () => {
         data: { unwatched: true, q: '平屋', limit: 30 },
       }),
     )
+  })
+
+  it('keeps what is typed while the previous title search is still loading', async () => {
+    const page = { rows: [clip(1)], matched: 1, channels: CHANNELS, todayKey: '2026-09-25' }
+    // The answer for "abc" is held back until the test lets it go (a phone on a slow line)
+    let answerAbc: (() => void) | undefined
+    mockOf(listChannelVideosPage).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { q?: string } }).data.q === 'abc') {
+        await new Promise<void>((resolve) => {
+          answerAbc = resolve
+        })
+      }
+      return page
+    })
+    const { user, router } = await renderRoute('/works')
+    const box = await screen.findByRole('textbox', { name: 'タイトルで検索' })
+    await user.type(box, 'abc ')
+    await waitFor(() => expect(answerAbc).toBeDefined())
+    // One more letter, and the answer for "abc" lands before that letter's debounce is over
+    await user.type(box, 'd')
+    answerAbc!()
+    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'abc d' }))
+    expect(box).toHaveValue('abc d')
+    expect(mockOf(listChannelVideosPage)).toHaveBeenLastCalledWith({
+      data: { kind: 'video', q: 'abc d', limit: 30 },
+    })
+  })
+
+  it('keeps the box when two title searches are in flight, and follows a change of q from outside', async () => {
+    const page = { rows: [clip(1)], matched: 1, channels: CHANNELS, todayKey: '2026-09-25' }
+    const held: (() => void)[] = []
+    mockOf(listChannelVideosPage).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { q?: string } }).data.q) {
+        await new Promise<void>((resolve) => held.push(resolve))
+      }
+      return page
+    })
+    const { user, router } = await renderRoute('/works')
+    const box = await screen.findByRole('textbox', { name: 'タイトルで検索' })
+    await user.type(box, 'abc')
+    await waitFor(() => expect(held).toHaveLength(1))
+    await user.type(box, 'd')
+    await waitFor(() => expect(held).toHaveLength(2))
+    await user.type(box, 'e')
+    // The older answer first, as the network may deliver them
+    held[0]()
+    held[1]()
+    await waitFor(() => expect(held).toHaveLength(3))
+    held[2]()
+    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'abcde' }))
+    expect(box).toHaveValue('abcde')
+
+    // A change that did not come from the box (back/forward, a link) still realigns it
+    act(() => void router.navigate({ to: '/works', search: { q: '平屋' } }))
+    await waitFor(() => expect(held).toHaveLength(4))
+    held[3]()
+    await waitFor(() => expect(box).toHaveValue('平屋'))
+    act(() => void router.navigate({ to: '/works', search: {} }))
+    await waitFor(() => expect(box).toHaveValue(''))
   })
 
   it('treats an unknown channel id as no filter', async () => {
