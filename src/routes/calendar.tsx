@@ -270,9 +270,14 @@ function Page() {
   // Japanese calendars colour Saturday blue and Sunday / holidays red (SHIG 71). Mantine's
   // weekendDays paints both red, so Saturday that is not a holiday gets its own class
   function dayProps(key: string) {
+    // Today is the server's Japanese date (todayKey), marked with aria-current and painted by
+    // styles.css. Mantine's own mark (highlightToday) compares with the clock of whoever
+    // renders: the Worker runs in UTC, so a page loaded between 00:00 and 08:59 in Japan
+    // marked yesterday, and hydration does not repair an attribute
+    const today = dateKey(key) === todayKey ? { 'aria-current': 'date' as const } : {}
     const name = holidayName(key)
-    if (name) return { className: 'is-holiday', title: name }
-    return dayOfWeek(dateKey(key)) === 6 ? { className: 'is-saturday' } : {}
+    if (name) return { ...today, className: 'is-holiday', title: name }
+    return dayOfWeek(dateKey(key)) === 6 ? { ...today, className: 'is-saturday' } : today
   }
 
   return (
@@ -307,7 +312,7 @@ function Page() {
           monthViewProps={{
             firstDayOfWeek: 1,
             weekendDays: [0, 6],
-            highlightToday: true,
+            highlightToday: false,
             getDayProps: dayProps,
             maxEventsPerDay: isMobile ? 1 : 2,
             // All heading dates are unified to YYYY/MM/DD (owner's request, 2026-09-23). Months use YYYY/MM

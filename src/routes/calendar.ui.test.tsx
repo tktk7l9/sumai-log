@@ -157,6 +157,34 @@ describe('calendar route', () => {
     }
   })
 
+  it('marks today as the server decides it, not by the clock of where the page is rendered', async () => {
+    // The page as the Worker renders it: in UTC, at 07:30 in Japan, when UTC is still on the
+    // day before
+    const zone = process.env.TZ
+    process.env.TZ = 'UTC'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-10-09T22:30:00Z'))
+    try {
+      stub(listEventsBetween, {
+        events: [],
+        recordedEventIds: [],
+        todayKey: '2099-10-10',
+        nowIso: '2099-10-10T07:30:00+09:00',
+      })
+      await renderRoute(`/calendar?m=${MONTH}`)
+      await screen.findByText('自分たちの予定')
+      const yesterday = screen.getByRole('button', { name: '10月 9, 2099' })
+      expect(yesterday.querySelector('[data-today]')).toBeNull()
+      expect(yesterday).not.toHaveAttribute('aria-current')
+      // Exactly one day is today, and it is the Japanese date
+      expect(screen.getByRole('button', { current: 'date' })).toHaveAccessibleName('10月 10, 2099')
+    } finally {
+      vi.useRealTimers()
+      if (zone === undefined) delete process.env.TZ
+      else process.env.TZ = zone
+    }
+  })
+
   it('edits an event from the calendar, and deletes it with undo', async () => {
     const save = stub(saveEvent, { id: 'e1' })
     const remove = stub(deleteEvent, { ok: true })
