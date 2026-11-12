@@ -823,6 +823,36 @@ describe('adjacent land, orientation and sunlight', () => {
     expect(sunOnSouthWall(p, 'summer').blockers).toEqual([])
   })
 
+  it('counts 24 lit ten-minute steps as exactly 4 hours, which meets the 4-hour guide', () => {
+    // A building 6 m above window height, 11.3 m south of the wall and as wide as the view,
+    // blocks the sun while its profile angle is under atan(6 / 11.3) = 27.97° (tan 0.531). On
+    // the winter solstice at 35.5°N the tangent of the profile angle is 0.523 at 9:55, 0.536 at
+    // 10:05 and the same mirrored at 13:55 / 14:05: lit for the 24 steps from 10:05 to 13:55,
+    // blocked for the other 24. Adding 1/6 h per step gave 3.9999999999999982 -> "warn"
+    const p = normalizePlan({
+      ...DEFAULT_SITE_PLAN,
+      landWidth: 18,
+      landDepth: 55,
+      sectionWidth: 14,
+      buildingWidth: 10,
+      buildingX: 2,
+      buildingY: 4,
+      neighbors: [{ ...tall, x: -500, y: 4 - 11.3 - 10, width: 1000, depth: 10, height: 7 }],
+    })
+    const r = sunOnSouthWall(p)
+    expect(r.hours).toEqual([4, 4, 4, 4, 4])
+    expect(r.min).toBe(4)
+    expect(r.average).toBe(4)
+    expect(r.blockers).toEqual([{ label: '南の建物', hours: 4 }])
+    const c = check(p, 'sun')
+    expect(c.status).toBe('ok')
+    expect(c.detail).toContain('短い所で 4時間')
+    // One step less is under the guide
+    const closer = { ...p, neighbors: [{ ...p.neighbors[0]!, y: 4 - 11 - 10 }] }
+    expect(sunOnSouthWall(closer).min).toBeLessThan(4)
+    expect(check(closer, 'sun').status).toBe('warn')
+  })
+
   it('does not hit the south window in the morning and evening of the summer solstice, when the sun is toward the north', () => {
     expect(sunOnSouthWall(base(), 'summer').min).toBeLessThan(8)
   })

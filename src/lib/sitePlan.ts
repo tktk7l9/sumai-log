@@ -627,10 +627,15 @@ export function shadingBoxes(plan: SitePlan): (Box & { label: string })[] {
     .map(({ label, x, y, width, depth, height }) => ({ label, x, y, width, depth, height }))
 }
 
-/** The time window (true solar time) and the step (hours) for looking at sunlight */
+/** The time window (true solar time) for looking at sunlight */
 export const SUN_START = 8
 export const SUN_END = 16
-const SUN_STEP = 1 / 6
+/**
+ * Steps per hour (10 minutes). Lit and blocked steps are counted as integers and turned into
+ * hours once at the end: adding 1/6 h twenty-four times gives 3.9999999999999982, which fell
+ * under the 4 h guide while the text said 「4時間」
+ */
+const SUN_STEPS_PER_HOUR = 6
 /** Rough window height (m, around the middle of a floor-to-ceiling sliding window) */
 const WINDOW_Z = 1
 
@@ -672,27 +677,31 @@ export function sunOnSouthWall(plan: SitePlan, season: Season = 'winter'): SunRe
     z: WINDOW_Z,
   }))
   const boxes = shadingBoxes(plan)
+  // Numbers of steps, per building that blocked and per sample point that was lit
   const blocked = new Map<string, number>()
-  const hours = samples.map(() => 0)
+  const lit = samples.map(() => 0)
   const decl = SEASON_DECLINATION[season]
-  for (let t = SUN_START + SUN_STEP / 2; t < SUN_END; t += SUN_STEP) {
+  const steps = (SUN_END - SUN_START) * SUN_STEPS_PER_HOUR
+  for (let step = 0; step < steps; step++) {
+    const t = SUN_START + (step + 0.5) / SUN_STEPS_PER_HOUR
     const { altitude, azimuth } = solarPosition(plan.latitude, decl, t)
     if (altitude <= 0) continue
     const sun = sunInLand(altitude, azimuth, rightAz, backAz)
     if (sun.x * wall.nx + sun.y * wall.ny <= 0) continue
     samples.forEach((p, i) => {
       const hit = boxes.find((box) => rayHitsBox(p, sun, box))
-      if (hit) blocked.set(hit.label, (blocked.get(hit.label) ?? 0) + SUN_STEP / samples.length)
-      else hours[i]! += SUN_STEP
+      if (hit) blocked.set(hit.label, (blocked.get(hit.label) ?? 0) + 1)
+      else lit[i]! += 1
     })
   }
+  const hours = lit.map((n) => n / SUN_STEPS_PER_HOUR)
   return {
     wall: sideDirections(plan.roadSide)[wall.side],
     hours,
-    average: hours.reduce((a, v) => a + v, 0) / hours.length,
+    average: lit.reduce((a, n) => a + n, 0) / SUN_STEPS_PER_HOUR / lit.length,
     min: Math.min(...hours),
     blockers: [...blocked]
-      .map(([label, h]) => ({ label, hours: h }))
+      .map(([label, n]) => ({ label, hours: n / SUN_STEPS_PER_HOUR / samples.length }))
       .sort((a, c) => c.hours - a.hours),
   }
 }
