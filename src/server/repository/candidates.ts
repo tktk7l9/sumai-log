@@ -3,6 +3,7 @@ import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import type { Db } from '../../db/client'
 import {
   comments,
+  inboundMails,
   properties,
   vendors,
   type FaviconSource,
@@ -42,10 +43,30 @@ export async function upsertVendor(
   return id
 }
 
-/** Deletes a vendor. FK SET NULL detaches vendorId on places/events/visits/videos. Comments are deleted */
+/**
+ * Deletes a vendor. FK SET NULL detaches vendorId on places/events/visits/videos. Comments are
+ * deleted, and so are the vendor's news rows (FK CASCADE).
+ *
+ * The mails imported as this vendor's newsletters go back to unassigned first. The foreign keys
+ * alone would only null their vendor_id / news_id and leave them `imported`: not under
+ * 「未割当」, not importable to another vendor (importMailAsNews takes unassigned rows only), and
+ * the same mail forwarded again is dropped as a duplicate. One db.batch, so a failure midway
+ * does not leave the mails unassigned (or the comments gone) with the vendor still there.
+ */
 export async function deleteVendorCascade(db: Db, id: string): Promise<void> {
-  await db.delete(comments).where(and(eq(comments.targetType, 'vendor'), eq(comments.targetId, id)))
-  await db.delete(vendors).where(eq(vendors.id, id))
+  await db.batch([
+    db
+      .update(inboundMails)
+      .set({
+        status: 'unassigned',
+        vendorId: null,
+        newsId: null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(and(eq(inboundMails.vendorId, id), eq(inboundMails.status, 'imported'))),
+    db.delete(comments).where(and(eq(comments.targetType, 'vendor'), eq(comments.targetId, id))),
+    db.delete(vendors).where(eq(vendors.id, id)),
+  ])
 }
 
 export async function getVendorWebsiteUrl(db: Db, id: string): Promise<string | null> {
