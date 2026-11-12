@@ -3,6 +3,9 @@
  * joined by the caller) (design.md §3). When there is no kind word at all, or not a single
  * real date can be found, it is not an event (null).
  *
+ * The text is read after NFKC normalisation, so full-width digits, slashes, brackets and the
+ * full-width tilde are the same as their ASCII forms (`１１／１４（土）` = `11/14(土)`).
+ *
  * Date expressions are resolved by filling in the year of the published date (when the body
  * has no explicit year). The year-crossing decision is split out into `inferYear`. Found dates
  * are validated as month 1-12 and a day on the real calendar (leap years considered), and
@@ -10,14 +13,17 @@
  * exists).
  *
  * Supported date formats (see the comments of each section for details):
- *   - Kanji: `M月D日` (`YYYY年` is optional), and a list / range of standalone `D日` that
- *     follows right after (`・18日` `〜23日(月祝)` etc.; weekday / holiday notes are ignored)
- *   - Slash: `M/D` alone, `M/D-/D` (end in the same month), `M/D-M/D` (end that may cross
- *     months), `M/D〜M/D` / `M/D～D` (range with wave dash / full-width tilde),
- *     `M/D.D` / `M/D・D` / `M/D、D` / `M/D,D` (list of days separated by `.` `・` `、` `,`.
- *     It can repeat, as in `8/22.23.24`. Each item must be a real day greater than the
- *     previous day, and reading the list stops at the point where that no longer holds
- *     -- a trade-off to avoid confusion with decimal notation [`1.5` `0.5割`])
+ *   - Kanji: `M月D日` (`YYYY年` is optional), and the standalone `D日` that continue it
+ *     (`・18日` `〜23日(月祝)` `と22日`; weekday / holiday notes are ignored). A `D日` that
+ *     counts days (`1日3組`, `3日間`, `3日前`) is not a day of the month
+ *   - Slash: `M/D` alone (`YYYY/` is optional), `M/D-/D` (end in the same month), `M/D-M/D`
+ *     (end that may cross months), `M/D〜D` (range marks: `-` `〜` `~` `–` `—` `−`), and a
+ *     list of days `M/D.D` / `M/D・D` / `M/D、D` / `M/D,D` (it can repeat, as in `8/22.23.24`.
+ *     Each item must be a real day greater than the previous day, and reading the list stops
+ *     at the point where that no longer holds -- a trade-off to avoid confusion with decimal
+ *     notation [`1.5` `0.5割`]). A weekday note may sit between the day and the mark
+ *     (`11/14(土)・15(日)`, `11/14(土)〜15(日)`)
+ *   - Dot with a year: `YYYY.M.D`
  */
 
 import { pad } from './text'
@@ -44,11 +50,13 @@ function detectKind(text: string): EventKindLabel | null {
  * (`publishedOn` = 'YYYY-MM-DD'). A month **2 or more months before** the published month
  * (`month < published month - 1`) is taken as an event of the next year.
  * Anything else (up to 1 month before the published month, the same month, later months) is
- * the same year as the published date.
+ * the same year as the published date. "1 month before" wraps at the new year: December in a
+ * January post is last month, so the year before (a report on an event that just ended).
  */
 export function inferYear(month: number, publishedOn: string): number {
   const postYear = Number(publishedOn.slice(0, 4))
   const postMonth = Number(publishedOn.slice(5, 7))
+  if (postMonth === 1 && month === 12) return postYear - 1
   return month < postMonth - 1 ? postYear + 1 : postYear
 }
 
@@ -86,16 +94,49 @@ export function isRealDate(date: FoundDate): boolean {
 // ignored. They contain no digits, so they do not affect the later scan).
 const KANJI_DATE = /(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日/g
 // A standalone "D日" that is not part of "M月D日" (continuation of a list / range: `・18日`
-// `〜23日` etc.).
-const BARE_DAY = /(\d{1,2})日/g
+// `〜23日` etc.). Not the tail of a longer number (`120日`).
+const BARE_DAY = /(?<!\d)(\d{1,2})日/g
 
-type KanjiSpan = { start: number; end: number; year: number; month: number }
+/** A weekday / holiday note: `(土)` `(月・祝)` `(土曜)`. No digits, so `(10:00)` is not one */
+const NOTE = String.raw`(?:\s*\([^)\d]{1,6}\))?`
 
 /**
- * Picks up "M月D日" (an explicit year is allowed too) and the list / range of "D日" that
- * follows it (`・18日` `〜23日(月祝)` etc.; weekday / holiday notes are ignored).
- * A standalone "D日" is taken as the same month and year as the preceding "M月D日", and is
- * dropped when there is none before it.
+ * What may stand between a date and the "D日" that continues it as a list or a range: the
+ * note of the date before, then one joining mark (`11月21日(土)・22日`, `21日〜23日`,
+ * `21日と22日`, `21日から23日`).
+ */
+const KANJI_JOIN = new RegExp(`^${NOTE}\\s*(?:[・、,〜~\\-–—−&と]|から|及び|および)\\s*$`)
+
+/**
+ * "D日" counts days instead of naming a day of the month when one of these follows:
+ * `1日3組`, `3日間`, `2日目`, `3日前`, `8日後`, `5日以内`.
+ */
+const COUNT_AFTER_JOINED = /^(?:\d|間|目|前|後|以内)/
+/**
+ * The same for a "D日" that is not joined to the date before it, which gets less benefit of
+ * the doubt: also `1日だけ`, `1日のみ`, `1日限り`, `1日中`, `3日連続`, `第3日曜`, `2日とも`,
+ * `3日以上`, `3日ほど`, `3日程度`, `3日おき`, `3日ごと`, `3日分`.
+ */
+const COUNT_AFTER_LOOSE = /^(?:\d|間|目|前|後|以|だけ|のみ|限|中|連|曜|とも|ほど|程|おき|ごと|分)/
+/** `第3日`, `全3日`, `計3日`, `約3日`, `各3日`, `毎3日` */
+const COUNT_BEFORE_LOOSE = /[第全計約各毎]$/
+/** How far (in characters) a "D日" that is not joined may be from the date it takes its month from */
+const LOOSE_REACH = 40
+
+type KanjiSpan = { start: number; end: number; year: number; month: number; day: number }
+
+/**
+ * Picks up "M月D日" (an explicit year is allowed too) and the "D日" that continue it, which
+ * take the month and year of the date before them.
+ *
+ * A "D日" joined to the date before it by a list / range mark is a day of that month unless a
+ * counter follows (`11月21日、3日前までに`). One that is not joined
+ * (`11月21日(土)10:00〜17:00 / 22日(日)10:00〜15:00`) counts only when it is later in the
+ * month than the date before it, in the same sentence and near it, and neither a counter nor
+ * a count prefix surrounds it: "1日3組限定", "3日間限定" and "3日前までに" after a date are
+ * not the 1st or the 3rd of the month (they used to move the event to a day long past, and
+ * the news showed 「終了」 for an open house still two weeks away).
+ * A "D日" with no "M月D日" before it has no clue for the month and is dropped.
  */
 function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
@@ -105,36 +146,64 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
     // A matchAll match always has an index (it is optional only in the type definition)
     const start = match.index as number
     const month = Number(match[2])
+    const day = Number(match[3])
     const year = match[1] !== undefined ? Number(match[1]) : inferYear(month, publishedOn)
-    spans.push({ start, end: start + match[0].length, year, month })
-    dates.push({ year, month, day: Number(match[3]) })
+    spans.push({ start, end: start + match[0].length, year, month, day })
+    dates.push({ year, month, day })
   }
+
+  // The date each "D日" continues: the "M月D日" before it, or the "D日" accepted after that
+  let previous: KanjiSpan | undefined
+  let nextSpan = 0
 
   for (const match of text.matchAll(BARE_DAY)) {
     const start = match.index as number
+    const end = start + match[0].length
     // Do not double count the day part of a "M月D日" already picked up by KANJI_DATE
     if (spans.some((span) => start >= span.start && start < span.end)) continue
 
     // The preceding "M月D日" whose month is reused (without one this "D日" has no clue, so drop it)
-    let governing: KanjiSpan | undefined
-    for (let i = spans.length - 1; i >= 0; i--) {
-      if (spans[i].start < start) {
-        governing = spans[i]
-        break
-      }
+    while (nextSpan < spans.length && spans[nextSpan].start < start) {
+      previous = spans[nextSpan]
+      nextSpan++
     }
-    if (!governing) continue
+    if (!previous) continue
 
-    dates.push({ year: governing.year, month: governing.month, day: Number(match[1]) })
+    const day = Number(match[1])
+    const between = text.slice(previous.end, start)
+    const after = text.slice(end)
+    const joined = KANJI_JOIN.test(between)
+    const isDayOfMonth = joined
+      ? !COUNT_AFTER_JOINED.test(after)
+      : day > previous.day &&
+        between.length <= LOOSE_REACH &&
+        !between.includes('。') &&
+        !COUNT_BEFORE_LOOSE.test(between) &&
+        !COUNT_AFTER_LOOSE.test(after)
+    if (!isDayOfMonth) continue
+
+    dates.push({ year: previous.year, month: previous.month, day })
+    previous = { ...previous, start, end, day }
   }
 
   return dates
 }
 
-// After "M/D", optionally allows a range that ends in the same month (`-/D` `～D`) or runs to
-// another month (`-M/D` `〜M/D`).
-const SLASH_RANGE =
-  /(\d{1,2})\/(\d{1,2})(?:[-〜～](?:(\d{1,2})\/(\d{1,2})|\/(\d{1,2})|(\d{1,2})))?/g
+/** A range mark, with the note of the day before it: `-` `〜` `~` (also from `～`) `–` `—` `−` */
+const RANGE_MARK = String.raw`${NOTE}\s*[-〜~–—−]\s*`
+
+// "M/D" (an explicit `YYYY/` is allowed), optionally followed by a range that ends in the same
+// month (`-/D` `〜D`) or runs to another month (`-M/D` `〜M/D`). It is not read out of the
+// middle of a longer run (`2026/11/21` is not `26/11`), and the end of a range is not a time
+// (`11/14〜17:00`, `11/14〜17時`).
+const SLASH_RANGE = new RegExp(
+  String.raw`(?<![\d/])(?:(20\d{2})/)?(\d{1,2})/(\d{1,2})(?![\d/])` +
+    String.raw`(?:${RANGE_MARK}(?:(\d{1,2})/(\d{1,2})|/(\d{1,2})|(\d{1,2}))(?![\d/:時]))?`,
+  'g',
+)
+
+// "YYYY.M.D". The year is required: without it `11.21` is a decimal or a version number.
+const DOT_DATE = /(?<![\d.])(20\d{2})\.(\d{1,2})\.(\d{1,2})(?![\d.])/g
 
 /**
  * A lone "M/D" with neither a range marker (`-` `〜` `～`) nor a weekday note can be a false
@@ -159,10 +228,17 @@ function looksLikeFraction(text: string, start: number, end: number): boolean {
   )
 }
 
+/** What makes a number after a list mark a count, not a day: `、15組限定`, `・20名様`, `,3時間` */
+const LIST_COUNTERS =
+  '組|名|人|件|棟|回|時|分|円|万|千|%|:|歳|年|月|階|坪|畳|帖|社|邸|区|か月|ヶ月|カ月|m|cm|mm|㎡|kg|度|日間|日目|日前|日後'
+
 // One item of the list of days that continues right after "M/D" (a 1-2 digit day following
-// one of `.` `・` `、` `,`). So as not to cut out part of a number with 3 or more digits
-// (`.234` etc.), it does not match when another digit follows right after (`(?!\d)`).
-const SLASH_DAY_LIST_ITEM = /^[.・、,](\d{1,2})(?!\d)/
+// one of `.` `・` `、` `,` `&` `と`, after the weekday note of the day before:
+// `11/14(土)・15(日)`). So as not to cut out part of a number with 3 or more digits (`.234`
+// etc.), it does not match when another digit follows right after, nor when a counter does.
+const SLASH_DAY_LIST_ITEM = new RegExp(
+  String.raw`^${NOTE}\s*(?:\.|[・、,&と]\s*)(\d{1,2})(?!\d|\s*(?:${LIST_COUNTERS}))`,
+)
 
 /**
  * Reads as much of the list of days starting at `cursor` as it can. Each item must be a real
@@ -195,41 +271,45 @@ function readDayList(
   return lastDay
 }
 
-/** Picks up "M/D", "M/D-/D", "M/D-M/D", "M/D〜M/D", "M/D～D", "M/D.D", "M/D・D" etc. */
+/** Picks up "M/D", "M/D-/D", "M/D-M/D", "M/D〜M/D", "M/D〜D", "M/D.D", "M/D・D" etc. */
 function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   const dates: FoundDate[] = []
 
   for (const match of text.matchAll(SLASH_RANGE)) {
-    const startMonth = Number(match[1])
-    const startDay = Number(match[2])
-    const hasRange = match[3] !== undefined || match[5] !== undefined || match[6] !== undefined
+    const startMonth = Number(match[2])
+    const startDay = Number(match[3])
+    const hasRange = match[4] !== undefined || match[6] !== undefined || match[7] !== undefined
     const start = match.index as number
     const end = start + match[0].length
-    const year = inferYear(startMonth, publishedOn)
+    const hasYear = match[1] !== undefined
+    const year = hasYear ? Number(match[1]) : inferYear(startMonth, publishedOn)
 
-    // Without a range marker (`-` `〜` `～`), try the list of days that follows right after
+    // Without a range marker (`-` `〜` `~`), try the list of days that follows right after
     // (`8/22.23` etc.). It does not coexist with the existing range forms (when there is a
     // range, the list is not tried).
     const listEndDay = hasRange ? null : readDayList(text, end, year, startMonth, startDay)
 
-    if (!hasRange && listEndDay === null && looksLikeFraction(text, start, end)) continue
+    // With a year in front it is a date, not a fraction
+    if (!hasRange && !hasYear && listEndDay === null && looksLikeFraction(text, start, end))
+      continue
 
     dates.push({ year, month: startMonth, day: startDay })
 
-    if (match[3] !== undefined) {
-      // M/D-M/D (end that may cross months)
-      const endMonth = Number(match[3])
-      dates.push({
-        year: inferYear(endMonth, publishedOn),
-        month: endMonth,
-        day: Number(match[4]),
-      })
-    } else if (match[5] !== undefined) {
-      // M/D-/D (end in the same month)
-      dates.push({ year, month: startMonth, day: Number(match[5]) })
+    if (match[4] !== undefined) {
+      // M/D-M/D (end that may cross months, and the year when the start names its year)
+      const endMonth = Number(match[4])
+      const endYear = !hasYear
+        ? inferYear(endMonth, publishedOn)
+        : endMonth < startMonth
+          ? year + 1
+          : year
+      dates.push({ year: endYear, month: endMonth, day: Number(match[5]) })
     } else if (match[6] !== undefined) {
-      // M/D～D (end in the same month)
+      // M/D-/D (end in the same month)
       dates.push({ year, month: startMonth, day: Number(match[6]) })
+    } else if (match[7] !== undefined) {
+      // M/D〜D (end in the same month)
+      dates.push({ year, month: startMonth, day: Number(match[7]) })
     } else if (listEndDay !== null) {
       // M/D.D, M/D・D etc. (list. The last day that was read becomes the end)
       dates.push({ year, month: startMonth, day: listEndDay })
@@ -237,6 +317,15 @@ function findSlashDates(text: string, publishedOn: string): FoundDate[] {
   }
 
   return dates
+}
+
+/** Picks up "YYYY.M.D" */
+function findDotDates(text: string): FoundDate[] {
+  return [...text.matchAll(DOT_DATE)].map((match) => ({
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  }))
 }
 
 /**
@@ -274,12 +363,17 @@ export function extractEvent(
   text: string,
   publishedOn: string,
 ): { start: string; end: string; kind: EventKindLabel } | null {
-  const kind = detectKind(text)
+  // Full-width digits, slashes and brackets, the full-width tilde and half-width katakana
+  // become the forms the patterns below are written in
+  const normalized = text.normalize('NFKC')
+  const kind = detectKind(normalized)
   if (!kind) return null
 
-  const dates = [...findKanjiDates(text, publishedOn), ...findSlashDates(text, publishedOn)].filter(
-    isRealDate,
-  )
+  const dates = [
+    ...findKanjiDates(normalized, publishedOn),
+    ...findSlashDates(normalized, publishedOn),
+    ...findDotDates(normalized),
+  ].filter(isRealDate)
   if (dates.length === 0) return null
 
   const isoDates = dates.map(toIso)

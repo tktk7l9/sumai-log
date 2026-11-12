@@ -134,6 +134,12 @@ describe('a failed Drizzle query', () => {
     )
   })
 
+  it('leaves a failed-query message that carries no values as it is', () => {
+    expect(describeError(new Error('Failed query: select 1')).message).toBe(
+      'Failed query: select 1',
+    )
+  })
+
   it('strips the values from a cause that is itself a failed query', () => {
     const outer = new Error('batch failed', { cause: failedQuery('id-1,テスト市') })
     expect(describeError(outer).cause).toBe(

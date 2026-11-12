@@ -17,6 +17,14 @@ describe('inferYear', () => {
     expect(inferYear(8, '2026-08-01')).toBe(2026)
     expect(inferYear(9, '2026-08-01')).toBe(2026)
   })
+
+  it('the month before a January post is December of the year before (a report on last month)', () => {
+    expect(inferYear(12, '2027-01-06')).toBe(2026)
+  })
+
+  it('two months before a January post is still the coming November', () => {
+    expect(inferYear(11, '2027-01-06')).toBe(2027)
+  })
 })
 
 describe('extractEvent', () => {
@@ -300,5 +308,122 @@ describe('extractEvent', () => {
         end: '2026-08-01',
       })
     })
+  })
+})
+
+describe('a "D日" that is a count, not a day of the month', () => {
+  const published = '2026-11-05'
+  const on = (start: string, end = start) => ({ kind: '完成見学会', start, end })
+
+  it.each([
+    ['完成見学会 11月21日(土)・22日(日) 1日3組限定', on('2026-11-21', '2026-11-22')],
+    ['【予約制】完成見学会 11月21日(土)〜23日(月・祝) 3日間限定', on('2026-11-21', '2026-11-23')],
+    ['完成見学会 11月21日(土) 開催。3日前までにご予約ください', on('2026-11-21')],
+    ['完成見学会 11月21日(土)、3日前までにご予約ください', on('2026-11-21')],
+    ['完成見学会 11月21日(土)の1日だけ開催', on('2026-11-21')],
+    ['完成見学会 11月7日(土) 毎月第3日曜は定休', on('2026-11-07')],
+    ['完成見学会 11月7日(土) 工期は120日', on('2026-11-07')],
+    ['完成見学会 11月7日(土) 2日目は予約制', on('2026-11-07')],
+    ['完成見学会 11月7日(土) 開催から8日後に締切', on('2026-11-07')],
+  ])('%s', (text, expected) => {
+    expect(extractEvent(text, published)).toEqual(expected)
+  })
+
+  it('still reads a later day of the same month that is not written as a list', () => {
+    const text = '完成見学会 11月21日(土)10:00〜17:00 / 22日(日)10:00〜15:00'
+    expect(extractEvent(text, published)).toEqual(on('2026-11-21', '2026-11-22'))
+  })
+
+  it('does not carry the month across a sentence or a long gap', () => {
+    expect(extractEvent('完成見学会 11月21日(土)開催。25日は定休日です', published)).toEqual(
+      on('2026-11-21'),
+    )
+    const gap = 'あ'.repeat(41)
+    expect(extractEvent(`完成見学会 11月21日(土)${gap}25日`, published)).toEqual(on('2026-11-21'))
+  })
+
+  it('reads a list joined by と / から / 及び', () => {
+    expect(extractEvent('完成見学会 11月21日(土)と22日(日)', published)).toEqual(
+      on('2026-11-21', '2026-11-22'),
+    )
+    expect(extractEvent('完成見学会 11月21日から23日まで', published)).toEqual(
+      on('2026-11-21', '2026-11-23'),
+    )
+    expect(extractEvent('完成見学会 11月21日及び22日', published)).toEqual(
+      on('2026-11-21', '2026-11-22'),
+    )
+  })
+})
+
+describe('slash dates as vendors really write them', () => {
+  const published = '2026-11-05'
+  const on = (start: string, end = start) => ({ kind: '完成見学会', start, end })
+
+  it.each([
+    ['11/14(土)・15(日) 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['11/14(土)、15(日) 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['11/14(土)〜15(日) 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['11/14(土)〜11/15(日) 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['11/14(土・祝) - 11/16(月) 完成見学会', on('2026-11-14', '2026-11-16')],
+    ['11/14~15 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['11/14–15 完成見学会', on('2026-11-14', '2026-11-15')],
+    ['完成見学会(12/12-20)', on('2026-12-12', '2026-12-20')],
+    ['2026/11/21(土) 完成見学会', on('2026-11-21')],
+    ['2026/11/21〜11/23 完成見学会', on('2026-11-21', '2026-11-23')],
+    ['2026/12/28〜1/3 完成見学会', on('2026-12-28', '2027-01-03')],
+    ['2026.11.21 完成見学会', on('2026-11-21')],
+    ['2027.1.9(土) 完成見学会', on('2027-01-09')],
+  ])('%s', (text, expected) => {
+    expect(extractEvent(text, published)).toEqual(expected)
+  })
+
+  it('does not take a time, a count or a version for the end of a range or a list', () => {
+    expect(extractEvent('11/14〜17:00 完成見学会', published)).toEqual(on('2026-11-14'))
+    expect(extractEvent('11/14〜17時 完成見学会', published)).toEqual(on('2026-11-14'))
+    expect(extractEvent('11/14(土)、15組限定の完成見学会', published)).toEqual(on('2026-11-14'))
+    expect(extractEvent('11/14(土)・20名様まで 完成見学会', published)).toEqual(on('2026-11-14'))
+    expect(extractEvent('完成見学会 11/14(土) ver2.11.21', published)).toEqual(on('2026-11-14'))
+  })
+
+  it('does not read the tail of a year as a month', () => {
+    // 2026/13/1 is no date: neither "26/13" nor "13/1" may come out of it
+    expect(extractEvent('完成見学会 2026/13/1', published)).toBeNull()
+    expect(extractEvent('完成見学会 2026.13.1', published)).toBeNull()
+  })
+})
+
+describe('full-width and compatibility characters', () => {
+  it('reads full-width digits, slashes and brackets', () => {
+    expect(extractEvent('１１月１４日（土）完成見学会', '2026-11-05')).toEqual({
+      kind: '完成見学会',
+      start: '2026-11-14',
+      end: '2026-11-14',
+    })
+    expect(extractEvent('１１／１４（土）・１５（日）完成見学会', '2026-11-05')).toEqual({
+      kind: '完成見学会',
+      start: '2026-11-14',
+      end: '2026-11-15',
+    })
+  })
+
+  it('reads a kind word written in half-width katakana', () => {
+    expect(extractEvent('ｾﾐﾅｰ 11月14日', '2026-11-05')).toEqual({
+      kind: 'セミナー',
+      start: '2026-11-14',
+      end: '2026-11-14',
+    })
+  })
+})
+
+describe('a report on last month, published in January', () => {
+  it('stays in the year before', () => {
+    expect(extractEvent('12月20日の完成見学会レポート', '2027-01-06')).toEqual({
+      kind: '完成見学会',
+      start: '2026-12-20',
+      end: '2026-12-20',
+    })
+    expect(
+      extractEvent('12/19・20 完成見学会にご来場ありがとうございました', '2027-01-06'),
+    ).toEqual({ kind: '完成見学会', start: '2026-12-19', end: '2026-12-20' })
   })
 })
