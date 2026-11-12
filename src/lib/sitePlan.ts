@@ -930,15 +930,19 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   // spread
   if (plan.quasiFireZone) {
     const dir = sideDirections(plan.roadSide)
-    const sidesWithin = (distance: number) => {
-      const safe = fireSafeRect(plan, distance)
-      return [
-        plan.buildingY + 0.01 < safe.y ? dir.front : null,
-        plan.buildingY + bDepth > safe.y + safe.depth + 0.01 ? dir.back : null,
-        plan.buildingX + 0.01 < safe.x ? dir.left : null,
-        plan.buildingX + plan.buildingWidth > safe.x + safe.width + 0.01 ? dir.right : null,
-      ].filter((v): v is string => v !== null)
-    }
+    // Distance of each exterior wall from the line it is measured from (adjacent land
+    // boundary; on the road side the road center line). The part at risk is "within 3m / 5m"
+    // (以下), so a wall exactly on the line is inside it: dragging snaps to 0.5m, which makes
+    // exactly 3.0m the usual "just clear" position. A wall a rounding error short of the line
+    // also counts as inside
+    const walls = [
+      [dir.front, plan.buildingY + (plan.sectionY <= 0 ? plan.roadWidth / 2 : 0)],
+      [dir.back, section.depth - (plan.buildingY + bDepth)],
+      [dir.left, plan.buildingX],
+      [dir.right, plan.sectionWidth - (plan.buildingX + plan.buildingWidth)],
+    ] as const
+    const sidesWithin = (distance: number) =>
+      walls.filter(([, d]) => d <= distance + 1e-6).map(([side]) => side)
     const lower = sidesWithin(FIRE_SPREAD_DISTANCE)
     const upper = plan.floors >= 2 ? sidesWithin(FIRE_SPREAD_DISTANCE_UPPER) : []
     const parts = [

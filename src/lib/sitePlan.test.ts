@@ -527,6 +527,39 @@ describe('quasi-fire-prevention district (the part at risk of fire spread)', () 
     expect(evaluateSite(plan()).checks.find((c) => c.id === 'fire')).toBeUndefined()
   })
 
+  it('counts a wall exactly on the line as inside the part at risk of fire spread (3m 以下)', () => {
+    // Section 20 x 20 m (121 tsubo = 400 ㎡) set back from the road, so all four sides are
+    // adjacent land. Building 10 x 12 m (36.3 tsubo = 120 ㎡)
+    const at = (buildingX: number, buildingY: number) =>
+      fire({
+        landDepth: 55,
+        targetTsubo: 121,
+        sectionY: 10,
+        buildingTsubo: 36.3,
+        buildingWidth: 10,
+        buildingX,
+        buildingY,
+      })
+    // Left 3.0, front 3.0; right 20 - 3 - 10 = 7, rear 20 - 3 - 12 = 5
+    expect(check(at(3, 3), 'fire').detail).toContain('南・西側の外壁が 3m 以内')
+    // Right 20 - 7 - 10 = 3.0, rear 20 - 5 - 12 = 3.0; left 7, front 5
+    expect(check(at(7, 5), 'fire').detail).toContain('北・東側の外壁が 3m 以内')
+    // 0.1 m further in on every side: clear (left 3.1, front 3.1, right 6.9, rear 4.9)
+    expect(check(at(3.1, 3.1), 'fire').status).toBe('ok')
+    expect(check(at(6.9, 4.9), 'fire').status).toBe('ok')
+  })
+
+  it('measures the road side from the road center line, the line itself included', () => {
+    const at = (roadWidth: number, buildingY: number) =>
+      check(fire({ roadWidth, buildingWidth: 10, buildingX: 5, buildingY }), 'fire')
+    // Road 4 m: a wall 1.0 m from the boundary is 2 + 1 = 3.0 m from the center line
+    expect(at(4, 1).detail).toContain('南側の外壁が 3m 以内')
+    expect(at(4, 1.1).status).toBe('ok')
+    // Road 6 m: a wall on the boundary is 3.0 m from the center line; road 8 m: 4 m, clear
+    expect(at(6, 0).detail).toContain('南側の外壁が 3m 以内')
+    expect(at(8, 0).status).toBe('ok')
+  })
+
   it('maps sides to compass directions', () => {
     expect(sideDirections('S')).toEqual({ front: '南', back: '北', left: '西', right: '東' })
     expect(sideDirections('N').front).toBe('北')
@@ -907,6 +940,10 @@ describe('number of floors (single-story, two-story)', () => {
     expect(c.detail).not.toContain('1 階は')
     const q = { ...p, buildingX: 1 }
     expect(check(q, 'fire').detail).toContain('1 階は西側の外壁が 3m 以内')
+    // Walls exactly 5.0 m from the boundary (left 5, right 20 - 5 - 10 = 5) are inside the 2nd
+    // floor's part (5m 以下); 0.1 m to the right only the right wall is (left 5.1, right 4.9)
+    expect(check({ ...p, buildingX: 5 }, 'fire').detail).toContain('2 階は西・東側の外壁が 5m 以内')
+    expect(check({ ...p, buildingX: 5.1 }, 'fire').detail).toContain('2 階は東側の外壁が 5m 以内')
     // For a single-story house with the same footprint the 5m line is not looked at
     expect(check({ ...p, floors: 1, buildingTsubo: 15 }, 'fire').status).toBe('ok')
   })
