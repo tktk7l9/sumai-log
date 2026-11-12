@@ -1,8 +1,9 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   DEFAULT_SITE_PLAN,
+  moveSectionToBack,
   normalizePlan,
   placeBuildingNorth,
   type SitePlan,
@@ -14,6 +15,26 @@ import { renderRoute } from '../../test/ui/render'
 vi.mock('../components/site/SiteView3D', () => import('../../test/ui/site3dStub'))
 
 const SAVED: SitePlan = placeBuildingNorth(normalizePlan({ ...DEFAULT_SITE_PLAN }))
+/** The plan as the other person saved it: with a neighbouring building entered by hand */
+const THEIRS: SitePlan = normalizePlan({
+  ...SAVED,
+  neighbors: [{ label: '北の家', kind: 'building', x: 0, y: 50, width: 8, depth: 6, height: 7 }],
+})
+const T0 = '2030-01-01 00:00:00'
+const T1 = '2030-01-02 00:00:00'
+const T2 = '2030-01-03 00:00:00'
+const CONFLICT = /^相手が先に区画を保存していたので、上書きしませんでした。/
+const NEWER = /^相手が先に区画を保存しています。/
+
+type Loaded = { plan: SitePlan | null; updatedAt: string | null; buildPlan: null }
+type SaveArg = { data: { plan: SitePlan; expectedUpdatedAt: string | null } }
+
+/** A loader that answers with whatever is "in the database" now */
+function database(first: Loaded) {
+  const state = { row: first }
+  mockOf(getSitePlan).mockImplementation(async () => state.row)
+  return state
+}
 
 function sectionDistance() {
   return screen.getByText(/^道路からの距離 /).textContent
@@ -38,7 +59,7 @@ function stubSvgGeometry() {
 
 describe('site route', () => {
   beforeEach(() => {
-    stub(getSitePlan, { plan: null, buildPlan: { floors: 1, tsuboMax: 32 } })
+    stub(getSitePlan, { plan: null, updatedAt: null, buildPlan: { floors: 1, tsuboMax: 32 } })
     stubSvgGeometry()
   })
 
@@ -59,8 +80,9 @@ describe('site route', () => {
 
   it('moves the section and the building with the buttons and saves', async () => {
     const save = mockOf(saveSitePlan).mockImplementation(async (arg) => ({
-      ok: true,
-      plan: (arg as { data: SitePlan }).data,
+      conflict: false,
+      plan: (arg as SaveArg).data.plan,
+      updatedAt: T0,
     }))
     const { user } = await renderRoute('/site')
     await screen.findByText('初期値（まだ保存していません）')
@@ -74,18 +96,23 @@ describe('site route', () => {
 
     await user.click(screen.getByRole('button', { name: '区画を保存' }))
     expect(await screen.findByText('区画を保存しました')).toBeInTheDocument()
+    // Nothing was saved when the page opened: the save says so (null), and the server refuses
+    // it if the other person saved first
     expect(save).toHaveBeenCalledWith({
-      data: expect.objectContaining({ landWidth: 20, landDepth: 50 }),
+      data: {
+        plan: expect.objectContaining({ landWidth: 20, landDepth: 50 }),
+        expectedUpdatedAt: null,
+      },
     })
   })
 
   it('shows the saved state after a save, whatever key order the server answers in', async () => {
     const rekeyed = (p: SitePlan) => Object.fromEntries(Object.entries(p).reverse()) as never
-    let stored: SitePlan | null = null
-    mockOf(getSitePlan).mockImplementation(async () => ({ plan: stored, buildPlan: null }))
+    const db = database({ plan: null, updatedAt: null, buildPlan: null })
     mockOf(saveSitePlan).mockImplementation(async (arg) => {
-      stored = (arg as { data: SitePlan }).data
-      return { ok: true, plan: rekeyed(stored) }
+      const { plan } = (arg as SaveArg).data
+      db.row = { plan, updatedAt: T0, buildPlan: null }
+      return { conflict: false, plan: rekeyed(plan), updatedAt: T0 }
     })
     const { user } = await renderRoute('/site')
     await screen.findByText('初期値（まだ保存していません）')
@@ -98,6 +125,127 @@ describe('site route', () => {
     expect(screen.getByRole('button', { name: '区画を保存' })).toBeDisabled()
   })
 
+  it('does not overwrite a plan the other person saved first: says so, keeps the changes, and saves on the second press', async () => {
+    const db = database({ plan: SAVED, updatedAt: T0, buildPlan: null })
+    const save = mockOf(saveSitePlan).mockImplementationOnce(async () => {
+      // The other person saved while this page was open
+      db.row = { plan: THEIRS, updatedAt: T1, buildPlan: null }
+      return { conflict: true }
+    })
+    const { user } = await renderRoute('/site')
+    await screen.findByText('保存済み（二人で共有）')
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    const mine = sectionDistance()
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+
+    expect(await screen.findByText(CONFLICT)).toBeInTheDocument()
+    expect(save).toHaveBeenLastCalledWith({
+      data: { plan: expect.objectContaining({ neighbors: [] }), expectedUpdatedAt: T0 },
+    })
+    expect(screen.queryByText('区画を保存しました')).not.toBeInTheDocument()
+    // The changes made here are still on screen, and the other person's plan is one press away
+    expect(sectionDistance()).toBe(mine)
+    expect(screen.getByRole('button', { name: '隣地・周りの建物（0）' })).toBeInTheDocument()
+    expect(await screen.findByText(NEWER)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '相手の区画を表示' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: '元に戻す' })).not.toBeInTheDocument()
+
+    // Pressing save again is the overwrite the message announced, on top of their version
+    save.mockImplementationOnce(async (arg) => {
+      const { plan } = (arg as SaveArg).data
+      db.row = { plan, updatedAt: T2, buildPlan: null }
+      return { conflict: false, plan, updatedAt: T2 }
+    })
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+    expect(await screen.findByText('区画を保存しました')).toBeInTheDocument()
+    expect(save).toHaveBeenLastCalledWith({
+      data: { plan: expect.objectContaining({ neighbors: [] }), expectedUpdatedAt: T1 },
+    })
+    expect(await screen.findByText('保存済み（二人で共有）')).toBeInTheDocument()
+    expect(screen.queryByText(NEWER)).not.toBeInTheDocument()
+    expect(sectionDistance()).toBe(mine)
+  })
+
+  it('shows the plan the other person saved when asked to, and the next save is based on it', async () => {
+    const db = database({ plan: SAVED, updatedAt: T0, buildPlan: null })
+    const save = mockOf(saveSitePlan).mockImplementationOnce(async () => {
+      db.row = { plan: THEIRS, updatedAt: T1, buildPlan: null }
+      return { conflict: true }
+    })
+    const { user } = await renderRoute('/site')
+    await screen.findByText('保存済み（二人で共有）')
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+    await user.click(await screen.findByRole('button', { name: '相手の区画を表示' }))
+
+    expect(screen.getByRole('button', { name: '隣地・周りの建物（1）' })).toBeInTheDocument()
+    expect(sectionDistance()).toBe('道路からの距離 0.0m')
+    expect(screen.getByText('保存済み（二人で共有）')).toBeInTheDocument()
+    expect(screen.queryByText(NEWER)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '元に戻す' })).toBeDisabled()
+
+    // A change on top of their plan saves at the first press and keeps their neighbour
+    save.mockImplementationOnce(async (arg) => {
+      const { plan } = (arg as SaveArg).data
+      db.row = { plan, updatedAt: T2, buildPlan: null }
+      return { conflict: false, plan, updatedAt: T2 }
+    })
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+    expect(await screen.findByText('区画を保存しました')).toBeInTheDocument()
+    expect(save).toHaveBeenLastCalledWith({
+      data: {
+        plan: expect.objectContaining({ neighbors: THEIRS.neighbors }),
+        expectedUpdatedAt: T1,
+      },
+    })
+  })
+
+  it('after a refresh, takes a newer saved plan when nothing was changed here', async () => {
+    const db = database({ plan: SAVED, updatedAt: T0, buildPlan: null })
+    const { router } = await renderRoute('/site')
+    await screen.findByText('保存済み（二人で共有）')
+    db.row = { plan: THEIRS, updatedAt: T1, buildPlan: null }
+    await act(() => router.invalidate())
+    expect(await screen.findByRole('button', { name: '隣地・周りの建物（1）' })).toBeInTheDocument()
+    expect(screen.getByText('保存済み（二人で共有）')).toBeInTheDocument()
+    expect(screen.queryByText(NEWER)).not.toBeInTheDocument()
+  })
+
+  it('after a refresh with changes made here, keeps them, says the other person saved, and the first save is still refused', async () => {
+    const db = database({ plan: SAVED, updatedAt: T0, buildPlan: null })
+    const save = mockOf(saveSitePlan).mockResolvedValue({ conflict: true })
+    const { user, router } = await renderRoute('/site')
+    await screen.findByText('保存済み（二人で共有）')
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    const mine = sectionDistance()
+    db.row = { plan: THEIRS, updatedAt: T1, buildPlan: null }
+    await act(() => router.invalidate())
+
+    expect(await screen.findByText(NEWER)).toBeInTheDocument()
+    expect(sectionDistance()).toBe(mine)
+    expect(screen.getByRole('button', { name: '隣地・周りの建物（0）' })).toBeInTheDocument()
+    expect(screen.getByText('未保存の変更')).toBeInTheDocument()
+    // The save still names the version this screen started from, so the server refuses it
+    await user.click(screen.getByRole('button', { name: '区画を保存' }))
+    expect(await screen.findByText(CONFLICT)).toBeInTheDocument()
+    expect(save).toHaveBeenLastCalledWith({
+      data: { plan: expect.anything(), expectedUpdatedAt: T0 },
+    })
+  })
+
+  it('takes a newer saved plan without asking when the changes made here are the same', async () => {
+    const db = database({ plan: SAVED, updatedAt: T0, buildPlan: null })
+    const { user, router } = await renderRoute('/site')
+    await screen.findByText('保存済み（二人で共有）')
+    await user.click(screen.getByRole('button', { name: '奥に寄せる' }))
+    // The other person saved the very same move
+    db.row = { plan: moveSectionToBack(SAVED), updatedAt: T1, buildPlan: null }
+    await act(() => router.invalidate())
+    expect(await screen.findByText('保存済み（二人で共有）')).toBeInTheDocument()
+    expect(screen.queryByText(NEWER)).not.toBeInTheDocument()
+  })
+
   it('reports a refused save', async () => {
     mockOf(saveSitePlan).mockRejectedValue(new Error('区画が土地からはみ出しています'))
     const { user } = await renderRoute('/site')
@@ -106,7 +254,7 @@ describe('site route', () => {
   })
 
   it('restores the saved plan after edits', async () => {
-    stub(getSitePlan, { plan: SAVED, buildPlan: null })
+    stub(getSitePlan, { plan: SAVED, updatedAt: T0, buildPlan: null })
     const { user } = await renderRoute('/site')
     expect(await screen.findByText('保存済み（二人で共有）')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '元に戻す' })).toBeDisabled()
@@ -117,7 +265,7 @@ describe('site route', () => {
   })
 
   it('drags the building on the drawing', async () => {
-    stub(getSitePlan, { plan: SAVED, buildPlan: null })
+    stub(getSitePlan, { plan: SAVED, updatedAt: T0, buildPlan: null })
     await renderRoute('/site')
     const drawing = await screen.findByRole('img', { name: /配置図/ })
     const building = drawing.querySelector('.site-building')!
@@ -225,7 +373,7 @@ describe('site route', () => {
 
 describe('site route with a two-storey plan', () => {
   it('uses the build plan for the first layout', async () => {
-    stub(getSitePlan, { plan: null, buildPlan: { floors: 2, tsuboMax: 30 } })
+    stub(getSitePlan, { plan: null, updatedAt: null, buildPlan: { floors: 2, tsuboMax: 30 } })
     await renderRoute('/site')
     expect(await screen.findByRole('button', { name: '建物（2 階建て）' })).toBeInTheDocument()
     await waitFor(() =>

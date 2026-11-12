@@ -114,18 +114,31 @@ function initialPlan(
   )
 }
 
+/**
+ * Shown when the save was refused because the other person saved first. Same pattern as
+ * CONFLICT_MESSAGE of the forms (DraftNotice.tsx): nothing was overwritten, where to see
+ * their content, and that saving again overwrites it
+ */
+const SITE_CONFLICT_MESSAGE =
+  '相手が先に区画を保存していたので、上書きしませんでした。「相手の区画を表示」で相手の内容を確かめられます（いまの変更は消えます）。このまま保存し直すと、あなたの内容で上書きします。'
+
 function num(v: string | number, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
 
 function Page() {
-  const { plan: saved, buildPlan } = Route.useLoaderData()
+  const { plan: saved, updatedAt, buildPlan } = Route.useLoaderData()
   const router = useRouter()
   const save = useServerFn(saveSitePlan)
-  // What the page opened with (the saved plan, or the initial values before the first save)
-  const [startPlan] = useState<SitePlan>(() => initialPlan(saved, buildPlan))
-  const [plan, setPlan] = useState<SitePlan>(startPlan)
+  // The saved version the plan on screen started from (or the initial values before the first
+  // save) and when it was saved. Kept apart from the loader data: a refresh brings the other
+  // person's newer plan into `saved` while the screen still shows the older one, and a save
+  // must name the version it was really based on
+  const [base, setBase] = useState(() => ({ plan: initialPlan(saved, buildPlan), updatedAt }))
+  const [plan, setPlan] = useState<SitePlan>(base.plan)
   const [saving, setSaving] = useState(false)
+  // The user was told that a save now overwrites the other person's plan (a refused save)
+  const [overwriteTold, setOverwriteTold] = useState(false)
   // Lot lines are entered as text such as "10.5, 20". Kept as text so a half-typed value is not erased
   const [lotText, setLotText] = useState(() => formatLotLines(plan.lotLines))
   // Shadow display (not saved. State for viewing only)
@@ -136,7 +149,22 @@ function Page() {
   const sunNow = solarPosition(plan.latitude, SEASON_DECLINATION[season], hour)
   const dirty = saved === null || !samePlan(saved, plan)
   // Changed by the user in this session (the initial values before the first save do not count)
-  const edited = !samePlan(saved ?? startPlan, plan)
+  const edited = !samePlan(base.plan, plan)
+  // The other person saved after the plan on screen was loaded. updated_at is always D1's
+  // datetime('now') text, so it orders as a string; "later" and not "different", because
+  // right after this page's own save the loader data is still the older one
+  const newer = saved !== null && (updatedAt ?? '') > (base.updatedAt ?? '')
+
+  function show(next: SitePlan, at: string | null) {
+    setBase({ plan: next, updatedAt: at })
+    setPlan(next)
+    setLotText(formatLotLines(next.lotLines))
+    setOverwriteTold(false)
+  }
+
+  // Nothing of the user's would be lost (no changes here, or the same ones): follow the newer
+  // plan. With changes, the plan stays and the save bar says so
+  if (newer && (!edited || !dirty)) show(saved, updatedAt)
   const e = evaluateSite(plan)
   const sDepth = sectionDepth(plan)
   // The range the section can move left and right (avoids the strip of the access lane to the
@@ -187,9 +215,19 @@ function Page() {
   async function handleSave() {
     setSaving(true)
     try {
-      const { plan: stored } = await save({ data: plan })
-      setPlan(stored)
-      setLotText(formatLotLines(stored.lotLines))
+      // Based on the version on screen; on the version the loader has now only after the
+      // refusal below said that this overwrites it
+      const res = await save({
+        data: { plan, expectedUpdatedAt: overwriteTold ? updatedAt : base.updatedAt },
+      })
+      if (res.conflict) {
+        notifications.show({ message: SITE_CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        setOverwriteTold(true)
+        // Loads the other person's plan: it is offered in the save bar, not put on screen
+        await router.invalidate()
+        return
+      }
+      show(res.plan, res.updatedAt)
       await router.invalidate()
       notifications.show({ message: '区画を保存しました' })
     } catch (error) {
@@ -766,42 +804,41 @@ function Page() {
             next to the sliders being moved, not ~3,000px down on a phone (SHIG 30, 66). Before the
             first save it says the values are the initial ones instead of 「未保存の変更」
             (unsaved changes) that nobody made (SHIG 25, 42) */}
-        <Group
-          justify="space-between"
-          align="center"
-          className={edited ? 'site-save-bar is-sticky' : 'site-save-bar'}
-        >
-          {saved === null && !edited ? (
-            <Text size="xs" c="dimmed">
-              初期値（まだ保存していません）
-            </Text>
-          ) : dirty ? (
-            <Badge variant="light" color="yellow">
-              未保存の変更
-            </Badge>
-          ) : (
-            <Text size="xs" c="dimmed">
-              保存済み（二人で共有）
-            </Text>
-          )}
-          <Group gap="xs">
-            {saved ? (
-              <Button
-                variant="default"
-                disabled={!dirty}
-                onClick={() => {
-                  setPlan(saved)
-                  setLotText(formatLotLines(saved.lotLines))
-                }}
-              >
-                元に戻す
+        <Stack gap="xs" className={edited ? 'site-save-bar is-sticky' : 'site-save-bar'}>
+          {newer ? (
+            <Group gap="xs" wrap="nowrap" className="draft-notice" role="status">
+              <CircleAlert size={16} aria-hidden style={{ flexShrink: 0 }} />
+              <Text size="sm">
+                相手が先に区画を保存しています。「相手の区画を表示」で確かめられます（いまの変更は消えます）。
+              </Text>
+            </Group>
+          ) : null}
+          <Group justify="space-between" align="center">
+            {saved === null && !edited ? (
+              <Text size="xs" c="dimmed">
+                初期値（まだ保存していません）
+              </Text>
+            ) : dirty ? (
+              <Badge variant="light" color="yellow">
+                未保存の変更
+              </Badge>
+            ) : (
+              <Text size="xs" c="dimmed">
+                保存済み（二人で共有）
+              </Text>
+            )}
+            <Group gap="xs">
+              {saved ? (
+                <Button variant="default" disabled={!dirty} onClick={() => show(saved, updatedAt)}>
+                  {newer ? '相手の区画を表示' : '元に戻す'}
+                </Button>
+              ) : null}
+              <Button onClick={handleSave} loading={saving} disabled={!dirty}>
+                区画を保存
               </Button>
-            ) : null}
-            <Button onClick={handleSave} loading={saving} disabled={!dirty}>
-              区画を保存
-            </Button>
+            </Group>
           </Group>
-        </Group>
+        </Stack>
       </Stack>
     </PageShell>
   )
