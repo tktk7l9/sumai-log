@@ -660,6 +660,9 @@ describe('parcel boundaries', () => {
     expect(parseLotLines('10.5, 20')).toEqual([10.5, 20])
     expect(parseLotLines('10.5、20 abc')).toEqual([10.5, 20])
     expect(parseLotLines('')).toEqual([])
+    // Typed with the Japanese input method on: full-width digits, point, comma and space
+    expect(parseLotLines('９、１２．５')).toEqual([9, 12.5])
+    expect(parseLotLines('９，１２．５　１５')).toEqual([9, 12.5, 15])
     expect(formatLotLines([10.5, 20])).toBe('10.5, 20')
   })
 

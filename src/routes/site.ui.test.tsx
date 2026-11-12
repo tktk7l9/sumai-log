@@ -334,7 +334,14 @@ describe('site route', () => {
     expect(
       screen.getByRole('img', { name: /間口30m×奥行50m のうち、区画 100\.0坪/ }),
     ).toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: '筆界（左端からの距離 m）' }), '10.5, 20')
+    // Full-width digits (Japanese input left on) are read like half-width ones
+    const lots = screen.getByRole('textbox', { name: '筆界（左端からの距離 m）' })
+    await user.type(lots, '１０．５、２０')
+    await waitFor(() =>
+      expect(document.querySelectorAll('svg.site-canvas .site-lotline')).toHaveLength(2),
+    )
+    await user.clear(lots)
+    await user.type(lots, '10.5, 20')
     // A front road under 4 m brings up the setback (道路後退) among the checks
     expect(screen.queryByText('道路後退（セットバック）')).not.toBeInTheDocument()
     const road = screen.getByRole('textbox', { name: '前面道路の幅員（m）' })

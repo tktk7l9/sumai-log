@@ -582,10 +582,12 @@ export function fireSafeRect(plan: SitePlan, distance: number = FIRE_SPREAD_DIST
 }
 
 /** Turns the parcel boundary input ("10.5, 20", "10.5、20" and so on) into a list of numbers.
- * Pieces that cannot be read are dropped */
+ * Full-width digits, points and commas (the Japanese input method left on) read like
+ * half-width ones (NFKC). Pieces that cannot be read are dropped */
 export function parseLotLines(text: string): number[] {
   return text
-    .split(/[,、，\s]+/)
+    .normalize('NFKC')
+    .split(/[,、\s]+/)
     .filter((t) => t !== '')
     .map(Number)
     .filter((v) => Number.isFinite(v))
