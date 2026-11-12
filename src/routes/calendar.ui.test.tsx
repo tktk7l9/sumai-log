@@ -519,6 +519,20 @@ describe('calendar route', () => {
     expect(getVendorNews).toHaveBeenCalledWith({ data: { id: seeded } })
   })
 
+  it('opens the plan form on today for a two-day event that started yesterday', async () => {
+    // OPEN_HOUSE runs 10/18 - 10/19; the server says today is the 19th
+    stub(listEventsBetween, {
+      events: [],
+      recordedEventIds: [],
+      todayKey: '2099-10-19',
+      nowIso: '2099-10-19T09:00:00+09:00',
+    })
+    stub(getVendorNews, { news: OPEN_HOUSE })
+    await renderRoute(`/calendar?m=${MONTH}&plan=${NEWS_ID}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(form).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/19')
+  })
+
   it('loads a single day in the day view', async () => {
     await renderRoute(`/calendar?d=2099-10-10&v=day`)
     await screen.findAllByText('打合せ（間取り）')

@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { FeedItem } from '../lib/feed'
+import { ROADMAP_STAGE_IDS } from '../lib/roadmap'
 import { listCandidates } from '../server/candidates'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
@@ -65,7 +66,10 @@ function stubHome(feed: FeedItem[] = []) {
   stub(listVendorNews, { news: [] })
   stub(pickGlossaryTerm, null)
   stub(listHomeTodos, { todos: [], todayKey: '2026-10-01' })
-  stub(getRoadmap, { roadmap: { version: 1, stage: 'research' } })
+  stub(getRoadmap, {
+    roadmap: { version: 1, stage: 'research' },
+    relatedTerms: Object.fromEntries(ROADMAP_STAGE_IDS.map((id) => [id, []])),
+  })
 }
 
 describe('app layout', () => {

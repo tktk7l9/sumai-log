@@ -22,7 +22,8 @@ export function VideoCard({ video }: { video: VideoRow }) {
     >
       <Card withBorder padding="sm" component="article" aria-label={video.title}>
         <Group gap="sm" wrap="nowrap" align="flex-start">
-          {/* YouTube's 4:3 picture, cropped to the 16:9 of the video */}
+          {/* YouTube's small 16:9 picture (320×180), built from the video id: the stored
+              thumbnailUrl is the 480×360 one, twice the bytes for a 112px box */}
           {video.thumbnailUrl ? (
             <Image
               src={youtubeThumbnailUrl(video.videoId, 'small')}

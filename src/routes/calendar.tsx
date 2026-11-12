@@ -229,7 +229,9 @@ function Page() {
 
   // The event form reached from "行く" (?plan=). Initial values come from planEventDefaults.
   // plan is removed on close
-  const planDefaults = planNews ? planEventDefaults(planNews) : null
+  // A multi-day event already under way opens on today (the day the button named), not on a
+  // day gone by
+  const planDefaults = planNews ? planEventDefaults(planNews, todayKey) : null
   function closePlan() {
     return navigate({ search: (s) => ({ ...s, plan: undefined }), replace: true })
   }
