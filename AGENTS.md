@@ -211,6 +211,21 @@ A record app for a housing search, used only by one married couple. **The reposi
   requirement like "3m when longer than 20m" (do not confuse it with the Tokyo Metropolitan
   Building Safety Ordinance (東京都安全条例)). The actual dimensions of the land and the
   neighbouring lots (name, position, height) are run by the owner with SQL in `seed.local/out/`.
+  「残りの土地」 (the remaining land) is judged per connected piece (`remainingPieces`): land
+  behind the plot is linked to the road by the wider single gap beside the plot (the passage
+  is one of those gaps; left and right are never summed), and under 2m is NG. A front road
+  under 4m is treated as an Article 42-2 road: the retreat strip `(4 − width) / 2 ×` the
+  frontage is excluded from the site area of the coverage and floor-area ratios, the cap uses
+  a deemed width of 4m, and a check names the setback (a one-sided retreat is not modelled).
+  A wall exactly on the fire-spread line is inside it (3m / 5m 以下). `normalizePlan` is
+  idempotent and returns the keys in the order of the type; positions are fitted with
+  `fitPosition` (never rounded across the end of their range: a plot pushed to the back keeps
+  the exact position, so no 1–5cm sliver "remains" behind it), and two plans are compared with
+  `samePlan`. Saving is under the stale check like the forms: the loader returns the setting
+  row's `updated_at`, `saveSitePlan` takes `{ plan, expectedUpdatedAt }` and answers
+  `{ conflict: true }`; the page keeps the user's changes and offers the other person's plan.
+  That `updated_at` is always written by D1's `datetime('now')` (the page compares the stamps
+  as strings), also in SQL the owner runs.
   The sunlight calculation (`src/lib/sun.ts`) uses true solar time (真太陽時) and does not include
   the equation of time (均時差), the longitude or atmospheric refraction (大気差).
   The 3D view is `src/lib/site3d.ts` (the content of the scene, pure functions) and
