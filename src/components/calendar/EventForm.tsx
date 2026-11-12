@@ -35,7 +35,8 @@ export function EventForm({
   >
   targets: Targets
   places: PlaceWithLinks[]
-  onSaved: (id: string) => void
+  /** Awaited: the save button stays busy until what the page does after the save is done */
+  onSaved: (id: string) => void | Promise<void>
 }) {
   const router = useRouter()
   const save = useServerFn(saveEvent)
@@ -136,7 +137,9 @@ export function EventForm({
       draft.clear()
       await router.invalidate()
       notifications.show({ message: event ? '予定を更新しました' : '予定を追加しました' })
-      onSaved(res.id)
+      // The 「行く」 (Go) form stays open while the page links the news item and leaves ?plan=;
+      // a second tap in that time used to save a duplicate event
+      await onSaved(res.id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {

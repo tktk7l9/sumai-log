@@ -231,8 +231,10 @@ function Page() {
   // plan is removed on close
   const planDefaults = planNews ? planEventDefaults(planNews) : null
   function closePlan() {
-    navigate({ search: (s) => ({ ...s, plan: undefined }), replace: true })
+    return navigate({ search: (s) => ({ ...s, plan: undefined }), replace: true })
   }
+  // Resolves when the form is gone (the navigation out of ?plan= has loaded): EventForm keeps
+  // its save button busy until then
   async function handlePlanSaved(eventId: string) {
     if (!planNews) return
     try {
@@ -241,7 +243,7 @@ function Page() {
     } catch (error) {
       notifications.show({ message: extractErrorMessage(error), color: 'red' })
     }
-    closePlan()
+    await closePlan()
   }
 
   /**

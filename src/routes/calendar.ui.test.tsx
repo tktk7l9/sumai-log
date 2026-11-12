@@ -354,6 +354,34 @@ describe('calendar route', () => {
     await waitFor(() => expect(router.state.location.search).not.toHaveProperty('plan'))
   })
 
+  it('keeps the plan form busy until the link is written, so it cannot be saved twice', async () => {
+    stub(getVendorNews, { news: OPEN_HOUSE })
+    const save = stub(saveEvent, { id: 'e3' })
+    // The link is held back until the test lets it go (a phone on a slow line)
+    let finishLink: (() => void) | undefined
+    mockOf(linkNewsToEvent).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finishLink = resolve
+      })
+      return { eventId: 'e3' }
+    })
+    const { user, router } = await renderRoute(`/calendar?m=${MONTH}&plan=${NEWS_ID}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    const button = within(form).getByRole('button', { name: '予定を保存' })
+    await user.click(button)
+    await waitFor(() => expect(finishLink).toBeDefined())
+    // An impatient second tap while the event is saved but the form is still open
+    expect(button).toBeDisabled()
+    await user.click(button)
+    finishLink!()
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('plan'))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '予定を追加' })).not.toBeInTheDocument(),
+    )
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(linkNewsToEvent).toHaveBeenCalledTimes(1)
+  })
+
   it('reports a failed link but still closes the plan form', async () => {
     stub(getVendorNews, { news: OPEN_HOUSE })
     stub(saveEvent, { id: 'e3' })
