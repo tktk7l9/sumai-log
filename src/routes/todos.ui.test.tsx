@@ -70,7 +70,10 @@ describe('todos route', () => {
     )
     const fold = screen.getByRole('button', { name: /^完了 1$/ })
     expect(fold).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText('容量の共有')).not.toBeVisible()
+    // The folded list is inside React's <Activity mode="hidden"> (Mantine's Collapse), which
+    // renders its children later, at idle priority: reading it at once failed now and then on
+    // a busy machine (CI, 2026-11-12)
+    expect(await screen.findByText('容量の共有')).not.toBeVisible()
   })
 
   it('narrows by list and who through the URL', async () => {
