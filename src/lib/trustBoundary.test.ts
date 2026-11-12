@@ -203,12 +203,16 @@ describe('scripts written by the app', () => {
       'JSXExpressionContainer:ZOD_JITLESS_SCRIPT',
     ])
 
-    // <ColorSchemeScript> with literal props only
+    // <ColorSchemeScript> with literal props only: a string literal, or a bare attribute
+    // (`suppressHydrationWarning`), which has no value to compute
     const colorScheme = named('ColorSchemeScript')
     expect(colorScheme).toHaveLength(1)
     const attributes = (colorScheme[0]!.openingElement as Node).attributes as Node[]
+    expect(attributes.map((attribute) => attribute.type)).toEqual(
+      attributes.map(() => 'JSXAttribute'),
+    )
     for (const attribute of attributes)
-      expect((attribute.value as Node | null)?.type).toBe('Literal')
+      expect((attribute.value as Node | null)?.type ?? 'bare').toMatch(/^(Literal|bare)$/)
   })
 })
 
