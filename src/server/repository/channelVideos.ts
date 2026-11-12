@@ -114,10 +114,17 @@ export async function listChannelVideoRows(
     })
     .from(channelVideos)
     .where(whereOf(filter))
+    // One channel: its own order is all there is to sort by, and channel_videos_channel_idx
+    // (channel_id, sort_order) serves it. With the three-part order below, SQLite read and
+    // sorted the whole channel for a 30-row page
     .orderBy(
-      sql`${channelVideos.vendorId} IS NULL`,
-      asc(channelVideos.channel),
-      asc(channelVideos.sortOrder),
+      ...(filter.channelId
+        ? [asc(channelVideos.sortOrder)]
+        : [
+            sql`${channelVideos.vendorId} IS NULL`,
+            asc(channelVideos.channel),
+            asc(channelVideos.sortOrder),
+          ]),
     )
     .limit(filter.limit)
     .as('page')
