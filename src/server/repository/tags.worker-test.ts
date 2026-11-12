@@ -51,6 +51,24 @@ describe('tags', () => {
     ])
   })
 
+  it('replaceTags stores as many tags as the editor allows (100), in order', async () => {
+    await seedDefaultTags(db)
+    const names = Array.from({ length: 100 }, (_, i) => `タグ${i}`)
+    await replaceTags(db, names)
+    const rows = await listTags(db)
+    expect(rows.map((r) => r.name)).toEqual(names)
+    expect(rows.map((r) => r.sortOrder)).toEqual(names.map((_, i) => i))
+  })
+
+  it('replaceTags keeps the old tags when a later part of the insert fails', async () => {
+    await replaceTags(db, ['A', 'B'])
+    const names = Array.from({ length: 100 }, (_, i) => `タグ${i}`)
+    // NOT NULL on tags.name: the row fails in the last INSERT of the batch
+    names[95] = null as unknown as string
+    await expect(replaceTags(db, names)).rejects.toThrow(/NOT NULL/)
+    expect((await listTags(db)).map((r) => r.name)).toEqual(['A', 'B'])
+  })
+
   it('replaceTags can delete everything with an empty array', async () => {
     await seedDefaultTags(db)
     await replaceTags(db, [])
