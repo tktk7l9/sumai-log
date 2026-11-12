@@ -18,5 +18,7 @@ export function planButtonState(
   if (!news.eventStart) return { kind: 'none' }
   const last = news.eventEnd ?? news.eventStart
   if (last < today) return { kind: 'ended' }
-  return { kind: 'plan', label: `${formatShortDateWithWeekday(news.eventStart)}に行く` }
+  // A multi-day event that has already started is offered for today, not for a day gone by
+  const day = news.eventStart < today ? today : news.eventStart
+  return { kind: 'plan', label: `${formatShortDateWithWeekday(day)}に行く` }
 }

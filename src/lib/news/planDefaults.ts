@@ -1,8 +1,9 @@
 /**
  * Initial values of the event form opened by "行く" (Go) on a vendor news item (owner's
  * request, 2026-09-20: do not create at once; confirm in the form, then save). The title is
- * "vendor name headline", the date is the detected start date, and the note is the URL of the
- * original article (empty for news from mail, which has no URL).
+ * "vendor name headline", the date is the detected start date (today, when a multi-day event
+ * has already started: the same day the button names, planButton.ts), and the note is the URL
+ * of the original article (empty for news from mail, which has no URL).
  */
 
 import { isMailNews } from '../mail/toNews'
@@ -18,17 +19,20 @@ export type PlanEventDefaults = {
   note: string | null
 }
 
-export function planEventDefaults(news: {
-  title: string
-  vendorName: string
-  vendorId: string | null
-  eventStart: string | null
-  url: string
-}): PlanEventDefaults | null {
+export function planEventDefaults(
+  news: {
+    title: string
+    vendorName: string
+    vendorId: string | null
+    eventStart: string | null
+    url: string
+  },
+  today?: string,
+): PlanEventDefaults | null {
   if (!news.eventStart) return null
   return {
     title: truncate(`${news.vendorName} ${news.title}`.trim(), PLAN_TITLE_MAX),
-    date: news.eventStart,
+    date: today !== undefined && news.eventStart < today ? today : news.eventStart,
     vendorId: news.vendorId,
     note: isMailNews(news.url) ? null : news.url,
   }

@@ -29,4 +29,13 @@ describe('planEventDefaults', () => {
     const long = planEventDefaults({ ...base, title: 'あ'.repeat(300) })
     expect(long?.title.length).toBe(PLAN_TITLE_MAX)
   })
+
+  it('starts from today when a multi-day event has already begun', () => {
+    expect(planEventDefaults({ ...base, eventStart: '2026-09-26' }, '2026-09-27')?.date).toBe(
+      '2026-09-27',
+    )
+    expect(planEventDefaults({ ...base, eventStart: '2026-09-28' }, '2026-09-27')?.date).toBe(
+      '2026-09-28',
+    )
+  })
 })
