@@ -1,6 +1,6 @@
 import { createMiddleware, createStart } from '@tanstack/react-start'
 
-import { isTrustedMutation } from './lib/csrf'
+import { isSameSiteRead, isTrustedMutation } from './lib/csrf'
 import { formatError, isLoggableError } from './lib/errorLog'
 import { applySecurityHeaders, securityHeadersInit } from './lib/securityHeaders'
 import { recordSeen } from './server/activity'
@@ -11,7 +11,10 @@ import { requireUser } from './server/auth'
  * Always done in the global middleware so that no individual route can forget to add it.
  *
  * Mutations check the Origin first. Even if the Access cookie is sent from another site,
- * only requests from the same Origin pass. Authentication is enforced after that.
+ * only requests from the same Origin pass. Reads are answered only to this app itself, to the
+ * user, or as a top-level navigation (Fetch Metadata, lib/csrf.ts): another site cannot load
+ * a page, a photo or a server function's answer as a subresource with the user's session.
+ * Authentication is enforced after that.
  */
 const authMiddleware = createMiddleware().server(async ({ next, request }) => {
   if (
@@ -19,6 +22,11 @@ const authMiddleware = createMiddleware().server(async ({ next, request }) => {
       method: request.method,
       origin: request.headers.get('origin'),
       requestUrl: request.url,
+    }) ||
+    !isSameSiteRead({
+      site: request.headers.get('sec-fetch-site'),
+      mode: request.headers.get('sec-fetch-mode'),
+      dest: request.headers.get('sec-fetch-dest'),
     })
   ) {
     throw new Response('この操作は許可されていません。', {
