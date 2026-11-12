@@ -98,6 +98,35 @@ describe('fetchVendorNews', () => {
     expect(rows).toHaveLength(2)
   })
 
+  it('a page that answers 200 but yields no item is recorded as a failure, not a success', async () => {
+    const vendorId = await makeVendor('テスト設計', {
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    })
+    const vendor: NewsSourceVendor = {
+      id: vendorId,
+      name: 'テスト設計',
+      newsUrl: 'https://news.example.com/feed/',
+      newsSource: 'rss',
+    }
+
+    // The site was rebuilt and the "feed" URL now serves a page (no <item>, no <entry>)
+    const result = await fetchVendorNews(
+      db,
+      vendor,
+      fakeFetch(() => new Response('<html><body><p>リニューアルしました</p></body></html>')),
+    )
+    expect(result).toEqual({
+      added: 0,
+      error:
+        'お知らせを 1 件も読み取れませんでした（ページやフィードの形が変わった可能性があります）',
+    })
+
+    const [after] = await db.select().from(vendors).where(eq(vendors.id, vendorId))
+    expect(after.newsFetchedAt).not.toBeNull()
+    expect(after.newsFetchError).toBe(result.error)
+  })
+
   it('HTML: adds candidates on success', async () => {
     const vendorId = await makeVendor('テスト建設', {
       newsUrl: 'https://www.example-koumuten.co.jp/',

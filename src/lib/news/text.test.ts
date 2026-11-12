@@ -155,6 +155,22 @@ describe('truncate', () => {
     // max=4 is right after the pair (no split) -> cut including the emoji
     expect(truncate(text, 4)).toBe('AB😀')
   })
+
+  it('does not cut in the middle of a number or a date (12/12 must not become 12/1)', () => {
+    expect(truncate('見学会は12/12(土)に開催', 8)).toBe('見学会は')
+    expect(truncate('見学会は12月12日に開催', 8)).toBe('見学会は12月')
+    expect(truncate('価格は1.25倍', 6)).toBe('価格は')
+  })
+
+  it('cuts right after or right before a number as before', () => {
+    expect(truncate('見学会は12/12(土)に開催', 10)).toBe('見学会は12/12(')
+    expect(truncate('見学会は12/12(土)に開催', 4)).toBe('見学会は')
+    expect(truncate('見学会は12/12(土)に開催', 9)).toBe('見学会は12/12')
+  })
+
+  it('still cuts inside a run of digits too long to be a number worth keeping whole', () => {
+    expect(truncate('1'.repeat(40), 30)).toBe('1'.repeat(30))
+  })
 })
 
 describe('extractElementBlocks', () => {

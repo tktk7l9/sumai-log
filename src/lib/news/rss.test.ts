@@ -292,6 +292,7 @@ describe('parseRss', () => {
       const xml = atom(`
         <entry>
           <title>お知らせ</title>
+          <link rel='self' href='https://news.example.com/api/2' />
           <link href='https://news.example.com/blog/2' />
           <updated>2026-11-05T09:00:00.123+09:00</updated>
           <content type="html"><![CDATA[<p>本文です</p>]]></content>

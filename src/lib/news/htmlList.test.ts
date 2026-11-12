@@ -229,4 +229,38 @@ describe('parseHtmlList', () => {
       },
     ])
   })
+
+  it('skips a date notation that is not on the calendar', () => {
+    const html = `
+      <ul>
+        <li>2026/2/30 <a href="/news/a">実在しない日付</a></li>
+        <li>2026.13.45 2026.11.05 <a href="/news/b">二つ目が本物</a></li>
+      </ul>`
+    expect(parseHtmlList(html, 'https://news.example.com/')).toEqual([
+      {
+        url: 'https://news.example.com/news/b',
+        title: '2026.13.45 二つ目が本物',
+        summary: null,
+        publishedOn: '2026-11-05',
+      },
+    ])
+  })
+
+  it('keeps a date that runs on as a list or a range in the title (it is the event, not the posting date)', () => {
+    const html = `
+      <ul>
+        <li><a href="/e/1">2026年11月21日(土)・22日(日) 完成見学会</a></li>
+        <li><a href="/e/2">2026/12/12〜12/20 完成見学会</a></li>
+        <li><a href="/e/3">2026.11.05 完成見学会のお知らせ</a></li>
+        <li><a href="/e/4">2026.11.05(木) - 12:00 更新のお知らせ</a></li>
+      </ul>`
+    expect(
+      parseHtmlList(html, 'https://news.example.com/').map((c) => [c.publishedOn, c.title]),
+    ).toEqual([
+      ['2026-11-21', '2026年11月21日(土)・22日(日) 完成見学会'],
+      ['2026-12-12', '2026/12/12〜12/20 完成見学会'],
+      ['2026-11-05', '完成見学会のお知らせ'],
+      ['2026-11-05', '(木) - 12:00 更新のお知らせ'],
+    ])
+  })
 })
