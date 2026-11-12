@@ -768,7 +768,8 @@ function fmt(v: number, digits = 1): string {
 /**
  * fmt for a value printed next to the limit it is judged against: adds decimals until the
  * printed number is on the same side of the limit as the value (1.96 against 2 is "1.96",
- * not "2")
+ * not "2"; 40.05% against 40% is not "40%（上限 40%）" beside an NG). A value on the limit,
+ * give or take floating-point noise, prints as the limit
  */
 function fmtVs(v: number, limit: number): string {
   const side = (x: number) => (Math.abs(x - limit) <= NOISE ? 0 : Math.sign(x - limit))
@@ -812,7 +813,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
           id: 'area',
           status: 'warn',
           label: '区画の面積',
-          detail: `土地の奥行が足りず ${fmt(m2ToTsubo(sectionArea))}坪しか取れない。区画の幅を広げる`,
+          detail: `土地の奥行が足りず ${fmtVs(m2ToTsubo(sectionArea), plan.targetTsubo)}坪しか取れない。区画の幅を広げる`,
         },
   )
 
@@ -830,11 +831,11 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
         id: 'road',
         status: plan.sectionWidth >= 2 ? 'ok' : 'ng',
         label: '接道',
-        detail: `道路に ${fmt(plan.sectionWidth)}m 接する（2m 以上が必要）`,
+        detail: `道路に ${fmtVs(plan.sectionWidth, MIN_FRONTAGE)}m 接する（2m 以上が必要）`,
       })
     }
   } else {
-    const base = `通路の長さ ${fmt(flag.depth)}m・幅 ${fmt(flag.width)}m。`
+    const base = `通路の長さ ${fmt(flag.depth)}m・幅 ${fmtVs(flag.width, MIN_FRONTAGE)}m。`
     checks.push(
       flag.width < MIN_FRONTAGE
         ? {
@@ -947,19 +948,20 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   // 4. Building coverage ratio and floor area ratio
   checks.push({
     id: 'coverage',
-    status: coverageUsed <= plan.coverageRatio ? 'ok' : 'ng',
+    status: coverageUsed <= plan.coverageRatio + NOISE ? 'ok' : 'ng',
     label: '建ぺい率',
-    detail: `${fmt(coverageUsed)}%（上限 ${plan.coverageRatio}%）`,
+    detail: `${fmtVs(coverageUsed, plan.coverageRatio)}%（上限 ${plan.coverageRatio}%）`,
   })
   const floorAreaLimit = effectiveFloorAreaRatio(plan)
+  const floorAreaShown = fmtVs(floorAreaUsed, floorAreaLimit)
   checks.push({
     id: 'floorArea',
-    status: floorAreaUsed <= floorAreaLimit ? 'ok' : 'ng',
+    status: floorAreaUsed <= floorAreaLimit + NOISE ? 'ok' : 'ng',
     label: '容積率',
     detail:
       floorAreaLimit < plan.floorAreaRatio
-        ? `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%＝道路の幅員${retreat > 0 ? `を ${MIN_ROAD_WIDTH}m とみなして` : ` ${fmt(plan.roadWidth)}m`}×0.4。指定は ${plan.floorAreaRatio}%）`
-        : `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%）`,
+        ? `${floorAreaShown}%（上限 ${floorAreaLimit}%＝道路の幅員${retreat > 0 ? `を ${MIN_ROAD_WIDTH}m とみなして` : ` ${fmt(plan.roadWidth)}m`}×0.4。指定は ${plan.floorAreaRatio}%）`
+        : `${floorAreaShown}%（上限 ${floorAreaLimit}%）`,
   })
 
   // 5. Exterior wall setback (the distance between the building and the section boundary)
@@ -976,7 +978,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     id: 'setback',
     status: minEdge + 0.01 >= plan.setback ? 'ok' : 'warn',
     label: '境界からの離れ',
-    detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上${frontRetreat > 0 ? '。道路側は後退後の線から' : ''}）`,
+    detail: `境界までの最小距離 ${fmtVs(minEdge, plan.setback - 0.01)}m（目安 ${fmt(plan.setback)}m 以上${frontRetreat > 0 ? '。道路側は後退後の線から' : ''}）`,
   })
 
   // 5b. Quasi-fire-prevention district: exterior walls that fall in the part at risk of fire
@@ -1071,8 +1073,8 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     status: openSouth >= 4 ? 'ok' : 'warn',
     label: '南側の空き',
     detail: southIsRoad
-      ? `建物の南に ${fmt(gap)}m（区画内）＋道路 ${fmt(plan.roadWidth)}m＝${fmt(openSouth)}m。平屋は 4m 以上あると冬も日が入りやすい（道路の向こうの建物は別に確かめる）`
-      : `建物の南に ${fmt(gap)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
+      ? `建物の南に ${fmt(gap)}m（区画内）＋道路 ${fmt(plan.roadWidth)}m＝${fmtVs(openSouth, 4)}m。平屋は 4m 以上あると冬も日が入りやすい（道路の向こうの建物は別に確かめる）`
+      : `建物の南に ${fmtVs(gap, 4)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
   })
 
   return {

@@ -574,6 +574,66 @@ describe('front road narrower than 4m (article 42 paragraph 2)', () => {
   })
 })
 
+describe('a value printed next to its limit is never rounded onto or across the limit', () => {
+  // Lot 18 x 55 m, section 14 m wide, single-story 35 tsubo
+  const lot = (o: Partial<SitePlan> = {}) =>
+    plan({ landWidth: 18, landDepth: 55, sectionWidth: 14, buildingWidth: 10, ...o })
+
+  it('coverage and floor area ratio just over the limit show the difference', () => {
+    // 35 tsubo on 87.4 tsubo = 40.046%: over 40%, and it was printed as "40%（上限 40%）"
+    const over = lot({ targetTsubo: 87.4, coverageRatio: 40, floorAreaRatio: 40, roadWidth: 12 })
+    expect(check(over, 'coverage').status).toBe('ng')
+    expect(check(over, 'coverage').detail).toBe('40.05%（上限 40%）')
+    expect(check(over, 'floorArea').status).toBe('ng')
+    expect(check(over, 'floorArea').detail).toBe('40.05%（上限 40%）')
+    // 35 on 87.6 tsubo = 39.954%: passes, and is not printed as if it sat on the limit
+    const under = { ...over, targetTsubo: 87.6 }
+    expect(check(under, 'coverage').status).toBe('ok')
+    expect(check(under, 'coverage').detail).toBe('39.95%（上限 40%）')
+    expect(check(under, 'floorArea').detail).toBe('39.95%（上限 40%）')
+    // 35 on 87.5 tsubo = exactly 40%: passes (floating-point noise is not an excess)
+    const exact = { ...over, targetTsubo: 87.5 }
+    expect(check(exact, 'coverage').status).toBe('ok')
+    expect(check(exact, 'coverage').detail).toBe('40%（上限 40%）')
+    expect(check(exact, 'floorArea').status).toBe('ok')
+    // Far from the limit one decimal is enough
+    expect(check(lot(), 'coverage').detail).toBe('35%（上限 60%）')
+  })
+
+  it('does the same for the other checks that print their guide', () => {
+    // Section 20 x 20 m (121 tsubo), building 34.9 tsubo 10 m wide = 11.537 m deep
+    const b = {
+      landDepth: 55,
+      targetTsubo: 121,
+      sectionWidth: 20,
+      buildingTsubo: 34.9,
+      buildingX: 5,
+    }
+    // 8 m from the front: 20 - 8 - 11.537 = 0.463 m to the rear boundary, under the 0.5 m guide
+    const edge = plan({ ...b, buildingWidth: 10, buildingY: 8 })
+    expect(check(edge, 'setback').status).toBe('warn')
+    expect(check(edge, 'setback').detail).toBe('境界までの最小距離 0.46m（目安 0.5m 以上）')
+    // Road to the north, 4.5 m from the front: 20 - 4.5 - 11.537 = 3.963 m to the south
+    const south = plan({ ...b, buildingWidth: 10, buildingY: 4.5, roadSide: 'N' })
+    expect(check(south, 'south').status).toBe('warn')
+    expect(check(south, 'south').detail).toContain('建物の南に 3.96m（区画内）')
+    // Road to the south, entered as 1.96 m wide: 2 m in the section + 1.96 m = 3.96 m
+    const withRoad = plan({ ...b, buildingWidth: 10, buildingY: 2, roadWidth: 1.96 })
+    expect(check(withRoad, 'south').detail).toContain('＝3.96m。')
+    // Lot 16.525 m deep: 20 x 16.525 = 330.5 ㎡ = 99.98 tsubo of the 100 asked for
+    const shallow = plan({ landDepth: 16.525, sectionWidth: 20 })
+    expect(check(shallow, 'area').status).toBe('warn')
+    expect(check(shallow, 'area').detail).toContain('99.98坪しか取れない')
+    // Frontage and flag-lot access strip 1.96 m wide against the 2 m of article 43
+    const narrow = plan({ landWidth: 1.96, sectionWidth: 1.96, buildingWidth: 1 })
+    expect(check(narrow, 'road').status).toBe('ng')
+    expect(check(narrow, 'road').detail).toBe('道路に 1.96m 接する（2m 以上が必要）')
+    const strip = plan({ sectionY: 20, flagWidth: 1.96 })
+    expect(check(strip, 'road').status).toBe('ng')
+    expect(check(strip, 'road').detail).toContain('幅 1.96m。')
+  })
+})
+
 describe('quasi-fire-prevention district (the part at risk of fire spread)', () => {
   const fire = (o: Partial<SitePlan> = {}) =>
     plan({ quasiFireZone: true, sectionWidth: 20, roadWidth: 5, ...o })
