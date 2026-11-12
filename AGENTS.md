@@ -20,7 +20,14 @@ A record app for a housing search, used only by one married couple. **The reposi
    authentication.
 3. **Do not add a path that can bypass authentication.** The decision is centralised in
    `src/lib/access.ts` and applied to every request by the global middleware in `src/start.ts`.
-   Fail closed.
+   Fail closed. The same middleware rejects, before authentication, a mutation whose Origin
+   is not this app and a read that another site makes as a subresource or in a frame
+   (`isTrustedMutation` / `isSameSiteRead` in `src/lib/csrf.ts`, from `Origin` and the Fetch
+   Metadata headers `Sec-Fetch-Site` / `-Mode` / `-Dest`): this app itself, the user (address
+   bar, bookmark, home screen icon) and a top-level navigation (a link in a mail, the return
+   from the Access login) are answered; `same-site` counts as another site, because every
+   Worker of the account shares the workers.dev registrable domain; a request without the
+   headers passes on to authentication.
    Exception: static assets (client bundle, favicon, manifest, robots.txt) are served by the
    Workers Assets layer and do not go through `src/start.ts`. They are behind Cloudflare Access,
    but they do not pass the app-side allowlist. Photo upload (`POST /api/photos`) and delivery
@@ -168,11 +175,19 @@ A record app for a housing search, used only by one married couple. **The reposi
 - Visual tokens are centralised in `src/theme.ts` (Mantine theme and colour scheme) and
   `src/styles.css` (the `--sumai-*` CSS variables). Contrast must satisfy 4.5:1 for body text and
   3:1 for UI parts (borders etc.)
-- Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (extraction of `<item>`
-  of RSS 2.0), `htmlList.ts` (extraction of a `<li>` news list: the date from the text, or
-  from the link when the text shows none — `index_20261114.php`, `20261212/`, `/2026/11/14/`;
-  comments and scripts are not read; one candidate per link), `eventDate.ts` (extraction of
-  the event date from the title/summary), `text.ts` (tag removal and length limit), and in
+- Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (the items of RSS
+  2.0, RSS 1.0 with `<dc:date>` and Atom `<entry>`; the written date is checked against the
+  calendar, not against the UTC month of the instant), `htmlList.ts` (extraction of a `<li>`
+  news list: the date from the text, or from the link when the text shows none —
+  `index_20261114.php`, `20261212/`, `/2026/11/14/`; comments and scripts are not read; one
+  candidate per link; a date in the text that runs on as a list or a range is the event's and
+  stays in the title), `eventDate.ts` (extraction of the event date from the title/summary,
+  after NFKC: a `D日` after `M月D日` is a day of that month only when a list / range mark joins
+  it or it is later in the month, near, in the same sentence and no counter surrounds it —
+  `1日3組限定`, `3日間`, `3日前までに` are counts; slash dates read a weekday note between the
+  day and the mark, `11/14(土)・15(日)`; the work per match is bounded, so a long mail body is
+  linear), `text.ts` (tag removal and length limit; `truncate` does not cut inside a number,
+  because half a date is another date), and in
   addition `url.ts` (decides whether a URL may be fetched. https only; rejects user info and
   non-default ports; rejects local/internal hosts and literal IPs. `fetch` of Workers has no
   route to private networks in the first place, so this is one layer of defence in depth) and
@@ -192,7 +207,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   most 100 candidates per fetch go on to D1, the newest by date (`newestCandidates` in
   `src/lib/news/limit.ts`), so one oversized list cannot fill the daily Cron. Each
   vendor is made independent with try/catch, and the failure of 1 vendor (expected errors as well
-  as unexpected exceptions) does not stop the fetch for other vendors. Recording the fetch result
+  as unexpected exceptions) does not stop the fetch for other vendors. A 200 whose body gave
+  no item at all is recorded as a failure too (`NOTHING_READ_ERROR`): a rebuilt site otherwise
+  goes to 0 items while the settings page keeps showing a successful fetch. Recording the fetch result
   (`markNewsFetched` in `src/server/repository/news.ts`) updates only
   `vendors.news_fetched_at`/`news_fetch_error` on both success and failure, and **does not move
   `vendors.updated_at`** (moving it would make the vendor surface in the 「最近の更新」 (Recent
@@ -206,7 +223,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   (`render error path=… route=… …`), a server function that threw by the function middleware
   in `src/start.ts` (`server function error fn=…`), and anything else by the request
   middleware. A Response, `notFound()` and `redirect()` are answers, not failures, and are not
-  logged. Never log request data
+  logged. Never log request data: Drizzle's error for a failed statement carries every bound
+  value in its message (`Failed query: … params: …`, repeated at the top of the stack), so
+  `describeError` cuts the values and logs the reason from `cause` (D1's own message) instead
 - A deploy renames the chunks under /assets/; a page left open gets 404 for the old names and
   Vite raises `vite:preloadError`. `AppLayout` reloads once per minute on that event
   (`src/lib/staleChunk.ts`) instead of showing the error screen
