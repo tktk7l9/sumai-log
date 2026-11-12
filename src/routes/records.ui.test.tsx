@@ -328,6 +328,82 @@ describe('records route', () => {
     expect(within(drawer).getByRole('textbox', { name: '題名' })).toHaveValue('')
   })
 
+  describe('auto-fill of the video memo form', () => {
+    const PASTED = 'https://www.youtube.com/watch?v=zyxwvutsrqp'
+    function oembedAnswer() {
+      return new Response(
+        JSON.stringify({
+          videoId: 'zyxwvutsrqp',
+          title: 'YouTube の題名',
+          channel: 'サンプル住宅ch',
+          thumbnailUrl: 'https://i.ytimg.com/vi/zyxwvutsrqp/hqdefault.jpg',
+          canonicalUrl: PASTED,
+        }),
+      )
+    }
+
+    it('keeps a title typed while the answer from YouTube is still on its way', async () => {
+      // The answer is held back until the test lets it go (a phone on a slow line)
+      let answer: ((res: Response) => void) | undefined
+      vi.spyOn(globalThis, 'fetch').mockImplementation(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve
+          }),
+      )
+      const { user } = await renderRoute('/records?tab=videos')
+      await user.click(await screen.findByRole('button', { name: '動画メモを追加' }))
+      const drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
+      await user.click(within(drawer).getByRole('textbox', { name: 'URL' }))
+      await user.paste(PASTED)
+      await waitFor(() => expect(answer).toBeDefined())
+      const title = within(drawer).getByRole('textbox', { name: '題名' })
+      await user.type(title, '自分で付けた題名')
+      answer!(oembedAnswer())
+      expect(await screen.findByText('取得しました')).toBeInTheDocument()
+      // The rest is filled in, the title the user wrote is not replaced
+      expect(within(drawer).getByRole('textbox', { name: 'チャンネル' })).toHaveValue(
+        'サンプル住宅ch',
+      )
+      expect(title).toHaveValue('自分で付けた題名')
+    })
+
+    it('does not fetch again for a restored draft, whose title may be hand-written', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => oembedAnswer())
+      const { user } = await renderRoute('/records?tab=videos')
+      await user.click(await screen.findByRole('button', { name: '動画メモを追加' }))
+      let drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
+      await user.click(within(drawer).getByRole('textbox', { name: 'URL' }))
+      await user.paste(PASTED)
+      const title = within(drawer).getByRole('textbox', { name: '題名' })
+      await waitFor(() => expect(title).toHaveValue('YouTube の題名'))
+      await user.clear(title)
+      await user.type(title, '断熱の回（自分の題名）')
+      // Closed without saving: the input stays on the device as a draft
+      await user.click(within(drawer).getByRole('button', { name: '閉じる' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+      await user.click(screen.getByRole('button', { name: '動画メモを追加' }))
+      drawer = await screen.findByRole('dialog', { name: '動画メモを書く' })
+      expect(await within(drawer).findByText('書きかけの下書きを戻しました')).toBeInTheDocument()
+      const restored = within(drawer).getByRole('textbox', { name: '題名' })
+      expect(restored).toHaveValue('断熱の回（自分の題名）')
+      // Into the URL field and out again, changing nothing
+      await user.click(within(drawer).getByRole('textbox', { name: 'URL' }))
+      await user.click(within(drawer).getByRole('textbox', { name: '学び' }))
+      expect(fetchSpy).toHaveBeenCalledTimes(1)
+      expect(restored).toHaveValue('断熱の回（自分の題名）')
+
+      // Discarding the draft starts over: the same URL is looked up again
+      await user.click(within(drawer).getByRole('button', { name: '破棄' }))
+      expect(restored).toHaveValue('')
+      await user.click(within(drawer).getByRole('textbox', { name: 'URL' }))
+      await user.paste(PASTED)
+      await waitFor(() => expect(restored).toHaveValue('YouTube の題名'))
+      expect(fetchSpy).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('asks for a title when YouTube cannot be reached and rejects other sites', async () => {
     const save = stub(saveVideo, { id: 'vd3' })
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 502 }))
