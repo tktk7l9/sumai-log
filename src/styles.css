@@ -986,3 +986,15 @@ a:focus-visible {
 .todo-row[data-done] {
   opacity: 0.75;
 }
+/* The label around the 24px tick box. On touch screens it is a 7mm target (SHIG 78); the
+   negative margin keeps the row where it was, and leaves the edit button beside it alone */
+@media (pointer: coarse) {
+  .todo-row-tick {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    margin: -10px;
+  }
+}

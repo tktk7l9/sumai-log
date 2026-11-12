@@ -51,12 +51,15 @@ function workMetaOf(work: ChannelVideoWork): string {
 export function ChannelVideoCard({
   video,
   fresh = false,
+  marking = false,
   onPlay,
   onToggleWatched,
 }: {
   video: ChannelVideoRow
   /** Published in the last 7 days: the "New" tag */
   fresh?: boolean
+  /** The watched flag of this video is being written: its button shows busy and takes no tap */
+  marking?: boolean
   onPlay: () => void
   onToggleWatched: () => void
 }) {
@@ -125,7 +128,13 @@ export function ChannelVideoCard({
             >
               見る
             </Button>
-            <Button size="sm" mih={44} variant="default" onClick={onToggleWatched}>
+            <Button
+              size="sm"
+              mih={44}
+              variant="default"
+              loading={marking}
+              onClick={onToggleWatched}
+            >
               {watched ? '視聴済みを取り消す' : '視聴済みにする'}
             </Button>
             {/* The memo of this video (記録 > 動画). Writing one from here fills in the URL, title,

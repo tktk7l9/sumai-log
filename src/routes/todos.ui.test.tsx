@@ -103,6 +103,16 @@ describe('todos route', () => {
     )
   })
 
+  it('ticks from the area around the box too, the touch target on a phone', async () => {
+    const tick = stub(setTodoDone, { ok: true })
+    const { user } = await renderRoute('/todos')
+    const box = await screen.findByRole('checkbox', { name: 'NISA 口座を開く を完了にする' })
+    // styles.css makes this label 44px on touch screens (the box itself is 24px)
+    await user.click(box.closest('label')!)
+    expect(tick).toHaveBeenCalledTimes(1)
+    expect(tick).toHaveBeenCalledWith({ data: { id: uid(3), done: true } })
+  })
+
   it('adds an item from the FAB with the current list preselected', async () => {
     const save = stub(saveTodo, { id: uid(9), conflict: false })
     const { user } = await renderRoute('/todos?l=money')

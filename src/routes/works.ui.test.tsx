@@ -174,6 +174,32 @@ describe('works route', () => {
     )
   })
 
+  it('shows the watched button of that work as busy while it is saved, and ignores a second tap', async () => {
+    // The write is held back until the test lets it go (a phone on a slow line)
+    let finish: (() => void) | undefined
+    mockOf(markWorkWatched).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true }
+    })
+    const { user } = await renderRoute('/works?tab=works')
+    const full = within(await screen.findByRole('article', { name: '全部そろった家' }))
+    const button = full.getByRole('button', { name: '視聴済みにする' })
+    await user.click(button)
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('data-loading', 'true')
+    // Only that one: the other works can still be marked
+    const other = within(screen.getByRole('article', { name: '見終わった家' }))
+    expect(other.getByRole('button', { name: '視聴済みを取り消す' })).toBeEnabled()
+    await user.click(button)
+    finish!()
+    expect(await screen.findByText('視聴済みにしました')).toBeInTheDocument()
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mockOf(markWorkWatched)).toHaveBeenCalledTimes(1)
+  })
+
   it('offers an undo after marking a work watched by hand, since the filter hides the card', async () => {
     const { user } = await renderRoute('/works?tab=works&unwatched=true')
     const full = within(await screen.findByRole('article', { name: '全部そろった家' }))
@@ -595,6 +621,36 @@ describe('works route, videos tab', () => {
         data: { id: uid(102), watched: false },
       }),
     )
+  })
+
+  it('shows the watched button of that video as busy while it is saved, and ignores a second tap', async () => {
+    // The write is held back until the test lets it go (a phone on a slow line)
+    let finish: (() => void) | undefined
+    mockOf(markChannelVideoWatched).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true }
+    })
+    const { user } = await renderRoute('/works?unwatched=true')
+    const first = within(await screen.findByRole('article', { name: '動画1' }))
+    const button = first.getByRole('button', { name: '視聴済みにする' })
+    await user.click(button)
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('data-loading', 'true')
+    // Only that one: the other videos can still be marked
+    const second = within(screen.getByRole('article', { name: '動画2' }))
+    expect(second.getByRole('button', { name: '視聴済みを取り消す' })).toBeEnabled()
+    // An impatient second tap on the same button
+    await user.click(button)
+    finish!()
+    expect(await screen.findByText('視聴済みにしました')).toBeInTheDocument()
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledTimes(1)
+    expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+      data: { id: uid(101), watched: true },
+    })
   })
 
   it('says so when saving fails', async () => {

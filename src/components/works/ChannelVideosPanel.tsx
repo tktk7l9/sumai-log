@@ -110,7 +110,18 @@ export function ChannelVideosPanel({
   const allTotal = page.channels.reduce((sum, c) => sum + c.total, 0)
   const limit = search.n ?? CHANNEL_VIDEO_PAGE
 
+  // The videos whose watched flag is being written. Nothing on the card changed until the
+  // write and the reload had both returned, and with 「まだ見ていない」 (Not watched yet) on the
+  // row then left the list, so an impatient second tap marked the next video. That button now
+  // shows busy, and another write for the same video is not started (the ref, because two
+  // taps can arrive before the busy state is drawn)
+  const [marking, setMarking] = useState<readonly string[]>([])
+  const inFlight = useRef(new Set<string>())
+
   async function setWatched(video: ChannelVideoRow, on: boolean): Promise<boolean> {
+    if (inFlight.current.has(video.id)) return false
+    inFlight.current.add(video.id)
+    setMarking([...inFlight.current])
     try {
       await mark({ data: { id: video.id, watched: on } })
       await router.invalidate()
@@ -118,6 +129,9 @@ export function ChannelVideosPanel({
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
       return false
+    } finally {
+      inFlight.current.delete(video.id)
+      setMarking([...inFlight.current])
     }
   }
 
@@ -204,6 +218,7 @@ export function ChannelVideosPanel({
               key={video.id}
               video={video}
               fresh={isRecent(video.publishedAt, page.todayKey)}
+              marking={marking.includes(video.id)}
               onPlay={() => setPlaying(video)}
               onToggleWatched={() =>
                 void (video.watchedAt === null

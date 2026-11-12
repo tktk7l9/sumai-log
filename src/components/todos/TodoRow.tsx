@@ -35,13 +35,17 @@ export function TodoRow({
       className="todo-row"
       data-done={done || undefined}
     >
-      <Checkbox
-        checked={done}
-        onChange={(e) => onToggle(e.currentTarget.checked)}
-        aria-label={`${todo.title} を${done ? '未完了に戻す' : '完了にする'}`}
-        size="md"
-        mt={2}
-      />
+      {/* The box is 24px with the edit button right beside it. The label around it ticks it
+          too, and on touch screens it is a 44px target (styles.css .todo-row-tick; SHIG 78, 16) */}
+      <label className="todo-row-tick">
+        <Checkbox
+          checked={done}
+          onChange={(e) => onToggle(e.currentTarget.checked)}
+          aria-label={`${todo.title} を${done ? '未完了に戻す' : '完了にする'}`}
+          size="md"
+          mt={2}
+        />
+      </label>
       <UnstyledButton
         onClick={onOpen}
         className="todo-row-main"
