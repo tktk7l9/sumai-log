@@ -282,9 +282,35 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), Math.max(min, max))
 }
 
+/** Narrower than the 0.1 m that positions are rounded to: a rounding leftover, not land */
+const SLIVER = 0.05
+/** Differences smaller than this are floating-point noise, not a real over or under */
+const NOISE = 1e-9
+
+/**
+ * Fits a position into [min, max] and rounds it to 0.1 m without leaving the range: a
+ * position that rounding would put past an end, or within the rounding step of max, is that
+ * end itself, unrounded. Rounding the clamped rear position (29.339 -> 29.3) left 3.9 cm of
+ * "land behind the section", for which a passage was drawn and the section was narrowed on
+ * the next pass; rounding up put the section or the building 1-5 cm outside
+ */
+function fitPosition(v: number, min: number, max: number): number {
+  const hi = Math.max(min, max)
+  const c = clamp(v, min, hi)
+  if (c <= min) return min
+  const r = Math.max(Math.min(round1(c), hi), min)
+  return hi - r < SLIVER ? hi : r
+}
+
 /** Depth of the section (m). Target area / width. Does not exceed the depth of the land */
 export function sectionDepth(plan: SitePlan): number {
   return Math.min(tsuboToM2(plan.targetTsubo) / plan.sectionWidth, plan.landDepth)
+}
+
+/** Whether land remains behind the section. One rule for normalizePlan, the passage and the
+ * checks: a strip under the rounding step is not land that needs a way in */
+function hasLandBehind(plan: SitePlan): boolean {
+  return plan.landDepth - plan.sectionY - sectionDepth(plan) > SLIVER - NOISE
 }
 
 /** Area of the building footprint (building area, ㎡). Total floor area / number of floors
@@ -347,24 +373,24 @@ export function normalizePlan(plan: SitePlan): SitePlan {
     neighbors,
   }
   let sDepth = sectionDepth(next)
-  let sectionY = clamp(plan.sectionY, 0, landDepth - sDepth)
-  const leavesBack = landDepth - sectionY - sDepth > 0.01
-  const lane = plan.parkingAccess && accessWidth > 0 && leavesBack
+  // Whether land remains behind is decided on the position as it will be stored, so that a
+  // second pass over the result decides the same
+  next.sectionY = fitPosition(plan.sectionY, 0, landDepth - sDepth)
+  const lane = plan.parkingAccess && accessWidth > 0 && hasLandBehind(next)
   if (lane) {
     sectionWidth = clamp(sectionWidth, 1, landWidth - accessWidth)
     next.sectionWidth = sectionWidth
     sDepth = sectionDepth(next)
-    sectionY = clamp(sectionY, 0, landDepth - sDepth)
+    next.sectionY = fitPosition(next.sectionY, 0, landDepth - sDepth)
   }
   const minX = lane && plan.accessSide === 'left' ? accessWidth : 0
   const maxX = lane && plan.accessSide === 'right' ? landWidth - accessWidth : landWidth
-  next.sectionX = round1(clamp(plan.sectionX, minX, maxX - sectionWidth))
-  next.sectionY = round1(sectionY)
+  next.sectionX = fitPosition(plan.sectionX, minX, maxX - sectionWidth)
   next.flagWidth = clamp(plan.flagWidth, 0, sectionWidth)
   next.buildingWidth = clamp(plan.buildingWidth, 1, sectionWidth)
   const bDepth = buildingDepth(next)
-  next.buildingX = round1(clamp(plan.buildingX, 0, sectionWidth - next.buildingWidth))
-  next.buildingY = round1(clamp(plan.buildingY, 0, sDepth - bDepth))
+  next.buildingX = fitPosition(plan.buildingX, 0, sectionWidth - next.buildingWidth)
+  next.buildingY = fitPosition(plan.buildingY, 0, sDepth - bDepth)
   return next
 }
 
@@ -390,10 +416,9 @@ export function flagRect(plan: SitePlan): Rect | null {
  */
 export function accessRect(plan: SitePlan): Rect | null {
   if (!plan.parkingAccess || plan.accessWidth <= 0) return null
-  const reach = plan.sectionY + sectionDepth(plan)
-  if (plan.landDepth - reach <= 0.01) return null
+  if (!hasLandBehind(plan)) return null
   const x = plan.accessSide === 'left' ? 0 : plan.landWidth - plan.accessWidth
-  return { x, y: 0, width: plan.accessWidth, depth: reach }
+  return { x, y: 0, width: plan.accessWidth, depth: plan.sectionY + sectionDepth(plan) }
 }
 
 /** Area per car used for the rough estimate of the number of parking spaces (㎡. A rough
@@ -418,9 +443,6 @@ export const MIN_FRONTAGE = 2
  * enter at the legal minimum (2m) */
 export const CAR_LANE_WIDTH = 3
 
-/** Narrower than the 0.1 m that positions are rounded to: a rounding leftover, not land */
-const SLIVER = 0.05
-
 export type RemainingPiece = { where: 'rear' | 'left' | 'right' | 'front'; link: number }
 
 /**
@@ -441,7 +463,7 @@ export function remainingPieces(plan: SitePlan): RemainingPiece[] {
   const flag = flagRect(plan)
   const gapL = s.x
   const gapR = plan.landWidth - s.x - s.width
-  const hasRear = plan.landDepth - s.y - s.depth > 0.01
+  const hasRear = hasLandBehind(plan)
   const joinsRear = (gap: number) => hasRear && gap >= SLIVER
   const pieces: RemainingPiece[] = []
   if (hasRear) pieces.push({ where: 'rear', link: Math.max(gapL, gapR, 0) })
@@ -677,9 +699,6 @@ export type SiteEvaluation = {
 function fmt(v: number, digits = 1): string {
   return v.toLocaleString('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 })
 }
-
-/** Differences smaller than this are floating-point noise, not a real over or under */
-const NOISE = 1e-9
 
 /**
  * fmt for a value printed next to the limit it is judged against: adds decimals until the

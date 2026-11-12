@@ -432,17 +432,20 @@ describe('remaining land: each piece needs its own 2m link to the road', () => {
   })
 
   it('does not take a leftover narrower than the 0.1 m rounding for land', () => {
-    // Lot 18.23 m wide: the section cannot be placed closer than 0.03 m to the right edge
+    // Lot 18.23 m wide. A section pushed to the right ends on the boundary (floating-point
+    // noise is not a gap)
     const p = plan({
       landWidth: 18.23,
       landDepth: 20,
       targetTsubo: 121,
       sectionWidth: 15,
-      sectionX: 9,
+      sectionX: 99,
     })
-    expect(p.sectionX).toBe(3.2)
-    expect(remainingPieces(p)).toEqual([{ where: 'left', link: 3.2 }])
+    expect(remainingPieces(p)).toEqual([{ where: 'left', link: p.sectionX }])
+    // The width field takes one decimal, so 18.2 m is as wide as the section can be typed:
+    // the 3 cm beside it is not judged as a piece of land
     const full = plan({ landWidth: 18.23, landDepth: 20, targetTsubo: 200, sectionWidth: 18.2 })
+    expect(full.sectionX).toBe(0)
     expect(remainingPieces(full)).toEqual([])
     expect(remain(full).detail).toBe('残りの土地はありません')
     const front = plan({ landWidth: 18.23, landDepth: 55, sectionWidth: 18.2 })
@@ -528,6 +531,112 @@ describe('moving the section', () => {
     expect(moveSectionToFront(plan({ sectionY: 10 })).sectionY).toBe(0)
     const back = moveSectionToBack(plan())
     expect(back.sectionY + sectionDepth(back)).toBeCloseTo(50, 0)
+  })
+
+  it('puts the section exactly on the rear boundary: no sliver is left behind it', () => {
+    // Defaults (20 x 50 m, 100 tsubo, passage 4 m on): 16 m wide, 20.661 m deep, so the rear
+    // position is 29.339 m. Stored as 29.3 it left 3.9 cm "behind", and a 50 m passage appeared
+    const back = moveSectionToBack(normalizePlan(DEFAULT_SITE_PLAN))
+    expect(back.sectionY + sectionDepth(back)).toBeCloseTo(50, 9)
+    expect(accessRect(back)).toBeNull()
+    expect(back.sectionWidth).toBe(16)
+    expect(check(back, 'parking').detail).toContain('通路は不要')
+    expect(remainingPieces(back)).toEqual([{ where: 'right', link: 17.5 }])
+    // 8 x 53 m, 43 tsubo, 5.5 m wide: 25.845 m deep, rear position 27.155 m. Rounded up to
+    // 27.2 the section stuck out 4.5 cm beyond the land
+    const up = plan({
+      landWidth: 8,
+      landDepth: 53,
+      targetTsubo: 43,
+      sectionWidth: 5.5,
+      sectionY: 53,
+    })
+    expect(up.sectionY + sectionDepth(up)).toBeCloseTo(53, 9)
+    // A position that is not at the rear is still rounded to 0.1 m
+    expect(plan({ sectionY: 10.26 }).sectionY).toBe(10.3)
+  })
+
+  it('does not reshape a section at the rear when the passage is switched on', () => {
+    const off = moveSectionToBack(plan({ landWidth: 18, landDepth: 55, sectionWidth: 18 }))
+    const on = normalizePlan({ ...off, parkingAccess: true })
+    expect(on.sectionWidth).toBe(18)
+    expect(on.sectionY).toBe(off.sectionY)
+    expect(accessRect(on)).toBeNull()
+  })
+
+  it('keeps the building inside the section and the section inside the land when a position is rounded', () => {
+    // Section 20 x 16.529 m, building 14 x 8.264 m: the far position 8.264 is not rounded up to 8.3
+    const far = plan({ buildingY: 99, buildingX: 99 })
+    expect(far.buildingY + buildingDepth(far)).toBeCloseTo(sectionDepth(far), 9)
+    expect(far.buildingX).toBe(6)
+    // Lot 18.26 m wide, section 15 m: the far position 3.26 is not rounded up to 3.3; next to a
+    // passage of 3.14 m on the left the near position is not rounded down to 3.1
+    const wide = plan({ landWidth: 18.26, sectionWidth: 15, sectionX: 99 })
+    expect(wide.sectionX).toBeCloseTo(3.26, 9)
+    const lane = normalizePlan({
+      ...DEFAULT_SITE_PLAN,
+      accessSide: 'left',
+      accessWidth: 3.14,
+      sectionWidth: 10,
+      sectionX: 0,
+    })
+    expect(lane.sectionX).toBe(3.14)
+  })
+})
+
+describe('normalizePlan over generated plans', () => {
+  // Deterministic generator (linear congruential), dimensions in 0.5 m steps as the page gives
+  let seed = 12345
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32
+  const half = (a: number, b: number) => Math.round((a + rnd() * (b - a)) * 2) / 2
+  const side = () => (rnd() < 0.5 ? 'left' : 'right')
+  const generate = (): SitePlan => {
+    const landWidth = half(8, 30)
+    const landDepth = half(20, 70)
+    const where = rnd()
+    return {
+      ...DEFAULT_SITE_PLAN,
+      landWidth,
+      landDepth,
+      targetTsubo: Math.round(40 + rnd() * 120),
+      sectionWidth: half(4, landWidth),
+      sectionX: half(0, landWidth),
+      sectionY: where < 0.3 ? 0 : where < 0.6 ? landDepth : half(0, landDepth),
+      flagWidth: half(0, 5),
+      flagSide: side(),
+      parkingAccess: rnd() < 0.6,
+      accessWidth: half(0, 6),
+      accessSide: side(),
+      floors: rnd() < 0.5 ? 1 : 2,
+      buildingTsubo: Math.round(20 + rnd() * 40),
+      buildingWidth: half(5, 16),
+      buildingX: half(0, 10),
+      buildingY: half(0, 30),
+    }
+  }
+  const overlap = (a: { x: number; y: number; width: number; depth: number }, b: typeof a) =>
+    Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)) *
+    Math.max(0, Math.min(a.y + a.depth, b.y + b.depth) - Math.max(a.y, b.y))
+
+  it('is idempotent and keeps the section, the passage and the building apart and inside', () => {
+    const failures: string[] = []
+    for (let i = 0; i < 20000; i++) {
+      const p = normalizePlan(generate())
+      const fail = (what: string) => failures.push(`${what}: ${JSON.stringify(p)}`)
+      if (JSON.stringify(normalizePlan(p)) !== JSON.stringify(p)) fail('not idempotent')
+      const s = sectionRect(p)
+      const b = buildingRect(p)
+      const lane = accessRect(p)
+      const flag = flagRect(p)
+      if (s.x < 0 || s.x + s.width > p.landWidth + 1e-9) fail('section outside the land (x)')
+      if (s.y + s.depth > p.landDepth + 1e-9) fail('section beyond the rear')
+      if (lane && overlap(lane, s) > 1e-6) fail('passage overlaps the section')
+      if (lane && flag && overlap(lane, flag) > 1e-6) fail('passage overlaps the flag strip')
+      if (lane && p.landDepth - s.y - s.depth < 0.05) fail('passage without land behind')
+      if (b.depth <= s.depth && b.y + b.depth > s.y + s.depth + 1e-9) fail('building beyond rear')
+      if (b.x + b.width > s.x + s.width + 1e-9) fail('building beyond the right edge')
+    }
+    expect(failures.slice(0, 3)).toEqual([])
   })
 })
 
