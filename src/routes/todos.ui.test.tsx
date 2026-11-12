@@ -222,6 +222,17 @@ describe('todos route', () => {
     })
   })
 
+  it('says the item is gone when the home link points at one that no longer exists', async () => {
+    const { router } = await renderRoute(`/todos?l=move&edit=${uid(99)}`)
+    expect(await screen.findByText('そのやることは、すでに削除されていました')).toBeInTheDocument()
+    // Not the empty 「やることを追加」 form, and the list is there to carry on with
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText('鍵の受け取り')).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.search).toEqual({ l: 'move' }))
+    expect(screen.getAllByText('そのやることは、すでに削除されていました')).toHaveLength(1)
+    clearNotifications()
+  })
+
   it('says so when there is nothing to do', async () => {
     stub(listTodos, { todos: [], todayKey: TODAY, viewer: ME })
     await renderRoute('/todos')
