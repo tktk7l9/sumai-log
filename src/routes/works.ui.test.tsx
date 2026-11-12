@@ -387,6 +387,28 @@ describe('works route, videos tab', () => {
     expect(await screen.findByRole('article', { name: '動画1' })).toBeInTheDocument()
   })
 
+  it('asks YouTube for the small picture in the video list and the large one on a work card', async () => {
+    const { user } = await renderRoute('/works')
+    // 128x72 on a phone: the 320x180 picture, not the 480x360 one with black bars
+    const clipCard = await screen.findByRole('article', { name: '動画1' })
+    expect(clipCard.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://i.ytimg.com/vi/video000001/mqdefault.jpg',
+    )
+    await user.click(screen.getByRole('radio', { name: '施工例' }))
+    const workCard = await screen.findByRole('article', { name: '全部そろった家' })
+    expect(workCard.querySelector('img')?.getAttribute('src')).toMatch(
+      /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/hqdefault\.jpg$/,
+    )
+  })
+
+  it('opens a connection to the thumbnail host early', async () => {
+    const { router } = await renderRoute('/works')
+    await screen.findByRole('article', { name: '動画1' })
+    const links = router.state.matches.flatMap((m) => m.links ?? [])
+    expect(links).toContainEqual({ rel: 'preconnect', href: 'https://i.ytimg.com' })
+  })
+
   it('links a tour video to the page of its work', async () => {
     await renderRoute('/works')
     const first = within(await screen.findByRole('article', { name: '動画1' }))

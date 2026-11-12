@@ -102,8 +102,13 @@ describe('canonicalYouTubeUrl', () => {
 })
 
 describe('youtubeThumbnailUrl', () => {
-  it('builds the thumbnail URL', () => {
+  it('builds the large thumbnail URL (480x360) unless told otherwise', () => {
     expect(youtubeThumbnailUrl(ID)).toBe(`https://i.ytimg.com/vi/${ID}/hqdefault.jpg`)
+    expect(youtubeThumbnailUrl(ID, 'large')).toBe(`https://i.ytimg.com/vi/${ID}/hqdefault.jpg`)
+  })
+
+  it('builds the small 16:9 thumbnail URL (320x180) for the pictures of list cards', () => {
+    expect(youtubeThumbnailUrl(ID, 'small')).toBe(`https://i.ytimg.com/vi/${ID}/mqdefault.jpg`)
   })
 })
 

@@ -89,6 +89,22 @@ describe('records route', () => {
     expect(screen.getByRole('button', { name: '動画メモを追加' })).toBeInTheDocument()
   })
 
+  it('asks YouTube for the small picture of a memo in the list', async () => {
+    stub(listVideos, [
+      {
+        ...video({ thumbnailUrl: 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg' }),
+        vendorName: null,
+      },
+    ])
+    await renderRoute('/records?tab=videos')
+    const card = await screen.findByRole('link', { name: /断熱の基本を解説/ })
+    // 112x63: the 320x180 picture is enough, and it is 16:9 like the box
+    expect(card.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://i.ytimg.com/vi/abcdefghijk/mqdefault.jpg',
+    )
+  })
+
   it('narrows the memos by tag, by vendor and by a search, and says when nothing matches', async () => {
     stub(listVideos, [
       { ...video(), vendorName: null },

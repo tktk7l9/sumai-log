@@ -73,7 +73,7 @@ export function ChannelVideoCard({
             className="channel-video-thumb"
           >
             <Image
-              src={youtubeThumbnailUrl(video.videoId)}
+              src={youtubeThumbnailUrl(video.videoId, 'small')}
               alt=""
               radius="sm"
               w={{ base: 128, sm: 160 }}

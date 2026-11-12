@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { Film } from 'lucide-react'
 
 import { formatDateSlash } from '../../lib/calendar'
+import { youtubeThumbnailUrl } from '../../lib/youtube'
 import type { listVideos } from '../../server/videos'
 
 export type VideoRow = Awaited<ReturnType<typeof listVideos>>[number]
@@ -24,7 +25,7 @@ export function VideoCard({ video }: { video: VideoRow }) {
           {/* YouTube's 4:3 picture, cropped to the 16:9 of the video */}
           {video.thumbnailUrl ? (
             <Image
-              src={video.thumbnailUrl}
+              src={youtubeThumbnailUrl(video.videoId, 'small')}
               alt=""
               radius="sm"
               w={112}

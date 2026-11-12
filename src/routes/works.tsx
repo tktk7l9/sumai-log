@@ -23,6 +23,8 @@ const ALL = 'all'
 
 export const Route = createFileRoute('/works')({
   component: Page,
+  // Both tabs are lists of YouTube thumbnails: connect to their host while the CSS loads
+  head: () => ({ links: [{ rel: 'preconnect', href: 'https://i.ytimg.com' }] }),
   validateSearch: (s) => worksSearchSchema.parse(s),
   // The works are filtered on the page; the videos (thousands) are filtered and paged by the server
   loaderDeps: ({ search }) =>
