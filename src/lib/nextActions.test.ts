@@ -33,3 +33,45 @@ describe('appendAction', () => {
     expect(appendAction('a', '  ')).toBe('a')
   })
 })
+
+describe('words that only look like a mark', () => {
+  it('does not take 完了 / 済 at the head of an ordinary word for the done mark', () => {
+    expect(parseActions('完了検査の立会い日を確認\n済んでいない書類を出す')).toEqual([
+      { line: 0, text: '完了検査の立会い日を確認', done: false },
+      { line: 1, text: '済んでいない書類を出す', done: false },
+    ])
+  })
+
+  it('ticking and unticking such a line keeps every character', () => {
+    const ticked = toggleAction('完了検査の立会い日を確認', 0)
+    expect(ticked).toBe('済 完了検査の立会い日を確認')
+    expect(parseActions(ticked)).toEqual([
+      { line: 0, text: '完了検査の立会い日を確認', done: true },
+    ])
+    expect(toggleAction(ticked, 0)).toBe('完了検査の立会い日を確認')
+  })
+
+  it('still reads the marks people write: with a space, a colon, み, or alone', () => {
+    expect(
+      parseActions('済 電話\n済み 見積もり\n完了: 予約\n完了：資料請求\n✓契約書\n[x] 測量\n済').map(
+        (a) => [a.text, a.done],
+      ),
+    ).toEqual([
+      ['電話', true],
+      ['見積もり', true],
+      ['予約', true],
+      ['資料請求', true],
+      ['契約書', true],
+      ['測量', true],
+    ])
+  })
+
+  it('does not take the integer part of a decimal or a date for a numbered bullet', () => {
+    expect(parseActions('10.5畳のLDKを確認\n2026.11.20までに書類提出\n1. 電話\n2)予約')).toEqual([
+      { line: 0, text: '10.5畳のLDKを確認', done: false },
+      { line: 1, text: '2026.11.20までに書類提出', done: false },
+      { line: 2, text: '電話', done: false },
+      { line: 3, text: '予約', done: false },
+    ])
+  })
+})

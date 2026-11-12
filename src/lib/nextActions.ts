@@ -4,11 +4,19 @@
  * its head (the analysis page also counts by this mark).
  */
 
-/** Mark of a done line. A line starting with "済", "完了", "✓", "✔" or "[x]" is taken as done */
-export const DONE_PREFIX = /^(済|完了|✓|✔|\[x\])\s*/iu
+/**
+ * Mark of a done line. A line starting with "済", "済み", "完了", "✓", "✔" or "[x]" is taken
+ * as done. The word marks need a space or a colon after them (or to be the whole line): the
+ * app itself writes "済 ", and "完了検査の立会い" or "済んでいない書類" is an ordinary item
+ * (it used to show as ticked, and unticking it deleted those characters from the record).
+ */
+export const DONE_PREFIX = /^(?:(?:済み?|完了)(?:[\s:：]+|$)|(?:✓|✔|\[x\])\s*)/iu
 
-/** Bullet mark at the head of a line ("・", "-", "*", "□", "1." etc.) */
-const BULLET = /^([・\-*□☐]|\d+[.)．])\s*/u
+/**
+ * Bullet mark at the head of a line ("・", "-", "*", "□", "1." etc.). A number is a bullet
+ * only when no digit follows its mark ("10.5畳" and "2026.11.20" are not)
+ */
+const BULLET = /^([・\-*□☐]|\d+[.)．](?!\d))\s*/u
 
 export type ActionItem = {
   /** Line number in the original text */
