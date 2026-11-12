@@ -60,6 +60,27 @@ A record app for a housing search, used only by one married couple. **The reposi
   the same names, and the public import path does not change)
 - The R2 cleanup when a photo upload fails midway is `cleanupFailedUpload` in
   `src/server/storage.ts`
+- What reaches the browser is kept small on purpose (`src/lib/clientBundle.test.ts`,
+  `src/lib/assetHeaders.test.ts`). `validateSearch` and `loader` of a route are not code-split:
+  whatever they import lands in the entry chunk of every page. So: the enum arrays, label maps
+  and their types live in `src/db/enums.ts` (no drizzle import; add a new one there), and code
+  that reaches the browser (routes, components, lib, `*.schema.ts`, the top level of server
+  function modules) imports them from `db/enums`, `db/schema` for types only; the glossary
+  terms (`src/content/glossary.ts`, 160 KB) may be imported as a value only by the files on
+  the allowlist of that test — the categories are in `src/content/glossaryCategories.ts`, the
+  term page's loader uses a dynamic import, and the home roadmap gets the names of its related
+  terms from `getRoadmap` (`relatedTerms`). `public/_headers` has exactly one rule,
+  `/assets/*` → `Cache-Control: public, max-age=31536000, immutable` (the file names are
+  content-hashed; rules for the same path are comma-joined, so do not add more, and security
+  headers stay in the Worker). `youtubeThumbnailUrl(id, 'small')` is the 320×180 picture for
+  list cards
+- D1 refuses a statement with more than 100 bound parameters: look up or insert many rows in
+  chunks (`LOOKUP_CHUNK` in `channelVideosFetcher.ts`, 30 rows per INSERT in `replaceTags`),
+  and put writes that belong together into one `db.batch` (atomic, one round trip): the
+  channel refresh writes each channel in batches of 50 and only the rows that changed;
+  `deleteVendorCascade` first returns the vendor's imported mails to `unassigned`;
+  `importMailAsNews` inserts the news row and updates the mail in one batch, reading the new
+  id with a subselect
 - Dates are TEXT in ISO-8601, amounts are integers in yen, areas are decimals, ids are text
   (`crypto.randomUUID()`)
 - Mobile first. Bottom tabs + FAB + full-screen Drawer. Desktop uses a left navigation. The
@@ -127,6 +148,30 @@ A record app for a housing search, used only by one married couple. **The reposi
   `WHERE updated_at = ?` matches 0 rows (it does not overwrite). The save button is wrapped in
   `.form-actions` (fixed to the bottom edge of the Drawer). Fields that confirm with Enter look at
   `e.nativeEvent.isComposing` and do not act on the conversion commit of Japanese input
+- More on input (the audit of 2026-11-12, each pinned by a UI test):
+  - The research memo is under the stale check too: `saveVendorResearch` takes the vendor's
+    `updatedAt` as `expectedUpdatedAt`, and the stamp is in its draft key. Deleting the memo is
+    not checked. The four free-text fields of a visit hold 4,000 characters (`VISIT_TEXT_MAX`
+    in `src/server/visits.schema.ts`), the textareas carry `maxLength`, and a refusal names
+    the field (`extractFormError`)
+  - The to-do and event forms keep the `updatedAt` their save is based on themselves and move
+    it to the reloaded row only after the conflict notice (a reload behind an open form must
+    not move it, or the save would overwrite the other person without the notice). The row is
+    looked up in loader data by id on every render, so saving again after the notice goes
+    through and the draft is still there
+  - A search box bound to `?q=` remembers the last value it sent and realigns only when `q`
+    changed from elsewhere (works, records, glossary): the answer to an earlier search used to
+    delete what was typed meanwhile
+  - Text-entry components default to `size: 'md'` (16px) in `src/theme.ts`; under 16px iOS
+    zooms the page on focus and stays zoomed. `src/theme.test.ts` reads the imports of `src/`
+    and fails on a text-entry component without that default
+  - Search params of a route always fall back with `.catch` (a hand-edited or old URL opens
+    the page, not the error screen); an id in the URL is checked by `UUID_SHAPE`, not
+    `.uuid()` (ids from the seed import are not RFC v4)
+  - The calendar's loader depends on the visible range and `plan` only; the selected day,
+    month and view are read from the current location, so a tap on a day does not reload.
+    Today in the month grid is the server's `todayKey` marked with `aria-current="date"` and
+    painted in styles.css (`highlightToday` follows the renderer's clock, UTC on the Worker)
 - The aggregation for the analysis of records (`/analysis`) is `src/lib/analysis.ts` (pure
   functions). `src/server/analysis.ts` reads from D1 and finishes the aggregation, and returns
   only the result to the screen. Nothing is sent to an external API (LLM etc.) (the owner's
