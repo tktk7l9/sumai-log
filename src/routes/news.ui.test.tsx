@@ -239,6 +239,77 @@ describe('news route, newsletters tab', () => {
     )
   })
 
+  it('keeps the drawer open under 「未読だけ」 after opening marked the newsletter read', async () => {
+    const item = row({
+      id: UNREAD,
+      vendorId: VENDOR,
+      title: '今月の見学会のご案内',
+      publishedOn: '2026-09-20',
+      url: 'mail:unread@example.com',
+      mailId: uid(91),
+    })
+    // The server as it behaves: the unread-only list leaves out what was read
+    let read = false
+    mockOf(listNewsletters).mockImplementation(async (arg: unknown) => {
+      const { unreadOnly } = (arg as { data: { unreadOnly?: true } }).data
+      const listed = { ...item, readAt: read ? '2026-09-21T00:00:00.000Z' : null }
+      return {
+        news: unreadOnly && read ? [] : [listed],
+        vendors: [{ vendorId: VENDOR, vendorName: 'テスト工務店', total: 1, unread: read ? 0 : 1 }],
+      }
+    })
+    mockOf(markNewsRead).mockImplementation(async (arg: unknown) => {
+      read = (arg as { data: { read: boolean } }).data.read
+      return { ok: true }
+    })
+    stub(getMailBody, { body: '本文です' })
+
+    const { user } = await renderRoute('/news?tab=mail&unread=true')
+    await user.click(await screen.findByText('今月の見学会のご案内'))
+    // The reload after the mark no longer lists the row
+    expect(await screen.findByText('未読 0 通／全 1 通')).toBeInTheDocument()
+    expect(screen.getByText('該当するメルマガはありません')).toBeInTheDocument()
+    const drawer = screen.getByRole('dialog', { name: 'お知らせ' })
+    expect(within(drawer).getByText('今月の見学会のご案内')).toBeInTheDocument()
+    expect(await within(drawer).findByText('本文です')).toBeInTheDocument()
+
+    // The kept row knows it was read: the button takes the mark back, and the row is listed again
+    await user.click(within(drawer).getByRole('button', { name: '未読に戻す' }))
+    await waitFor(() =>
+      expect(markNewsRead).toHaveBeenLastCalledWith({ data: { id: UNREAD, read: false } }),
+    )
+    expect(await screen.findByText('未読 1 通／全 1 通')).toBeInTheDocument()
+    expect(within(drawer).getByRole('button', { name: '既読にする' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'お知らせ' })).toBeInTheDocument()
+  })
+
+  it('shows the read button as it was when taking the mark back fails', async () => {
+    const item = row({
+      id: UNREAD,
+      title: '今月の見学会のご案内',
+      url: 'mail:unread@example.com',
+      mailId: uid(91),
+    })
+    let read = false
+    mockOf(listNewsletters).mockImplementation(async () => ({
+      news: read ? [] : [item],
+      vendors: [{ vendorId: VENDOR, vendorName: 'テスト工務店', total: 1, unread: read ? 0 : 1 }],
+    }))
+    mockOf(markNewsRead).mockImplementation(async (arg: unknown) => {
+      if (!(arg as { data: { read: boolean } }).data.read) throw new Error('offline')
+      read = true
+      return { ok: true }
+    })
+    const { user } = await renderRoute('/news?tab=mail&unread=true')
+    await user.click(await screen.findByText('今月の見学会のご案内'))
+    expect(await screen.findByText('未読 0 通／全 1 通')).toBeInTheDocument()
+    const drawer = screen.getByRole('dialog', { name: 'お知らせ' })
+    await user.click(within(drawer).getByRole('button', { name: '未読に戻す' }))
+    expect(await screen.findByText('保存できませんでした')).toBeInTheDocument()
+    // Still read on the server, so the button still offers to take it back
+    expect(await within(drawer).findByRole('button', { name: '未読に戻す' })).toBeInTheDocument()
+  })
+
   it('shows the body of a newsletter as text, never as markup', async () => {
     // The trust boundary of the script nonce (src/lib/trustBoundary.test.ts): markup in an
     // imported mail must reach the page as text
