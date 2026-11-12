@@ -21,6 +21,19 @@ describe('normalizeDomains', () => {
   it('also accepts newline separators', () => {
     expect(normalizeDomains('a.com\nb.com')).toBe('a.com,b.com')
   })
+  it('accepts the Japanese comma, spaces and full-width characters as separators', () => {
+    expect(normalizeDomains('example.com、mail.example.jp')).toBe('example.com,mail.example.jp')
+    expect(normalizeDomains('example.com example.jp　example.net')).toBe(
+      'example.com,example.jp,example.net',
+    )
+    expect(normalizeDomains('Ｅｘａｍｐｌｅ．ｃｏｍ，example.jp')).toBe('example.com,example.jp')
+  })
+  it('takes the host out of a pasted URL', () => {
+    expect(normalizeDomains('https://www.example.com/contact?x=1')).toBe('www.example.com')
+    expect(normalizeDomains('http://example.jp:8080/ , example.net/path')).toBe(
+      'example.jp,example.net',
+    )
+  })
 })
 
 describe('splitDomains', () => {
