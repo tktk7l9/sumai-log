@@ -418,6 +418,44 @@ export const MIN_FRONTAGE = 2
  * enter at the legal minimum (2m) */
 export const CAR_LANE_WIDTH = 3
 
+/** Narrower than the 0.1 m that positions are rounded to: a rounding leftover, not land */
+const SLIVER = 0.05
+
+export type RemainingPiece = { where: 'rear' | 'left' | 'right' | 'front'; link: number }
+
+/**
+ * The pieces the remaining land falls into, each with the width (m) of its link to the road.
+ * Widths are never added up across pieces or gaps: a site has to touch the road over 2m in
+ * one place (article 43), so two 1.5m gaps are 1.5m.
+ *   - rear: the land behind the section. It reaches the road only through the gap on the
+ *     left or on the right of the section (the passage to the parking lot is one of them),
+ *     so its link is the wider of the two. Land beside or in front of the section on a side
+ *     with a gap belongs to this piece
+ *   - left / right: land that does not join the land behind (there is none, or that side has
+ *     no gap). It touches the road itself: beside a section at the road over the gap, in
+ *     front of a section set back over what is left on that side of the flag-lot access strip
+ *   - front: the same in front of a section set back without a strip (one piece)
+ */
+export function remainingPieces(plan: SitePlan): RemainingPiece[] {
+  const s = sectionRect(plan)
+  const flag = flagRect(plan)
+  const gapL = s.x
+  const gapR = plan.landWidth - s.x - s.width
+  const hasRear = plan.landDepth - s.y - s.depth > 0.01
+  const joinsRear = (gap: number) => hasRear && gap >= SLIVER
+  const pieces: RemainingPiece[] = []
+  if (hasRear) pieces.push({ where: 'rear', link: Math.max(gapL, gapR, 0) })
+  if (plan.sectionY > 0 && !flag) {
+    if (!joinsRear(gapL) && !joinsRear(gapR)) pieces.push({ where: 'front', link: plan.landWidth })
+    return pieces
+  }
+  const frontL = flag ? flag.x : gapL
+  const frontR = flag ? plan.landWidth - flag.x - flag.width : gapR
+  if (!joinsRear(gapL) && frontL >= SLIVER) pieces.push({ where: 'left', link: frontL })
+  if (!joinsRear(gapR) && frontR >= SLIVER) pieces.push({ where: 'right', link: frontR })
+  return pieces
+}
+
 /** Distance of the part at risk of fire spread (m, 1st floor). Measured from the adjacent
  * land boundary line and the road center line (article 2 item 6 of the Building Standards
  * Act) */
@@ -640,6 +678,21 @@ function fmt(v: number, digits = 1): string {
   return v.toLocaleString('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 })
 }
 
+/** Differences smaller than this are floating-point noise, not a real over or under */
+const NOISE = 1e-9
+
+/**
+ * fmt for a value printed next to the limit it is judged against: adds decimals until the
+ * printed number is on the same side of the limit as the value (1.96 against 2 is "1.96",
+ * not "2")
+ */
+function fmtVs(v: number, limit: number): string {
+  const side = (x: number) => (Math.abs(x - limit) <= NOISE ? 0 : Math.sign(x - limit))
+  let digits = 1
+  while (digits < 9 && side(Number(v.toFixed(digits))) !== side(v)) digits++
+  return fmt(v, digits)
+}
+
 /** Computes the areas and ratios, and lists the points to check as ok / warn / ng */
 export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const section = sectionRect(plan)
@@ -716,27 +769,50 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 3. Whether the remaining land keeps touching the road (using the whole front leaves the
-  // rear land with no road frontage)
-  const usedFrontage = plan.sectionY <= 0 ? plan.sectionWidth : flag ? flag.width : 0
-  const remainingFrontage = plan.landWidth - usedFrontage
-  checks.push(
-    remainingArea <= 0.01
-      ? { id: 'remain', status: 'ok', label: '残りの土地', detail: '残りの土地はありません' }
-      : remainingFrontage >= 2
-        ? {
-            id: 'remain',
-            status: 'ok',
-            label: '残りの土地',
-            detail: `${fmt(m2ToTsubo(remainingArea))}坪。道路に ${fmt(remainingFrontage)}m 接したまま`,
-          }
-        : {
-            id: 'remain',
-            status: 'ng',
-            label: '残りの土地',
-            detail: `${fmt(m2ToTsubo(remainingArea))}坪が道路に接しなくなる（接する幅 ${fmt(Math.max(remainingFrontage, 0))}m）。区画の幅を間口より狭くする`,
-          },
-  )
+  // 3. Whether every piece of the remaining land keeps its own 2m link to the road (a section
+  // that takes the whole frontage, or leaves only narrow gaps beside it, cuts the rear off)
+  const pieces = remainingPieces(plan)
+  const short = pieces.filter((p) => p.link + NOISE < MIN_FRONTAGE)
+  if (pieces.length === 0) {
+    checks.push({
+      id: 'remain',
+      status: 'ok',
+      label: '残りの土地',
+      detail: '残りの土地はありません',
+    })
+  } else if (short.length > 0) {
+    const rearTsubo = fmt(m2ToTsubo(plan.landWidth * (plan.landDepth - section.y - section.depth)))
+    const need = `${MIN_FRONTAGE}m 以上`
+    checks.push({
+      id: 'remain',
+      status: 'ng',
+      label: '残りの土地',
+      detail: short
+        .map((p) =>
+          p.where !== 'rear'
+            ? `${p.where === 'left' ? '左' : '右'}側に残る土地は道路に ${fmtVs(p.link, MIN_FRONTAGE)}m しか接しない（${need}が必要）`
+            : p.link < SLIVER
+              ? `区画の奥の ${rearTsubo}坪が道路に接しなくなる。区画の幅を間口より狭くして、横に ${need}の通り道を残す`
+              : `区画の奥の ${rearTsubo}坪は、区画の横の幅 ${fmtVs(p.link, MIN_FRONTAGE)}m でしか道路につながらない（${need}が必要。左右の空きは足せない）`,
+        )
+        .join('。'),
+    })
+  } else {
+    const rear = pieces.find((p) => p.where === 'rear')
+    const others = pieces.filter((p) => p.where !== 'rear').map((p) => `${fmt(p.link)}m`)
+    checks.push({
+      id: 'remain',
+      status: 'ok',
+      label: '残りの土地',
+      detail: [
+        `${fmt(m2ToTsubo(remainingArea))}坪`,
+        ...(rear ? [`区画の奥の土地は、区画の横の幅 ${fmt(rear.link)}m で道路につながる`] : []),
+        ...(others.length > 0
+          ? [`${rear ? '手前の土地は' : ''}道路に ${others.join('・')} 接したまま`]
+          : []),
+      ].join('。'),
+    })
+  }
 
   // 3b. The passage to the remaining land (the parking lot)
   const access = accessRect(plan)

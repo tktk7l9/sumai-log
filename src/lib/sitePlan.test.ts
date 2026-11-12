@@ -28,6 +28,7 @@ import {
   parseLotLines,
   parseSitePlan,
   placeBuildingNorth,
+  remainingPieces,
   sideDirections,
   round1,
   sectionDepth,
@@ -263,6 +264,189 @@ describe('evaluateSite', () => {
     expect(evaluateSite(narrow).floorAreaLimit).toBe(160)
     expect(check(narrow, 'floorArea').detail).toContain('×0.4')
     expect(check(plan({ roadWidth: 5 }), 'floorArea').detail).not.toContain('×0.4')
+  })
+})
+
+describe('remaining land: each piece needs its own 2m link to the road', () => {
+  // Lot 18 x 55 m, 100 tsubo = 330.58 ㎡, passage switch off unless stated
+  const lot = (o: Partial<SitePlan> = {}) => plan({ landWidth: 18, landDepth: 55, ...o })
+  const remain = (p: SitePlan) => check(p, 'remain')
+
+  it('section at the road, land behind: the link is the wider gap beside the section, not the sum', () => {
+    // Section 15 m wide, 1.5 m from the left: depth 330.58 / 15 = 22.04 m, so 55 - 22.04 =
+    // 32.96 m of land lies behind it (18 x 32.96 = 593.3 ㎡ = 179.5 tsubo). It reaches the
+    // road through a 1.5 m gap on the left or a 1.5 m gap on the right: 1.5 m, not 3 m
+    const slivers = lot({ sectionWidth: 15, sectionX: 1.5 })
+    expect(remainingPieces(slivers)).toEqual([{ where: 'rear', link: 1.5 }])
+    expect(remain(slivers).status).toBe('ng')
+    expect(remain(slivers).detail).toBe(
+      '区画の奥の 179.5坪は、区画の横の幅 1.5m でしか道路につながらない（2m 以上が必要。左右の空きは足せない）',
+    )
+    // Pushed to the left edge the same section leaves one 3 m gap
+    const oneGap = lot({ sectionWidth: 15, sectionX: 0 })
+    expect(remainingPieces(oneGap)).toEqual([{ where: 'rear', link: 3 }])
+    expect(remain(oneGap).status).toBe('ok')
+    expect(remain(oneGap).detail).toBe(
+      '199.5坪。区画の奥の土地は、区画の横の幅 3m で道路につながる',
+    )
+    // Full width: 55 - 330.58 / 18 = 36.63 m behind (659.4 ㎡ = 199.5 tsubo), no gap at all
+    const full = lot({ sectionWidth: 18 })
+    expect(remainingPieces(full)).toEqual([{ where: 'rear', link: 0 }])
+    expect(remain(full).status).toBe('ng')
+    expect(remain(full).detail).toBe(
+      '区画の奥の 199.5坪が道路に接しなくなる。区画の幅を間口より狭くして、横に 2m 以上の通り道を残す',
+    )
+  })
+
+  it('the passage to the parking lot is one of the gaps: 1.5 m of passage plus 0.5 m on the other side is not 2 m', () => {
+    const p = normalizePlan({
+      ...DEFAULT_SITE_PLAN,
+      landWidth: 18,
+      landDepth: 55,
+      accessWidth: 1.5,
+      sectionWidth: 16,
+      sectionX: 0.5,
+    })
+    expect(remainingPieces(p)).toEqual([{ where: 'rear', link: 1.5 }])
+    expect(remain(p).status).toBe('ng')
+    // A passage of exactly 2 m passes (18.3 - 16.3 is 2.0000000000000004 or just under)
+    for (const landWidth of [18, 18.3, 9.7]) {
+      const ok = normalizePlan({ ...DEFAULT_SITE_PLAN, landWidth, landDepth: 55, accessWidth: 2 })
+      expect(remain(ok).status).toBe('ok')
+    }
+    // 1.96 m must not be printed as "2m" next to "2m 以上が必要"
+    const near = lot({ sectionWidth: 16.04, sectionX: 0 })
+    expect(remain(near).status).toBe('ng')
+    expect(remain(near).detail).toContain('幅 1.96m でしか')
+  })
+
+  it('section set back with a flag strip, land behind: the land behind is cut off by a full-width section', () => {
+    // Section 18 m wide, 15 m from the road, strip 2.5 m on the left: depth 18.37 m, so
+    // 55 - 15 - 18.37 = 21.63 m behind = 389.4 ㎡ = 117.8 tsubo with no way to the road. The
+    // 15.5 m in front of the section (right of the strip) touches the road but not the rear
+    const cut = lot({ sectionWidth: 18, sectionY: 15, flagWidth: 2.5 })
+    expect(remainingPieces(cut)).toEqual([
+      { where: 'rear', link: 0 },
+      { where: 'right', link: 15.5 },
+    ])
+    expect(remain(cut).status).toBe('ng')
+    expect(remain(cut).detail).toContain('区画の奥の 117.8坪が道路に接しなくなる')
+    // 15 m wide at the left edge: the land behind joins the front through the 3 m on the right
+    const linked = lot({ sectionWidth: 15, sectionY: 15, flagWidth: 2.5 })
+    expect(remainingPieces(linked)).toEqual([{ where: 'rear', link: 3 }])
+    expect(remain(linked).status).toBe('ok')
+    // 17 m wide: the front has 15.5 m on the road, but the land behind hangs on a 1 m neck
+    const neck = lot({ sectionWidth: 17, sectionY: 15, flagWidth: 2.5 })
+    expect(remainingPieces(neck)).toEqual([{ where: 'rear', link: 1 }])
+    expect(remain(neck).status).toBe('ng')
+    expect(remain(neck).detail).toContain('幅 1m でしか')
+  })
+
+  it('section set back, land behind: land in front on the side without a gap is a piece of its own', () => {
+    // Section 15 m at the left edge (gap 0 left, 3 m right), strip on the right edge of the
+    // section. Strip 2.5 m: 12.5 m of frontage left of it, cut off from the rear but fine
+    const wide = lot({ sectionWidth: 15, sectionY: 15, flagWidth: 2.5, flagSide: 'right' })
+    expect(remainingPieces(wide)).toEqual([
+      { where: 'rear', link: 3 },
+      { where: 'left', link: 12.5 },
+    ])
+    expect(remain(wide).status).toBe('ok')
+    expect(remain(wide).detail).toBe(
+      '188.1坪。区画の奥の土地は、区画の横の幅 3m で道路につながる。手前の土地は道路に 12.5m 接したまま',
+    )
+    // Strip 14 m: only 1 m is left between the lot edge and the strip
+    const sliver = lot({ sectionWidth: 15, sectionY: 15, flagWidth: 14, flagSide: 'right' })
+    expect(remainingPieces(sliver)).toEqual([
+      { where: 'rear', link: 3 },
+      { where: 'left', link: 1 },
+    ])
+    expect(remain(sliver).status).toBe('ng')
+    expect(remain(sliver).detail).toBe('左側に残る土地は道路に 1m しか接しない（2m 以上が必要）')
+  })
+
+  it('section set back without a strip: the land in front is one piece', () => {
+    const cut = lot({ sectionWidth: 18, sectionY: 15, flagWidth: 0 })
+    expect(remainingPieces(cut)).toEqual([
+      { where: 'rear', link: 0 },
+      { where: 'front', link: 18 },
+    ])
+    expect(remain(cut).status).toBe('ng')
+    const linked = lot({ sectionWidth: 15, sectionY: 15, flagWidth: 0 })
+    expect(remainingPieces(linked)).toEqual([{ where: 'rear', link: 3 }])
+    expect(remain(linked).status).toBe('ok')
+  })
+
+  // Lot 20 x 55 m and 121 tsubo = 400 ㎡: a section 16 m wide is 25 m deep and sits at the
+  // rear at exactly 30 m from the road
+  const rearLot = (o: Partial<SitePlan> = {}) =>
+    plan({ landWidth: 20, landDepth: 55, targetTsubo: 121, sectionWidth: 16, sectionY: 30, ...o })
+
+  it('section at the rear with a flag strip: the land on each side of the strip is judged by its own frontage', () => {
+    // At the left edge, strip 2.5 m on the left: everything else is one piece with 17.5 m
+    // (1100 - 400 - 2.5 x 30 = 625 ㎡ = 189.1 tsubo)
+    const edge = rearLot({ sectionX: 0, flagWidth: 2.5 })
+    expect(remainingPieces(edge)).toEqual([{ where: 'right', link: 17.5 }])
+    expect(remain(edge).status).toBe('ok')
+    expect(remain(edge).detail).toBe('189.1坪。道路に 17.5m 接したまま')
+    // 1 m from the left edge: a strip of land 1 m wide and 55 m long is left beside the site
+    const sliver = rearLot({ sectionX: 1, flagWidth: 2.5 })
+    expect(remainingPieces(sliver)).toEqual([
+      { where: 'left', link: 1 },
+      { where: 'right', link: 16.5 },
+    ])
+    expect(remain(sliver).status).toBe('ng')
+    expect(remain(sliver).detail).toContain('左側に残る土地は道路に 1m しか接しない')
+    // Strip on the right of the section, 3 m from the left: 16.5 m left of the strip, 1 m right
+    const right = rearLot({ sectionX: 3, flagWidth: 2.5, flagSide: 'right' })
+    expect(remainingPieces(right)).toEqual([
+      { where: 'left', link: 16.5 },
+      { where: 'right', link: 1 },
+    ])
+    expect(remain(right).detail).toContain('右側に残る土地は道路に 1m しか接しない')
+    // 2 m on each side of a 16 m strip: two pieces, each just enough
+    const both = rearLot({ sectionX: 2, flagWidth: 16 })
+    expect(remain(both).status).toBe('ok')
+    expect(remain(both).detail).toMatch(/。道路に 2m・2m 接したまま$/)
+    // Without a strip the land in front is one piece over the whole frontage
+    const noStrip = rearLot({ sectionX: 2, flagWidth: 0 })
+    expect(remainingPieces(noStrip)).toEqual([{ where: 'front', link: 20 }])
+    expect(remain(noStrip).status).toBe('ok')
+  })
+
+  it('section from the road to the rear: only the land beside it remains, each side on its own', () => {
+    // Lot 20 x 20 m: a 14 m wide section takes the whole depth
+    const through = (sectionX: number) =>
+      plan({ landWidth: 20, landDepth: 20, targetTsubo: 121, sectionWidth: 14, sectionX })
+    expect(remainingPieces(through(3))).toEqual([
+      { where: 'left', link: 3 },
+      { where: 'right', link: 3 },
+    ])
+    expect(remain(through(3)).status).toBe('ok')
+    expect(remainingPieces(through(1))).toEqual([
+      { where: 'left', link: 1 },
+      { where: 'right', link: 5 },
+    ])
+    expect(remain(through(1)).status).toBe('ng')
+    expect(remainingPieces(through(0))).toEqual([{ where: 'right', link: 6 }])
+    expect(remain(through(0)).status).toBe('ok')
+  })
+
+  it('does not take a leftover narrower than the 0.1 m rounding for land', () => {
+    // Lot 18.23 m wide: the section cannot be placed closer than 0.03 m to the right edge
+    const p = plan({
+      landWidth: 18.23,
+      landDepth: 20,
+      targetTsubo: 121,
+      sectionWidth: 15,
+      sectionX: 9,
+    })
+    expect(p.sectionX).toBe(3.2)
+    expect(remainingPieces(p)).toEqual([{ where: 'left', link: 3.2 }])
+    const full = plan({ landWidth: 18.23, landDepth: 20, targetTsubo: 200, sectionWidth: 18.2 })
+    expect(remainingPieces(full)).toEqual([])
+    expect(remain(full).detail).toBe('残りの土地はありません')
+    const front = plan({ landWidth: 18.23, landDepth: 55, sectionWidth: 18.2 })
+    expect(remain(front).detail).toContain('道路に接しなくなる')
   })
 })
 
