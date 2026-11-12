@@ -1,6 +1,9 @@
-import { asc, eq } from 'drizzle-orm'
+import { env } from 'cloudflare:test'
+import { asc, eq, sql } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/d1'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import * as schema from '../db/schema'
 import { channelVideos, vendors, videos, works } from '../db/schema'
 import { refreshChannelVideos } from './channelVideosFetcher'
 import { actor, db, reset } from './repository/test-helpers'
@@ -44,6 +47,53 @@ function fakeYoutube(playlists: Record<string, Item[] | number>) {
   }) as typeof fetch
   return { fetchImpl, calls }
 }
+
+/**
+ * A Db that counts the round trips to D1: every statement run on its own is one, and a batch is
+ * one however many statements it carries
+ */
+function countingDb() {
+  let roundTrips = 0
+  const real = new WeakMap<object, D1PreparedStatement>()
+  const wrap = (statement: D1PreparedStatement): D1PreparedStatement => {
+    const proxy = new Proxy(statement, {
+      get(target, prop) {
+        if (prop === 'bind') return (...values: unknown[]) => wrap(target.bind(...values))
+        const value: unknown = Reflect.get(target, prop)
+        if (typeof value !== 'function') return value
+        return (...args: unknown[]) => {
+          roundTrips++
+          return value.apply(target, args) as unknown
+        }
+      },
+    })
+    real.set(proxy, statement)
+    return proxy
+  }
+  const client = new Proxy(env.DB, {
+    get(target, prop) {
+      if (prop === 'prepare') return (query: string) => wrap(target.prepare(query))
+      if (prop === 'batch')
+        return (statements: D1PreparedStatement[]) => {
+          roundTrips++
+          return target.batch(statements.map((s) => real.get(s) ?? s))
+        }
+      const value: unknown = Reflect.get(target, prop)
+      return typeof value === 'function' ? (value.bind(target) as unknown) : value
+    },
+  })
+  return { db: drizzle(client, { schema }), roundTrips: () => roundTrips }
+}
+
+/** n items of one playlist published in the given hour, newest first, one minute apart */
+const playlist = (prefix: string, n: number, sec: number, hour: string): Item[] =>
+  Array.from({ length: n }, (_, i) => ({
+    id: `${prefix}${String(i).padStart(10, '0')}`,
+    title: `${prefix} ${i}`,
+    at: `2026-10-01T${hour}:${String(59 - i).padStart(2, '0')}:00Z`,
+    sec,
+    views: i,
+  }))
 
 async function seedChannel() {
   await db.insert(vendors).values({ id: VENDOR_ID, name: '甲工務店', createdBy: actor })
@@ -102,8 +152,70 @@ describe('refreshChannelVideos', () => {
     // 3 playlists (live has none: 404) and one videos.list for the 4 ids
     expect(calls).toEqual(['playlistItems', 'playlistItems', 'playlistItems', 'videos'])
 
+    // The same answer again: nothing to write
     const again = await refreshChannelVideos(db, 'k', fetchImpl)
-    expect(again.channels[0]).toMatchObject({ added: 0, updated: 4 })
+    expect(again.channels[0]).toMatchObject({ added: 0, updated: 0 })
+  })
+
+  it('stores a channel with more videos than one statement can name (50 + 50 + 1)', async () => {
+    await seedChannel()
+    const { fetchImpl } = fakeYoutube({
+      [`UULF${TAIL}`]: playlist('v', 50, 600, '02'),
+      [`UULV${TAIL}`]: playlist('l', 1, 3600, '01'),
+      [`UUSH${TAIL}`]: playlist('s', 50, 30, '00'),
+    })
+
+    const result = await refreshChannelVideos(db, 'k', fetchImpl)
+
+    expect(result.channels).toEqual([{ channel: '甲工務店', added: 101, updated: 0, error: null }])
+    const rows = await db.select().from(channelVideos).orderBy(asc(channelVideos.sortOrder))
+    expect(rows).toHaveLength(102)
+    // The newest of all on top, the row that was there before at the bottom
+    expect(rows.slice(0, 2).map((r) => r.videoId)).toEqual(['v0000000000', 'v0000000001'])
+    expect(rows.slice(-2).map((r) => r.videoId)).toEqual(['s0000000049', 'oldaaaaaaaa'])
+    expect(new Set(rows.map((r) => r.sortOrder)).size).toBe(102)
+    expect(rows.filter((r) => r.durationSec === null)).toEqual([])
+
+    // The next morning all 101 are existing rows: the lookup must not fail either
+    const again = await refreshChannelVideos(db, 'k', fetchImpl)
+    expect(again.channels).toEqual([{ channel: '甲工務店', added: 0, updated: 0, error: null }])
+  })
+
+  it('writes only the rows that changed, in a few round trips to D1', async () => {
+    await seedChannel()
+    const lists = {
+      [`UULF${TAIL}`]: playlist('v', 50, 600, '02'),
+      [`UULV${TAIL}`]: playlist('l', 1, 3600, '01'),
+      [`UUSH${TAIL}`]: playlist('s', 50, 30, '00'),
+    }
+    await refreshChannelVideos(db, 'k', fakeYoutube(lists).fetchImpl)
+    await db.run(sql`UPDATE channel_videos SET updated_at = '2026-01-01 00:00:00'`)
+
+    // Nothing changed at YouTube: the channels, two lookups (101 ids) and the works. No write
+    const unchanged = countingDb()
+    const same = await refreshChannelVideos(unchanged.db, 'k', fakeYoutube(lists).fetchImpl)
+    expect(same.channels).toEqual([{ channel: '甲工務店', added: 0, updated: 0, error: null }])
+    expect(unchanged.roundTrips()).toBe(4)
+    const touched = () =>
+      db
+        .select({ videoId: channelVideos.videoId })
+        .from(channelVideos)
+        .where(sql`${channelVideos.updatedAt} <> '2026-01-01 00:00:00'`)
+        .then((rows) => rows.map((r) => r.videoId).sort())
+    expect(await touched()).toEqual([])
+
+    // Every count moved and one title: 101 UPDATEs in 3 batches, not 101 round trips
+    const moved = Object.fromEntries(
+      Object.entries(lists).map(([key, items]) => [
+        key,
+        items.map((v) => ({ ...v, views: (v.views ?? 0) + 1 })),
+      ]),
+    )
+    const changed = countingDb()
+    const next = await refreshChannelVideos(changed.db, 'k', fakeYoutube(moved).fetchImpl)
+    expect(next.channels).toEqual([{ channel: '甲工務店', added: 0, updated: 101, error: null }])
+    expect(changed.roundTrips()).toBe(7)
+    expect(await touched()).toHaveLength(101)
   })
 
   it('starts a new video as watched when it is in the records, and links a work by name', async () => {
