@@ -112,14 +112,21 @@ export const theme = createTheme({
     },
   },
   components: {
+    // Every field that is typed into is md (16px): under 16px iOS Safari zooms the page on
+    // focus and stays zoomed. src/theme.test.ts checks each such component the app renders
     TextInput: { defaultProps: { size: 'md' } },
     NumberInput: { defaultProps: { size: 'md' } },
     Textarea: { defaultProps: { size: 'md' } },
     Select: { defaultProps: { size: 'md', clearButtonProps: CLEAR_BUTTON } },
-    MultiSelect: { defaultProps: { clearButtonProps: CLEAR_BUTTON } },
+    MultiSelect: { defaultProps: { size: 'md', clearButtonProps: CLEAR_BUTTON } },
     DateInput: {
-      defaultProps: { clearButtonProps: CLEAR_BUTTON, ariaLabels: CALENDAR_ARIA_LABELS },
+      defaultProps: {
+        size: 'md',
+        clearButtonProps: CLEAR_BUTTON,
+        ariaLabels: CALENDAR_ARIA_LABELS,
+      },
     },
+    TimeInput: { defaultProps: { size: 'md' } },
     TagsInput: { defaultProps: { size: 'md' } },
     Button: { defaultProps: { size: 'md' } },
     // 12px between cards. Lists line up with the same spacing on every tab
