@@ -5,7 +5,7 @@ import { CANDIDATE_STATUSES } from '../lib/status'
 import { normalizeDomains } from '../lib/mail/match'
 import { isAllowedNewsUrl } from '../lib/news/url'
 import { normalizeSocialUrls } from '../lib/social'
-import { NEWS_SOURCES, VENDOR_KINDS } from '../db/schema'
+import { NEWS_SOURCES, VENDOR_KINDS } from '../db/enums'
 import {
   idField,
   numberOrEmpty,

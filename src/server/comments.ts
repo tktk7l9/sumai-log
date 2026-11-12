@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { COMMENT_TARGETS } from '../db/schema'
+import { COMMENT_TARGETS } from '../db/enums'
 import { allMembers, currentActorEmail } from './members'
 import { deleteOwnComment, insertComment, listComments } from './repository'
 import { idField, idInput } from './zod'

@@ -3,7 +3,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { ATTENDEES } from '../db/schema'
+import { ATTENDEES } from '../db/enums'
 import { dateKey } from '../lib/calendar'
 import { nowJstIso } from './events'
 import { currentActorEmail } from './members'

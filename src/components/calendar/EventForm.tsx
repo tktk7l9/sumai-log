@@ -7,7 +7,7 @@ import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 
-import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/schema'
+import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/enums'
 import { splitStartsAt } from '../../lib/calendar'
 import { resolveEventTitle, suggestEventTitle } from '../../lib/eventTitle'
 import { draftKey } from '../../lib/drafts'

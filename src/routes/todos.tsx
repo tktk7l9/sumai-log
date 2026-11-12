@@ -14,7 +14,8 @@ import { PageShell } from '../components/PageShell'
 import { TodoForm } from '../components/todos/TodoForm'
 import { TodoRow } from '../components/todos/TodoRow'
 import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
-import { TODO_LISTS, TODO_LIST_LABEL, type Todo } from '../db/schema'
+import { TODO_LISTS, TODO_LIST_LABEL } from '../db/enums'
+import type { Todo } from '../db/schema'
 import { UUID_SHAPE } from '../lib/ids'
 import {
   TODO_SECTIONS,

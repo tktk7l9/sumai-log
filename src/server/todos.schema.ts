@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { TODO_LISTS } from '../db/schema'
+import { TODO_LISTS } from '../db/enums'
 import { dateField, idField, optionalText, optionalUrl } from './zod'
 
 /**

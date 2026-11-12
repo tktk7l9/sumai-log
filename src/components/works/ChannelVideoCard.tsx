@@ -12,7 +12,7 @@ import {
 import { Link } from '@tanstack/react-router'
 import { Check, ExternalLink, Footprints, NotebookPen, Play } from 'lucide-react'
 
-import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
+import { CHANNEL_VIDEO_KIND_LABEL } from '../../db/enums'
 import { formatDateSlash } from '../../lib/calendar'
 import { formatDuration, formatViews } from '../../lib/channelVideos/format'
 import { toJstDateKey } from '../../lib/jst'

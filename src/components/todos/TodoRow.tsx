@@ -1,7 +1,8 @@
 import { ActionIcon, Badge, Checkbox, Group, Text, UnstyledButton } from '@mantine/core'
 import { ExternalLink } from 'lucide-react'
 
-import { TODO_LIST_LABEL, type Todo } from '../../db/schema'
+import { TODO_LIST_LABEL } from '../../db/enums'
+import type { Todo } from '../../db/schema'
 import type { Member } from '../../lib/members'
 import { dueLabel } from '../../lib/todos'
 import { MemberChip } from '../MemberChip'

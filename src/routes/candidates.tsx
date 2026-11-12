@@ -13,7 +13,7 @@ import { PropertyCard } from '../components/candidates/PropertyCard'
 import { PropertyForm } from '../components/candidates/PropertyForm'
 import { VendorCard } from '../components/candidates/VendorCard'
 import { VendorForm } from '../components/candidates/VendorForm'
-import { VENDOR_KINDS, VENDOR_KIND_LABEL } from '../db/schema'
+import { VENDOR_KINDS, VENDOR_KIND_LABEL } from '../db/enums'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../lib/status'
 import { listCandidates } from '../server/candidates'
 

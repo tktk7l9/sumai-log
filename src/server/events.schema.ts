@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { EVENT_KINDS } from '../db/schema'
+import { EVENT_KINDS } from '../db/enums'
 import { composeStartsAt } from '../lib/calendar'
 import { dateField, idField, optionalText, timeField } from './zod'
 

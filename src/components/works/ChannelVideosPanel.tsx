@@ -6,7 +6,7 @@ import { useServerFn } from '@tanstack/react-start'
 import { Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { CHANNEL_VIDEO_KINDS, CHANNEL_VIDEO_KIND_LABEL } from '../../db/schema'
+import { CHANNEL_VIDEO_KINDS, CHANNEL_VIDEO_KIND_LABEL } from '../../db/enums'
 import { markChannelVideoWatched } from '../../server/channelVideos'
 import { CHANNEL_VIDEO_PAGE } from '../../server/channelVideos.schema'
 import type { ChannelSummary, ChannelVideoRow } from '../../server/repository/channelVideos'
