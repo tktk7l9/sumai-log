@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildPlanInput, vendorResearchInput } from './research.schema'
+import { buildPlanInput, saveVendorResearchInput, vendorResearchInput } from './research.schema'
 
 /**
  * saveVendorResearch / saveBuildPlan are wrapped in createServerFn, so here only the
@@ -50,6 +50,23 @@ describe('vendorResearchInput', () => {
 
   it('rejects unknown facts keys', () => {
     expect(vendorResearchInput.safeParse({ ...base, facts: { unknown: 'x' } }).success).toBe(false)
+  })
+})
+
+describe('saveVendorResearchInput', () => {
+  const id = '11111111-1111-4111-8111-111111111111'
+
+  it('carries the update time of the vendor as of opening the form', () => {
+    const result = saveVendorResearchInput.safeParse({
+      id,
+      expectedUpdatedAt: '2030-01-01 00:00:00',
+      research: null,
+    })
+    expect(result.success && result.data.expectedUpdatedAt).toBe('2030-01-01 00:00:00')
+  })
+
+  it('still passes without it (the delete with undo sends none)', () => {
+    expect(saveVendorResearchInput.safeParse({ id, research: null }).success).toBe(true)
   })
 })
 

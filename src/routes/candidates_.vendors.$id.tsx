@@ -396,6 +396,7 @@ function Page() {
         {editingResearch ? (
           <ResearchForm
             vendorId={vendor.id}
+            updatedAt={vendor.updatedAt}
             research={research ?? null}
             onSaved={() => setEditingResearch(false)}
           />

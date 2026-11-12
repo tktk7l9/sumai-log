@@ -47,6 +47,9 @@ export type VendorResearchInput = z.infer<typeof vendorResearchInput>
 
 export const saveVendorResearchInput = z.object({
   id: idField,
+  // The vendor's update time as of opening the form. If the other person saved first, return
+  // a conflict instead of overwriting (repository/stale.ts). The delete with undo sends none
+  expectedUpdatedAt: z.string().max(40).nullish(),
   /** null clears the research memo */
   research: vendorResearchInput.nullable(),
 })

@@ -7,6 +7,7 @@ import { listLinkTargets, savePlace } from '../server/places'
 import { getBuildPlan, saveVendorResearch } from '../server/research'
 import { getHomeAreas } from '../server/settings'
 import { deleteVendorFavicon } from '../server/vendorImages'
+import { draftKey, serializeDraft } from '../lib/drafts'
 import type { VendorResearch } from '../lib/research'
 import { MEMBERS, comment, mockOf, place, stub, uid, vendor } from '../../test/ui/fixtures'
 
@@ -182,6 +183,7 @@ describe('vendor detail route', () => {
     expect(save).toHaveBeenCalledWith({
       data: {
         id: V1,
+        expectedUpdatedAt: FULL.updatedAt,
         research: expect.objectContaining({
           summary: '説明が丁寧',
           facts: { insulation: 'G2' },
@@ -190,6 +192,64 @@ describe('vendor detail route', () => {
         }),
       },
     })
+  })
+
+  it('reports a conflict instead of overwriting the research memo the partner saved first', async () => {
+    const save = stub(saveVendorResearch, { id: null, conflict: true })
+    const { user } = await renderRoute(PAGE)
+    await user.click((await screen.findAllByRole('button', { name: '編集' }))[1]!)
+    const drawer = await screen.findByRole('dialog', { name: '調査メモ' })
+    const summary = within(drawer).getByRole('textbox', { name: '一言で' })
+    await user.clear(summary)
+    await user.type(summary, '自分の一言')
+    // What the page reloads after the conflict: the partner's memo, saved a day later
+    const LATER = '2026-09-02 00:00:00'
+    load({ ...FULL, updatedAt: LATER, research: { ...RESEARCH, summary: '相手の一言' } })
+    await user.click(within(drawer).getByRole('button', { name: '調査メモを保存' }))
+    expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+    expect(save).toHaveBeenLastCalledWith({
+      data: {
+        id: V1,
+        expectedUpdatedAt: FULL.updatedAt,
+        research: expect.objectContaining({ summary: '自分の一言' }),
+      },
+    })
+    // The page behind shows the partner's memo; the form keeps my input, also as a draft
+    expect(await screen.findByText('相手の一言')).toBeInTheDocument()
+    expect(summary).toHaveValue('自分の一言')
+    await waitFor(() =>
+      expect(window.localStorage.getItem(draftKey('research', V1, LATER))).toContain('自分の一言'),
+    )
+
+    // Saving once more is the deliberate overwrite, based on what was just reloaded
+    await user.click(within(drawer).getByRole('button', { name: '調査メモを保存' }))
+    await waitFor(() =>
+      expect(save).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ expectedUpdatedAt: LATER }),
+      }),
+    )
+  })
+
+  it('restores a research draft only onto the version of the memo it was written against', async () => {
+    const stale = serializeDraft({ ...RESEARCH, summary: '古い下書き' }, Date.now())
+    // Written before the partner saved (an older stamp), and by a version without the stamp
+    window.localStorage.setItem(draftKey('research', V1, '2026-08-01 00:00:00'), stale)
+    window.localStorage.setItem(draftKey('research', V1), stale)
+    const { user } = await renderRoute(PAGE)
+    await user.click((await screen.findAllByRole('button', { name: '編集' }))[1]!)
+    let drawer = await screen.findByRole('dialog', { name: '調査メモ' })
+    expect(within(drawer).getByRole('textbox', { name: '一言で' })).toHaveValue(RESEARCH.summary)
+    expect(within(drawer).queryByText('書きかけの下書きを戻しました')).not.toBeInTheDocument()
+    await user.click(within(drawer).getByRole('button', { name: '閉じる' }))
+
+    window.localStorage.setItem(
+      draftKey('research', V1, FULL.updatedAt),
+      serializeDraft({ ...RESEARCH, summary: 'いまの下書き' }, Date.now()),
+    )
+    await user.click((await screen.findAllByRole('button', { name: '編集' }))[1]!)
+    drawer = await screen.findByRole('dialog', { name: '調査メモ' })
+    expect(await within(drawer).findByText('書きかけの下書きを戻しました')).toBeInTheDocument()
+    expect(within(drawer).getByRole('textbox', { name: '一言で' })).toHaveValue('いまの下書き')
   })
 
   it('deletes the research memo with undo', async () => {

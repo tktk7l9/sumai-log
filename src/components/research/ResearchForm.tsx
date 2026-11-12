@@ -19,7 +19,7 @@ import { saveVendorResearch } from '../../server/research'
 import { draftKey } from '../../lib/drafts'
 import { DeleteSection } from '../DetailActions'
 import { cancelPendingDelete, deleteWithUndo, researchDeleteId } from '../undoableDelete'
-import { DraftNotice } from '../DraftNotice'
+import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 
 /**
@@ -27,14 +27,18 @@ import { useFormDraft } from '../useFormDraft'
  * key), sections (heading + body), sources.
  * Rows of sections and sources can be added/removed. Saving goes through
  * saveVendorResearch (it replaces only the research column and does not touch the other
- * fields of the vendor form).
+ * fields of the vendor form). The memo has no row of its own: its version is the vendor's
+ * updatedAt, which a memo save moves.
  */
 export function ResearchForm({
   vendorId,
+  updatedAt,
   research,
   onSaved,
 }: {
   vendorId: string
+  /** The vendor's updatedAt as loaded: sent with the save, and part of the draft key */
+  updatedAt: string
   research: VendorResearch | null
   onSaved: () => void
 }) {
@@ -59,18 +63,29 @@ export function ResearchForm({
       },
     },
   })
-  // Keep the unfinished input on the device (it survives closing the Drawer)
-  const draft = useFormDraft(form, draftKey('research', vendorId), initialValues)
+  // Keep the unfinished input on the device (it survives closing the Drawer). The key carries
+  // the version, so a draft from before the other person saved is not put back over their memo
+  const draft = useFormDraft(form, draftKey('research', vendorId, updatedAt), initialValues)
 
   async function submit(values: VendorResearch) {
     setSaving(true)
     // A memo written again right after deleting the old one: the late delete must not wipe it
     cancelPendingDelete(researchDeleteId(vendorId))
     try {
-      await save({ data: { id: vendorId, research: values } })
+      const res = await save({
+        data: { id: vendorId, expectedUpdatedAt: updatedAt, research: values },
+      })
+      if (res.conflict) {
+        notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
+        // Reflect the partner's content on screen (the next save is based on the latest updated
+        // time)
+        await router.invalidate()
+        return
+      }
+      // Before the reload: it moves updatedAt, and with it the draft key
+      draft.clear()
       await router.invalidate()
       notifications.show({ message: '調査メモを保存しました' })
-      draft.clear()
       onSaved()
     } catch (error) {
       const { message, path } = extractFormError(error)
