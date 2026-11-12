@@ -335,6 +335,13 @@ describe('site route', () => {
       screen.getByRole('img', { name: /間口30m×奥行50m のうち、区画 100\.0坪/ }),
     ).toBeInTheDocument()
     await user.type(screen.getByRole('textbox', { name: '筆界（左端からの距離 m）' }), '10.5, 20')
+    // A front road under 4 m brings up the setback (道路後退) among the checks
+    expect(screen.queryByText('道路後退（セットバック）')).not.toBeInTheDocument()
+    const road = screen.getByRole('textbox', { name: '前面道路の幅員（m）' })
+    await user.clear(road)
+    await user.type(road, '3.6')
+    expect(await screen.findByText('道路後退（セットバック）')).toBeInTheDocument()
+    expect(screen.getByText(/道路の幅員を 4m とみなして×0\.4/)).toBeInTheDocument()
     await user.click(screen.getByRole('radio', { name: '東側' }))
 
     await user.click(screen.getByRole('switch', { name: '残りの土地への通路を確保する' }))

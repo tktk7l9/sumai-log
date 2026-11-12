@@ -27,6 +27,14 @@
  *   - Floor area ratio: when the width of the front road is less than 12m, the smaller of
  *     width x 0.4 (residential zones) and the designated floor area ratio (指定容積率)
  *     (article 52 paragraph 2 of the Act)
+ *   - Front road narrower than 4m: taken as a road under article 42 paragraph 2 of the Act
+ *     (whether it is one is confirmed at the counter; otherwise it is not a road at all).
+ *     The line 2m from the road center line is deemed the road boundary, the strip between
+ *     it and the present boundary is not counted in the site area (article 2 paragraph 1
+ *     item 1 of the Enforcement Order) and nothing may be built on it (article 44), and the
+ *     road counts as 4m wide for the floor area ratio. When the far side of the road is a
+ *     cliff, a river or a railway the line is 4m from that side instead (not modelled; the
+ *     check says so)
  *   - Quasi-fire-prevention district (準防火地域): within 3m of the adjacent land boundary
  *     line and within 3m of the road center line (1st floor) is the part at risk of fire
  *     spread (延焼のおそれのある部分) (article 2 item 6 of the Act). Openings in exterior
@@ -513,15 +521,29 @@ export const FIRE_SPREAD_DISTANCE = 3
 /** The same for the 2nd floor and above (m) */
 export const FIRE_SPREAD_DISTANCE_UPPER = 5
 
+/** Width (m) a road has under the Building Standards Act (article 42). A narrower road
+ * that is still a road (paragraph 2) is deemed to reach 2m to each side of its center line */
+export const MIN_ROAD_WIDTH = 4
+
+/**
+ * How far (m) the site boundary on the road retreats when the front road is narrower than
+ * 4m: to the line 2m from the road center line, (4 - width) / 2. 0 for 4m or more
+ */
+export function roadSetback(plan: SitePlan): number {
+  return Math.max(MIN_ROAD_WIDTH - plan.roadWidth, 0) / 2
+}
+
 /**
  * The upper limit of the floor area ratio due to the width of the front road (%). When the
  * width is less than 12m it is width x 0.4 (residential use districts), and the smaller of
  * it and the designated floor area ratio applies (article 52 paragraph 2 of the Building
- * Standards Act)
+ * Standards Act). A road under 4m counts as 4m (its deemed boundaries are 4m apart): the raw
+ * width would give a cap lower than the legal one
  */
 export function effectiveFloorAreaRatio(plan: SitePlan): number {
   if (plan.roadWidth >= 12) return plan.floorAreaRatio
-  return Math.min(plan.floorAreaRatio, Math.round(plan.roadWidth * 40))
+  const width = Math.max(plan.roadWidth, MIN_ROAD_WIDTH)
+  return Math.min(plan.floorAreaRatio, Math.round(width * 40))
 }
 
 /** Which compass direction the front, rear, left and right of the section each face
@@ -722,6 +744,10 @@ export type SiteEvaluation = {
   buildingArea: number
   coverageUsed: number
   floorAreaUsed: number
+  /** The part of siteArea between the present road boundary and the line 2m from the road
+   * center line (㎡). Left out of the area the two ratios are computed on. 0 for a road of
+   * 4m or more */
+  setbackArea: number
   southGap: number
   /** The upper limit of the floor area ratio with the width of the front road applied (%) */
   floorAreaLimit: number
@@ -759,8 +785,14 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const landArea = plan.landWidth * plan.landDepth
   const remainingArea = landArea - siteArea
   const buildingArea = buildingFootprint(plan)
-  const coverageUsed = (buildingArea / siteArea) * 100
-  const floorAreaUsed = (tsuboToM2(plan.buildingTsubo) / siteArea) * 100
+  // Front road under 4m: the strip along the road is not site area for the two ratios. Our
+  // site touches the road over the section width, or over the flag-lot access strip only
+  const retreat = roadSetback(plan)
+  const frontage = flag ? flag.width : plan.sectionY <= 0 ? section.width : 0
+  const setbackArea = Math.min(retreat, flag ? flag.depth : section.depth) * frontage
+  const ratioArea = siteArea - setbackArea
+  const coverageUsed = (buildingArea / ratioArea) * 100
+  const floorAreaUsed = (tsuboToM2(plan.buildingTsubo) / ratioArea) * 100
   const gap = southGap(plan)
   const checks: SiteCheck[] = []
 
@@ -823,6 +855,23 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
               detail: `${base}法の ${MIN_FRONTAGE}m 以上（神奈川県の条例に通路の長さによる上乗せは無い）`,
             },
     )
+  }
+
+  // 2b. Front road narrower than 4m: the boundary retreats (article 42 paragraph 2)
+  if (retreat > 0) {
+    const inStrip = plan.sectionY <= 0 && plan.buildingY + NOISE < retreat
+    checks.push({
+      id: 'roadSetback',
+      status: inStrip ? 'ng' : 'warn',
+      label: '道路後退（セットバック）',
+      detail:
+        `前面道路の幅員 ${fmt(plan.roadWidth)}m は ${MIN_ROAD_WIDTH}m 未満。建築基準法 42 条 2 項の道路なら、道路の中心線から 2m の線まで敷地が ${fmt(retreat, 2)}m 下がる。` +
+        (setbackArea > 0
+          ? `その部分（道路沿い ${fmt(frontage)}m×${fmt(retreat, 2)}m＝${fmt(setbackArea)}㎡）は敷地面積に入らず、建物も塀も建てられない。建ぺい率・容積率は残りの ${fmt(ratioArea)}㎡ で計算している。`
+          : '') +
+        (inStrip ? 'いまの配置は建物が後退部分にかかっている。' : '') +
+        '向かいが川・がけ・線路のときは後退がこの倍になる。2 項道路かどうかと後退の線は市の窓口で確かめる',
+    })
   }
 
   // 3. Whether every piece of the remaining land keeps its own 2m link to the road (a section
@@ -907,15 +956,17 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     label: '容積率',
     detail:
       floorAreaLimit < plan.floorAreaRatio
-        ? `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%＝道路の幅員 ${fmt(plan.roadWidth)}m×0.4。指定は ${plan.floorAreaRatio}%）`
+        ? `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%＝道路の幅員${retreat > 0 ? `を ${MIN_ROAD_WIDTH}m とみなして` : ` ${fmt(plan.roadWidth)}m`}×0.4。指定は ${plan.floorAreaRatio}%）`
         : `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%）`,
   })
 
   // 5. Exterior wall setback (the distance between the building and the section boundary)
   const bDepth = buildingDepth(plan)
+  // On a road under 4m the road side is measured from the retreated boundary
+  const frontRetreat = plan.sectionY <= 0 ? retreat : 0
   const minEdge = Math.min(
     plan.buildingX,
-    plan.buildingY,
+    plan.buildingY - frontRetreat,
     plan.sectionWidth - (plan.buildingX + plan.buildingWidth),
     section.depth - (plan.buildingY + bDepth),
   )
@@ -923,7 +974,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     id: 'setback',
     status: minEdge + 0.01 >= plan.setback ? 'ok' : 'warn',
     label: '境界からの離れ',
-    detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上）`,
+    detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上${frontRetreat > 0 ? '。道路側は後退後の線から' : ''}）`,
   })
 
   // 5b. Quasi-fire-prevention district: exterior walls that fall in the part at risk of fire
@@ -1031,6 +1082,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     buildingArea,
     coverageUsed,
     floorAreaUsed,
+    setbackArea,
     southGap: gap,
     floorAreaLimit,
     winterSun,

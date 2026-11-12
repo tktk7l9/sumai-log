@@ -450,7 +450,7 @@ function Page() {
                 </Group>
                 <NumberInput
                   label="前面道路の幅員（m）"
-                  description="容積率の上限（幅員×0.4）・延焼ライン・南の空きに使います"
+                  description="容積率の上限（幅員×0.4）・延焼ライン・南の空きに使います。4m 未満なら道路後退（セットバック）も見ます"
                   min={0}
                   max={50}
                   step={0.5}

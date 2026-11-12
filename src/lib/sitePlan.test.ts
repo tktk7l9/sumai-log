@@ -29,6 +29,7 @@ import {
   parseSitePlan,
   placeBuildingNorth,
   remainingPieces,
+  roadSetback,
   sideDirections,
   round1,
   samePlan,
@@ -484,6 +485,92 @@ describe('remaining land: each piece needs its own 2m link to the road', () => {
     expect(remain(full).detail).toBe('残りの土地はありません')
     const front = plan({ landWidth: 18.23, landDepth: 55, sectionWidth: 18.2 })
     expect(remain(front).detail).toContain('道路に接しなくなる')
+  })
+})
+
+describe('front road narrower than 4m (article 42 paragraph 2)', () => {
+  // Lot 18 x 55 m, 100 tsubo = 330.58 ㎡, single-story 35 tsubo = 115.70 ㎡, designated 200%
+  const lot = (o: Partial<SitePlan> = {}) =>
+    plan({ landWidth: 18, landDepth: 55, sectionWidth: 14, buildingWidth: 10, ...o })
+
+  it('retreats the boundary to 2m from the road center line: (4 - width) / 2', () => {
+    expect(roadSetback(lot({ roadWidth: 3.6 }))).toBeCloseTo(0.2)
+    expect(roadSetback(lot({ roadWidth: 2.7 }))).toBeCloseTo(0.65)
+    expect(roadSetback(lot({ roadWidth: 4 }))).toBe(0)
+    expect(roadSetback(lot({ roadWidth: 6 }))).toBe(0)
+  })
+
+  it('caps the floor area ratio with a deemed width of 4m, not with the raw width', () => {
+    // 3.6 m x 0.4 would be 144%; the deemed width 4 m gives 160%
+    for (const roadWidth of [0, 2.7, 3.6, 4]) {
+      expect(effectiveFloorAreaRatio(lot({ roadWidth }))).toBe(160)
+    }
+    expect(effectiveFloorAreaRatio(lot({ roadWidth: 4.4 }))).toBe(176)
+    const c = check(lot({ roadWidth: 3.6 }), 'floorArea')
+    expect(c.detail).toContain('上限 160%＝道路の幅員を 4m とみなして×0.4。指定は 200%')
+    expect(check(lot({ roadWidth: 4 }), 'floorArea').detail).toContain('道路の幅員 4m×0.4')
+  })
+
+  it('section at the road: leaves the strip along the road out of the site area for the ratios, and names it', () => {
+    // Road 3.6 m, section 14 m wide at the road: the strip is 14 x 0.2 = 2.8 ㎡, the site area
+    // for the ratios 330.58 - 2.8 = 327.78 ㎡, coverage 115.70 / 327.78 = 35.30%
+    const p = lot({ roadWidth: 3.6 })
+    const e = evaluateSite(p)
+    expect(e.setbackArea).toBeCloseTo(2.8)
+    expect(e.siteArea - e.setbackArea).toBeCloseTo(327.78, 2)
+    expect(e.coverageUsed).toBeCloseTo(35.3, 2)
+    expect(e.floorAreaUsed).toBeCloseTo(35.3, 2)
+    const c = check(p, 'roadSetback')
+    expect(c.status).toBe('warn')
+    expect(c.detail).toContain('前面道路の幅員 3.6m は 4m 未満')
+    expect(c.detail).toContain('敷地が 0.2m 下がる')
+    expect(c.detail).toContain('道路沿い 14m×0.2m＝2.8㎡')
+    expect(c.detail).toContain('残りの 327.8㎡')
+    // At 4 m or more there is nothing to say
+    const wide = evaluateSite(lot({ roadWidth: 4 }))
+    expect(wide.setbackArea).toBe(0)
+    expect(wide.coverageUsed).toBeCloseTo(35, 2)
+    expect(wide.checks.find((x) => x.id === 'roadSetback')).toBeUndefined()
+  })
+
+  it('section set back: only the flag-lot access strip touches the road, so only its end retreats', () => {
+    // Strip 2.5 m wide and 15 m long: site 330.58 + 37.5 = 368.08 ㎡, less 2.5 x 0.2 = 0.5 ㎡
+    const p = lot({ roadWidth: 3.6, sectionY: 15, flagWidth: 2.5 })
+    const e = evaluateSite(p)
+    expect(e.setbackArea).toBeCloseTo(0.5)
+    expect(e.siteArea - e.setbackArea).toBeCloseTo(367.58, 2)
+    expect(e.coverageUsed).toBeCloseTo((115.7 / 367.58) * 100, 1)
+    expect(check(p, 'roadSetback').detail).toContain('道路沿い 2.5m×0.2m＝0.5㎡')
+    // Without a strip the site does not touch the road: no area to leave out
+    const none = lot({ roadWidth: 3.6, sectionY: 15, flagWidth: 0 })
+    expect(evaluateSite(none).setbackArea).toBe(0)
+    expect(check(none, 'roadSetback').status).toBe('warn')
+    expect(check(none, 'roadSetback').detail).not.toContain('道路沿い')
+  })
+
+  it('measures the building from the retreated line on the road side', () => {
+    // 0.6 m from the present boundary is 0.4 m from the retreated one: under the 0.5 m guide
+    const near = lot({ roadWidth: 3.6, buildingX: 2, buildingY: 0.6 })
+    expect(check(near, 'setback').status).toBe('warn')
+    expect(check(near, 'setback').detail).toContain('最小距離 0.4m')
+    expect(check(near, 'setback').detail).toContain('道路側は後退後の線から')
+    expect(check({ ...near, roadWidth: 4 }, 'setback').status).toBe('ok')
+    expect(check({ ...near, buildingY: 0.7 }, 'setback').status).toBe('ok')
+    expect(check(near, 'roadSetback').status).toBe('warn')
+    // Standing in the strip itself is not allowed
+    const inside = lot({ roadWidth: 3.6, buildingX: 2, buildingY: 0.1 })
+    expect(check(inside, 'roadSetback').status).toBe('ng')
+    expect(check(inside, 'roadSetback').detail).toContain('建物が後退部分にかかっている')
+    // A section set back is not measured from the road
+    const back = lot({ roadWidth: 3.6, sectionY: 15, buildingX: 2, buildingY: 0.6 })
+    expect(check(back, 'setback').status).toBe('ok')
+    expect(check(back, 'roadSetback').status).toBe('warn')
+  })
+
+  it('never leaves out more than the site has', () => {
+    // Lot 1 m deep on a road entered as 0 m: the 2 m retreat is cut to the 1 m there is
+    const e = evaluateSite(plan({ landDepth: 1, roadWidth: 0 }))
+    expect(e.setbackArea).toBeCloseTo(e.siteArea)
   })
 })
 
