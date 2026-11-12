@@ -7,12 +7,15 @@
 export const GSI_ADDRESS_SEARCH = 'https://msearch.gsi.go.jp/address-search/AddressSearch'
 
 export function normalizeAddress(value: string): string {
-  return value
-    .normalize('NFKC')
-    .replace(/\s+/g, '')
-    .replace(/[－ー―‐]/g, '-')
-    .replace(/(\d+)丁目(\d+)番(\d+)号?/u, '$1-$2-$3')
-    .replace(/(\d+)丁目(\d+)番地?(?!\d)/u, '$1-$2')
+  return (
+    value
+      .normalize('NFKC')
+      .replace(/\s+/g, '')
+      // A dash between digits only: `ー` is also the long vowel of katakana (センター北)
+      .replace(/(?<=\d)[－ー―‐](?=\d)/g, '-')
+      .replace(/(\d+)丁目(\d+)番地?(\d+)号?/u, '$1-$2-$3')
+      .replace(/(\d+)丁目(\d+)番地?(?![\d地])/u, '$1-$2')
+  )
 }
 
 export function buildGsiUrl(query: string): string {

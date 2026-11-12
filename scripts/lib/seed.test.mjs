@@ -57,6 +57,12 @@ test('normalizeAddress unifies dash-like characters to the half-width hyphen', (
   assert.equal(normalizeAddress('架空市架空町1ー2ー3'), '架空市架空町1-2-3')
 })
 
+test('normalizeAddress keeps the long vowel of katakana and reads 番地 followed by a number', () => {
+  assert.equal(normalizeAddress('架空市テストセンター北1丁目2番3号'), '架空市テストセンター北1-2-3')
+  assert.equal(normalizeAddress('架空市架空町1丁目2番地3'), '架空市架空町1-2-3')
+  assert.equal(normalizeAddress('架空市架空町1丁目2番地'), '架空市架空町1-2')
+})
+
 test('normalizeAddress returns null/undefined/empty string as is', () => {
   assert.equal(normalizeAddress(null), null)
   assert.equal(normalizeAddress(undefined), undefined)
