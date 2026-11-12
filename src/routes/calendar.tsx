@@ -3,7 +3,7 @@ import { useMediaQuery } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { AgendaView, Schedule } from '@mantine/schedule'
 import type { ScheduleEventData, ScheduleViewLevel } from '@mantine/schedule'
-import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
+import { createFileRoute, useLocation, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
@@ -54,12 +54,19 @@ const search = z.object({
 export const Route = createFileRoute('/calendar')({
   component: Page,
   validateSearch: (s) => search.parse(s),
-  loaderDeps: ({ search }) => ({ m: search.m, d: search.d, v: search.v, plan: search.plan }),
+  // Only what the loader fetches: the visible range of the view and the news item of ?plan=.
+  // The selected day itself is not a dependency, so a tap on a day inside the range already
+  // loaded does not run the four server functions again. Without a day or a month in the URL
+  // the range is the one around today, which the loader decides
+  loaderDeps: ({ search }) => {
+    const anchor = search.d ?? (search.m ? `${search.m}-01` : undefined)
+    const view = search.v ?? 'month'
+    return { range: anchor ? visibleRange(anchor, view) : undefined, view, plan: search.plan }
+  },
   loader: async ({ deps }) => {
     // Decide "today" on the server (independent of the client clock)
-    const date = deps.d ?? (deps.m ? `${deps.m}-01` : todayKeyJst())
-    const view = deps.v ?? 'month'
-    const { from, to } = visibleRange(date, view)
+    const today = todayKeyJst()
+    const { from, to } = deps.range ?? visibleRange(today, deps.view)
     const [range, targets, places, news, planNews] = await Promise.all([
       listEventsBetween({ data: { from, to } }),
       listLinkTargets(),
@@ -73,7 +80,7 @@ export const Route = createFileRoute('/calendar')({
     // range also contains nowIso / todayKey returned by listEventsBetween (the "now" decided by
     // the server). Used as the reference for dimming finished events and vendor news whose dates
     // have passed
-    return { ...range, targets, places, date, newsEvents: news.news, planNews }
+    return { ...range, targets, places, today, newsEvents: news.news, planNews }
   },
 })
 
@@ -111,9 +118,16 @@ function visibleRange(date: string, view: 'day' | 'week' | 'month'): { from: str
 }
 
 function Page() {
-  const { events, targets, places, date, newsEvents, planNews, nowIso, todayKey } =
+  const { events, targets, places, today, newsEvents, planNews, nowIso, todayKey } =
     Route.useLoaderData()
-  const { d, v } = Route.useSearch()
+  // The day, month and view of the URL as it is now. Route.useSearch() follows only when the
+  // loader has answered, and until then a day tapped just before 「予定を追加」 (Add event) was
+  // not the date of the new event. While leaving for another page the location is already
+  // that page's, so the calendar keeps its own search
+  const location = useLocation()
+  const loadedSearch = Route.useSearch()
+  const { d, m, v } =
+    location.pathname === Route.fullPath ? search.parse(location.search) : loadedSearch
   const navigate = useNavigate({ from: '/calendar' })
   const router = useRouter()
   const remove = useServerFn(deleteEvent)
@@ -154,7 +168,7 @@ function Page() {
     ],
     [events, newsEvents, nowIso, todayKey, pendingDeletes],
   )
-  const selected = d ?? date
+  const selected = d ?? (m ? `${m}-01` : today)
   const newsDrawerNews = newsDrawerNewsId
     ? (newsEvents.find((n) => n.id === newsDrawerNewsId) ?? null)
     : null
@@ -265,7 +279,7 @@ function Page() {
           </Button>
         ) : null}
         <Schedule
-          date={date}
+          date={selected}
           onDateChange={(next) => {
             const key = dateKey(next)
             navigate({ search: (s) => ({ ...s, m: key.slice(0, 7), d: key }), replace: true })

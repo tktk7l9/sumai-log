@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteEvent, listEventsBetween, saveEvent } from '../server/events'
 import { getMailBody } from '../server/mails'
@@ -83,6 +83,78 @@ describe('calendar route', () => {
     expect(listEventsBetween).toHaveBeenCalledWith({
       data: { from: '2099-09-24', to: '2099-11-07' },
     })
+  })
+
+  it('does not ask the server again for a day tapped inside the month already loaded', async () => {
+    const { user, router } = await renderRoute(`/calendar?m=${MONTH}`)
+    await screen.findByText('打合せ（間取り）')
+    const loads = mockOf(listEventsBetween).mock.calls.length
+    await user.click(screen.getByRole('button', { name: '10月 20, 2099' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ d: '2099-10-20' }))
+    await user.click(screen.getByRole('button', { name: '10月 21, 2099' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ d: '2099-10-21' }))
+    // The tapped day is the date of a new event
+    await user.click(screen.getByRole('button', { name: '予定を追加' }))
+    const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/21')
+    expect(mockOf(listEventsBetween)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(newsEventsBetween)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(listPlaces)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(listLinkTargets)).toHaveBeenCalledTimes(loads)
+  })
+
+  it('opens the add form on the day tapped just before, while the loader is still out', async () => {
+    const range = {
+      events: [],
+      recordedEventIds: [],
+      todayKey: '2099-10-01',
+      nowIso: '2099-10-01T09:00:00+09:00',
+    }
+    // The answer for November is held back until the test lets it go (a phone on a slow line)
+    let answerNovember: (() => void) | undefined
+    mockOf(listEventsBetween).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { from: string } }).data.from > '2099-10') {
+        await new Promise<void>((resolve) => {
+          answerNovember = resolve
+        })
+      }
+      return range
+    })
+    const save = stub(saveEvent, { id: 'e9' })
+    const { user } = await renderRoute(`/calendar?m=${MONTH}&d=2099-10-05`)
+    await screen.findByText('自分たちの予定')
+    // A day of the next month shown at the end of the October grid: its range is not loaded yet
+    await user.click(screen.getByRole('button', { name: '11月 1, 2099' }))
+    await waitFor(() => expect(answerNovember).toBeDefined())
+    await user.click(screen.getByRole('button', { name: '予定を追加' }))
+    const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/11/01')
+    answerNovember!()
+    await user.type(within(drawer).getByRole('textbox', { name: 'タイトル' }), '相談')
+    await user.click(within(drawer).getByRole('button', { name: '予定を保存' }))
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        data: expect.objectContaining({ title: '相談', date: '2099-11-01' }),
+      }),
+    )
+  })
+
+  it('opens on today as the server decides it when the URL names no day or month', async () => {
+    // Only the date is faked: the timers of the router and of user-event stay real
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-10-09T22:30:00Z')) // 2099-10-10 07:30 in Japan
+    try {
+      const { user } = await renderRoute('/calendar')
+      await screen.findByText('打合せ（間取り）')
+      expect(listEventsBetween).toHaveBeenCalledWith({
+        data: { from: '2099-09-24', to: '2099-11-07' },
+      })
+      await user.click(screen.getByRole('button', { name: '予定を追加' }))
+      const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+      expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/10')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('edits an event from the calendar, and deletes it with undo', async () => {
