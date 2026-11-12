@@ -3,7 +3,6 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 
 import { getDb } from '../db/client'
-import { ATTENDEES } from '../db/enums'
 import { dateKey } from '../lib/calendar'
 import { nowJstIso } from './events'
 import { currentActorEmail } from './members'
@@ -21,35 +20,14 @@ import {
   setVisitNextActions,
 } from './repository'
 import { deletePhotoObjects } from './storage'
-import { reorderPhotosInput } from './visits.schema'
-import { dateField, idField, idInput, optionalText } from './zod'
+import { reorderPhotosInput, visitInput, visitText } from './visits.schema'
+import { idField, idInput } from './zod'
 import { listLinkTargets } from './places'
 
-// reorderPhotosInput comes from visits.schema.ts (see there for why it was split for the tests).
-// The public import path (reorderPhotosInput/ReorderPhotosInput available from './visits')
-// does not change.
-export { reorderPhotosInput }
-export type { ReorderPhotosInput } from './visits.schema'
-
-export const visitInput = z.object({
-  id: idField.optional(),
-  // Update time as of opening. If the other person saved first, return a conflict instead
-  // of overwriting (repository/stale.ts)
-  expectedUpdatedAt: z.string().max(40).nullish(),
-  eventId: idField.nullable(),
-  placeId: idField.nullable(),
-  vendorId: idField.nullable(),
-  propertyId: idField.nullable(),
-  visitedOn: dateField,
-  // The attendees input field was removed (records are basically written by the two
-  // together, 2026-09-19). The column stays and always holds the default value
-  attendees: z.enum(ATTENDEES).default('both'),
-  good: optionalText,
-  concerns: optionalText,
-  qa: optionalText,
-  nextActions: optionalText,
-})
-export type VisitInput = z.input<typeof visitInput>
+// reorderPhotosInput and visitInput come from visits.schema.ts (see there for why they were
+// split for the tests). The public import path (available from './visits') does not change.
+export { reorderPhotosInput, visitInput }
+export type { ReorderPhotosInput, VisitInput } from './visits.schema'
 
 export const listVisits = createServerFn().handler(async () => listVisitsWithLinks(getDb()))
 
@@ -72,7 +50,8 @@ export const saveVisitNextActions = createServerFn({ method: 'POST' })
   .validator(
     z.object({
       id: idField,
-      nextActions: optionalText,
+      // The same limit as the form, or a long list could be saved there and not ticked here
+      nextActions: visitText,
       expectedUpdatedAt: z.string().min(1).max(40),
     }),
   )

@@ -293,6 +293,24 @@ describe('visit detail route', () => {
     })
   })
 
+  it('shows the limit of the long fields and says which one the server refused', async () => {
+    // What the client receives when the validator of the server function fails: the zod issues
+    mockOf(saveVisit).mockRejectedValue(
+      new Error(JSON.stringify([{ code: 'too_big', path: ['qa'], message: 'Too big' }])),
+    )
+    const { user } = await renderRoute(PAGE)
+    await user.click(await screen.findByRole('button', { name: '編集' }))
+    const drawer = await screen.findByRole('dialog', { name: '見学記録を編集' })
+    for (const name of ['良かった点', '気になった点', '聞いたことと答え', '次にやること']) {
+      expect(within(drawer).getByRole('textbox', { name })).toHaveAttribute('maxlength', '4000')
+    }
+    await user.click(within(drawer).getByRole('button', { name: '記録を保存' }))
+    // In the notification and under the field itself
+    expect(await screen.findAllByText('聞いたことと答えは 4000 文字までです')).toHaveLength(2)
+    expect(within(drawer).getByRole('textbox', { name: '聞いたことと答え' })).toBeInvalid()
+    expect(screen.queryByText('保存できませんでした')).not.toBeInTheDocument()
+  })
+
   it('deletes the record and returns to the list', async () => {
     const remove = stub(deleteVisit, { ok: true })
     const { user, router } = await renderRoute(PAGE)

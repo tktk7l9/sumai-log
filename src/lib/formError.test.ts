@@ -113,6 +113,28 @@ describe('extractFormError', () => {
     ).toBe('メモが長すぎます')
   })
 
+  it('names the visit field that is too long, and its limit', () => {
+    const message = (field: string) =>
+      extractFormError(issueError([{ code: 'too_big', path: [field], message: 'Too big' }]))
+    expect(message('good')).toEqual({ message: '良かった点は 4000 文字までです', path: 'good' })
+    expect(message('concerns')).toEqual({
+      message: '気になった点は 4000 文字までです',
+      path: 'concerns',
+    })
+    expect(message('qa')).toEqual({ message: '聞いたことと答えは 4000 文字までです', path: 'qa' })
+    expect(message('nextActions')).toEqual({
+      message: '次にやることは 4000 文字までです',
+      path: 'nextActions',
+    })
+  })
+
+  it('names the vendor field that is too long, and its limit', () => {
+    const message = (field: string) =>
+      extractFormError(issueError([{ code: 'too_big', path: [field], message: 'Too big' }])).message
+    expect(message('structure')).toBe('構造は 2000 文字までです')
+    expect(message('features')).toBe('特徴・メモは 2000 文字までです')
+  })
+
   it('has the same wording for both invalid_type / invalid_value of watchedBy', () => {
     expect(
       extractFormError(

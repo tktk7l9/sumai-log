@@ -60,6 +60,26 @@ const FIELD_CODE_MESSAGE: Partial<Record<string, Partial<Record<ZodIssueCode, st
   note: {
     too_big: 'メモが長すぎます',
   },
+  // The free-text fields of a visit record (VISIT_TEXT_MAX in src/server/visits.schema.ts)
+  good: {
+    too_big: '良かった点は 4000 文字までです',
+  },
+  concerns: {
+    too_big: '気になった点は 4000 文字までです',
+  },
+  qa: {
+    too_big: '聞いたことと答えは 4000 文字までです',
+  },
+  nextActions: {
+    too_big: '次にやることは 4000 文字までです',
+  },
+  // The vendor form (optionalText in src/server/zod.ts)
+  structure: {
+    too_big: '構造は 2000 文字までです',
+  },
+  features: {
+    too_big: '特徴・メモは 2000 文字までです',
+  },
 }
 
 function firstIssue(error: unknown): RawIssue | null {
