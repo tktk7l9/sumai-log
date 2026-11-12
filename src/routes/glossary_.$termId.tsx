@@ -5,14 +5,17 @@ import { EmptyState } from '../components/EmptyState'
 import { BackButton, PageShell } from '../components/PageShell'
 import { TermCard } from '../components/glossary/TermCard'
 import { glossarySearchSchema } from '../components/glossary/glossarySearch'
-import { GLOSSARY, GLOSSARY_CATEGORIES } from '../content/glossary'
+import { GLOSSARY_CATEGORIES } from '../content/glossaryCategories'
 import { findTerm, relatedTerms } from '../lib/glossary'
 
 export const Route = createFileRoute('/glossary_/$termId')({
   component: Page,
   notFoundComponent: TermNotFound,
   validateSearch: (s) => glossarySearchSchema.parse(s),
-  loader: ({ params }) => {
+  loader: async ({ params }) => {
+    // Loaded here and not imported at the top: a loader is not code-split, so a static import
+    // put every term (52.6 KB gzip) into the entry chunk of every page
+    const { GLOSSARY } = await import('../content/glossary')
     const term = findTerm(GLOSSARY, params.termId)
     if (!term) throw notFound()
     return { term, related: relatedTerms(GLOSSARY, term) }

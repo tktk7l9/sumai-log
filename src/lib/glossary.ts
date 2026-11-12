@@ -3,7 +3,8 @@
  * (`src/content/glossary.ts`) and is made of pure functions that look only at the array passed in.
  */
 
-import { GLOSSARY_CATEGORIES, type GlossaryCategory, type GlossaryTerm } from '../content/glossary'
+import type { GlossaryTerm } from '../content/glossary'
+import { GLOSSARY_CATEGORIES, type GlossaryCategory } from '../content/glossaryCategories'
 
 /**
  * Normalisation of the search key.

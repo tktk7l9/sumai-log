@@ -32,7 +32,7 @@ export const Route = createFileRoute('/')({
   loader: async () => {
     // The events for the agenda (upcoming events) are returned together by listHomeEvents as
     // agenda/agendaFrom/agendaTo (the same 90 day to 365 day range is not queried twice)
-    const [home, feed, { members }, { news }, glossaryPick, { roadmap }, homeTodos] =
+    const [home, feed, { members }, { news }, glossaryPick, roadmapData, homeTodos] =
       await Promise.all([
         listHomeEvents(),
         recentFeed(),
@@ -42,7 +42,16 @@ export const Route = createFileRoute('/')({
         getRoadmap(),
         listHomeTodos(),
       ])
-    return { ...home, feed, members, news, glossaryPick, roadmap, homeTodos }
+    return {
+      ...home,
+      feed,
+      members,
+      news,
+      glossaryPick,
+      roadmap: roadmapData.roadmap,
+      roadmapTerms: roadmapData.relatedTerms,
+      homeTodos,
+    }
   },
 })
 
@@ -61,6 +70,7 @@ function Home() {
     glossaryPick,
     nowIso,
     roadmap,
+    roadmapTerms,
     homeTodos,
   } = hidePendingOnHome(Route.useLoaderData(), pendingDeletes)
   return (
@@ -74,7 +84,7 @@ function Home() {
       </VisuallyHidden>
       {/* Where the two of them are in building the house, above the events, so that the big
           picture comes before the dates (owner's request, 2026-10-11) */}
-      <HomeRoadmap roadmap={roadmap} />
+      <HomeRoadmap roadmap={roadmap} relatedTerms={roadmapTerms} />
       {/* "Now" uses the value decided by the server (listHomeEvents). Finished events and vendor
           news whose dates have passed are dimmed (owner's request, 2026-09-21) */}
       <HomeAgenda events={agenda} rangeStart={agendaFrom} rangeEnd={agendaTo} nowIso={nowIso} />

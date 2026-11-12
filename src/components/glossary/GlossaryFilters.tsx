@@ -3,7 +3,7 @@ import { useDebouncedValue } from '@mantine/hooks'
 import { Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { GLOSSARY_CATEGORIES, type CategoryId } from '../../content/glossary'
+import { GLOSSARY_CATEGORIES, type CategoryId } from '../../content/glossaryCategories'
 
 const SEARCH_DEBOUNCE_MS = 250
 

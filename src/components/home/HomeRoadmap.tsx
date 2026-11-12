@@ -4,10 +4,8 @@ import { Link, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
 import { useState } from 'react'
 
-import { GLOSSARY } from '../../content/glossary'
 import { ROADMAP_GUIDE } from '../../content/roadmap'
 import { extractErrorMessage } from '../../lib/formError'
-import { findTerm } from '../../lib/glossary'
 import {
   ROADMAP_HEIGHT,
   ROADMAP_STAGES,
@@ -19,6 +17,7 @@ import {
   stageState,
   type Roadmap,
   type RoadmapStageId,
+  type RoadmapTermLinks,
   type StageState,
 } from '../../lib/roadmap'
 import { saveRoadmap } from '../../server/roadmap'
@@ -41,12 +40,20 @@ const STATE_LABEL: Record<StageState, string> = {
  * filled in and a "現在地" (You are here) pin on the current one. Tapping a stage opens what
  * that stage generally involves (`src/content/roadmap.ts`), and either of the two can move
  * the pin from there or from "現在地を変更" (the setting `roadmap`; `src/lib/roadmap.ts`).
+ * `relatedTerms` are the names of the glossary terms each guide links to; they come from the
+ * server with the roadmap, so this component must not import the glossary itself.
  *
  * Colours are the app's accent for the way travelled and a neutral for the way ahead
  * (`--sumai-road-*` in styles.css, different steps in light and dark). The text wears the
  * text colours, not the road colour.
  */
-export function HomeRoadmap({ roadmap }: { roadmap: Roadmap }) {
+export function HomeRoadmap({
+  roadmap,
+  relatedTerms,
+}: {
+  roadmap: Roadmap
+  relatedTerms: RoadmapTermLinks
+}) {
   const [pickerOpened, setPickerOpened] = useState(false)
   const [guideStage, setGuideStage] = useState<RoadmapStageId | null>(null)
   const current = stageIndex(roadmap.stage)
@@ -94,6 +101,7 @@ export function HomeRoadmap({ roadmap }: { roadmap: Roadmap }) {
       <StageGuide
         stage={guideStage}
         current={current}
+        relatedTerms={relatedTerms}
         onClose={() => setGuideStage(null)}
         onMoved={() => setGuideStage(null)}
       />
@@ -263,12 +271,14 @@ function StagePicker({
 function StageGuide({
   stage,
   current,
+  relatedTerms,
   onClose,
   onMoved,
 }: {
   /** null = closed */
   stage: RoadmapStageId | null
   current: number
+  relatedTerms: RoadmapTermLinks
   onClose: () => void
   onMoved: () => void
 }) {
@@ -277,9 +287,7 @@ function StageGuide({
   const info = stage ? ROADMAP_STAGES[index] : null
   const guide = stage ? ROADMAP_GUIDE[stage] : null
   const state = stage ? stageState(index, current) : null
-  const related = guide
-    ? guide.related.map((id) => findTerm(GLOSSARY, id)).filter((t) => t !== null)
-    : []
+  const related = stage ? relatedTerms[stage] : []
   return (
     <FormDrawer
       opened={stage !== null}
