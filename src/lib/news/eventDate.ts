@@ -120,8 +120,13 @@ const COUNT_AFTER_JOINED = /^(?:\d|間|目|前|後|以内)/
 const COUNT_AFTER_LOOSE = /^(?:\d|間|目|前|後|以|だけ|のみ|限|中|連|曜|とも|ほど|程|おき|ごと|分)/
 /** `第3日`, `全3日`, `計3日`, `約3日`, `各3日`, `毎3日` */
 const COUNT_BEFORE_LOOSE = /[第全計約各毎]$/
-/** How far (in characters) a "D日" that is not joined may be from the date it takes its month from */
+/**
+ * How far (in characters) a "D日" may be from the date it takes its month from. A join (a
+ * weekday note and one mark) is far shorter than this
+ */
 const LOOSE_REACH = 40
+/** The longest counter word above, in characters: how much text after a "D日" is looked at */
+const COUNT_WORD_MAX = 4
 
 type KanjiSpan = { start: number; end: number; year: number; month: number; day: number }
 
@@ -152,31 +157,37 @@ function findKanjiDates(text: string, publishedOn: string): FoundDate[] {
     dates.push({ year, month, day })
   }
 
-  // The date each "D日" continues: the "M月D日" before it, or the "D日" accepted after that
+  // The date each "D日" continues: the "M月D日" before it, or the "D日" accepted after that.
+  // Both lists are in text order, so one pointer walks the spans (no scan per "D日")
   let previous: KanjiSpan | undefined
+  let lastSpanEnd = 0
   let nextSpan = 0
 
   for (const match of text.matchAll(BARE_DAY)) {
     const start = match.index as number
     const end = start + match[0].length
-    // Do not double count the day part of a "M月D日" already picked up by KANJI_DATE
-    if (spans.some((span) => start >= span.start && start < span.end)) continue
 
     // The preceding "M月D日" whose month is reused (without one this "D日" has no clue, so drop it)
     while (nextSpan < spans.length && spans[nextSpan].start < start) {
       previous = spans[nextSpan]
+      lastSpanEnd = previous.end
       nextSpan++
     }
-    if (!previous) continue
+    // Do not double count the day part of a "M月D日" already picked up by KANJI_DATE
+    if (!previous || start < lastSpanEnd) continue
+
+    // A "D日" further away than this is neither joined nor near. Checked before anything is
+    // sliced, so the work per "D日" is bounded (a long text with one date and thousands of
+    // "N日" would otherwise re-read the growing gap every time)
+    if (start - previous.end > LOOSE_REACH) continue
 
     const day = Number(match[1])
     const between = text.slice(previous.end, start)
-    const after = text.slice(end)
+    const after = text.slice(end, end + COUNT_WORD_MAX)
     const joined = KANJI_JOIN.test(between)
     const isDayOfMonth = joined
       ? !COUNT_AFTER_JOINED.test(after)
       : day > previous.day &&
-        between.length <= LOOSE_REACH &&
         !between.includes('。') &&
         !COUNT_BEFORE_LOOSE.test(between) &&
         !COUNT_AFTER_LOOSE.test(after)
@@ -220,11 +231,9 @@ const FRACTION_TRAILING_WORDS = ['程度', '以下', '以上', '割', '%', '名'
 const FRACTION_LEADING_WORDS = ['の', 'は', '約', '先着']
 
 function looksLikeFraction(text: string, start: number, end: number): boolean {
-  const after = text.slice(end)
-  const before = text.slice(0, start)
   return (
-    FRACTION_TRAILING_WORDS.some((word) => after.startsWith(word)) ||
-    FRACTION_LEADING_WORDS.some((word) => before.endsWith(word))
+    FRACTION_TRAILING_WORDS.some((word) => text.startsWith(word, end)) ||
+    FRACTION_LEADING_WORDS.some((word) => text.endsWith(word, start))
   )
 }
 
@@ -239,6 +248,9 @@ const LIST_COUNTERS =
 const SLASH_DAY_LIST_ITEM = new RegExp(
   String.raw`^${NOTE}\s*(?:\.|[・、,&と]\s*)(\d{1,2})(?!\d|\s*(?:${LIST_COUNTERS}))`,
 )
+
+/** Longer than any list item (note ≤ 8, mark, spaces, 2 digits, the counter looked ahead for) */
+const LIST_ITEM_WINDOW = 32
 
 /**
  * Reads as much of the list of days starting at `cursor` as it can. Each item must be a real
@@ -259,7 +271,8 @@ function readDayList(
   let prevDay = startDay
 
   for (;;) {
-    const match = SLASH_DAY_LIST_ITEM.exec(text.slice(pos))
+    // A list item is a note, a mark and a day: a short window is all that is read
+    const match = SLASH_DAY_LIST_ITEM.exec(text.slice(pos, pos + LIST_ITEM_WINDOW))
     if (!match) break
     const day = Number(match[1])
     if (day <= prevDay || !isRealDate({ year, month, day })) break

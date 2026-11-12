@@ -427,3 +427,36 @@ describe('a report on last month, published in January', () => {
     ).toEqual({ kind: '完成見学会', start: '2026-12-19', end: '2026-12-20' })
   })
 })
+
+describe('long input', () => {
+  it('reads one date followed by thousands of "N日" in linear time', () => {
+    const text = `完成見学会 11月21日(土) ${'3日 '.repeat(200_000)}`
+    const started = performance.now()
+    expect(extractEvent(text, '2026-11-05')).toEqual({
+      kind: '完成見学会',
+      start: '2026-11-21',
+      end: '2026-11-21',
+    })
+    expect(performance.now() - started).toBeLessThan(1000)
+  })
+
+  it('reads thousands of dates, slash lists and fractions in linear time', () => {
+    const text = `完成見学会 ${'11月21日・22日 11/14(土)・15(日) の1/2 '.repeat(30_000)}`
+    const started = performance.now()
+    expect(extractEvent(text, '2026-11-05')).toEqual({
+      kind: '完成見学会',
+      start: '2026-11-14',
+      end: '2026-11-22',
+    })
+    expect(performance.now() - started).toBeLessThan(1000)
+  })
+
+  it('does not join a "D日" across a gap longer than a join can be', () => {
+    const text = `完成見学会 11月21日${' '.repeat(41)}・22日`
+    expect(extractEvent(text, '2026-11-05')).toEqual({
+      kind: '完成見学会',
+      start: '2026-11-21',
+      end: '2026-11-21',
+    })
+  })
+})
