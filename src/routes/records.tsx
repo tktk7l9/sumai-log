@@ -26,10 +26,12 @@ import { listVideos, videoFormOptions } from '../server/videos'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
-  tab: z.enum(['visits', 'videos']).default('visits'),
+  // An off-schema value (a hand-edited or old bookmarked URL) falls back like the keys below,
+  // instead of the error screen
+  tab: z.enum(['visits', 'videos']).default('visits').catch('visits'),
   // When arriving from an event through "記録を書く" (Write a record): open the form with that
   // event as the initial values
-  fromEvent: z.string().regex(UUID_SHAPE).optional(),
+  fromEvent: z.string().regex(UUID_SHAPE).optional().catch(undefined),
   // When arriving from the videos tab through "メモを書く" (Write a memo): the YouTube id of
   // the channel video; the memo form opens filled in from it
   video: z

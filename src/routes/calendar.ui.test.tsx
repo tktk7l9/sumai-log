@@ -276,6 +276,33 @@ describe('calendar route', () => {
     )
   })
 
+  // A hand-edited or old bookmarked URL: the calendar opens with the value ignored instead of
+  // the error screen, where 「読み直す」 (Reload) could not help
+  it.each([
+    '/calendar?m=209910',
+    '/calendar?d=2099-10-12T10%3A00',
+    '/calendar?v=year',
+    '/calendar?v=agenda',
+    '/calendar?plan=abc',
+  ])('ignores an off-schema search value: %s', async (url) => {
+    await renderRoute(url)
+    expect(await screen.findByText('自分たちの予定')).toBeInTheDocument()
+    expect(screen.queryByText('表示できませんでした')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens the plan form for a news id that is not an RFC v4 UUID (rows from the seed import)', async () => {
+    // 8-4-4-4-12 hex, but without the version and variant nibbles of v4 (src/lib/ids.ts)
+    const seeded = '3f2a1b4c-5d6e-7f80-1a0b-1c2d3e4f5a6b'
+    stub(getVendorNews, { news: { ...OPEN_HOUSE, id: seeded } })
+    await renderRoute(`/calendar?m=${MONTH}&plan=${seeded}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(form).getByRole('textbox', { name: 'タイトル' })).toHaveValue(
+      'テスト工務店 完成見学会',
+    )
+    expect(getVendorNews).toHaveBeenCalledWith({ data: { id: seeded } })
+  })
+
   it('loads a single day in the day view', async () => {
     await renderRoute(`/calendar?d=2099-10-10&v=day`)
     await screen.findAllByText('打合せ（間取り）')

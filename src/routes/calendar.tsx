@@ -19,6 +19,7 @@ import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
 import { extractErrorMessage } from '../lib/formError'
 import { dateKey, formatDateSlash, formatDateWithWeekday, formatMonthSlash } from '../lib/calendar'
 import { dayOfWeek, holidayName } from '../lib/holidays'
+import { UUID_SHAPE } from '../lib/ids'
 import { planEventDefaults } from '../lib/news/planDefaults'
 import { newsToScheduleEvents, toScheduleEvents, type CalendarPayload } from '../lib/scheduleEvents'
 import { SCHEDULE_LABELS_JA } from '../lib/scheduleLabels'
@@ -27,22 +28,27 @@ import { getVendorNews, linkNewsToEvent, newsEventsBetween } from '../server/new
 import { listLinkTargets, listPlaces } from '../server/places'
 import type { EventWithLinks, NewsEventRow } from '../server/repository'
 
+// Every key falls back to "not set" on an off-schema value, like the other routes: a hand-edited
+// or old bookmarked URL opens the calendar instead of the error screen
 const search = z.object({
   // The month on display, 'YYYY-MM'. The current month when absent
   m: z
     .string()
     .regex(/^\d{4}-\d{2}$/)
-    .optional(),
+    .optional()
+    .catch(undefined),
   // The selected day, 'YYYY-MM-DD'
   d: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
+    .optional()
+    .catch(undefined),
   // The view on display. The year view can be picked from the header but is not kept in the URL
-  v: z.enum(['day', 'week', 'month']).optional(),
+  v: z.enum(['day', 'week', 'month']).optional().catch(undefined),
   // When arriving from "行く" (Go) on a vendor news item: open the event form with that news
-  // item as the initial values
-  plan: z.string().uuid().optional(),
+  // item as the initial values. Only the shape is checked: ids from the seed import are not
+  // RFC v4 (src/lib/ids.ts), and `.uuid()` turned 「行く」 on those into the error screen
+  plan: z.string().regex(UUID_SHAPE).optional().catch(undefined),
 })
 
 export const Route = createFileRoute('/calendar')({

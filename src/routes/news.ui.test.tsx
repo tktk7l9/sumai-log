@@ -8,6 +8,8 @@ import { MEMBERS, mockOf, news, stub, uid } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
 const VENDOR = uid(71)
+// Ids have the UUID shape, as in the database: /calendar ignores a ?plan= of any other shape
+const OPEN_HOUSE = uid(73)
 
 function row(over: Parameters<typeof news>[0]) {
   return { ...news(over), vendorName: 'テスト工務店' }
@@ -18,7 +20,7 @@ describe('news route', () => {
     stub(listVendorNews, {
       news: [
         row({
-          id: 'n1',
+          id: OPEN_HOUSE,
           title: '完成見学会のお知らせ',
           publishedOn: '2026-08-20',
           eventKind: '見学会',
@@ -100,7 +102,11 @@ describe('news route', () => {
     const drawer = await screen.findByRole('dialog', { name: 'お知らせ' })
     await user.click(within(drawer).getByRole('button', { name: /に行く$/ }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/calendar'))
-    expect(router.state.location.search).toEqual({ m: '2099-08', d: '2099-08-29', plan: 'n1' })
+    expect(router.state.location.search).toEqual({
+      m: '2099-08',
+      d: '2099-08-29',
+      plan: OPEN_HOUSE,
+    })
   })
 
   it('jumps to the planned event in the calendar', async () => {

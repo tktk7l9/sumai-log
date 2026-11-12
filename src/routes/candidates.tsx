@@ -17,9 +17,11 @@ import { VENDOR_KINDS, VENDOR_KIND_LABEL } from '../db/enums'
 import { CANDIDATE_STATUSES, STATUS_LABEL } from '../lib/status'
 import { listCandidates } from '../server/candidates'
 
+// An off-schema value (a hand-edited or old bookmarked URL) falls back to the default, like
+// the other routes, instead of the error screen
 const search = z.object({
-  tab: z.enum(['vendors', 'properties']).default('vendors'),
-  status: z.enum(CANDIDATE_STATUSES).optional(),
+  tab: z.enum(['vendors', 'properties']).default('vendors').catch('vendors'),
+  status: z.enum(CANDIDATE_STATUSES).optional().catch(undefined),
 })
 
 type VendorKind = (typeof VENDOR_KINDS)[number]

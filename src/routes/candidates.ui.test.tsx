@@ -38,6 +38,18 @@ describe('candidates route', () => {
     })
   })
 
+  // A hand-edited or old bookmarked URL shows the full list instead of the error screen
+  it.each(['/candidates?tab=land', '/candidates?status=bought', '/candidates?tab=1&status=2'])(
+    'ignores an off-schema search value: %s',
+    async (url) => {
+      await renderRoute(url)
+      expect(await screen.findByRole('heading', { name: '工務店（1）' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'その他（1）' })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'すべて' })).toBeChecked()
+      expect(screen.queryByText('表示できませんでした')).not.toBeInTheDocument()
+    },
+  )
+
   it('groups vendors by kind with their key facts', async () => {
     await renderRoute('/candidates')
     expect(await screen.findByRole('heading', { name: '工務店（1）' })).toBeInTheDocument()

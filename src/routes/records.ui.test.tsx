@@ -78,6 +78,22 @@ describe('records route', () => {
     expect(screen.getByRole('button', { name: '記録を書く' })).toBeInTheDocument()
   })
 
+  // A hand-edited or old bookmarked URL shows the visits instead of the error screen
+  it.each(['/records?tab=photos', '/records?tab=1', '/records?fromEvent=abc'])(
+    'ignores an off-schema search value: %s',
+    async (url) => {
+      await renderRoute(url)
+      expect(await screen.findByRole('link', { name: /テスト展示場/ })).toBeInTheDocument()
+      expect(screen.queryByText('表示できませんでした')).not.toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    },
+  )
+
+  it('keeps the tab when only the search term is off-schema', async () => {
+    await renderRoute('/records?tab=videos&q=35')
+    expect(await screen.findByText('断熱の基本を解説')).toBeInTheDocument()
+  })
+
   it('switches to videos', async () => {
     const { user, router } = await renderRoute('/records')
     await user.click(await screen.findByText('動画 1'))
