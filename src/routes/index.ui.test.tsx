@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { ROADMAP_STAGE_IDS } from '../lib/roadmap'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
 import { pickGlossaryTerm } from '../server/glossary'
@@ -45,7 +46,13 @@ describe('home route', () => {
       reading: 'ユーエーち',
       summary: '断熱性能の指標',
     })
-    stub(getRoadmap, { roadmap: { version: 1, stage: 'vendor' } })
+    stub(getRoadmap, {
+      roadmap: { version: 1, stage: 'vendor' },
+      relatedTerms: {
+        ...Object.fromEntries(ROADMAP_STAGE_IDS.map((id) => [id, []])),
+        contract: [{ id: 'sample-term', term: 'テスト用語' }],
+      },
+    })
     stub(listHomeTodos, { todos: [], todayKey: '2026-10-01' })
   })
 
@@ -107,9 +114,11 @@ describe('home route', () => {
       within(dialog).getByText('金額・工期・支払いの約束', { exact: false }),
     ).toBeInTheDocument()
     expect(within(dialog).getByText('この段階でやること')).toBeInTheDocument()
-    expect(within(dialog).getByRole('link', { name: '重要事項説明・手付金' })).toHaveAttribute(
+    // The names of the glossary terms come with the roadmap (the page does not hold the glossary)
+    expect(within(dialog).getByText('用語集で読む')).toBeInTheDocument()
+    expect(within(dialog).getByRole('link', { name: 'テスト用語' })).toHaveAttribute(
       'href',
-      '/glossary/important-matters',
+      '/glossary/sample-term',
     )
     await user.click(within(dialog).getByRole('button', { name: 'ここを現在地にする' }))
     expect(mockOf(saveRoadmap)).toHaveBeenCalledWith({ data: { stage: 'contract' } })
@@ -126,6 +135,8 @@ describe('home route', () => {
     expect(
       within(dialog).queryByRole('button', { name: 'ここを現在地にする' }),
     ).not.toBeInTheDocument()
+    // A stage without related terms shows no empty 「用語集で読む」 heading
+    expect(within(dialog).queryByText('用語集で読む')).not.toBeInTheDocument()
   })
 
   it('moves the current stage from 現在地を変更', async () => {

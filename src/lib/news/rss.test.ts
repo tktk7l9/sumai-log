@@ -224,4 +224,165 @@ describe('parseRss', () => {
     expect(parseRss('<item>' + '<link>'.repeat(200_000) + '</item>')).toEqual([])
     expect(performance.now() - start).toBeLessThan(2000)
   })
+
+  describe('a pubDate in the first hours of a month, written with its own offset', () => {
+    const published = (pubDate: string) =>
+      parseRss(
+        feed(`
+        <item>
+          <title>月初のお知らせ</title>
+          <link>https://news.example.com/topics/30</link>
+          <pubDate>${pubDate}</pubDate>
+        </item>
+      `),
+      ).map((c) => c.publishedOn)
+
+    it('keeps 08:00 on the 1st in Japan time (still the month before in UTC)', () => {
+      expect(published('Sun, 01 Nov 2026 08:00:00 +0900')).toEqual(['2026-11-01'])
+    })
+
+    it('keeps midnight of New Year in Japan time', () => {
+      expect(published('Fri, 01 Jan 2027 00:00:00 +0900')).toEqual(['2027-01-01'])
+    })
+
+    it('keeps the last evening of a month written with a negative offset', () => {
+      // 20:00 at -05:00 is 10:00 on 1 November in Japan
+      expect(published('Sat, 31 Oct 2026 20:00:00 -0500')).toEqual(['2026-11-01'])
+    })
+
+    it('still drops a day that is not on the calendar', () => {
+      expect(published('Mon, 31 Nov 2026 08:00:00 +0900')).toEqual([])
+      expect(published('Mon, 29 Feb 2027 08:00:00 +0900')).toEqual([])
+    })
+  })
+
+  describe('Atom', () => {
+    const atom = (entries: string) => `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>テスト工務店 ブログ</title>
+  <link rel="self" href="https://news.example.com/feed.atom"/>
+  <updated>2026-11-05T00:00:00Z</updated>
+  ${entries}
+</feed>`
+
+    it('reads <entry> with a link href, a published date and a summary', () => {
+      const xml = atom(`
+        <entry>
+          <title>完成見学会のお知らせ</title>
+          <link rel="self" href="https://news.example.com/api/1"/>
+          <link rel="alternate" type="text/html" href="https://news.example.com/blog/1"/>
+          <id>tag:news.example.com,2026:1</id>
+          <published>2026-11-04T23:30:00Z</published>
+          <updated>2026-11-08T10:00:00Z</updated>
+          <summary type="html">&lt;p&gt;11月21日に開催します&lt;/p&gt;</summary>
+        </entry>
+      `)
+      expect(parseRss(xml)).toEqual([
+        {
+          url: 'https://news.example.com/blog/1',
+          title: '完成見学会のお知らせ',
+          summary: '11月21日に開催します',
+          // 23:30 UTC on the 4th is 08:30 on the 5th in Japan
+          publishedOn: '2026-11-05',
+        },
+      ])
+    })
+
+    it('reads a link without rel, single quotes, and falls back to <updated> and <content>', () => {
+      const xml = atom(`
+        <entry>
+          <title>お知らせ</title>
+          <link rel='self' href='https://news.example.com/api/2' />
+          <link href='https://news.example.com/blog/2' />
+          <updated>2026-11-05T09:00:00.123+09:00</updated>
+          <content type="html"><![CDATA[<p>本文です</p>]]></content>
+        </entry>
+      `)
+      expect(parseRss(xml)).toEqual([
+        {
+          url: 'https://news.example.com/blog/2',
+          title: 'お知らせ',
+          summary: '本文です',
+          publishedOn: '2026-11-05',
+        },
+      ])
+    })
+
+    it('drops an entry whose only links are not the page itself, or not http(s)', () => {
+      const xml = atom(`
+        <entry>
+          <title>編集用リンクだけ</title>
+          <link rel="edit" href="https://news.example.com/edit/3"/>
+          <linkage href="https://news.example.com/other/3"/>
+          <link rel="alternate"/>
+          <updated>2026-11-05T09:00:00+09:00</updated>
+        </entry>
+        <entry>
+          <title>怪しいリンク</title>
+          <link href="javascript:alert(1)"/>
+          <updated>2026-11-05T09:00:00+09:00</updated>
+        </entry>
+      `)
+      expect(parseRss(xml)).toEqual([])
+    })
+
+    it('drops an entry without a readable date', () => {
+      const xml = atom(`
+        <entry>
+          <title>日付なし</title>
+          <link href="https://news.example.com/blog/4"/>
+        </entry>
+        <entry>
+          <title>読めない日付</title>
+          <link href="https://news.example.com/blog/5"/>
+          <updated>きのう</updated>
+        </entry>
+        <entry>
+          <title>実在しない日付</title>
+          <link href="https://news.example.com/blog/6"/>
+          <updated>2026-02-30T09:00:00+09:00</updated>
+        </entry>
+      `)
+      expect(parseRss(xml)).toEqual([])
+    })
+
+    it('finishes in linear time on an entry full of unclosed <link', () => {
+      const xml = atom(`<entry><title>t</title>${'<link '.repeat(100_000)}</entry>`)
+      const started = performance.now()
+      expect(parseRss(xml)).toEqual([])
+      expect(performance.now() - started).toBeLessThan(1000)
+    })
+  })
+
+  describe('RSS 1.0 (RDF)', () => {
+    const rdf = (date: string) => `<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel><title>テスト工務店</title></channel>
+  <item rdf:about="https://news.example.com/topics/40">
+    <title>構造見学会</title>
+    <link>https://news.example.com/topics/40</link>
+    <description>現場で開催します</description>
+    <dc:date>${date}</dc:date>
+  </item>
+</rdf:RDF>`
+
+    it('reads <dc:date> with an offset', () => {
+      expect(parseRss(rdf('2026-11-05T08:00:00+09:00'))).toEqual([
+        {
+          url: 'https://news.example.com/topics/40',
+          title: '構造見学会',
+          summary: '現場で開催します',
+          publishedOn: '2026-11-05',
+        },
+      ])
+    })
+
+    it('reads a date without seconds, and a date alone', () => {
+      expect(parseRss(rdf('2026-11-05T08:00+09:00')).map((c) => c.publishedOn)).toEqual([
+        '2026-11-05',
+      ])
+      expect(parseRss(rdf('2026-11-05')).map((c) => c.publishedOn)).toEqual(['2026-11-05'])
+      expect(parseRss(rdf('2026-11-31'))).toEqual([])
+    })
+  })
 })

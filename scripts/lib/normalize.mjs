@@ -26,12 +26,15 @@
  */
 export function normalizeAddress(address) {
   if (address === null || address === undefined) return address
-  return address
-    .normalize('NFKC')
-    .replace(/\s+/g, '')
-    .replace(/[－ー―‐]/g, '-')
-    .replace(/(\d+)丁目(\d+)番(\d+)号?/u, '$1-$2-$3')
-    .replace(/(\d+)丁目(\d+)番地?(?!\d)/u, '$1-$2')
+  return (
+    address
+      .normalize('NFKC')
+      .replace(/\s+/g, '')
+      // A dash between digits only: `ー` is also the long vowel of katakana (センター北)
+      .replace(/(?<=\d)[－ー―‐](?=\d)/g, '-')
+      .replace(/(\d+)丁目(\d+)番地?(\d+)号?/u, '$1-$2-$3')
+      .replace(/(\d+)丁目(\d+)番地?(?![\d地])/u, '$1-$2')
+  )
 }
 
 /**

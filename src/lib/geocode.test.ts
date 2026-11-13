@@ -8,6 +8,19 @@ describe('normalizeAddress', () => {
     expect(normalizeAddress('仮想県テスト市1丁目2番3号')).toBe('仮想県テスト市1-2-3')
     expect(normalizeAddress('仮想県テスト市1丁目')).toBe('仮想県テスト市1丁目')
   })
+
+  it('reads 番地 with a number after it as the third part', () => {
+    expect(normalizeAddress('架空町1丁目2番地3')).toBe('架空町1-2-3')
+    expect(normalizeAddress('架空町1丁目2番地3号')).toBe('架空町1-2-3')
+    expect(normalizeAddress('架空町1丁目2番地')).toBe('架空町1-2')
+    expect(normalizeAddress('架空町1丁目2番')).toBe('架空町1-2')
+  })
+
+  it('leaves the long vowel of katakana alone and turns only a dash between digits into a hyphen', () => {
+    expect(normalizeAddress('テストセンター北1丁目2番3号')).toBe('テストセンター北1-2-3')
+    expect(normalizeAddress('架空ニュータウン1ー2ー3')).toBe('架空ニュータウン1-2-3')
+    expect(normalizeAddress('架空町1―2‐3')).toBe('架空町1-2-3')
+  })
 })
 
 describe('buildGsiUrl', () => {

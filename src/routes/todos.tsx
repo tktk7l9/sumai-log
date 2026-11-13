@@ -2,7 +2,7 @@ import { Accordion, Button, Chip, Stack, Text, Title } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { z } from 'zod'
 
 import { ChipRow } from '../components/ChipRow'
@@ -14,7 +14,8 @@ import { PageShell } from '../components/PageShell'
 import { TodoForm } from '../components/todos/TodoForm'
 import { TodoRow } from '../components/todos/TodoRow'
 import { deleteWithUndo, usePendingDeletes } from '../components/undoableDelete'
-import { TODO_LISTS, TODO_LIST_LABEL, type Todo } from '../db/schema'
+import { TODO_LISTS, TODO_LIST_LABEL } from '../db/enums'
+import type { Todo } from '../db/schema'
 import { UUID_SHAPE } from '../lib/ids'
 import {
   TODO_SECTIONS,
@@ -60,10 +61,29 @@ function Page() {
   const pendingDeletes = usePendingDeletes()
   // Ticks applied on the device before the server answers, so the row moves at once
   const [optimistic, setOptimistic] = useState<Record<string, string | null>>({})
-  const [opened, setOpened] = useState(edit !== undefined)
-  const [editing, setEditing] = useState<Todo | null>(
+  // 「やること」 on the home page links here with ?edit=<id>: the form opens on that item
+  const [editingRow, setEditing] = useState<Todo | null>(
     () => loaded.find((t) => t.id === edit) ?? null,
   )
+  const [opened, setOpened] = useState(editingRow !== null)
+  // The form gets the row of the loader data, not the one it was opened with: after the
+  // conflict notice it bases the next save and its draft on the reloaded row (TodoForm). A row
+  // that is no longer listed (the partner deleted it) stays as it was opened
+  const editing = editingRow ? (loaded.find((t) => t.id === editingRow.id) ?? editingRow) : null
+
+  // An item that is gone by now (the partner deleted it, an old link) used to open the empty
+  // 「やることを追加」 (Add a to-do) form under that link. Say so and drop the id from the URL
+  useEffect(() => {
+    if (!edit || loaded.some((t) => t.id === edit)) return
+    // The id keeps it to one notice (StrictMode runs the effect twice)
+    notifications.show({
+      id: 'todo-gone',
+      message: 'そのやることは、すでに削除されていました',
+      color: 'orange',
+    })
+    void navigate({ search: (s) => ({ ...s, edit: undefined }), replace: true })
+    // Only when the id in the URL changes: a row deleted while its form is open stays open
+  }, [edit])
 
   const todos = loaded
     .filter((t) => !pendingDeletes.has(t.id))

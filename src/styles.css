@@ -289,6 +289,16 @@ a:focus-visible {
 }
 
 /*
+ * Today in the month grid: the day calendar.tsx marks with aria-current="date" from the
+ * server's Japanese date, painted as Mantine paints its own `data-today` (which is switched
+ * off there: it follows the clock of the renderer, UTC on the Worker).
+ */
+.mantine-MonthView-monthViewDay[aria-current='date'] .mantine-MonthView-monthViewDayLabel {
+  background-color: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast);
+}
+
+/*
  * Saturday in blue, Sunday / holidays in red, as on Japanese calendars (SHIG 71). Mantine's
  * weekendDays paints both weekend days red; calendar.tsx puts `is-saturday` on Saturdays that
  * are not holidays and `is-holiday` on holidays. Mantine's own shades (blue-7 4.1:1, red-6
@@ -975,4 +985,16 @@ a:focus-visible {
 }
 .todo-row[data-done] {
   opacity: 0.75;
+}
+/* The label around the 24px tick box. On touch screens it is a 7mm target (SHIG 78); the
+   negative margin keeps the row where it was, and leaves the edit button beside it alone */
+@media (pointer: coarse) {
+  .todo-row-tick {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    margin: -10px;
+  }
 }

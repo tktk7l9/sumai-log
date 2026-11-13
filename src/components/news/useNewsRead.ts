@@ -8,7 +8,8 @@ import type { NewsEventRow } from '../../server/repository'
 
 /**
  * The read flag of a newsletter (vendor news whose url is mail:). One flag shared by the two
- * users, like the watched flag of the videos. `setRead` writes it and refreshes the loaders;
+ * users, like the watched flag of the videos. `setRead` writes it and refreshes the loaders
+ * (false when the write failed);
  * `openRead` is what a tap on a row calls: opening an unread newsletter counts as reading
  * it (a mail client's rule), and 「未読に戻す」 (Mark unread) in the drawer takes it back
  */
@@ -16,12 +17,14 @@ export function useNewsRead() {
   const router = useRouter()
   const mark = useServerFn(markNewsRead)
 
-  async function setRead(news: NewsEventRow, read: boolean) {
+  async function setRead(news: NewsEventRow, read: boolean): Promise<boolean> {
     try {
       await mark({ data: { id: news.id, read } })
       await router.invalidate()
+      return true
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
+      return false
     }
   }
 

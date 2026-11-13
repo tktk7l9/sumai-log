@@ -83,6 +83,30 @@ export function roadmapDescription(stage: RoadmapStageId): string {
   return `家づくりのロードマップ。${ROADMAP_STAGES.length} 段階のうち、いまは ${i + 1} 番目の「${ROADMAP_STAGES[i].label}」`
 }
 
+/** A glossary term linked from a stage's guide: only what the link shows */
+export type RoadmapTermLink = { id: string; term: string }
+export type RoadmapTermLinks = Record<RoadmapStageId, RoadmapTermLink[]>
+
+/**
+ * Turns the glossary ids of every stage's guide into `{ id, term }`. The server does this
+ * (`getRoadmap`) and sends the pairs with the roadmap, so that the home page shows the names
+ * without downloading the glossary. An id the glossary does not have is dropped
+ */
+export function roadmapTermLinks(
+  guide: Record<RoadmapStageId, { related: readonly string[] }>,
+  terms: readonly RoadmapTermLink[],
+): RoadmapTermLinks {
+  const names = new Map(terms.map((t) => [t.id, t.term]))
+  const links = {} as RoadmapTermLinks
+  for (const stage of ROADMAP_STAGE_IDS) {
+    links[stage] = guide[stage].related.flatMap((id) => {
+      const term = names.get(id)
+      return term === undefined ? [] : [{ id, term }]
+    })
+  }
+  return links
+}
+
 // ---- Geometry ----------------------------------------------------------------------------
 
 /** viewBox of the drawing. Width is the width of a phone so that 12px text stays 12px */

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { ATTENDEES } from '../db/schema'
+import { ATTENDEES } from '../db/enums'
 import { canonicalYouTubeUrl, parseYouTubeId } from '../lib/youtube'
 import { dateField, idField, optionalUrl } from './zod'
 

@@ -27,6 +27,13 @@ const USER_AGENT = 'sumai-log/1.0'
 const TOO_LARGE_ERROR = '応答が上限（1MB）を超えました'
 /** The error for exceeding the redirect limit, failing to resolve Location, or a disallowed hop target. */
 const REDIRECT_BLOCKED_ERROR = 'リダイレクト先が許可されていません'
+/**
+ * A 200 whose body gave no item at all. Recorded as a failure: a vendor that rebuilt its site
+ * went to 0 items for days while the settings page kept showing a successful fetch
+ * (2026-10-19), and a feed in a format this cannot read looks the same.
+ */
+const NOTHING_READ_ERROR =
+  'お知らせを 1 件も読み取れませんでした（ページやフィードの形が変わった可能性があります）'
 /** The length cap for what is kept in vendors.news_fetch_error. There is no telling how long
  * the message of an exception gets (D1 errors, etc.), so it is cut here. The stack is never
  * included in the first place (only Error#message is looked at. stack is not referenced here
@@ -134,6 +141,7 @@ async function fetchCandidates(
 
   // Relative links are resolved against the final URL that actually returned the body (after redirects)
   const candidates = vendor.newsSource === 'rss' ? parseRss(body) : parseHtmlList(body, finalUrl)
+  if (candidates.length === 0) return { error: NOTHING_READ_ERROR }
   // At most MAX_CANDIDATES_PER_FETCH (the newest) go on to D1 (src/lib/news/limit.ts)
   return { candidates: newestCandidates(candidates) }
 }

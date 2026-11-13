@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { listChannelVideosPage, markChannelVideoWatched } from '../server/channelVideos'
@@ -172,6 +172,32 @@ describe('works route', () => {
         data: { id: uid(2), watched: false },
       }),
     )
+  })
+
+  it('shows the watched button of that work as busy while it is saved, and ignores a second tap', async () => {
+    // The write is held back until the test lets it go (a phone on a slow line)
+    let finish: (() => void) | undefined
+    mockOf(markWorkWatched).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true }
+    })
+    const { user } = await renderRoute('/works?tab=works')
+    const full = within(await screen.findByRole('article', { name: '全部そろった家' }))
+    const button = full.getByRole('button', { name: '視聴済みにする' })
+    await user.click(button)
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('data-loading', 'true')
+    // Only that one: the other works can still be marked
+    const other = within(screen.getByRole('article', { name: '見終わった家' }))
+    expect(other.getByRole('button', { name: '視聴済みを取り消す' })).toBeEnabled()
+    await user.click(button)
+    finish!()
+    expect(await screen.findByText('視聴済みにしました')).toBeInTheDocument()
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mockOf(markWorkWatched)).toHaveBeenCalledTimes(1)
   })
 
   it('offers an undo after marking a work watched by hand, since the filter hides the card', async () => {
@@ -387,6 +413,28 @@ describe('works route, videos tab', () => {
     expect(await screen.findByRole('article', { name: '動画1' })).toBeInTheDocument()
   })
 
+  it('asks YouTube for the small picture in the video list and the large one on a work card', async () => {
+    const { user } = await renderRoute('/works')
+    // 128x72 on a phone: the 320x180 picture, not the 480x360 one with black bars
+    const clipCard = await screen.findByRole('article', { name: '動画1' })
+    expect(clipCard.querySelector('img')).toHaveAttribute(
+      'src',
+      'https://i.ytimg.com/vi/video000001/mqdefault.jpg',
+    )
+    await user.click(screen.getByRole('radio', { name: '施工例' }))
+    const workCard = await screen.findByRole('article', { name: '全部そろった家' })
+    expect(workCard.querySelector('img')?.getAttribute('src')).toMatch(
+      /^https:\/\/i\.ytimg\.com\/vi\/[\w-]{11}\/hqdefault\.jpg$/,
+    )
+  })
+
+  it('opens a connection to the thumbnail host early', async () => {
+    const { router } = await renderRoute('/works')
+    await screen.findByRole('article', { name: '動画1' })
+    const links = router.state.matches.flatMap((m) => m.links ?? [])
+    expect(links).toContainEqual({ rel: 'preconnect', href: 'https://i.ytimg.com' })
+  })
+
   it('links a tour video to the page of its work', async () => {
     await renderRoute('/works')
     const first = within(await screen.findByRole('article', { name: '動画1' }))
@@ -455,6 +503,65 @@ describe('works route, videos tab', () => {
     )
   })
 
+  it('keeps what is typed while the previous title search is still loading', async () => {
+    const page = { rows: [clip(1)], matched: 1, channels: CHANNELS, todayKey: '2026-09-25' }
+    // The answer for "abc" is held back until the test lets it go (a phone on a slow line)
+    let answerAbc: (() => void) | undefined
+    mockOf(listChannelVideosPage).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { q?: string } }).data.q === 'abc') {
+        await new Promise<void>((resolve) => {
+          answerAbc = resolve
+        })
+      }
+      return page
+    })
+    const { user, router } = await renderRoute('/works')
+    const box = await screen.findByRole('textbox', { name: 'タイトルで検索' })
+    await user.type(box, 'abc ')
+    await waitFor(() => expect(answerAbc).toBeDefined())
+    // One more letter, and the answer for "abc" lands before that letter's debounce is over
+    await user.type(box, 'd')
+    answerAbc!()
+    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'abc d' }))
+    expect(box).toHaveValue('abc d')
+    expect(mockOf(listChannelVideosPage)).toHaveBeenLastCalledWith({
+      data: { kind: 'video', q: 'abc d', limit: 30 },
+    })
+  })
+
+  it('keeps the box when two title searches are in flight, and follows a change of q from outside', async () => {
+    const page = { rows: [clip(1)], matched: 1, channels: CHANNELS, todayKey: '2026-09-25' }
+    const held: (() => void)[] = []
+    mockOf(listChannelVideosPage).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { q?: string } }).data.q) {
+        await new Promise<void>((resolve) => held.push(resolve))
+      }
+      return page
+    })
+    const { user, router } = await renderRoute('/works')
+    const box = await screen.findByRole('textbox', { name: 'タイトルで検索' })
+    await user.type(box, 'abc')
+    await waitFor(() => expect(held).toHaveLength(1))
+    await user.type(box, 'd')
+    await waitFor(() => expect(held).toHaveLength(2))
+    await user.type(box, 'e')
+    // The older answer first, as the network may deliver them
+    held[0]()
+    held[1]()
+    await waitFor(() => expect(held).toHaveLength(3))
+    held[2]()
+    await waitFor(() => expect(router.state.location.search).toEqual({ q: 'abcde' }))
+    expect(box).toHaveValue('abcde')
+
+    // A change that did not come from the box (back/forward, a link) still realigns it
+    act(() => void router.navigate({ to: '/works', search: { q: '平屋' } }))
+    await waitFor(() => expect(held).toHaveLength(4))
+    held[3]()
+    await waitFor(() => expect(box).toHaveValue('平屋'))
+    act(() => void router.navigate({ to: '/works', search: {} }))
+    await waitFor(() => expect(box).toHaveValue(''))
+  })
+
   it('treats an unknown channel id as no filter', async () => {
     await renderRoute('/works?ch=UCnope')
     expect(await screen.findByRole('radio', { name: 'すべて 32' })).toBeChecked()
@@ -514,6 +621,36 @@ describe('works route, videos tab', () => {
         data: { id: uid(102), watched: false },
       }),
     )
+  })
+
+  it('shows the watched button of that video as busy while it is saved, and ignores a second tap', async () => {
+    // The write is held back until the test lets it go (a phone on a slow line)
+    let finish: (() => void) | undefined
+    mockOf(markChannelVideoWatched).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return { ok: true }
+    })
+    const { user } = await renderRoute('/works?unwatched=true')
+    const first = within(await screen.findByRole('article', { name: '動画1' }))
+    const button = first.getByRole('button', { name: '視聴済みにする' })
+    await user.click(button)
+    await waitFor(() => expect(finish).toBeDefined())
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute('data-loading', 'true')
+    // Only that one: the other videos can still be marked
+    const second = within(screen.getByRole('article', { name: '動画2' }))
+    expect(second.getByRole('button', { name: '視聴済みを取り消す' })).toBeEnabled()
+    // An impatient second tap on the same button
+    await user.click(button)
+    finish!()
+    expect(await screen.findByText('視聴済みにしました')).toBeInTheDocument()
+    await waitFor(() => expect(button).toBeEnabled())
+    expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledTimes(1)
+    expect(mockOf(markChannelVideoWatched)).toHaveBeenCalledWith({
+      data: { id: uid(101), watched: true },
+    })
   })
 
   it('says so when saving fails', async () => {

@@ -11,6 +11,26 @@ import {
 
 import type { VendorResearch } from '../lib/research'
 import { CANDIDATE_STATUSES } from '../lib/status'
+import {
+  ATTENDEES,
+  CHANNEL_VIDEO_KINDS,
+  COMMENT_TARGETS,
+  EVENT_KINDS,
+  FAVICON_SOURCES,
+  GEOCODE_SOURCES,
+  INBOUND_STATUSES,
+  NEWS_SOURCES,
+  PLACE_KINDS,
+  SOURCE_KINDS,
+  TODO_LISTS,
+  VENDOR_KINDS,
+  WORK_VIDEO_SOURCES,
+} from './enums'
+
+// The enum arrays, label maps and their types live in enums.ts, which has no drizzle import:
+// the pages use them, and importing them from this file shipped drizzle-orm and every table
+// to the browser. Server code can keep importing them from here
+export * from './enums'
 
 /**
  * Policy: dates are ISO-8601 in TEXT (date only is 'YYYY-MM-DD'), amounts are integers in
@@ -38,29 +58,6 @@ export const settings = sqliteTable('settings', {
   value: text('value').notNull(),
   updatedAt: timestamps.updatedAt,
 })
-
-export const VENDOR_KINDS = ['hm', 'koumuten', 'sekkei', 'developer'] as const
-export const VENDOR_KIND_LABEL: Record<(typeof VENDOR_KINDS)[number], string> = {
-  hm: 'ハウスメーカー',
-  koumuten: '工務店',
-  sekkei: '設計事務所',
-  developer: 'デベロッパー',
-}
-
-/** How vendor news is fetched. rss = RSS 2.0 feed, html-list = the <ul><li> list on the
- * top page */
-export const NEWS_SOURCES = ['rss', 'html-list'] as const
-/** Origin of favicon_key. 'auto' = fetched automatically (fetchFaviconForVendor),
- * 'manual' = uploaded by hand from the vendor form (design background: an alternative
- * route for servers that refuse access from Cloudflare).
- * For backward compatibility with existing rows the column is nullable, and null is
- * treated as 'auto' (see migration 0008). */
-export const FAVICON_SOURCES = ['auto', 'manual'] as const
-export type FaviconSource = (typeof FAVICON_SOURCES)[number]
-export const NEWS_SOURCE_LABEL: Record<(typeof NEWS_SOURCES)[number], string> = {
-  rss: 'RSS',
-  'html-list': 'HTML',
-}
 
 /** Vendors for detached houses */
 export const vendors = sqliteTable(
@@ -161,24 +158,6 @@ export const properties = sqliteTable(
   (t) => [index('properties_status_idx').on(t.status)],
 )
 
-export const PLACE_KINDS = [
-  'showroom',
-  'model_house',
-  'open_house',
-  'gallery',
-  'site',
-  'other',
-] as const
-export const PLACE_KIND_LABEL: Record<(typeof PLACE_KINDS)[number], string> = {
-  showroom: '住宅展示場',
-  model_house: 'モデルハウス',
-  open_house: '完成見学会',
-  gallery: 'マンションギャラリー',
-  site: '物件現地',
-  other: 'その他',
-}
-export const GEOCODE_SOURCES = ['gsi', 'manual'] as const
-
 /** Place. The unit of the map. Linked to either a vendor or a property (may have neither) */
 export const places = sqliteTable(
   'places',
@@ -200,14 +179,6 @@ export const places = sqliteTable(
   },
   (t) => [index('places_vendor_idx').on(t.vendorId), index('places_property_idx').on(t.propertyId)],
 )
-
-export const EVENT_KINDS = ['visit', 'meeting', 'viewing', 'other'] as const
-export const EVENT_KIND_LABEL: Record<(typeof EVENT_KINDS)[number], string> = {
-  visit: '見学',
-  meeting: '打合せ',
-  viewing: '内覧',
-  other: 'その他',
-}
 
 /** Event. When all-day, startsAt is 'YYYY-MM-DD'; otherwise ISO-8601 (+09:00) */
 export const events = sqliteTable(
@@ -286,15 +257,6 @@ export const vendorNews = sqliteTable(
   ],
 )
 
-export const INBOUND_STATUSES = ['imported', 'unassigned', 'rejected', 'system'] as const
-export type InboundStatus = (typeof INBOUND_STATUSES)[number]
-export const INBOUND_STATUS_LABEL: Record<InboundStatus, string> = {
-  imported: '取込',
-  unassigned: '未割当',
-  rejected: '拒否',
-  system: 'システム',
-}
-
 /**
  * Full record of the mail delivered to news@ (design 2026-09-19 §4). Serves as both the
  * place for unassigned mail and the receive log.
@@ -329,13 +291,6 @@ export const inboundMails = sqliteTable(
   },
   (t) => [index('inbound_mails_status_received_idx').on(t.status, t.receivedAt)],
 )
-
-export const ATTENDEES = ['both', 'husband', 'wife'] as const
-export const ATTENDEES_LABEL: Record<(typeof ATTENDEES)[number], string> = {
-  both: '二人',
-  husband: '夫',
-  wife: '妻',
-}
 
 /** Visit record */
 export const visits = sqliteTable(
@@ -403,10 +358,6 @@ export const videos = sqliteTable(
   ],
 )
 
-/** auto = embedded on the site's page; manual = pasted by hand; title = a channel video whose title
- * names the work (scripts/import-channel-videos.ts) */
-export const WORK_VIDEO_SOURCES = ['auto', 'manual', 'title'] as const
-
 /**
  * Built examples published on vendors' sites (/works). Rows come from the SQL that
  * scripts/import-works.ts generates; the app itself only changes the video and the
@@ -452,13 +403,6 @@ export const works = sqliteTable(
   ],
 )
 
-export const CHANNEL_VIDEO_KINDS = ['video', 'short', 'live'] as const
-export const CHANNEL_VIDEO_KIND_LABEL: Record<(typeof CHANNEL_VIDEO_KINDS)[number], string> = {
-  video: '動画',
-  short: 'ショート',
-  live: 'ライブ',
-}
-
 /**
  * Every video of the vendors' YouTube channels (/works?tab=videos). Rows come from the SQL that
  * scripts/import-channel-videos.ts generates; the app itself only changes the watched columns.
@@ -497,8 +441,6 @@ export const channelVideos = sqliteTable(
   ],
 )
 
-export const COMMENT_TARGETS = ['vendor', 'property', 'place', 'visit', 'video'] as const
-
 /** Both users can add a short comment to any record. targetId is not a foreign key (on
  * delete, the server side cleans up) */
 export const comments = sqliteTable(
@@ -520,20 +462,6 @@ export const tags = sqliteTable('tags', {
   sortOrder: integer('sort_order').notNull().default(0),
   ...timestamps,
 })
-
-export const DEFAULT_TAGS = [
-  '断熱',
-  '気密',
-  '耐震',
-  '間取り',
-  '資金',
-  'ローン',
-  '土地',
-  'マンション',
-  '管理',
-  '設備',
-  '外構',
-] as const
 
 /** Results of the GSI (Geospatial Information Authority of Japan) address search API.
  * The same string is never looked up twice */
@@ -571,11 +499,6 @@ export type ChannelVideo = typeof channelVideos.$inferSelect
 export type NewChannelVideo = typeof channelVideos.$inferInsert
 export type Comment = typeof comments.$inferSelect
 export type Tag = typeof tags.$inferSelect
-
-/** Kind of a source on the sources page (/sources). 'youtube' when it could be parsed
- * from a YouTube channel URL, otherwise 'site' (see parseYoutubeChannelUrl in
- * src/lib/sources.ts) */
-export const SOURCE_KINDS = ['youtube', 'site'] as const
 
 /**
  * Sources of the sources page (mainly YouTube channels). The genre is not a fixed enum; it
@@ -618,15 +541,6 @@ export const sources = sqliteTable(
  * done_at/done_by are set by ticking (and cleared by unticking). See
  * docs/superpowers/specs/2026-10-28-todos-design.md
  */
-export const TODO_LISTS = ['move', 'account', 'money', 'other'] as const
-export type TodoList = (typeof TODO_LISTS)[number]
-export const TODO_LIST_LABEL: Record<TodoList, string> = {
-  move: '引越し',
-  account: 'アカウント',
-  money: 'お金',
-  other: 'その他',
-}
-
 export const todos = sqliteTable(
   'todos',
   {

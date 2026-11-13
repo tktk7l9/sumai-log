@@ -72,13 +72,14 @@ export function VideoForm({
   const [fetchState, setFetchState] = useState<FetchState>('idle')
   // When an existing video is opened the title is already filled, so the oEmbed auto-fill
   // does not overwrite it. A title that came with `defaults` is not "touched": pasting another
-  // video's URL over it replaces the title with that video's
-  const [titleTouched, setTitleTouched] = useState(Boolean(initial))
+  // video's URL over it replaces the title with that video's.
+  // A ref, read when the answer is applied: as state it was read from the render in which the
+  // request started, so a title typed while the answer was on its way was replaced
+  const titleTouched = useRef(Boolean(initial))
   // No fetch for a URL whose title is already known (an existing memo, or a memo started from a
   // channel video). A URL alone (a video that is not a channel video) still fetches on blur
-  const lastFetchedUrl = useRef<string | null>(
-    initial?.url ?? (defaults?.title ? defaults.url : null) ?? null,
-  )
+  const knownUrl = initial?.url ?? (defaults?.title ? defaults.url : null) ?? null
+  const lastFetchedUrl = useRef<string | null>(knownUrl)
   // oEmbed can send several requests on repeated presses or re-pasting. So that an old
   // response returning later does not overwrite newer input, each request gets a number
   // and only the latest one is applied.
@@ -129,6 +130,20 @@ export function VideoForm({
     draftKey('video', initial?.id, initial?.updatedAt ?? defaults?.url),
     initialValues,
   )
+  // A restored draft is what the user left: its title may be hand-written and its URL was
+  // looked up back then. Leaving the URL field again must not fetch and replace the title
+  useEffect(() => {
+    if (!draft.restored || !form.values.title.trim()) return
+    titleTouched.current = true
+    lastFetchedUrl.current = form.values.url.trim()
+    // Only when a draft comes back: later input goes through the handlers below
+  }, [draft.restored])
+  /** 「破棄」 (Discard): back to the values at open time, and to what was settled then */
+  function discardDraft() {
+    draft.discard()
+    titleTouched.current = Boolean(initial)
+    lastFetchedUrl.current = knownUrl
+  }
   // Whether it was pressed via "保存して続けて追加" (Save and add another) (shown only
   // for a new entry)
   const continueRef = useRef(false)
@@ -173,7 +188,7 @@ export function VideoForm({
         url: data.canonicalUrl,
         channel: data.channel,
         thumbnailUrl: data.thumbnailUrl,
-        ...(titleTouched ? {} : { title: data.title }),
+        ...(titleTouched.current ? {} : { title: data.title }),
       })
       notifications.show({ message: '取得しました' })
     } catch {
@@ -216,7 +231,7 @@ export function VideoForm({
         draft.restart(next)
         form.setValues(next)
         form.resetDirty(next)
-        setTitleTouched(false)
+        titleTouched.current = false
         lastFetchedUrl.current = null
         setFetchState('idle')
         notifications.show({ message: `保存しました：${values.title}` })
@@ -238,7 +253,7 @@ export function VideoForm({
   return (
     <form onSubmit={form.onSubmit(submit)}>
       <Stack gap="md">
-        {draft.restored ? <DraftNotice onDiscard={draft.discard} /> : null}
+        {draft.restored ? <DraftNotice onDiscard={discardDraft} /> : null}
         <TextInput
           ref={urlInputRef}
           label="URL"
@@ -270,7 +285,7 @@ export function VideoForm({
           value={form.values.title}
           error={form.errors.title}
           onChange={(e) => {
-            setTitleTouched(true)
+            titleTouched.current = true
             form.setFieldValue('title', e.currentTarget.value)
           }}
         />

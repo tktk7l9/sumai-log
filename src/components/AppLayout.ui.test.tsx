@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { FeedItem } from '../lib/feed'
+import { ROADMAP_STAGE_IDS } from '../lib/roadmap'
 import { listCandidates } from '../server/candidates'
 import { listHomeEvents } from '../server/events'
 import { recentFeed } from '../server/feed'
@@ -65,7 +66,10 @@ function stubHome(feed: FeedItem[] = []) {
   stub(listVendorNews, { news: [] })
   stub(pickGlossaryTerm, null)
   stub(listHomeTodos, { todos: [], todayKey: '2026-10-01' })
-  stub(getRoadmap, { roadmap: { version: 1, stage: 'research' } })
+  stub(getRoadmap, {
+    roadmap: { version: 1, stage: 'research' },
+    relatedTerms: Object.fromEntries(ROADMAP_STAGE_IDS.map((id) => [id, []])),
+  })
 }
 
 describe('app layout', () => {
@@ -75,19 +79,22 @@ describe('app layout', () => {
   })
   afterEach(() => setPointer(false))
 
+  // jsdom lays the page out at 1024px and, from jsdom 31, applies media queries: the phone's
+  // bottom tabs and 「…」 menu (`hiddenFrom="sm"`) are `display: none` there, and the viewport
+  // cannot be changed. `hidden: true` reaches them at either version
   it('marks the current page in the tabs and offers the other pages in a named menu', async () => {
     const { user, router } = await renderRoute('/')
-    const tabs = await screen.findByRole('navigation', { name: '主要なページ' })
-    expect(within(tabs).getByRole('link', { name: 'ホーム' })).toHaveAttribute(
+    const tabs = await screen.findByRole('navigation', { name: '主要なページ', hidden: true })
+    expect(within(tabs).getByRole('link', { name: 'ホーム', hidden: true })).toHaveAttribute(
       'aria-current',
       'page',
     )
-    await user.click(screen.getByRole('button', { name: 'その他のページ' }))
-    const menu = await screen.findByRole('menu')
+    await user.click(screen.getByRole('button', { name: 'その他のページ', hidden: true }))
+    const menu = await screen.findByRole('menu', { hidden: true })
     for (const label of ['やること', '用語集', '情報収集', '地図', '区画', '分析', '設定']) {
-      expect(within(menu).getByRole('menuitem', { name: label })).toBeInTheDocument()
+      expect(within(menu).getByRole('menuitem', { name: label, hidden: true })).toBeInTheDocument()
     }
-    await user.click(within(menu).getByRole('menuitem', { name: '用語集' }))
+    await user.click(within(menu).getByRole('menuitem', { name: '用語集', hidden: true }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/glossary'))
   })
 

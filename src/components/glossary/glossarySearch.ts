@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { GLOSSARY_CATEGORIES, type CategoryId } from '../../content/glossary'
+import { GLOSSARY_CATEGORIES, type CategoryId } from '../../content/glossaryCategories'
 
 export const CATEGORY_IDS = GLOSSARY_CATEGORIES.map((c) => c.id) as [CategoryId, ...CategoryId[]]
 

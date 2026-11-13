@@ -2,7 +2,7 @@ import { Chip, Group, Modal, SegmentedControl, Stack, Text } from '@mantine/core
 import { notifications } from '@mantine/notifications'
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router'
 import { useServerFn } from '@tanstack/react-start'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 
 import { EmptyState } from '../components/EmptyState'
 import { PageShell } from '../components/PageShell'
@@ -23,6 +23,8 @@ const ALL = 'all'
 
 export const Route = createFileRoute('/works')({
   component: Page,
+  // Both tabs are lists of YouTube thumbnails: connect to their host while the CSS loads
+  head: () => ({ links: [{ rel: 'preconnect', href: 'https://i.ytimg.com' }] }),
   validateSearch: (s) => worksSearchSchema.parse(s),
   // The works are filtered on the page; the videos (thousands) are filtered and paged by the server
   loaderDeps: ({ search }) =>
@@ -121,7 +123,15 @@ function WorksPanel({
   // The count follows the vendor chip: "44 件中 3 件" for one vendor, all works otherwise
   const summary = watchedSummary(filterWorks(works, { vendorId }))
 
+  // The works whose watched flag is being written: that button shows busy, and another write
+  // for the same work is not started (same as the videos tab, ChannelVideosPanel)
+  const [marking, setMarking] = useState<readonly string[]>([])
+  const inFlight = useRef(new Set<string>())
+
   async function setWatched(work: WorkRow, watched: boolean): Promise<boolean> {
+    if (inFlight.current.has(work.id)) return false
+    inFlight.current.add(work.id)
+    setMarking([...inFlight.current])
     try {
       await mark({ data: { id: work.id, watched } })
       await router.invalidate()
@@ -129,6 +139,9 @@ function WorksPanel({
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
       return false
+    } finally {
+      inFlight.current.delete(work.id)
+      setMarking([...inFlight.current])
     }
   }
 
@@ -205,6 +218,7 @@ function WorksPanel({
                   key={work.id}
                   work={work}
                   showSpecs={search.view === 'spec'}
+                  marking={marking.includes(work.id)}
                   onPlay={() => setPlaying(work)}
                   onToggleWatched={() =>
                     void (work.watchedAt === null

@@ -10,9 +10,11 @@ import { useState } from 'react'
 import type { Event, Visit } from '../../db/schema'
 import { dateKey, formatDateWithWeekday } from '../../lib/calendar'
 import { draftKey } from '../../lib/drafts'
+import { extractFormError } from '../../lib/formError'
 import { CONFLICT_MESSAGE, DraftNotice } from '../DraftNotice'
 import { useFormDraft } from '../useFormDraft'
 import { saveVisit, type VisitInput } from '../../server/visits'
+import { VISIT_TEXT_MAX } from '../../server/visits.schema'
 import type { PlaceWithLinks } from '../../server/repository'
 
 type Targets = {
@@ -140,8 +142,12 @@ export function VisitForm({
       await router.invalidate()
       notifications.show({ message: visit ? '記録を更新しました' : '記録を保存しました' })
       onSaved(res.id)
-    } catch {
-      notifications.show({ message: '保存できませんでした', color: 'red' })
+    } catch (error) {
+      // When the server-side zod refuses (a field over its limit), say which field and why
+      // instead of the generic 「保存できませんでした」 (same pattern as VendorForm)
+      const { message, path } = extractFormError(error)
+      notifications.show({ message, color: 'red' })
+      if (path) form.setFieldError(path, message)
     } finally {
       setSaving(false)
     }
@@ -204,6 +210,7 @@ export function VisitForm({
           label="良かった点"
           autosize
           minRows={3}
+          maxLength={VISIT_TEXT_MAX}
           {...form.getInputProps('good')}
           value={form.values.good ?? ''}
         />
@@ -211,6 +218,7 @@ export function VisitForm({
           label="気になった点"
           autosize
           minRows={3}
+          maxLength={VISIT_TEXT_MAX}
           {...form.getInputProps('concerns')}
           value={form.values.concerns ?? ''}
         />
@@ -218,6 +226,7 @@ export function VisitForm({
           label="聞いたことと答え"
           autosize
           minRows={3}
+          maxLength={VISIT_TEXT_MAX}
           {...form.getInputProps('qa')}
           value={form.values.qa ?? ''}
         />
@@ -225,6 +234,7 @@ export function VisitForm({
           label="次にやること"
           autosize
           minRows={3}
+          maxLength={VISIT_TEXT_MAX}
           {...form.getInputProps('nextActions')}
           value={form.values.nextActions ?? ''}
         />

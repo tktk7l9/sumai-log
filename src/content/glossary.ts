@@ -15,17 +15,11 @@
  *   (region 6 (e.g. the flatlands of Kanto)))
  */
 
-export const GLOSSARY_CATEGORIES = [
-  { id: 'performance', label: '性能' },
-  { id: 'land', label: '土地・法規' },
-  { id: 'structure', label: '構造・工法' },
-  { id: 'money', label: 'お金' },
-  { id: 'process', label: '進め方' },
-  { id: 'condo', label: 'マンション' },
-] as const
+import type { CategoryId } from './glossaryCategories'
 
-export type GlossaryCategory = (typeof GLOSSARY_CATEGORIES)[number]
-export type CategoryId = GlossaryCategory['id']
+// The categories live in glossaryCategories.ts so that code every page loads (search
+// validators, the candidate badges) can use them without the terms below
+export { GLOSSARY_CATEGORIES, type CategoryId, type GlossaryCategory } from './glossaryCategories'
 
 /** List of diagrams (`src/components/glossary/diagrams/`). The `diagram` of a term is
  * chosen from these */

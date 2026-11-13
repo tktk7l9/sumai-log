@@ -7,7 +7,7 @@ import { useServerFn } from '@tanstack/react-start'
 import dayjs from 'dayjs'
 import { useState } from 'react'
 
-import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/schema'
+import { EVENT_KINDS, EVENT_KIND_LABEL } from '../../db/enums'
 import { splitStartsAt } from '../../lib/calendar'
 import { resolveEventTitle, suggestEventTitle } from '../../lib/eventTitle'
 import { draftKey } from '../../lib/drafts'
@@ -35,7 +35,8 @@ export function EventForm({
   >
   targets: Targets
   places: PlaceWithLinks[]
-  onSaved: (id: string) => void
+  /** Awaited: the save button stays busy until what the page does after the save is done */
+  onSaved: (id: string) => void | Promise<void>
 }) {
   const router = useRouter()
   const save = useServerFn(saveEvent)
@@ -84,6 +85,17 @@ export function EventForm({
       startTime: (v, values) => (!values.allDay && !v ? '開始時刻を入れてください' : null),
     },
   })
+  // The updatedAt a save is based on, and the draft is kept under: the row's as the form was
+  // opened. `event` follows the loader data, and a reload behind the open form must not move
+  // the base, or a save would replace the partner's change without the conflict notice. After
+  // that notice the reloaded row becomes the base: saving again overwrites, and the form
+  // opened again finds the draft (both promised by CONFLICT_MESSAGE)
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(event?.updatedAt)
+  const [rebasing, setRebasing] = useState(false)
+  if (rebasing && event && event.updatedAt !== baseUpdatedAt) {
+    setBaseUpdatedAt(event.updatedAt)
+    setRebasing(false)
+  }
   // Keep the unfinished input on the device. New entries are separated by "where it was
   // opened from" (date, vendor, place)
   const draft = useFormDraft(
@@ -92,7 +104,7 @@ export function EventForm({
       'event',
       event?.id,
       event
-        ? event.updatedAt
+        ? baseUpdatedAt
         : [defaults?.date, defaults?.vendorId, defaults?.placeId].filter(Boolean).join('|'),
     ),
     initial,
@@ -110,7 +122,7 @@ export function EventForm({
       }
       const res = await save({
         data: {
-          ...(event ? { id: event.id, expectedUpdatedAt: event.updatedAt } : {}),
+          ...(event ? { id: event.id, expectedUpdatedAt: baseUpdatedAt } : {}),
           ...normalized,
         },
       })
@@ -118,13 +130,16 @@ export function EventForm({
         notifications.show({ message: CONFLICT_MESSAGE, color: 'orange', autoClose: 12_000 })
         // Reflect the partner's content on screen (the next save is based on the latest updated
         // time)
+        setRebasing(true)
         await router.invalidate()
         return
       }
       draft.clear()
       await router.invalidate()
       notifications.show({ message: event ? '予定を更新しました' : '予定を追加しました' })
-      onSaved(res.id)
+      // The 「行く」 (Go) form stays open while the page links the news item and leaves ?plan=;
+      // a second tap in that time used to save a duplicate event
+      await onSaved(res.id)
     } catch {
       notifications.show({ message: '保存できませんでした', color: 'red' })
     } finally {

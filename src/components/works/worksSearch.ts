@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { CHANNEL_VIDEO_KINDS } from '../../db/schema'
+import { CHANNEL_VIDEO_KINDS } from '../../db/enums'
 
 /**
  * Filters and the view of the works page (/works). Every key falls back to "not set" on an

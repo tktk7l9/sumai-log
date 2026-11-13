@@ -21,16 +21,20 @@ export function domainOf(address: string): string | null {
   return domain.length > 0 ? domain : null
 }
 
-/** Normalises form input to comma-separated, lowercase, no duplicates. null when empty */
+/**
+ * Normalises form input to comma-separated, lowercase, no duplicates. null when empty.
+ * People type this on a phone: the separators are `,` `、` `，`, spaces (full-width too) and
+ * newlines, and an address (`info@example.com`) or a pasted URL (`https://example.com/x`) is
+ * reduced to its host. Before this, `a.com、b.com` was stored as one domain that matched no
+ * sender, and that vendor's newsletters stayed unassigned without a hint.
+ */
 export function normalizeDomains(input: string | null | undefined): string | null {
   if (!input) return null
   const seen = new Set<string>()
-  for (const part of input.split(/[,\n]/)) {
-    const raw = part.trim().toLowerCase()
-    if (!raw) continue
-    const at = raw.lastIndexOf('@')
-    const domain = at >= 0 ? raw.slice(at + 1) : raw
-    if (domain) seen.add(domain)
+  for (const part of input.normalize('NFKC').split(/[,、\s]+/)) {
+    const raw = part.toLowerCase().replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+    const host = raw.slice(raw.lastIndexOf('@') + 1).replace(/[/:?#].*$/, '')
+    if (host) seen.add(host)
   }
   return seen.size > 0 ? [...seen].join(',') : null
 }

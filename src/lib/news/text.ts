@@ -251,15 +251,30 @@ export function extractElementBlocks(html: string, tag: string, max = Infinity):
   return blocks
 }
 
+/** What a number or a date written with digits is made of: `12/12`, `2026.11.21`, `1.25` */
+const NUMBER_CHAR = /[\d/.]/
+/** A run of number characters longer than this is not kept whole (it is not a date or an amount) */
+const NUMBER_RUN_MAX = 12
+
 /**
  * Cuts off what exceeds `max` characters (no ellipsis is added). It does not cut in the middle
- * of a surrogate pair (emoji etc., characters of 2 code units in UTF-16).
- * At a position that would split one, it cuts 1 character earlier.
+ * of a surrogate pair (emoji etc., characters of 2 code units in UTF-16): at a position that
+ * would split one, it cuts 1 character earlier. Nor in the middle of a number: the cut moves
+ * back to before it, because half a date is another date (`12/12` cut to `12/1` put an event
+ * on 1 December).
  */
 export function truncate(text: string, max: number): string {
   if (text.length <= max) return text
   const high = text.charCodeAt(max - 1)
   const low = text.charCodeAt(max)
   const splitsSurrogatePair = high >= 0xd800 && high <= 0xdbff && low >= 0xdc00 && low <= 0xdfff
-  return text.slice(0, splitsSurrogatePair ? max - 1 : max)
+  let end = splitsSurrogatePair ? max - 1 : max
+
+  if (NUMBER_CHAR.test(text[end]) && NUMBER_CHAR.test(text[end - 1])) {
+    let runStart = end - 1
+    while (runStart > 0 && end - runStart < NUMBER_RUN_MAX && NUMBER_CHAR.test(text[runStart - 1]))
+      runStart--
+    if (end - runStart < NUMBER_RUN_MAX) end = runStart
+  }
+  return text.slice(0, end)
 }

@@ -2,8 +2,9 @@ import { env } from 'cloudflare:test'
 import { eq } from 'drizzle-orm'
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { inboundMails, vendorNews } from '../../db/schema'
-import { upsertVendor } from './candidates'
+import { comments, inboundMails, vendorNews, vendors } from '../../db/schema'
+import { deleteVendorCascade, upsertVendor } from './candidates'
+import { insertComment } from './comments'
 import {
   cleanupInboundMails,
   deleteInboundMail,
@@ -181,6 +182,111 @@ describe('importMailAsNews', () => {
     expect(news.vendorId).toBe(chosen)
     expect(news.mailId).toBe(id)
     expect(await db.select().from(vendorNews)).toHaveLength(2)
+  })
+})
+
+/** Makes every statement of the given kind on the table fail until the returned function is called */
+async function failOn(event: 'UPDATE' | 'DELETE', table: string): Promise<() => Promise<void>> {
+  await env.DB.exec(
+    `CREATE TRIGGER test_fail BEFORE ${event} ON ${table} BEGIN SELECT RAISE(ABORT, 'test failure'); END`,
+  )
+  return async () => {
+    await env.DB.exec('DROP TRIGGER test_fail')
+  }
+}
+
+describe('importMailAsNews: one atomic unit', () => {
+  it('leaves no newsletter behind when marking the mail imported fails', async () => {
+    const vendorId = await upsertVendor(
+      db,
+      { name: 'テスト工務店', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    const { id } = await insertInboundMail(db, row())
+    const restore = await failOn('UPDATE', 'inbound_mails')
+    try {
+      await expect(importMailAsNews(db, id, vendorId, '2026-09-17')).rejects.toThrow()
+    } finally {
+      await restore()
+    }
+    expect(await db.select().from(vendorNews)).toHaveLength(0)
+    const [mail] = await db.select().from(inboundMails).where(eq(inboundMails.id, id))
+    expect([mail.status, mail.newsId]).toEqual(['unassigned', null])
+
+    // The next try imports it as usual
+    const { newsId } = await importMailAsNews(db, id, vendorId, '2026-09-17')
+    expect(newsId).not.toBeNull()
+    expect(await db.select().from(vendorNews)).toHaveLength(1)
+  })
+})
+
+describe('deleting the vendor of imported mails', () => {
+  async function twoVendors() {
+    const gone = await upsertVendor(
+      db,
+      { name: 'テスト工務店A', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    const kept = await upsertVendor(
+      db,
+      { name: 'テスト工務店B', kind: 'koumuten', serviceAreas: [] },
+      actor,
+    )
+    return { gone, kept }
+  }
+  const mailOf = async (id: string) =>
+    (await db.select().from(inboundMails).where(eq(inboundMails.id, id)))[0]!
+
+  it('puts them back to unassigned, so they can be imported to another vendor', async () => {
+    const { gone, kept } = await twoVendors()
+    const { id } = await insertInboundMail(db, row())
+    const other = await insertInboundMail(db, row({ messageId: '<m2@example.com>' }))
+    await importMailAsNews(db, id, gone, '2026-09-17')
+    const keptNews = await importMailAsNews(db, other.id, kept, '2026-09-17')
+
+    await deleteVendorCascade(db, gone)
+
+    const mail = await mailOf(id)
+    expect([mail.status, mail.vendorId, mail.newsId]).toEqual(['unassigned', null, null])
+    expect(mail.bodyText).toBe('9月27日(土) 完成見学会を開催します。')
+    expect(
+      (await listInboundMails(db, { status: 'unassigned', limit: 10 })).map((m) => m.id),
+    ).toEqual([id])
+    // The other vendor's mail is not touched
+    const untouched = await mailOf(other.id)
+    expect([untouched.status, untouched.vendorId, untouched.newsId]).toEqual([
+      'imported',
+      kept,
+      keptNews.newsId,
+    ])
+
+    const again = await importMailAsNews(db, id, kept, '2026-09-18')
+    expect(again.newsId).not.toBeNull()
+    const [news] = await db.select().from(vendorNews).where(eq(vendorNews.id, again.newsId!))
+    expect([news.vendorId, news.mailId, news.url]).toEqual([kept, id, 'mail:<m1@example.com>'])
+    const imported = await mailOf(id)
+    expect([imported.status, imported.vendorId, imported.newsId]).toEqual([
+      'imported',
+      kept,
+      again.newsId,
+    ])
+  })
+
+  it('deletes nothing and changes no mail when the delete of the vendor fails', async () => {
+    const { gone } = await twoVendors()
+    const { id } = await insertInboundMail(db, row())
+    const { newsId } = await importMailAsNews(db, id, gone, '2026-09-17')
+    await insertComment(db, { targetType: 'vendor', targetId: gone, body: '一言' }, actor)
+    const restore = await failOn('DELETE', 'vendors')
+    try {
+      await expect(deleteVendorCascade(db, gone)).rejects.toThrow()
+    } finally {
+      await restore()
+    }
+    const mail = await mailOf(id)
+    expect([mail.status, mail.vendorId, mail.newsId]).toEqual(['imported', gone, newsId])
+    expect(await db.select().from(comments)).toHaveLength(1)
+    expect(await db.select().from(vendors)).toHaveLength(2)
   })
 })
 

@@ -57,26 +57,36 @@ export function MailNewsList({
   limit: number
 }) {
   const navigate = useNavigate()
-  const { setRead, openRead } = useNewsRead()
-  const [drawerNewsId, setDrawerNewsId] = useState<string | null>(null)
+  const { setRead } = useNewsRead()
+  // The opened row itself, not only its id: under 「未読だけ」 (Unread only) opening marks the
+  // newsletter read and the reloaded list no longer has it, which used to shut the drawer
+  // before the body could be read
+  const [opened, setOpened] = useState<NewsEventRow | null>(null)
 
   // A vendor id that matches no vendor (an old or hand-typed URL) is treated as no filter
   const vendorId = vendors.some((v) => v.vendorId === search.v) ? search.v : undefined
   const scope = vendorId ? vendors.filter((v) => v.vendorId === vendorId) : vendors
   const total = scope.reduce((sum, v) => sum + v.total, 0)
   const unread = scope.reduce((sum, v) => sum + v.unread, 0)
-  const drawerNews = drawerNewsId ? (news.find((n) => n.id === drawerNewsId) ?? null) : null
+  const drawerNews = opened ? (news.find((n) => n.id === opened.id) ?? opened) : null
+
+  /** Writes the read flag. The kept row follows it, so the drawer offers the right button
+   * while the list does not have the row; a failed write puts it back as it was */
+  async function writeRead(item: NewsEventRow, read: boolean) {
+    setOpened({ ...item, readAt: read ? new Date().toISOString() : null })
+    if (!(await setRead(item, read))) setOpened((cur) => (cur?.id === item.id ? item : cur))
+  }
 
   /** "行く" in the drawer: opens the event form in the calendar (same as NewsAgenda) */
   function handlePlan(item: NewsEventRow) {
-    setDrawerNewsId(null)
+    setOpened(null)
     const key = item.eventStart ?? item.publishedOn
     navigate({ to: '/calendar', search: { m: key.slice(0, 7), d: key, plan: item.id } })
   }
 
   /** "予定を見る" in the drawer: that day in the calendar (same as NewsAgenda) */
   function handleViewEvent(item: NewsEventRow) {
-    setDrawerNewsId(null)
+    setOpened(null)
     if (item.eventStart) {
       navigate({ to: '/calendar', search: { m: item.eventStart.slice(0, 7), d: item.eventStart } })
       return
@@ -142,8 +152,9 @@ export function MailNewsList({
                   className="news-agenda-row"
                   data-past={past ? true : undefined}
                   onClick={() => {
-                    openRead(item)
-                    setDrawerNewsId(item.id)
+                    // Opening an unread newsletter counts as reading it (useNewsRead)
+                    if (read) setOpened(item)
+                    else void writeRead(item, true)
                   }}
                 >
                   <Stack gap={4} py={8} px="sm">
@@ -201,18 +212,14 @@ export function MailNewsList({
           </Button>
         ) : null}
       </Stack>
-      <FormDrawer
-        opened={drawerNews !== null}
-        onClose={() => setDrawerNewsId(null)}
-        title="お知らせ"
-      >
+      <FormDrawer opened={drawerNews !== null} onClose={() => setOpened(null)} title="お知らせ">
         {drawerNews ? (
           <NewsEventDrawer
             news={drawerNews}
             planning={false}
             onPlan={() => handlePlan(drawerNews)}
             onViewEvent={() => handleViewEvent(drawerNews)}
-            onSetRead={(read) => void setRead(drawerNews, read)}
+            onSetRead={(read) => void writeRead(drawerNews, read)}
           />
         ) : null}
       </FormDrawer>

@@ -26,10 +26,12 @@ import { listVideos, videoFormOptions } from '../server/videos'
 import { listVisits, visitFormOptions } from '../server/visits'
 
 const search = z.object({
-  tab: z.enum(['visits', 'videos']).default('visits'),
+  // An off-schema value (a hand-edited or old bookmarked URL) falls back like the keys below,
+  // instead of the error screen
+  tab: z.enum(['visits', 'videos']).default('visits').catch('visits'),
   // When arriving from an event through "記録を書く" (Write a record): open the form with that
   // event as the initial values
-  fromEvent: z.string().regex(UUID_SHAPE).optional(),
+  fromEvent: z.string().regex(UUID_SHAPE).optional().catch(undefined),
   // When arriving from the videos tab through "メモを書く" (Write a memo): the YouTube id of
   // the channel video; the memo form opens filled in from it
   video: z
@@ -61,13 +63,22 @@ function MemoSearch({ q, onChange }: { q: string | undefined; onChange: (q: stri
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
+  // What this box last wrote to `?q=`: its own value coming back must not replace what was
+  // typed in the meantime (same as the title search of /works)
+  const sentRef = useRef(q ?? '')
+
   useEffect(() => {
+    if ((q ?? '') === sentRef.current) return
+    sentRef.current = q ?? ''
     setInput(q ?? '')
   }, [q])
 
   useEffect(() => {
     if (debounced !== input) return
-    if (debounced.trim() !== (qRef.current ?? '')) onChangeRef.current(debounced.trim())
+    const next = debounced.trim()
+    if (next === (qRef.current ?? '')) return
+    sentRef.current = next
+    onChangeRef.current(next)
   }, [debounced])
 
   return (

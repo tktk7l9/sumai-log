@@ -1,7 +1,7 @@
 import { Badge, Button, Drawer, Group, Stack, Text } from '@mantine/core'
 import { Link } from '@tanstack/react-router'
 
-import { PLACE_KIND_LABEL } from '../../db/schema'
+import { PLACE_KIND_LABEL } from '../../db/enums'
 import type { PlaceWithLinks } from '../../server/repository'
 
 /** A simple card that comes up from the bottom when a pin is tapped */

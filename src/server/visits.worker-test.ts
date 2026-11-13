@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { reorderPhotosInput } from './visits.schema'
+import { reorderPhotosInput, VISIT_TEXT_MAX, visitInput } from './visits.schema'
 
 /**
  * saveVisit/reorderPhotos are wrapped in createServerFn, so calling them directly from a
@@ -47,5 +47,46 @@ describe('reorderPhotosInput', () => {
   it('rejects when visitId is missing', () => {
     const result = reorderPhotosInput.safeParse({ photoIds: [photoA] })
     expect(result.success).toBe(false)
+  })
+})
+
+describe('visitInput', () => {
+  const base = {
+    eventId: null,
+    placeId: null,
+    vendorId: null,
+    propertyId: null,
+    visitedOn: '2026-11-12',
+    good: null,
+    concerns: null,
+    qa: null,
+    nextActions: null,
+  }
+  const fields = ['good', 'concerns', 'qa', 'nextActions'] as const
+
+  it('takes a long visit: 4,000 characters in each free-text field', () => {
+    expect(VISIT_TEXT_MAX).toBe(4000)
+    const long = 'あ'.repeat(VISIT_TEXT_MAX)
+    const result = visitInput.safeParse({
+      ...base,
+      good: long,
+      concerns: long,
+      qa: long,
+      nextActions: long,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it.each(fields)('names the field when %s is over the limit', (field) => {
+    const result = visitInput.safeParse({ ...base, [field]: 'あ'.repeat(VISIT_TEXT_MAX + 1) })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.map((i) => [i.code, i.path])).toEqual([['too_big', [field]]])
+    }
+  })
+
+  it('stores an empty or blank field as null', () => {
+    const result = visitInput.safeParse({ ...base, good: '', qa: '  ' })
+    expect(result.success && [result.data.good, result.data.qa]).toEqual([null, null])
   })
 })

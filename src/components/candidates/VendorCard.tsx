@@ -2,7 +2,8 @@ import { Avatar, Badge, Card, Group, Stack, Text, VisuallyHidden } from '@mantin
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MapPin } from 'lucide-react'
 
-import { VENDOR_KIND_LABEL, type Vendor } from '../../db/schema'
+import { VENDOR_KIND_LABEL } from '../../db/enums'
+import type { Vendor } from '../../db/schema'
 import { resolveAffiliations } from '../../lib/affiliations'
 import { formatTsubo } from '../../lib/format'
 import { termIdForMetric } from '../../lib/glossary'

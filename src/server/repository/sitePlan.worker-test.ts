@@ -10,9 +10,10 @@ beforeEach(reset)
 describe('sitePlan', () => {
   it('clamps into range on save and round-trips as JSON. A broken value is null', async () => {
     expect(await readSitePlan(db)).toBeNull()
-    const saved = await writeSitePlan(db, { ...DEFAULT_SITE_PLAN, sectionY: 999 })
-    expect(saved.sectionY).toBeLessThan(50)
-    expect(await readSitePlan(db)).toEqual(saved)
+    const saved = await writeSitePlan(db, { ...DEFAULT_SITE_PLAN, sectionY: 999 }, null)
+    if (saved.conflict) throw new Error('the first save must not conflict')
+    expect(saved.plan.sectionY).toBeLessThan(50)
+    expect(await readSitePlan(db)).toEqual(saved.plan)
     await writeSetting(db, 'sitePlan', '{broken')
     expect(await readSitePlan(db)).toBeNull()
   })

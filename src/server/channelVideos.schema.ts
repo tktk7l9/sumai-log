@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { CHANNEL_VIDEO_KINDS } from '../db/schema'
+import { CHANNEL_VIDEO_KINDS } from '../db/enums'
 import { idField } from './zod'
 
 // Split from channelVideos.ts for the same reason as works.schema.ts: channelVideos.ts pulls in

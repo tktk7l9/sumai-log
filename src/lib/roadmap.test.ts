@@ -4,12 +4,14 @@ import {
   DEFAULT_ROADMAP,
   ROADMAP_HEIGHT,
   ROADMAP_STAGES,
+  ROADMAP_STAGE_IDS,
   ROADMAP_WIDTH,
   isRoadmapStageId,
   parseRoadmap,
   roadPath,
   roadmapDescription,
   roadmapNodes,
+  roadmapTermLinks,
   stageIndex,
   stageOf,
   stageState,
@@ -90,5 +92,42 @@ describe('geometry', () => {
   it('clamps an index outside the road', () => {
     expect(roadPath(-3)).toBe(roadPath(0))
     expect(roadPath(99)).toBe(roadPath(ROADMAP_STAGES.length - 1))
+  })
+})
+
+describe('roadmapTermLinks', () => {
+  const guide = Object.fromEntries(
+    ROADMAP_STAGE_IDS.map((id) => [id, { related: [] as string[] }]),
+  ) as Record<(typeof ROADMAP_STAGE_IDS)[number], { related: string[] }>
+
+  it('gives every stage the id and name of its terms, in the order of the guide', () => {
+    const links = roadmapTermLinks(
+      { ...guide, contract: { related: ['b', 'a'] }, build: { related: ['a'] } },
+      [
+        { id: 'a', term: '用語A' },
+        { id: 'b', term: '用語B' },
+        { id: 'c', term: '用語C' },
+      ],
+    )
+    expect(Object.keys(links)).toEqual(ROADMAP_STAGE_IDS)
+    expect(links.contract).toEqual([
+      { id: 'b', term: '用語B' },
+      { id: 'a', term: '用語A' },
+    ])
+    expect(links.build).toEqual([{ id: 'a', term: '用語A' }])
+    expect(links.research).toEqual([])
+  })
+
+  it('carries only the id and the name, not the rest of a term', () => {
+    const term = { id: 'a', term: '用語A', summary: '説明', body: ['本文'] }
+    const links = roadmapTermLinks({ ...guide, plan: { related: ['a'] } }, [term])
+    expect(links.plan).toEqual([{ id: 'a', term: '用語A' }])
+  })
+
+  it('drops an id the glossary does not have', () => {
+    const links = roadmapTermLinks({ ...guide, land: { related: ['gone', 'a'] } }, [
+      { id: 'a', term: '用語A' },
+    ])
+    expect(links.land).toEqual([{ id: 'a', term: '用語A' }])
   })
 })

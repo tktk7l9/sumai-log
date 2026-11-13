@@ -1,12 +1,12 @@
-import { screen, waitFor, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { act, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deleteEvent, listEventsBetween, saveEvent } from '../server/events'
 import { getMailBody } from '../server/mails'
 import { getVendorNews, linkNewsToEvent, newsEventsBetween } from '../server/news'
 import { listLinkTargets, listPlaces } from '../server/places'
 import { event, mockOf, news, place, stub, uid } from '../../test/ui/fixtures'
-import { flushPendingDeletes, renderRoute } from '../../test/ui/render'
+import { clearNotifications, flushPendingDeletes, renderRoute } from '../../test/ui/render'
 
 // Far in the future so that "行く" (Go) is offered whatever day the tests run on
 const MONTH = '2099-10'
@@ -85,6 +85,106 @@ describe('calendar route', () => {
     })
   })
 
+  it('does not ask the server again for a day tapped inside the month already loaded', async () => {
+    const { user, router } = await renderRoute(`/calendar?m=${MONTH}`)
+    await screen.findByText('打合せ（間取り）')
+    const loads = mockOf(listEventsBetween).mock.calls.length
+    await user.click(screen.getByRole('button', { name: '10月 20, 2099' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ d: '2099-10-20' }))
+    await user.click(screen.getByRole('button', { name: '10月 21, 2099' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ d: '2099-10-21' }))
+    // The tapped day is the date of a new event
+    await user.click(screen.getByRole('button', { name: '予定を追加' }))
+    const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/21')
+    expect(mockOf(listEventsBetween)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(newsEventsBetween)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(listPlaces)).toHaveBeenCalledTimes(loads)
+    expect(mockOf(listLinkTargets)).toHaveBeenCalledTimes(loads)
+  })
+
+  it('opens the add form on the day tapped just before, while the loader is still out', async () => {
+    const range = {
+      events: [],
+      recordedEventIds: [],
+      todayKey: '2099-10-01',
+      nowIso: '2099-10-01T09:00:00+09:00',
+    }
+    // The answer for November is held back until the test lets it go (a phone on a slow line)
+    let answerNovember: (() => void) | undefined
+    mockOf(listEventsBetween).mockImplementation(async (arg: unknown) => {
+      if ((arg as { data: { from: string } }).data.from > '2099-10') {
+        await new Promise<void>((resolve) => {
+          answerNovember = resolve
+        })
+      }
+      return range
+    })
+    const save = stub(saveEvent, { id: 'e9' })
+    const { user } = await renderRoute(`/calendar?m=${MONTH}&d=2099-10-05`)
+    await screen.findByText('自分たちの予定')
+    // A day of the next month shown at the end of the October grid: its range is not loaded yet
+    await user.click(screen.getByRole('button', { name: '11月 1, 2099' }))
+    await waitFor(() => expect(answerNovember).toBeDefined())
+    await user.click(screen.getByRole('button', { name: '予定を追加' }))
+    const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/11/01')
+    answerNovember!()
+    await user.type(within(drawer).getByRole('textbox', { name: 'タイトル' }), '相談')
+    await user.click(within(drawer).getByRole('button', { name: '予定を保存' }))
+    await waitFor(() =>
+      expect(save).toHaveBeenCalledWith({
+        data: expect.objectContaining({ title: '相談', date: '2099-11-01' }),
+      }),
+    )
+  })
+
+  it('opens on today as the server decides it when the URL names no day or month', async () => {
+    // Only the date is faked: the timers of the router and of user-event stay real
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-10-09T22:30:00Z')) // 2099-10-10 07:30 in Japan
+    try {
+      const { user } = await renderRoute('/calendar')
+      await screen.findByText('打合せ（間取り）')
+      expect(listEventsBetween).toHaveBeenCalledWith({
+        data: { from: '2099-09-24', to: '2099-11-07' },
+      })
+      await user.click(screen.getByRole('button', { name: '予定を追加' }))
+      const drawer = await screen.findByRole('dialog', { name: '予定を追加' })
+      expect(within(drawer).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/10')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks today as the server decides it, not by the clock of where the page is rendered', async () => {
+    // The page as the Worker renders it: in UTC, at 07:30 in Japan, when UTC is still on the
+    // day before
+    const zone = process.env.TZ
+    process.env.TZ = 'UTC'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-10-09T22:30:00Z'))
+    try {
+      stub(listEventsBetween, {
+        events: [],
+        recordedEventIds: [],
+        todayKey: '2099-10-10',
+        nowIso: '2099-10-10T07:30:00+09:00',
+      })
+      await renderRoute(`/calendar?m=${MONTH}`)
+      await screen.findByText('自分たちの予定')
+      const yesterday = screen.getByRole('button', { name: '10月 9, 2099' })
+      expect(yesterday.querySelector('[data-today]')).toBeNull()
+      expect(yesterday).not.toHaveAttribute('aria-current')
+      // Exactly one day is today, and it is the Japanese date
+      expect(screen.getByRole('button', { current: 'date' })).toHaveAccessibleName('10月 10, 2099')
+    } finally {
+      vi.useRealTimers()
+      if (zone === undefined) delete process.env.TZ
+      else process.env.TZ = zone
+    }
+  })
+
   it('edits an event from the calendar, and deletes it with undo', async () => {
     const save = stub(saveEvent, { id: 'e1' })
     const remove = stub(deleteEvent, { ok: true })
@@ -158,6 +258,94 @@ describe('calendar route', () => {
     expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
   })
 
+  describe('when the partner saved the event first', () => {
+    const NEWER = '2099-10-01 12:00:00'
+    const MEETING = links(
+      event({
+        id: 'e1',
+        title: '打合せ（間取り）',
+        kind: 'meeting',
+        startsAt: '2099-10-10T10:00:00+09:00',
+      }),
+    )
+    // The server as it behaves: a save based on an old updatedAt is a conflict, not an overwrite
+    let current: typeof MEETING
+
+    beforeEach(() => {
+      current = MEETING
+      mockOf(listEventsBetween).mockImplementation(async () => ({
+        events: [current],
+        recordedEventIds: [],
+        todayKey: '2099-10-01',
+        nowIso: '2099-10-01T09:00:00+09:00',
+      }))
+      mockOf(saveEvent).mockImplementation(async (arg: unknown) => {
+        const { expectedUpdatedAt } = (arg as { data: { expectedUpdatedAt?: string } }).data
+        return expectedUpdatedAt === current.updatedAt ? { id: 'e1' } : { conflict: true }
+      })
+    })
+
+    async function editUntilConflict() {
+      const rendered = await renderRoute(`/calendar?m=${MONTH}`)
+      const { user } = rendered
+      await user.click(await screen.findByText('打合せ（間取り）'))
+      const dialog = await screen.findByRole('dialog', { name: '予定を編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '図面を持参')
+      // The partner's save lands while the form is open
+      current = { ...MEETING, title: '打合せ（仕様）', updatedAt: NEWER }
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      // The calendar behind the form now shows the partner's content
+      await screen.findByText('打合せ（仕様）')
+      return { ...rendered, dialog }
+    }
+
+    it('overwrites with the input when saved again, as the notice says', async () => {
+      const { user, dialog } = await editUntilConflict()
+      expect(within(dialog).getByRole('textbox', { name: 'メモ' })).toHaveValue('図面を持参')
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      expect(await screen.findByText('予定を更新しました')).toBeInTheDocument()
+      expect(mockOf(saveEvent)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({
+          id: 'e1',
+          expectedUpdatedAt: NEWER,
+          title: '打合せ（間取り）',
+          note: '図面を持参',
+        }),
+      })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+
+    it('still refuses to overwrite when the calendar was reloaded behind the open form', async () => {
+      const { user, router } = await renderRoute(`/calendar?m=${MONTH}`)
+      await user.click(await screen.findByText('打合せ（間取り）'))
+      const dialog = await screen.findByRole('dialog', { name: '予定を編集' })
+      await user.type(within(dialog).getByRole('textbox', { name: 'メモ' }), '図面を持参')
+      current = { ...MEETING, title: '打合せ（仕様）', updatedAt: NEWER }
+      // e.g. the undo window of a delete ends and the page reloads its data
+      await act(() => router.invalidate())
+      await screen.findByText('打合せ（仕様）')
+      await user.click(within(dialog).getByRole('button', { name: '予定を保存' }))
+      // The form never showed the partner's content, so this save must not replace it silently
+      expect(await screen.findByText(/相手が先にこの内容を保存していた/)).toBeInTheDocument()
+      expect(mockOf(saveEvent)).toHaveBeenCalledTimes(1)
+      expect(mockOf(saveEvent)).toHaveBeenLastCalledWith({
+        data: expect.objectContaining({ expectedUpdatedAt: MEETING.updatedAt }),
+      })
+    })
+
+    it('brings the input back when the form is closed and opened again', async () => {
+      const { user } = await editUntilConflict()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      clearNotifications()
+      await user.click(screen.getByText('打合せ（仕様）'))
+      const reopened = await screen.findByRole('dialog', { name: '予定を編集' })
+      expect(await within(reopened).findByText('書きかけの下書きを戻しました')).toBeInTheDocument()
+      expect(within(reopened).getByRole('textbox', { name: 'メモ' })).toHaveValue('図面を持参')
+    })
+  })
+
   it('tells when an event could not be saved', async () => {
     mockOf(saveEvent).mockRejectedValue(new Error('offline'))
     const { user } = await renderRoute(`/calendar?m=${MONTH}`)
@@ -192,6 +380,34 @@ describe('calendar route', () => {
       expect(link).toHaveBeenCalledWith({ data: { newsId: NEWS_ID, eventId: 'e3' } }),
     )
     await waitFor(() => expect(router.state.location.search).not.toHaveProperty('plan'))
+  })
+
+  it('keeps the plan form busy until the link is written, so it cannot be saved twice', async () => {
+    stub(getVendorNews, { news: OPEN_HOUSE })
+    const save = stub(saveEvent, { id: 'e3' })
+    // The link is held back until the test lets it go (a phone on a slow line)
+    let finishLink: (() => void) | undefined
+    mockOf(linkNewsToEvent).mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        finishLink = resolve
+      })
+      return { eventId: 'e3' }
+    })
+    const { user, router } = await renderRoute(`/calendar?m=${MONTH}&plan=${NEWS_ID}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    const button = within(form).getByRole('button', { name: '予定を保存' })
+    await user.click(button)
+    await waitFor(() => expect(finishLink).toBeDefined())
+    // An impatient second tap while the event is saved but the form is still open
+    expect(button).toBeDisabled()
+    await user.click(button)
+    finishLink!()
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('plan'))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: '予定を追加' })).not.toBeInTheDocument(),
+    )
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(linkNewsToEvent).toHaveBeenCalledTimes(1)
   })
 
   it('reports a failed link but still closes the plan form', async () => {
@@ -274,6 +490,47 @@ describe('calendar route', () => {
         v: 'week',
       }),
     )
+  })
+
+  // A hand-edited or old bookmarked URL: the calendar opens with the value ignored instead of
+  // the error screen, where 「読み直す」 (Reload) could not help
+  it.each([
+    '/calendar?m=209910',
+    '/calendar?d=2099-10-12T10%3A00',
+    '/calendar?v=year',
+    '/calendar?v=agenda',
+    '/calendar?plan=abc',
+  ])('ignores an off-schema search value: %s', async (url) => {
+    await renderRoute(url)
+    expect(await screen.findByText('自分たちの予定')).toBeInTheDocument()
+    expect(screen.queryByText('表示できませんでした')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('opens the plan form for a news id that is not an RFC v4 UUID (rows from the seed import)', async () => {
+    // 8-4-4-4-12 hex, but without the version and variant nibbles of v4 (src/lib/ids.ts)
+    const seeded = '3f2a1b4c-5d6e-7f80-1a0b-1c2d3e4f5a6b'
+    stub(getVendorNews, { news: { ...OPEN_HOUSE, id: seeded } })
+    await renderRoute(`/calendar?m=${MONTH}&plan=${seeded}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(form).getByRole('textbox', { name: 'タイトル' })).toHaveValue(
+      'テスト工務店 完成見学会',
+    )
+    expect(getVendorNews).toHaveBeenCalledWith({ data: { id: seeded } })
+  })
+
+  it('opens the plan form on today for a two-day event that started yesterday', async () => {
+    // OPEN_HOUSE runs 10/18 - 10/19; the server says today is the 19th
+    stub(listEventsBetween, {
+      events: [],
+      recordedEventIds: [],
+      todayKey: '2099-10-19',
+      nowIso: '2099-10-19T09:00:00+09:00',
+    })
+    stub(getVendorNews, { news: OPEN_HOUSE })
+    await renderRoute(`/calendar?m=${MONTH}&plan=${NEWS_ID}`)
+    const form = await screen.findByRole('dialog', { name: '予定を追加' })
+    expect(within(form).getByRole('textbox', { name: /日付/ })).toHaveValue('2099/10/19')
   })
 
   it('loads a single day in the day view', async () => {

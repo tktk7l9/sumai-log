@@ -1,7 +1,13 @@
 import { createServerFn } from '@tanstack/react-start'
 
 import { getDb } from '../db/client'
-import { readBuildPlan, setVendorResearch, vendorExists, writeBuildPlan } from './repository'
+import {
+  readBuildPlan,
+  saveOrConflict,
+  setVendorResearch,
+  vendorExists,
+  writeBuildPlan,
+} from './repository'
 import { buildPlanInput, saveVendorResearchInput, vendorResearchInput } from './research.schema'
 
 // Schemas come from research.schema.ts (the reason for the split is there).
@@ -14,8 +20,10 @@ export const saveVendorResearch = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const db = getDb()
     if (!(await vendorExists(db, data.id))) throw new Response('Not Found', { status: 404 })
-    await setVendorResearch(db, data.id, data.research)
-    return { ok: true as const }
+    return saveOrConflict(async () => {
+      await setVendorResearch(db, data.id, data.research, data.expectedUpdatedAt)
+      return data.id
+    })
   })
 
 export const getBuildPlan = createServerFn().handler(async () => ({

@@ -63,6 +63,11 @@ export function canonicalYouTubeUrl(id: string): string {
   return `https://www.youtube.com/watch?v=${id}`
 }
 
-export function youtubeThumbnailUrl(id: string): string {
-  return `https://i.ytimg.com/vi/${id}/hqdefault.jpg`
+/**
+ * 'large' is hqdefault (480x360, 4:3 with black bars above and below a 16:9 video), for a
+ * picture shown wide. 'small' is mqdefault (320x180, 16:9, about half the bytes), for the
+ * pictures of list cards (128x72 and smaller on a phone). Both exist for every video
+ */
+export function youtubeThumbnailUrl(id: string, size: 'large' | 'small' = 'large'): string {
+  return `https://i.ytimg.com/vi/${id}/${size === 'small' ? 'mqdefault' : 'hqdefault'}.jpg`
 }

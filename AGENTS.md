@@ -20,7 +20,14 @@ A record app for a housing search, used only by one married couple. **The reposi
    authentication.
 3. **Do not add a path that can bypass authentication.** The decision is centralised in
    `src/lib/access.ts` and applied to every request by the global middleware in `src/start.ts`.
-   Fail closed.
+   Fail closed. The same middleware rejects, before authentication, a mutation whose Origin
+   is not this app and a read that another site makes as a subresource or in a frame
+   (`isTrustedMutation` / `isSameSiteRead` in `src/lib/csrf.ts`, from `Origin` and the Fetch
+   Metadata headers `Sec-Fetch-Site` / `-Mode` / `-Dest`): this app itself, the user (address
+   bar, bookmark, home screen icon) and a top-level navigation (a link in a mail, the return
+   from the Access login) are answered; `same-site` counts as another site, because every
+   Worker of the account shares the workers.dev registrable domain; a request without the
+   headers passes on to authentication.
    Exception: static assets (client bundle, favicon, manifest, robots.txt) are served by the
    Workers Assets layer and do not go through `src/start.ts`. They are behind Cloudflare Access,
    but they do not pass the app-side allowlist. Photo upload (`POST /api/photos`) and delivery
@@ -53,6 +60,27 @@ A record app for a housing search, used only by one married couple. **The reposi
   the same names, and the public import path does not change)
 - The R2 cleanup when a photo upload fails midway is `cleanupFailedUpload` in
   `src/server/storage.ts`
+- What reaches the browser is kept small on purpose (`src/lib/clientBundle.test.ts`,
+  `src/lib/assetHeaders.test.ts`). `validateSearch` and `loader` of a route are not code-split:
+  whatever they import lands in the entry chunk of every page. So: the enum arrays, label maps
+  and their types live in `src/db/enums.ts` (no drizzle import; add a new one there), and code
+  that reaches the browser (routes, components, lib, `*.schema.ts`, the top level of server
+  function modules) imports them from `db/enums`, `db/schema` for types only; the glossary
+  terms (`src/content/glossary.ts`, 160 KB) may be imported as a value only by the files on
+  the allowlist of that test — the categories are in `src/content/glossaryCategories.ts`, the
+  term page's loader uses a dynamic import, and the home roadmap gets the names of its related
+  terms from `getRoadmap` (`relatedTerms`). `public/_headers` has exactly one rule,
+  `/assets/*` → `Cache-Control: public, max-age=31536000, immutable` (the file names are
+  content-hashed; rules for the same path are comma-joined, so do not add more, and security
+  headers stay in the Worker). `youtubeThumbnailUrl(id, 'small')` is the 320×180 picture for
+  list cards
+- D1 refuses a statement with more than 100 bound parameters: look up or insert many rows in
+  chunks (`LOOKUP_CHUNK` in `channelVideosFetcher.ts`, 30 rows per INSERT in `replaceTags`),
+  and put writes that belong together into one `db.batch` (atomic, one round trip): the
+  channel refresh writes each channel in batches of 50 and only the rows that changed;
+  `deleteVendorCascade` first returns the vendor's imported mails to `unassigned`;
+  `importMailAsNews` inserts the news row and updates the mail in one batch, reading the new
+  id with a subselect
 - Dates are TEXT in ISO-8601, amounts are integers in yen, areas are decimals, ids are text
   (`crypto.randomUUID()`)
 - Mobile first. Bottom tabs + FAB + full-screen Drawer. Desktop uses a left navigation. The
@@ -120,6 +148,30 @@ A record app for a housing search, used only by one married couple. **The reposi
   `WHERE updated_at = ?` matches 0 rows (it does not overwrite). The save button is wrapped in
   `.form-actions` (fixed to the bottom edge of the Drawer). Fields that confirm with Enter look at
   `e.nativeEvent.isComposing` and do not act on the conversion commit of Japanese input
+- More on input (the audit of 2026-11-12, each pinned by a UI test):
+  - The research memo is under the stale check too: `saveVendorResearch` takes the vendor's
+    `updatedAt` as `expectedUpdatedAt`, and the stamp is in its draft key. Deleting the memo is
+    not checked. The four free-text fields of a visit hold 4,000 characters (`VISIT_TEXT_MAX`
+    in `src/server/visits.schema.ts`), the textareas carry `maxLength`, and a refusal names
+    the field (`extractFormError`)
+  - The to-do and event forms keep the `updatedAt` their save is based on themselves and move
+    it to the reloaded row only after the conflict notice (a reload behind an open form must
+    not move it, or the save would overwrite the other person without the notice). The row is
+    looked up in loader data by id on every render, so saving again after the notice goes
+    through and the draft is still there
+  - A search box bound to `?q=` remembers the last value it sent and realigns only when `q`
+    changed from elsewhere (works, records, glossary): the answer to an earlier search used to
+    delete what was typed meanwhile
+  - Text-entry components default to `size: 'md'` (16px) in `src/theme.ts`; under 16px iOS
+    zooms the page on focus and stays zoomed. `src/theme.test.ts` reads the imports of `src/`
+    and fails on a text-entry component without that default
+  - Search params of a route always fall back with `.catch` (a hand-edited or old URL opens
+    the page, not the error screen); an id in the URL is checked by `UUID_SHAPE`, not
+    `.uuid()` (ids from the seed import are not RFC v4)
+  - The calendar's loader depends on the visible range and `plan` only; the selected day,
+    month and view are read from the current location, so a tap on a day does not reload.
+    Today in the month grid is the server's `todayKey` marked with `aria-current="date"` and
+    painted in styles.css (`highlightToday` follows the renderer's clock, UTC on the Worker)
 - The aggregation for the analysis of records (`/analysis`) is `src/lib/analysis.ts` (pure
   functions). `src/server/analysis.ts` reads from D1 and finishes the aggregation, and returns
   only the result to the screen. Nothing is sent to an external API (LLM etc.) (the owner's
@@ -159,6 +211,21 @@ A record app for a housing search, used only by one married couple. **The reposi
   requirement like "3m when longer than 20m" (do not confuse it with the Tokyo Metropolitan
   Building Safety Ordinance (東京都安全条例)). The actual dimensions of the land and the
   neighbouring lots (name, position, height) are run by the owner with SQL in `seed.local/out/`.
+  「残りの土地」 (the remaining land) is judged per connected piece (`remainingPieces`): land
+  behind the plot is linked to the road by the wider single gap beside the plot (the passage
+  is one of those gaps; left and right are never summed), and under 2m is NG. A front road
+  under 4m is treated as an Article 42-2 road: the retreat strip `(4 − width) / 2 ×` the
+  frontage is excluded from the site area of the coverage and floor-area ratios, the cap uses
+  a deemed width of 4m, and a check names the setback (a one-sided retreat is not modelled).
+  A wall exactly on the fire-spread line is inside it (3m / 5m 以下). `normalizePlan` is
+  idempotent and returns the keys in the order of the type; positions are fitted with
+  `fitPosition` (never rounded across the end of their range: a plot pushed to the back keeps
+  the exact position, so no 1–5cm sliver "remains" behind it), and two plans are compared with
+  `samePlan`. Saving is under the stale check like the forms: the loader returns the setting
+  row's `updated_at`, `saveSitePlan` takes `{ plan, expectedUpdatedAt }` and answers
+  `{ conflict: true }`; the page keeps the user's changes and offers the other person's plan.
+  That `updated_at` is always written by D1's `datetime('now')` (the page compares the stamps
+  as strings), also in SQL the owner runs.
   The sunlight calculation (`src/lib/sun.ts`) uses true solar time (真太陽時) and does not include
   the equation of time (均時差), the longitude or atmospheric refraction (大気差).
   The 3D view is `src/lib/site3d.ts` (the content of the scene, pure functions) and
@@ -168,11 +235,19 @@ A record app for a housing search, used only by one married couple. **The reposi
 - Visual tokens are centralised in `src/theme.ts` (Mantine theme and colour scheme) and
   `src/styles.css` (the `--sumai-*` CSS variables). Contrast must satisfy 4.5:1 for body text and
   3:1 for UI parts (borders etc.)
-- Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (extraction of `<item>`
-  of RSS 2.0), `htmlList.ts` (extraction of a `<li>` news list: the date from the text, or
-  from the link when the text shows none — `index_20261114.php`, `20261212/`, `/2026/11/14/`;
-  comments and scripts are not read; one candidate per link), `eventDate.ts` (extraction of
-  the event date from the title/summary), `text.ts` (tag removal and length limit), and in
+- Vendor news fetching (`src/lib/news/`) is pure functions only: `rss.ts` (the items of RSS
+  2.0, RSS 1.0 with `<dc:date>` and Atom `<entry>`; the written date is checked against the
+  calendar, not against the UTC month of the instant), `htmlList.ts` (extraction of a `<li>`
+  news list: the date from the text, or from the link when the text shows none —
+  `index_20261114.php`, `20261212/`, `/2026/11/14/`; comments and scripts are not read; one
+  candidate per link; a date in the text that runs on as a list or a range is the event's and
+  stays in the title), `eventDate.ts` (extraction of the event date from the title/summary,
+  after NFKC: a `D日` after `M月D日` is a day of that month only when a list / range mark joins
+  it or it is later in the month, near, in the same sentence and no counter surrounds it —
+  `1日3組限定`, `3日間`, `3日前までに` are counts; slash dates read a weekday note between the
+  day and the mark, `11/14(土)・15(日)`; the work per match is bounded, so a long mail body is
+  linear), `text.ts` (tag removal and length limit; `truncate` does not cut inside a number,
+  because half a date is another date), and in
   addition `url.ts` (decides whether a URL may be fetched. https only; rejects user info and
   non-default ports; rejects local/internal hosts and literal IPs. `fetch` of Workers has no
   route to private networks in the first place, so this is one layer of defence in depth) and
@@ -192,7 +267,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   most 100 candidates per fetch go on to D1, the newest by date (`newestCandidates` in
   `src/lib/news/limit.ts`), so one oversized list cannot fill the daily Cron. Each
   vendor is made independent with try/catch, and the failure of 1 vendor (expected errors as well
-  as unexpected exceptions) does not stop the fetch for other vendors. Recording the fetch result
+  as unexpected exceptions) does not stop the fetch for other vendors. A 200 whose body gave
+  no item at all is recorded as a failure too (`NOTHING_READ_ERROR`): a rebuilt site otherwise
+  goes to 0 items while the settings page keeps showing a successful fetch. Recording the fetch result
   (`markNewsFetched` in `src/server/repository/news.ts`) updates only
   `vendors.news_fetched_at`/`news_fetch_error` on both success and failure, and **does not move
   `vendors.updated_at`** (moving it would make the vendor surface in the 「最近の更新」 (Recent
@@ -206,7 +283,9 @@ A record app for a housing search, used only by one married couple. **The reposi
   (`render error path=… route=… …`), a server function that threw by the function middleware
   in `src/start.ts` (`server function error fn=…`), and anything else by the request
   middleware. A Response, `notFound()` and `redirect()` are answers, not failures, and are not
-  logged. Never log request data
+  logged. Never log request data: Drizzle's error for a failed statement carries every bound
+  value in its message (`Failed query: … params: …`, repeated at the top of the stack), so
+  `describeError` cuts the values and logs the reason from `cause` (D1's own message) instead
 - A deploy renames the chunks under /assets/; a page left open gets 404 for the old names and
   Vite raises `vite:preloadError`. `AppLayout` reloads once per minute on that event
   (`src/lib/staleChunk.ts`) instead of showing the error screen

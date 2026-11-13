@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { MapPinOff } from 'lucide-react'
 
 import { EmptyState } from '../EmptyState'
-import { PLACE_KIND_LABEL } from '../../db/schema'
+import { PLACE_KIND_LABEL } from '../../db/enums'
 import type { PlaceWithLinks } from '../../server/repository'
 
 /**

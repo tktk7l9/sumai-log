@@ -9,7 +9,6 @@ import {
   type NewInboundMail,
 } from '../../db/schema'
 import { inboundToNews } from '../../lib/mail/toNews'
-import { insertNewsIfNew } from './news'
 
 export type NewInbound = Omit<NewInboundMail, 'id' | 'createdAt' | 'updatedAt'>
 
@@ -88,6 +87,14 @@ export async function reviveRejectedInboundMail(
  * touched (calling twice is harmless). A rejected row (anyone can send one, and it has no
  * body) or a system row (the Gmail confirmation, whose body is the code) never becomes vendor
  * news, whatever id the caller passes: newsId is null (security audit 2026-11-10).
+ *
+ * The news row and the mail's new state are written in one db.batch (D1 has no other
+ * transaction): either both or neither. The two tables reference each other, and a batch
+ * cannot carry a value read in between, so the UPDATE looks the news row up by
+ * (vendor_id, url) inside the same batch: that is the row just inserted, or the one the vendor
+ * already had for this mail when the INSERT did nothing. In this order each statement
+ * satisfies its foreign key at once (the news row points at the mail that exists, then the
+ * mail at the news row that now exists).
  */
 export async function importMailAsNews(
   db: Db,
@@ -109,18 +116,23 @@ export async function importMailAsNews(
     vendorId,
     receivedOn,
   )
-  await insertNewsIfNew(db, [{ ...draft, mailId }])
-  const [news] = await db
-    .select({ id: vendorNews.id })
-    .from(vendorNews)
-    .where(and(eq(vendorNews.vendorId, vendorId), eq(vendorNews.url, draft.url)))
-    .limit(1)
-  const newsId = news?.id ?? null
-  await db
-    .update(inboundMails)
-    .set({ status: 'imported', vendorId, newsId, updatedAt: new Date().toISOString() })
-    .where(eq(inboundMails.id, mailId))
-  return { newsId }
+  const [, updated] = await db.batch([
+    db
+      .insert(vendorNews)
+      .values({ ...draft, id: crypto.randomUUID(), mailId })
+      .onConflictDoNothing({ target: [vendorNews.vendorId, vendorNews.url] }),
+    db
+      .update(inboundMails)
+      .set({
+        status: 'imported',
+        vendorId,
+        newsId: sql`(SELECT ${vendorNews.id} FROM ${vendorNews} WHERE ${vendorNews.vendorId} = ${vendorId} AND ${vendorNews.url} = ${draft.url})`,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(inboundMails.id, mailId))
+      .returning({ newsId: inboundMails.newsId }),
+  ])
+  return { newsId: updated[0]?.newsId ?? null }
 }
 
 /** How much of a newsletter body the receive log shows (the full text stays behind getInboundMailBody) */

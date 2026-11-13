@@ -27,6 +27,14 @@
  *   - Floor area ratio: when the width of the front road is less than 12m, the smaller of
  *     width x 0.4 (residential zones) and the designated floor area ratio (指定容積率)
  *     (article 52 paragraph 2 of the Act)
+ *   - Front road narrower than 4m: taken as a road under article 42 paragraph 2 of the Act
+ *     (whether it is one is confirmed at the counter; otherwise it is not a road at all).
+ *     The line 2m from the road center line is deemed the road boundary, the strip between
+ *     it and the present boundary is not counted in the site area (article 2 paragraph 1
+ *     item 1 of the Enforcement Order) and nothing may be built on it (article 44), and the
+ *     road counts as 4m wide for the floor area ratio. When the far side of the road is a
+ *     cliff, a river or a railway the line is 4m from that side instead (not modelled; the
+ *     check says so)
  *   - Quasi-fire-prevention district (準防火地域): within 3m of the adjacent land boundary
  *     line and within 3m of the road center line (1st floor) is the part at risk of fire
  *     spread (延焼のおそれのある部分) (article 2 item 6 of the Act). Openings in exterior
@@ -195,6 +203,34 @@ export const DEFAULT_SITE_PLAN: SitePlan = {
   neighbors: [],
 }
 
+/**
+ * Rebuilds a plan with its keys in the order of the type (and without keys it does not
+ * have). The page compares plans by their JSON, and a plan reaches it over three paths that
+ * each kept their own order (the validator's schema order from a save, the "defaults for
+ * later items first" order from a read, the order of the page's own state): the same values
+ * read as 「未保存の変更」 (unsaved changes) right after every save
+ */
+function inKeyOrder(plan: SitePlan): SitePlan {
+  const keys = Object.keys(DEFAULT_SITE_PLAN) as (keyof SitePlan)[]
+  return {
+    ...(Object.fromEntries(keys.map((k) => [k, plan[k]])) as SitePlan),
+    neighbors: plan.neighbors.map(({ label, kind, x, y, width, depth, height }) => ({
+      label,
+      kind,
+      x,
+      y,
+      width,
+      depth,
+      height,
+    })),
+  }
+}
+
+/** Whether two plans hold the same values, whatever order their keys are in */
+export function samePlan(a: SitePlan, b: SitePlan): boolean {
+  return JSON.stringify(inKeyOrder(a)) === JSON.stringify(inKeyOrder(b))
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
@@ -282,9 +318,35 @@ function clamp(v: number, min: number, max: number): number {
   return Math.min(Math.max(v, min), Math.max(min, max))
 }
 
+/** Narrower than the 0.1 m that positions are rounded to: a rounding leftover, not land */
+const SLIVER = 0.05
+/** Differences smaller than this are floating-point noise, not a real over or under */
+const NOISE = 1e-9
+
+/**
+ * Fits a position into [min, max] and rounds it to 0.1 m without leaving the range: a
+ * position that rounding would put past an end, or within the rounding step of max, is that
+ * end itself, unrounded. Rounding the clamped rear position (29.339 -> 29.3) left 3.9 cm of
+ * "land behind the section", for which a passage was drawn and the section was narrowed on
+ * the next pass; rounding up put the section or the building 1-5 cm outside
+ */
+function fitPosition(v: number, min: number, max: number): number {
+  const hi = Math.max(min, max)
+  const c = clamp(v, min, hi)
+  if (c <= min) return min
+  const r = Math.max(Math.min(round1(c), hi), min)
+  return hi - r < SLIVER ? hi : r
+}
+
 /** Depth of the section (m). Target area / width. Does not exceed the depth of the land */
 export function sectionDepth(plan: SitePlan): number {
   return Math.min(tsuboToM2(plan.targetTsubo) / plan.sectionWidth, plan.landDepth)
+}
+
+/** Whether land remains behind the section. One rule for normalizePlan, the passage and the
+ * checks: a strip under the rounding step is not land that needs a way in */
+function hasLandBehind(plan: SitePlan): boolean {
+  return plan.landDepth - plan.sectionY - sectionDepth(plan) > SLIVER - NOISE
 }
 
 /** Area of the building footprint (building area, ㎡). Total floor area / number of floors
@@ -347,25 +409,25 @@ export function normalizePlan(plan: SitePlan): SitePlan {
     neighbors,
   }
   let sDepth = sectionDepth(next)
-  let sectionY = clamp(plan.sectionY, 0, landDepth - sDepth)
-  const leavesBack = landDepth - sectionY - sDepth > 0.01
-  const lane = plan.parkingAccess && accessWidth > 0 && leavesBack
+  // Whether land remains behind is decided on the position as it will be stored, so that a
+  // second pass over the result decides the same
+  next.sectionY = fitPosition(plan.sectionY, 0, landDepth - sDepth)
+  const lane = plan.parkingAccess && accessWidth > 0 && hasLandBehind(next)
   if (lane) {
     sectionWidth = clamp(sectionWidth, 1, landWidth - accessWidth)
     next.sectionWidth = sectionWidth
     sDepth = sectionDepth(next)
-    sectionY = clamp(sectionY, 0, landDepth - sDepth)
+    next.sectionY = fitPosition(next.sectionY, 0, landDepth - sDepth)
   }
   const minX = lane && plan.accessSide === 'left' ? accessWidth : 0
   const maxX = lane && plan.accessSide === 'right' ? landWidth - accessWidth : landWidth
-  next.sectionX = round1(clamp(plan.sectionX, minX, maxX - sectionWidth))
-  next.sectionY = round1(sectionY)
+  next.sectionX = fitPosition(plan.sectionX, minX, maxX - sectionWidth)
   next.flagWidth = clamp(plan.flagWidth, 0, sectionWidth)
   next.buildingWidth = clamp(plan.buildingWidth, 1, sectionWidth)
   const bDepth = buildingDepth(next)
-  next.buildingX = round1(clamp(plan.buildingX, 0, sectionWidth - next.buildingWidth))
-  next.buildingY = round1(clamp(plan.buildingY, 0, sDepth - bDepth))
-  return next
+  next.buildingX = fitPosition(plan.buildingX, 0, sectionWidth - next.buildingWidth)
+  next.buildingY = fitPosition(plan.buildingY, 0, sDepth - bDepth)
+  return inKeyOrder(next)
 }
 
 export type Rect = { x: number; y: number; width: number; depth: number }
@@ -390,10 +452,9 @@ export function flagRect(plan: SitePlan): Rect | null {
  */
 export function accessRect(plan: SitePlan): Rect | null {
   if (!plan.parkingAccess || plan.accessWidth <= 0) return null
-  const reach = plan.sectionY + sectionDepth(plan)
-  if (plan.landDepth - reach <= 0.01) return null
+  if (!hasLandBehind(plan)) return null
   const x = plan.accessSide === 'left' ? 0 : plan.landWidth - plan.accessWidth
-  return { x, y: 0, width: plan.accessWidth, depth: reach }
+  return { x, y: 0, width: plan.accessWidth, depth: plan.sectionY + sectionDepth(plan) }
 }
 
 /** Area per car used for the rough estimate of the number of parking spaces (㎡. A rough
@@ -418,6 +479,41 @@ export const MIN_FRONTAGE = 2
  * enter at the legal minimum (2m) */
 export const CAR_LANE_WIDTH = 3
 
+export type RemainingPiece = { where: 'rear' | 'left' | 'right' | 'front'; link: number }
+
+/**
+ * The pieces the remaining land falls into, each with the width (m) of its link to the road.
+ * Widths are never added up across pieces or gaps: a site has to touch the road over 2m in
+ * one place (article 43), so two 1.5m gaps are 1.5m.
+ *   - rear: the land behind the section. It reaches the road only through the gap on the
+ *     left or on the right of the section (the passage to the parking lot is one of them),
+ *     so its link is the wider of the two. Land beside or in front of the section on a side
+ *     with a gap belongs to this piece
+ *   - left / right: land that does not join the land behind (there is none, or that side has
+ *     no gap). It touches the road itself: beside a section at the road over the gap, in
+ *     front of a section set back over what is left on that side of the flag-lot access strip
+ *   - front: the same in front of a section set back without a strip (one piece)
+ */
+export function remainingPieces(plan: SitePlan): RemainingPiece[] {
+  const s = sectionRect(plan)
+  const flag = flagRect(plan)
+  const gapL = s.x
+  const gapR = plan.landWidth - s.x - s.width
+  const hasRear = hasLandBehind(plan)
+  const joinsRear = (gap: number) => hasRear && gap >= SLIVER
+  const pieces: RemainingPiece[] = []
+  if (hasRear) pieces.push({ where: 'rear', link: Math.max(gapL, gapR, 0) })
+  if (plan.sectionY > 0 && !flag) {
+    if (!joinsRear(gapL) && !joinsRear(gapR)) pieces.push({ where: 'front', link: plan.landWidth })
+    return pieces
+  }
+  const frontL = flag ? flag.x : gapL
+  const frontR = flag ? plan.landWidth - flag.x - flag.width : gapR
+  if (!joinsRear(gapL) && frontL >= SLIVER) pieces.push({ where: 'left', link: frontL })
+  if (!joinsRear(gapR) && frontR >= SLIVER) pieces.push({ where: 'right', link: frontR })
+  return pieces
+}
+
 /** Distance of the part at risk of fire spread (m, 1st floor). Measured from the adjacent
  * land boundary line and the road center line (article 2 item 6 of the Building Standards
  * Act) */
@@ -425,15 +521,29 @@ export const FIRE_SPREAD_DISTANCE = 3
 /** The same for the 2nd floor and above (m) */
 export const FIRE_SPREAD_DISTANCE_UPPER = 5
 
+/** Width (m) a road has under the Building Standards Act (article 42). A narrower road
+ * that is still a road (paragraph 2) is deemed to reach 2m to each side of its center line */
+export const MIN_ROAD_WIDTH = 4
+
+/**
+ * How far (m) the site boundary on the road retreats when the front road is narrower than
+ * 4m: to the line 2m from the road center line, (4 - width) / 2. 0 for 4m or more
+ */
+export function roadSetback(plan: SitePlan): number {
+  return Math.max(MIN_ROAD_WIDTH - plan.roadWidth, 0) / 2
+}
+
 /**
  * The upper limit of the floor area ratio due to the width of the front road (%). When the
  * width is less than 12m it is width x 0.4 (residential use districts), and the smaller of
  * it and the designated floor area ratio applies (article 52 paragraph 2 of the Building
- * Standards Act)
+ * Standards Act). A road under 4m counts as 4m (its deemed boundaries are 4m apart): the raw
+ * width would give a cap lower than the legal one
  */
 export function effectiveFloorAreaRatio(plan: SitePlan): number {
   if (plan.roadWidth >= 12) return plan.floorAreaRatio
-  return Math.min(plan.floorAreaRatio, Math.round(plan.roadWidth * 40))
+  const width = Math.max(plan.roadWidth, MIN_ROAD_WIDTH)
+  return Math.min(plan.floorAreaRatio, Math.round(width * 40))
 }
 
 /** Which compass direction the front, rear, left and right of the section each face
@@ -472,10 +582,12 @@ export function fireSafeRect(plan: SitePlan, distance: number = FIRE_SPREAD_DIST
 }
 
 /** Turns the parcel boundary input ("10.5, 20", "10.5、20" and so on) into a list of numbers.
- * Pieces that cannot be read are dropped */
+ * Full-width digits, points and commas (the Japanese input method left on) read like
+ * half-width ones (NFKC). Pieces that cannot be read are dropped */
 export function parseLotLines(text: string): number[] {
   return text
-    .split(/[,、，\s]+/)
+    .normalize('NFKC')
+    .split(/[,、\s]+/)
     .filter((t) => t !== '')
     .map(Number)
     .filter((v) => Number.isFinite(v))
@@ -539,10 +651,15 @@ export function shadingBoxes(plan: SitePlan): (Box & { label: string })[] {
     .map(({ label, x, y, width, depth, height }) => ({ label, x, y, width, depth, height }))
 }
 
-/** The time window (true solar time) and the step (hours) for looking at sunlight */
+/** The time window (true solar time) for looking at sunlight */
 export const SUN_START = 8
 export const SUN_END = 16
-const SUN_STEP = 1 / 6
+/**
+ * Steps per hour (10 minutes). Lit and blocked steps are counted as integers and turned into
+ * hours once at the end: adding 1/6 h twenty-four times gives 3.9999999999999982, which fell
+ * under the 4 h guide while the text said 「4時間」
+ */
+const SUN_STEPS_PER_HOUR = 6
 /** Rough window height (m, around the middle of a floor-to-ceiling sliding window) */
 const WINDOW_Z = 1
 
@@ -584,27 +701,31 @@ export function sunOnSouthWall(plan: SitePlan, season: Season = 'winter'): SunRe
     z: WINDOW_Z,
   }))
   const boxes = shadingBoxes(plan)
+  // Numbers of steps, per building that blocked and per sample point that was lit
   const blocked = new Map<string, number>()
-  const hours = samples.map(() => 0)
+  const lit = samples.map(() => 0)
   const decl = SEASON_DECLINATION[season]
-  for (let t = SUN_START + SUN_STEP / 2; t < SUN_END; t += SUN_STEP) {
+  const steps = (SUN_END - SUN_START) * SUN_STEPS_PER_HOUR
+  for (let step = 0; step < steps; step++) {
+    const t = SUN_START + (step + 0.5) / SUN_STEPS_PER_HOUR
     const { altitude, azimuth } = solarPosition(plan.latitude, decl, t)
     if (altitude <= 0) continue
     const sun = sunInLand(altitude, azimuth, rightAz, backAz)
     if (sun.x * wall.nx + sun.y * wall.ny <= 0) continue
     samples.forEach((p, i) => {
       const hit = boxes.find((box) => rayHitsBox(p, sun, box))
-      if (hit) blocked.set(hit.label, (blocked.get(hit.label) ?? 0) + SUN_STEP / samples.length)
-      else hours[i]! += SUN_STEP
+      if (hit) blocked.set(hit.label, (blocked.get(hit.label) ?? 0) + 1)
+      else lit[i]! += 1
     })
   }
+  const hours = lit.map((n) => n / SUN_STEPS_PER_HOUR)
   return {
     wall: sideDirections(plan.roadSide)[wall.side],
     hours,
-    average: hours.reduce((a, v) => a + v, 0) / hours.length,
+    average: lit.reduce((a, n) => a + n, 0) / SUN_STEPS_PER_HOUR / lit.length,
     min: Math.min(...hours),
     blockers: [...blocked]
-      .map(([label, h]) => ({ label, hours: h }))
+      .map(([label, n]) => ({ label, hours: n / SUN_STEPS_PER_HOUR / samples.length }))
       .sort((a, c) => c.hours - a.hours),
   }
 }
@@ -625,6 +746,10 @@ export type SiteEvaluation = {
   buildingArea: number
   coverageUsed: number
   floorAreaUsed: number
+  /** The part of siteArea between the present road boundary and the line 2m from the road
+   * center line (㎡). Left out of the area the two ratios are computed on. 0 for a road of
+   * 4m or more */
+  setbackArea: number
   southGap: number
   /** The upper limit of the floor area ratio with the width of the front road applied (%) */
   floorAreaLimit: number
@@ -640,6 +765,19 @@ function fmt(v: number, digits = 1): string {
   return v.toLocaleString('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 })
 }
 
+/**
+ * fmt for a value printed next to the limit it is judged against: adds decimals until the
+ * printed number is on the same side of the limit as the value (1.96 against 2 is "1.96",
+ * not "2"; 40.05% against 40% is not "40%（上限 40%）" beside an NG). A value on the limit,
+ * give or take floating-point noise, prints as the limit
+ */
+function fmtVs(v: number, limit: number): string {
+  const side = (x: number) => (Math.abs(x - limit) <= NOISE ? 0 : Math.sign(x - limit))
+  let digits = 1
+  while (digits < 9 && side(Number(v.toFixed(digits))) !== side(v)) digits++
+  return fmt(v, digits)
+}
+
 /** Computes the areas and ratios, and lists the points to check as ok / warn / ng */
 export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const section = sectionRect(plan)
@@ -650,8 +788,14 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   const landArea = plan.landWidth * plan.landDepth
   const remainingArea = landArea - siteArea
   const buildingArea = buildingFootprint(plan)
-  const coverageUsed = (buildingArea / siteArea) * 100
-  const floorAreaUsed = (tsuboToM2(plan.buildingTsubo) / siteArea) * 100
+  // Front road under 4m: the strip along the road is not site area for the two ratios. Our
+  // site touches the road over the section width, or over the flag-lot access strip only
+  const retreat = roadSetback(plan)
+  const frontage = flag ? flag.width : plan.sectionY <= 0 ? section.width : 0
+  const setbackArea = Math.min(retreat, flag ? flag.depth : section.depth) * frontage
+  const ratioArea = siteArea - setbackArea
+  const coverageUsed = (buildingArea / ratioArea) * 100
+  const floorAreaUsed = (tsuboToM2(plan.buildingTsubo) / ratioArea) * 100
   const gap = southGap(plan)
   const checks: SiteCheck[] = []
 
@@ -669,7 +813,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
           id: 'area',
           status: 'warn',
           label: '区画の面積',
-          detail: `土地の奥行が足りず ${fmt(m2ToTsubo(sectionArea))}坪しか取れない。区画の幅を広げる`,
+          detail: `土地の奥行が足りず ${fmtVs(m2ToTsubo(sectionArea), plan.targetTsubo)}坪しか取れない。区画の幅を広げる`,
         },
   )
 
@@ -687,11 +831,11 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
         id: 'road',
         status: plan.sectionWidth >= 2 ? 'ok' : 'ng',
         label: '接道',
-        detail: `道路に ${fmt(plan.sectionWidth)}m 接する（2m 以上が必要）`,
+        detail: `道路に ${fmtVs(plan.sectionWidth, MIN_FRONTAGE)}m 接する（2m 以上が必要）`,
       })
     }
   } else {
-    const base = `通路の長さ ${fmt(flag.depth)}m・幅 ${fmt(flag.width)}m。`
+    const base = `通路の長さ ${fmt(flag.depth)}m・幅 ${fmtVs(flag.width, MIN_FRONTAGE)}m。`
     checks.push(
       flag.width < MIN_FRONTAGE
         ? {
@@ -716,27 +860,67 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     )
   }
 
-  // 3. Whether the remaining land keeps touching the road (using the whole front leaves the
-  // rear land with no road frontage)
-  const usedFrontage = plan.sectionY <= 0 ? plan.sectionWidth : flag ? flag.width : 0
-  const remainingFrontage = plan.landWidth - usedFrontage
-  checks.push(
-    remainingArea <= 0.01
-      ? { id: 'remain', status: 'ok', label: '残りの土地', detail: '残りの土地はありません' }
-      : remainingFrontage >= 2
-        ? {
-            id: 'remain',
-            status: 'ok',
-            label: '残りの土地',
-            detail: `${fmt(m2ToTsubo(remainingArea))}坪。道路に ${fmt(remainingFrontage)}m 接したまま`,
-          }
-        : {
-            id: 'remain',
-            status: 'ng',
-            label: '残りの土地',
-            detail: `${fmt(m2ToTsubo(remainingArea))}坪が道路に接しなくなる（接する幅 ${fmt(Math.max(remainingFrontage, 0))}m）。区画の幅を間口より狭くする`,
-          },
-  )
+  // 2b. Front road narrower than 4m: the boundary retreats (article 42 paragraph 2)
+  if (retreat > 0) {
+    const inStrip = plan.sectionY <= 0 && plan.buildingY + NOISE < retreat
+    checks.push({
+      id: 'roadSetback',
+      status: inStrip ? 'ng' : 'warn',
+      label: '道路後退（セットバック）',
+      detail:
+        `前面道路の幅員 ${fmt(plan.roadWidth)}m は ${MIN_ROAD_WIDTH}m 未満。建築基準法 42 条 2 項の道路なら、道路の中心線から 2m の線まで敷地が ${fmt(retreat, 2)}m 下がる。` +
+        (setbackArea > 0
+          ? `その部分（道路沿い ${fmt(frontage)}m×${fmt(retreat, 2)}m＝${fmt(setbackArea)}㎡）は敷地面積に入らず、建物も塀も建てられない。建ぺい率・容積率は残りの ${fmt(ratioArea)}㎡ で計算している。`
+          : '') +
+        (inStrip ? 'いまの配置は建物が後退部分にかかっている。' : '') +
+        '向かいが川・がけ・線路のときは後退がこの倍になる。2 項道路かどうかと後退の線は市の窓口で確かめる',
+    })
+  }
+
+  // 3. Whether every piece of the remaining land keeps its own 2m link to the road (a section
+  // that takes the whole frontage, or leaves only narrow gaps beside it, cuts the rear off)
+  const pieces = remainingPieces(plan)
+  const short = pieces.filter((p) => p.link + NOISE < MIN_FRONTAGE)
+  if (pieces.length === 0) {
+    checks.push({
+      id: 'remain',
+      status: 'ok',
+      label: '残りの土地',
+      detail: '残りの土地はありません',
+    })
+  } else if (short.length > 0) {
+    const rearTsubo = fmt(m2ToTsubo(plan.landWidth * (plan.landDepth - section.y - section.depth)))
+    const need = `${MIN_FRONTAGE}m 以上`
+    checks.push({
+      id: 'remain',
+      status: 'ng',
+      label: '残りの土地',
+      detail: short
+        .map((p) =>
+          p.where !== 'rear'
+            ? `${p.where === 'left' ? '左' : '右'}側に残る土地は道路に ${fmtVs(p.link, MIN_FRONTAGE)}m しか接しない（${need}が必要）`
+            : p.link < SLIVER
+              ? `区画の奥の ${rearTsubo}坪が道路に接しなくなる。区画の幅を間口より狭くして、横に ${need}の通り道を残す`
+              : `区画の奥の ${rearTsubo}坪は、区画の横の幅 ${fmtVs(p.link, MIN_FRONTAGE)}m でしか道路につながらない（${need}が必要。左右の空きは足せない）`,
+        )
+        .join('。'),
+    })
+  } else {
+    const rear = pieces.find((p) => p.where === 'rear')
+    const others = pieces.filter((p) => p.where !== 'rear').map((p) => `${fmt(p.link)}m`)
+    checks.push({
+      id: 'remain',
+      status: 'ok',
+      label: '残りの土地',
+      detail: [
+        `${fmt(m2ToTsubo(remainingArea))}坪`,
+        ...(rear ? [`区画の奥の土地は、区画の横の幅 ${fmt(rear.link)}m で道路につながる`] : []),
+        ...(others.length > 0
+          ? [`${rear ? '手前の土地は' : ''}道路に ${others.join('・')} 接したまま`]
+          : []),
+      ].join('。'),
+    })
+  }
 
   // 3b. The passage to the remaining land (the parking lot)
   const access = accessRect(plan)
@@ -764,26 +948,29 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
   // 4. Building coverage ratio and floor area ratio
   checks.push({
     id: 'coverage',
-    status: coverageUsed <= plan.coverageRatio ? 'ok' : 'ng',
+    status: coverageUsed <= plan.coverageRatio + NOISE ? 'ok' : 'ng',
     label: '建ぺい率',
-    detail: `${fmt(coverageUsed)}%（上限 ${plan.coverageRatio}%）`,
+    detail: `${fmtVs(coverageUsed, plan.coverageRatio)}%（上限 ${plan.coverageRatio}%）`,
   })
   const floorAreaLimit = effectiveFloorAreaRatio(plan)
+  const floorAreaShown = fmtVs(floorAreaUsed, floorAreaLimit)
   checks.push({
     id: 'floorArea',
-    status: floorAreaUsed <= floorAreaLimit ? 'ok' : 'ng',
+    status: floorAreaUsed <= floorAreaLimit + NOISE ? 'ok' : 'ng',
     label: '容積率',
     detail:
       floorAreaLimit < plan.floorAreaRatio
-        ? `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%＝道路の幅員 ${fmt(plan.roadWidth)}m×0.4。指定は ${plan.floorAreaRatio}%）`
-        : `${fmt(floorAreaUsed)}%（上限 ${floorAreaLimit}%）`,
+        ? `${floorAreaShown}%（上限 ${floorAreaLimit}%＝道路の幅員${retreat > 0 ? `を ${MIN_ROAD_WIDTH}m とみなして` : ` ${fmt(plan.roadWidth)}m`}×0.4。指定は ${plan.floorAreaRatio}%）`
+        : `${floorAreaShown}%（上限 ${floorAreaLimit}%）`,
   })
 
   // 5. Exterior wall setback (the distance between the building and the section boundary)
   const bDepth = buildingDepth(plan)
+  // On a road under 4m the road side is measured from the retreated boundary
+  const frontRetreat = plan.sectionY <= 0 ? retreat : 0
   const minEdge = Math.min(
     plan.buildingX,
-    plan.buildingY,
+    plan.buildingY - frontRetreat,
     plan.sectionWidth - (plan.buildingX + plan.buildingWidth),
     section.depth - (plan.buildingY + bDepth),
   )
@@ -791,22 +978,26 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     id: 'setback',
     status: minEdge + 0.01 >= plan.setback ? 'ok' : 'warn',
     label: '境界からの離れ',
-    detail: `境界までの最小距離 ${fmt(minEdge)}m（目安 ${fmt(plan.setback)}m 以上）`,
+    detail: `境界までの最小距離 ${fmtVs(minEdge, plan.setback - 0.01)}m（目安 ${fmt(plan.setback)}m 以上${frontRetreat > 0 ? '。道路側は後退後の線から' : ''}）`,
   })
 
   // 5b. Quasi-fire-prevention district: exterior walls that fall in the part at risk of fire
   // spread
   if (plan.quasiFireZone) {
     const dir = sideDirections(plan.roadSide)
-    const sidesWithin = (distance: number) => {
-      const safe = fireSafeRect(plan, distance)
-      return [
-        plan.buildingY + 0.01 < safe.y ? dir.front : null,
-        plan.buildingY + bDepth > safe.y + safe.depth + 0.01 ? dir.back : null,
-        plan.buildingX + 0.01 < safe.x ? dir.left : null,
-        plan.buildingX + plan.buildingWidth > safe.x + safe.width + 0.01 ? dir.right : null,
-      ].filter((v): v is string => v !== null)
-    }
+    // Distance of each exterior wall from the line it is measured from (adjacent land
+    // boundary; on the road side the road center line). The part at risk is "within 3m / 5m"
+    // (以下), so a wall exactly on the line is inside it: dragging snaps to 0.5m, which makes
+    // exactly 3.0m the usual "just clear" position. A wall a rounding error short of the line
+    // also counts as inside
+    const walls = [
+      [dir.front, plan.buildingY + (plan.sectionY <= 0 ? plan.roadWidth / 2 : 0)],
+      [dir.back, section.depth - (plan.buildingY + bDepth)],
+      [dir.left, plan.buildingX],
+      [dir.right, plan.sectionWidth - (plan.buildingX + plan.buildingWidth)],
+    ] as const
+    const sidesWithin = (distance: number) =>
+      walls.filter(([, d]) => d <= distance + 1e-6).map(([side]) => side)
     const lower = sidesWithin(FIRE_SPREAD_DISTANCE)
     const upper = plan.floors >= 2 ? sidesWithin(FIRE_SPREAD_DISTANCE_UPPER) : []
     const parts = [
@@ -882,8 +1073,8 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     status: openSouth >= 4 ? 'ok' : 'warn',
     label: '南側の空き',
     detail: southIsRoad
-      ? `建物の南に ${fmt(gap)}m（区画内）＋道路 ${fmt(plan.roadWidth)}m＝${fmt(openSouth)}m。平屋は 4m 以上あると冬も日が入りやすい（道路の向こうの建物は別に確かめる）`
-      : `建物の南に ${fmt(gap)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
+      ? `建物の南に ${fmt(gap)}m（区画内）＋道路 ${fmt(plan.roadWidth)}m＝${fmtVs(openSouth, 4)}m。平屋は 4m 以上あると冬も日が入りやすい（道路の向こうの建物は別に確かめる）`
+      : `建物の南に ${fmtVs(gap, 4)}m（区画内）。平屋は 4m 以上あると冬も日が入りやすい`,
   })
 
   return {
@@ -895,6 +1086,7 @@ export function evaluateSite(plan: SitePlan): SiteEvaluation {
     buildingArea,
     coverageUsed,
     floorAreaUsed,
+    setbackArea,
     southGap: gap,
     floorAreaLimit,
     winterSun,

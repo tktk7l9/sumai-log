@@ -28,8 +28,15 @@ export async function ensureTags(db: Db, names: string[]): Promise<void> {
 }
 
 /**
+ * Rows per INSERT in replaceTags. A row binds 3 parameters (id, name, sortOrder) and D1 allows
+ * 100 per statement: with every row in one INSERT the tag editor could not save from the 34th
+ * tag on, while the form allows 100 (2026-11).
+ */
+const INSERT_CHUNK_SIZE = 30
+
+/**
  * Full replacement with order = array order. tags on the video side is a string array
- * and does not reference the tags table, so it is not affected. delete and insert are
+ * and does not reference the tags table, so it is not affected. delete and the inserts are
  * made 1 atomic unit with `db.batch`, so that a failure midway does not leave the state
  * where "only the delete-all took effect"
  */
@@ -39,12 +46,12 @@ export async function replaceTags(db: Db, names: string[]): Promise<void> {
     await db.delete(tags)
     return
   }
-  await db.batch([
-    db.delete(tags),
-    db
-      .insert(tags)
-      .values(unique.map((name, i) => ({ id: crypto.randomUUID(), name, sortOrder: i }))),
-  ])
+  const rows = unique.map((name, i) => ({ id: crypto.randomUUID(), name, sortOrder: i }))
+  const inserts = []
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
+    inserts.push(db.insert(tags).values(rows.slice(i, i + INSERT_CHUNK_SIZE)))
+  }
+  await db.batch([db.delete(tags), ...inserts])
 }
 
 /** Inserts the default tags (spec §3) only when there are 0 rows. Idempotent however often it is called */

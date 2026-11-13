@@ -43,6 +43,7 @@ function householdOf(work: WorkRow): string {
 export function WorkCard({
   work,
   showSpecs,
+  marking = false,
   onPlay,
   onToggleWatched,
   onEditVideo,
@@ -50,6 +51,8 @@ export function WorkCard({
   work: WorkRow
   /** true in the aligned view: the full Data block instead of the three headline numbers */
   showSpecs: boolean
+  /** The watched flag of this work is being written: its button shows busy and takes no tap */
+  marking?: boolean
   onPlay: () => void
   onToggleWatched: () => void
   onEditVideo: () => void
@@ -127,7 +130,7 @@ export function WorkCard({
                 : `動画を見る（${formatDuration(work.videoDurationSec)}）`}
             </Button>
           ) : null}
-          <Button size="sm" mih={44} variant="default" onClick={onToggleWatched}>
+          <Button size="sm" mih={44} variant="default" loading={marking} onClick={onToggleWatched}>
             {watched ? '視聴済みを取り消す' : '視聴済みにする'}
           </Button>
           {!work.youtubeVideoId ? (

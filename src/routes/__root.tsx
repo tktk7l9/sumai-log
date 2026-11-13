@@ -56,7 +56,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ja" {...mantineHtmlProps}>
       <head>
-        <ColorSchemeScript defaultColorScheme="auto" />
+        {/* The Worker stamps a nonce on this script (src/lib/scriptNonce.ts) and the browser
+            hides the attribute's value, so React finds `nonce=""` where it rendered none. That
+            one attribute is the only difference; without this, development logs a hydration
+            error on every page and a real mismatch is easy to miss */}
+        <ColorSchemeScript defaultColorScheme="auto" suppressHydrationWarning />
         {/* Zod without eval, set before any module script runs (src/lib/zodJitless.ts). It runs
             once while the page is parsed and removes itself, so hydration finds nothing here */}
         <ScriptOnce>{ZOD_JITLESS_SCRIPT}</ScriptOnce>

@@ -53,3 +53,13 @@ export const sitePlanInput = z.object({
     )
     .max(NEIGHBORS_MAX),
 })
+
+/**
+ * What a save sends: the plan, and the updated_at of the saved version the page loaded (null
+ * when nothing was saved yet). Required, so a page left open from before this guard cannot
+ * write without it
+ */
+export const sitePlanSaveInput = z.object({
+  plan: sitePlanInput,
+  expectedUpdatedAt: z.string().max(40).nullable(),
+})

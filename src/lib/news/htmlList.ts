@@ -24,30 +24,40 @@ import {
 
 const TITLE_MAX = 200
 
-// One of "YYYY年M月D日", "YYYY.MM.DD", "YYYY/M/D". The leftmost match is taken.
+// One of "YYYY年M月D日", "YYYY.MM.DD", "YYYY/M/D". The leftmost real one is taken.
 const DATE_PATTERN =
-  /(\d{4})年(\d{1,2})月(\d{1,2})日|(\d{4})\.(\d{1,2})\.(\d{1,2})|(\d{4})\/(\d{1,2})\/(\d{1,2})/
+  /(\d{4})年(\d{1,2})月(\d{1,2})日|(\d{4})\.(\d{1,2})\.(\d{1,2})|(\d{4})\/(\d{1,2})\/(\d{1,2})/g
 
 type DateMatch = { start: number; end: number; publishedOn: string }
 
-/** Finds the first date notation in text already passed through stripTags. null when absent. */
+/**
+ * Finds the first date notation that is a real calendar day in text already passed through
+ * stripTags (`2026/2/30` and `2026.13.45` are not dates). null when absent.
+ */
 function findDate(text: string): DateMatch | null {
-  const match = DATE_PATTERN.exec(text)
-  if (!match) return null
+  for (const match of text.matchAll(DATE_PATTERN)) {
+    const [year, month, day] = (
+      match[1] !== undefined
+        ? [match[1], match[2], match[3]]
+        : match[4] !== undefined
+          ? [match[4], match[5], match[6]]
+          : [match[7], match[8], match[9]]
+    ).map(Number)
+    if (!isRealDate({ year, month, day })) continue
 
-  const [year, month, day] =
-    match[1] !== undefined
-      ? [match[1], match[2], match[3]]
-      : match[4] !== undefined
-        ? [match[4], match[5], match[6]]
-        : [match[7], match[8], match[9]]
-
-  return {
-    start: match.index,
-    end: match.index + match[0].length,
-    publishedOn: `${year}-${pad(Number(month))}-${pad(Number(day))}`,
+    const start = match.index as number
+    return {
+      start,
+      end: start + match[0].length,
+      publishedOn: `${year}-${pad(month)}-${pad(day)}`,
+    }
   }
+  return null
 }
+
+// What follows a date that runs on as a list or a range: a weekday note, a mark, and another
+// day (`(土)・22日`, `〜12/20`, `-23(月)`). Not a time (`- 12:00`).
+const DATE_RUNS_ON = /^\s*(?:[(（][^)）\d]{1,6}[)）])?\s*[・、,〜~～\-–—]\s*\d{1,2}(?:日|\s*[(（/])/
 
 // A day in the path or query of a link: "YYYY-MM-DD", "/YYYY/M/D/" (blog permalinks) or
 // "YYYYMMDD" (`index_20261114.php`, `20261212/`), bounded by non-digits. Only a 20xx year and
@@ -97,7 +107,8 @@ function resolveHttpUrl(href: string, baseUrl: string): string | null {
  * For each `<li>` element, takes the first `<a href>` and the first date notation and makes a
  * candidate. A li with no href, or one that cannot resolve to http(s), is dropped. The date is
  * the first date notation of the text, and the title is the text passed through stripTags
- * with that notation removed (up to 200 chars); when the text has no date notation, the date
+ * with that notation removed (up to 200 chars; the notation stays when it runs on as a list
+ * or a range, which makes it the event's date); when the text has no date notation, the date
  * is the first real calendar day written in the link and the whole text is the title. A li
  * with neither is dropped. summary is always null (a list page has no excerpt of the body).
  * When one link appears in several li (a menu, a banner and the list), the candidate with the
@@ -123,7 +134,12 @@ export function parseHtmlList(html: string, baseUrl: string): NewsCandidate[] {
     let title: string
     if (date) {
       publishedOn = date.publishedOn
-      title = (stripped.slice(0, date.start) + stripped.slice(date.end)).replace(/\s+/g, ' ').trim()
+      // A date that runs on (`2026年11月21日(土)・22日(日) 完成見学会`) is when the event is
+      // held, not when the item was posted: taking it out left `(土)・22日(日) 完成見学会`
+      // and the event date was lost. It stays in the title, where extractEvent reads it
+      title = DATE_RUNS_ON.test(stripped.slice(date.end, date.end + 24))
+        ? stripped
+        : (stripped.slice(0, date.start) + stripped.slice(date.end)).replace(/\s+/g, ' ').trim()
     } else {
       const urlDate = findDateInUrl(url)
       if (!urlDate) continue
