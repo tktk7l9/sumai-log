@@ -10,6 +10,7 @@ import { HomeTodos } from '../components/home/HomeTodos'
 import { PendingVisits } from '../components/home/PendingVisits'
 import { RecentFeed } from '../components/home/RecentFeed'
 import { usePendingDeletes } from '../components/undoableDelete'
+import { QuickVideoAdd } from '../components/videos/QuickVideoAdd'
 import { dateKey } from '../lib/calendar'
 import { hidePendingOnHome } from '../lib/deferredDelete'
 import { listHomeEvents } from '../server/events'
@@ -82,6 +83,9 @@ function Home() {
       <VisuallyHidden>
         <Title order={1}>住まいログ</Title>
       </VisuallyHidden>
+      {/* What the app is opened for on most evenings: adding the video that was just watched.
+          One row, so the roadmap below stays on the first screen (SHIG 20, measured 2026-11-13) */}
+      <QuickVideoAdd />
       {/* Where the two of them are in building the house, above the events, so that the big
           picture comes before the dates (owner's request, 2026-10-11) */}
       <HomeRoadmap roadmap={roadmap} relatedTerms={roadmapTerms} />
