@@ -253,6 +253,9 @@ export const vendorNews = sqliteTable(
   },
   (t) => [
     index('vendor_news_vendor_published_idx').on(t.vendorId, t.publishedOn),
+    // The newest N of every vendor (home, /news): without it each open sorted the whole
+    // table to return 5 rows
+    index('vendor_news_published_idx').on(t.publishedOn, t.firstSeenAt),
     uniqueIndex('vendor_news_vendor_url_unique').on(t.vendorId, t.url),
   ],
 )
@@ -310,7 +313,13 @@ export const visits = sqliteTable(
     createdBy: createdBy(),
     ...timestamps,
   },
-  (t) => [index('visits_visited_idx').on(t.visitedOn), index('visits_event_idx').on(t.eventId)],
+  (t) => [
+    index('visits_visited_idx').on(t.visitedOn),
+    index('visits_event_idx').on(t.eventId),
+    // "Was this place visited": the places list asks it once per place, and without the
+    // index each asked by scanning every visit (places × visits rows read per open)
+    index('visits_place_idx').on(t.placeId),
+  ],
 )
 
 /** Photo. The R2 key is photos/{visitId}/{photoId}-display.jpg / -thumb.jpg */
@@ -330,7 +339,11 @@ export const photos = sqliteTable(
     createdBy: createdBy(),
     ...timestamps,
   },
-  (t) => [index('photos_visit_idx').on(t.visitId)],
+  (t) => [
+    index('photos_visit_idx').on(t.visitId),
+    // The newest photos of the home feed
+    index('photos_created_idx').on(t.createdAt),
+  ],
 )
 
 /** YouTube memo */

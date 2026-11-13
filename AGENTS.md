@@ -300,6 +300,15 @@ A record app for a housing search, used only by one married couple. **The reposi
   `/records?tab=videos&video=<youtube id>`, which opens the memo form filled in from the
   channel video (`getChannelVideoForMemo`, `memoDefaultsOf` in `src/lib/videoMemo.ts`) and
   goes back to the videos tab after saving
+- Rows read by D1 are pinned for the list queries that run on every open of a page
+  (`src/server/repository/rowsRead.worker-test.ts`, from D1's own `meta.rows_read` on tables of
+  a realistic size): the places list (`visits_place_idx` for its per-place visit count), the
+  newest news (`vendor_news_published_idx`), the newest photos of the feed
+  (`photos_created_idx`) and one channel of the videos tab (ordered by `sort_order` alone when
+  a channel is chosen, so `channel_videos_channel_idx` serves it). A new list query over a
+  table that grows belongs in that test: a scan per row of another table, or a sort of a
+  whole table for its newest few, costs nothing while the tables are small and was how the
+  read limit was hit on 2026-10-05
 - Newsletters are the `vendor_news` rows whose `url` starts with `mail:` (the mail import,
   spec `docs/superpowers/specs/2026-09-19-mail-import-design.md`). `handleInboundMail`
   rejects, before parsing, mail whose envelope recipient is not the secret
