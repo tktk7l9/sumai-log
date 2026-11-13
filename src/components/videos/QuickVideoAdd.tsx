@@ -16,11 +16,13 @@ const NO_LINK_COPIED =
 /**
  * The major task of the app in one press (SHIG 20): the link copied in YouTube becomes a video
  * memo with today as the day watched. Nothing is asked before saving; what happened is said
- * right under the button, with 「開く」 and 「取り消す」 (SHIG 57, 54, 59). It is not a notification:
- * those come up at the top of a phone screen, over this very button on the home page, and the
- * next video could not be added until they left. Until 2026-11-13 the same took the 記録 tab, the 動画
- * tab, the add button, a paste into the URL field and a scroll down to the save button, and 186
- * memos had been written that way with nothing but the link and the day.
+ * right under the button, with 「開く」 and 「取り消す」 (SHIG 57, 54, 59). It is not a
+ * notification: those come up at the top of a phone screen, over this very button on the home
+ * page, and the next video could not be added until they left.
+ *
+ * Until 2026-11-13 the same took the 記録 tab, the 動画 tab, the add button, a paste into the URL
+ * field and a scroll down to the save button, and 186 memos had been written that way with
+ * nothing but the link and the day.
  *
  * When the browser cannot hand over the clipboard (no permission, or no such API), a field to
  * paste into takes the button's place; pasting there saves at once too.
@@ -36,7 +38,8 @@ export function QuickVideoAdd() {
   const [linkError, setLinkError] = useState<string | null>(null)
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const fieldRef = useRef<HTMLInputElement>(null)
-  // A second press or paste while the first is on its way would write the memo twice
+  // One request at a time: a second press or paste while the first is on its way would write
+  // the memo twice, and a press while 「取り消す」 is on its way would race it
   const sending = useRef(false)
 
   useEffect(() => {
@@ -48,6 +51,8 @@ export function QuickVideoAdd() {
   }
 
   async function takeBack(saved: Extract<Outcome, { kind: 'saved' }>) {
+    if (sending.current) return
+    sending.current = true
     setBusy(true)
     try {
       await undo({ data: { id: saved.id, unmarkWatched: saved.markedWatched } })
@@ -57,6 +62,7 @@ export function QuickVideoAdd() {
       // The memo is still there: 「取り消す」 stays, to be pressed again
       setOutcome({ ...saved, problem: '取り消せませんでした' })
     } finally {
+      sending.current = false
       setBusy(false)
     }
   }
@@ -74,6 +80,7 @@ export function QuickVideoAdd() {
           message: '題名を取得できませんでした。題名を入れて保存してください',
           color: 'orange',
         })
+        setOutcome(null)
         void navigate({ to: '/records', search: { tab: 'videos', video: result.videoId } })
         return true
       }
