@@ -315,6 +315,19 @@ A record app for a housing search, used only by one married couple. **The reposi
   calendar's information layer does not touch the flag
 - The videos tab of 「記録」 narrows the memos on the page by `?tag=`, `?vendor=` and `?q=`
   (`src/lib/videoFilter.ts`); an unknown tag or vendor counts as no filter
+- Adding a video memo is the major task (counted 2026-11-13: 186 memos, one on most evenings,
+  「学び」 filled in on none of them). 「コピーしたリンクから動画を追加」 (`QuickVideoAdd`,
+  at the top of the home page and of the videos tab of 「記録」) reads the clipboard on the
+  press, picks the YouTube link out of it (`findYouTubeUrl`) and saves in one request
+  (`addVideoFromLink` → `quickAddVideo` in `src/server/quickVideo.ts`): a memo that exists is
+  not written twice, an imported channel video gives title, channel and vendor without asking
+  YouTube, anything else goes through oEmbed, and a video whose title cannot be read opens the
+  form (`/records?tab=videos&video=<id>`) instead. The result is said under the button, not in
+  a notification: notifications sit at the top of a phone screen, over the button on the home
+  page. 「取り消す」 (`undoAddedVideo`) removes the memo and only the watched marks the add set
+  (`markedWatched`). Where the clipboard cannot be read (permission refused, the iOS 「ペースト」
+  bubble dismissed, no API) the button turns into a field that saves on paste. Do not move the
+  clipboard read behind an `await`: browsers allow it only inside the press itself
 - 「家づくりのロードマップ」 (House-building roadmap) at the top of the home page is
   `src/lib/roadmap.ts` (the 8 fixed stages, the setting `roadmap` = only the current stage
   id, and the SVG geometry of the road that winds in 2 rows) drawn by

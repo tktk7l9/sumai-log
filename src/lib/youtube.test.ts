@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { canonicalYouTubeUrl, isYouTubeHost, parseYouTubeId, youtubeThumbnailUrl } from './youtube'
+import {
+  canonicalYouTubeUrl,
+  findYouTubeUrl,
+  isYouTubeHost,
+  parseYouTubeId,
+  youtubeThumbnailUrl,
+} from './youtube'
 
 const ID = 'dQw4w9WgXcQ'
 
@@ -127,5 +133,41 @@ describe('isYouTubeHost', () => {
 
   it('returns false for anything else', () => {
     expect(isYouTubeHost('vimeo.com')).toBe(false)
+  })
+})
+
+describe('findYouTubeUrl', () => {
+  it('returns a copied share link as it is', () => {
+    expect(findYouTubeUrl(`https://youtu.be/${ID}?si=abcDEF123`)).toBe(
+      `https://youtu.be/${ID}?si=abcDEF123`,
+    )
+  })
+
+  it('picks the link out of a title and the text around it', () => {
+    expect(findYouTubeUrl(`平屋のルームツアー\nhttps://youtu.be/${ID}?si=abc を観た`)).toBe(
+      `https://youtu.be/${ID}?si=abc`,
+    )
+  })
+
+  it('stops at Japanese brackets and punctuation that follow the link', () => {
+    expect(findYouTubeUrl(`「https://www.youtube.com/watch?v=${ID}」、あとで観る`)).toBe(
+      `https://www.youtube.com/watch?v=${ID}`,
+    )
+  })
+
+  it('skips links to other sites and takes the first YouTube video', () => {
+    expect(
+      findYouTubeUrl(`https://example.com/a https://youtu.be/${ID} https://youtu.be/AAAAAAAAAAA`),
+    ).toBe(`https://youtu.be/${ID}`)
+  })
+
+  it('returns null when there is no YouTube video link', () => {
+    expect(findYouTubeUrl('')).toBeNull()
+    expect(findYouTubeUrl('買い物メモ 牛乳')).toBeNull()
+    expect(findYouTubeUrl('https://www.youtube.com/@channel')).toBeNull()
+  })
+
+  it('looks only at the beginning of a very long text', () => {
+    expect(findYouTubeUrl(`${'あ'.repeat(5000)} https://youtu.be/${ID}`)).toBeNull()
   })
 })

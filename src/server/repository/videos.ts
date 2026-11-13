@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from 'drizzle-orm'
 
 import type { Db } from '../../db/client'
 import { comments, vendors, videos, type NewVideo, type Video } from '../../db/schema'
-import { markRecordedVideoWatched } from './channelVideos'
+import { markRecordedVideoWatched, unmarkRecordedVideoWatched } from './channelVideos'
 import { assertUpdated } from './stale'
 
 type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'> & {
@@ -10,19 +10,29 @@ type VideoInput = Omit<NewVideo, 'id' | 'createdBy' | 'createdAt' | 'updatedAt'>
   expectedUpdatedAt?: string | null
 }
 
+type NewVideoValues = Omit<VideoInput, 'id' | 'expectedUpdatedAt'>
+
 /**
- * Creates when there is no id, updates when there is. The creator is recorded only on the first
- * save. A newly recorded video counts as watched on /works too (markRecordedVideoWatched); an
- * edit does not mark again, so a mark taken back on /works stays taken back
+ * A new memo. The creator is recorded here. A newly recorded video counts as watched on /works
+ * too (markRecordedVideoWatched); `markedWatched` says whether that changed anything
+ */
+export async function insertVideo(
+  db: Db,
+  values: NewVideoValues,
+  actorEmail: string,
+): Promise<{ id: string; markedWatched: boolean }> {
+  const id = crypto.randomUUID()
+  await db.insert(videos).values({ ...values, id, createdBy: actorEmail })
+  return { id, markedWatched: await markRecordedVideoWatched(db, values.videoId, actorEmail) }
+}
+
+/**
+ * Creates when there is no id, updates when there is. An edit does not mark the video as
+ * watched again, so a mark taken back on /works stays taken back
  */
 export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string): Promise<string> {
   const { id, expectedUpdatedAt, ...values } = input
-  if (!id) {
-    const newId = crypto.randomUUID()
-    await db.insert(videos).values({ ...values, id: newId, createdBy: actorEmail })
-    await markRecordedVideoWatched(db, values.videoId, actorEmail)
-    return newId
-  }
+  if (!id) return (await insertVideo(db, values, actorEmail)).id
   const rows = await db
     .update(videos)
     .set({ ...values, updatedAt: sql`(datetime('now'))` })
@@ -40,6 +50,35 @@ export async function upsertVideo(db: Db, input: VideoInput, actorEmail: string)
 export async function deleteVideoCascade(db: Db, id: string): Promise<void> {
   await db.delete(comments).where(and(eq(comments.targetType, 'video'), eq(comments.targetId, id)))
   await db.delete(videos).where(eq(videos.id, id))
+}
+
+/** The memo of a YouTube video, when one is written already (the oldest, if there are several) */
+export async function findVideoByVideoId(
+  db: Db,
+  videoId: string,
+): Promise<{ id: string; title: string } | null> {
+  const [row] = await db
+    .select({ id: videos.id, title: videos.title })
+    .from(videos)
+    .where(eq(videos.videoId, videoId))
+    .orderBy(videos.createdAt)
+    .limit(1)
+  return row ?? null
+}
+
+/**
+ * Takes a memo back right after it was added (「取り消す」): the memo, and the watched marks
+ * when the add was what set them. Nothing happens when the memo is gone already
+ */
+export async function removeAddedVideo(db: Db, id: string, unmarkWatched: boolean): Promise<void> {
+  const [row] = await db
+    .select({ videoId: videos.videoId })
+    .from(videos)
+    .where(eq(videos.id, id))
+    .limit(1)
+  if (!row) return
+  await deleteVideoCascade(db, id)
+  if (unmarkWatched) await unmarkRecordedVideoWatched(db, row.videoId)
 }
 
 /** List: newest watched date first (at the end if none) -> creation order, with the vendor name attached */

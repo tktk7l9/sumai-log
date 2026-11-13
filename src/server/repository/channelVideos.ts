@@ -272,24 +272,37 @@ export async function setChannelVideoWatched(
 /**
  * A video that was just written in the video records (動画の記録) has been watched: mark the
  * same channel video and the work with that tour video, unless they already are. Called by
- * upsertVideo; the import does the same for videos recorded before they were imported
+ * insertVideo; the import does the same for videos recorded before they were imported.
+ * Returns whether it marked anything, which is what the undo of a quick add takes back
  */
 export async function markRecordedVideoWatched(
   db: Db,
   videoId: string,
   actorEmail: string,
-): Promise<void> {
+): Promise<boolean> {
   const patch = {
     watchedAt: new Date().toISOString(),
     watchedBy: actorEmail,
     updatedAt: sql`(datetime('now'))`,
   }
-  await db
+  const markedVideos = await db
     .update(channelVideos)
     .set(patch)
     .where(and(eq(channelVideos.videoId, videoId), isNull(channelVideos.watchedAt)))
-  await db
+    .returning({ id: channelVideos.id })
+  const markedWorks = await db
     .update(works)
     .set(patch)
     .where(and(eq(works.youtubeVideoId, videoId), isNull(works.watchedAt)))
+    .returning({ id: works.id })
+  return markedVideos.length + markedWorks.length > 0
+}
+
+/** Takes back what markRecordedVideoWatched set (the undo of a quick add) */
+export async function unmarkRecordedVideoWatched(db: Db, videoId: string): Promise<void> {
+  const patch = { watchedAt: null, watchedBy: null, updatedAt: sql`(datetime('now'))` }
+  await db.batch([
+    db.update(channelVideos).set(patch).where(eq(channelVideos.videoId, videoId)),
+    db.update(works).set(patch).where(eq(works.youtubeVideoId, videoId)),
+  ])
 }

@@ -52,3 +52,21 @@ export const videoInput = z
     return { ...v, videoId, url: canonicalYouTubeUrl(videoId) }
   })
 export type VideoInput = z.input<typeof videoInput>
+
+/**
+ * Adding a video from a copied link in one step: the link and the day (the device's today, as
+ * the memo form does). Everything else is looked up on the server (src/server/quickVideo.ts)
+ */
+export const quickVideoInput = z
+  .object({ url: z.string().trim().max(500), watchedOn: dateField })
+  .transform((v, ctx) => {
+    const videoId = parseYouTubeId(v.url)
+    if (!videoId) {
+      ctx.addIssue({ code: 'custom', message: 'YouTube の URL を入れてください', path: ['url'] })
+      return z.NEVER
+    }
+    return { videoId, watchedOn: v.watchedOn }
+  })
+
+/** 「取り消す」 right after such an add: `unmarkWatched` is the `markedWatched` the add answered */
+export const quickVideoUndoInput = z.object({ id: idField, unmarkWatched: z.boolean() })

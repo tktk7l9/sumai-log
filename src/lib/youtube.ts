@@ -71,3 +71,20 @@ export function canonicalYouTubeUrl(id: string): string {
 export function youtubeThumbnailUrl(id: string, size: 'large' | 'small' = 'large'): string {
   return `https://i.ytimg.com/vi/${id}/${size === 'small' ? 'mqdefault' : 'hqdefault'}.jpg`
 }
+
+/** How much of a pasted text is searched for a link (a copied link sits at its start) */
+const PASTE_SCAN_MAX = 2000
+
+/** A link ends at whitespace, a quote, or the brackets and punctuation Japanese text puts after it */
+const LINK = /https?:\/\/[^\s<>"'「」『』（）()、。，]+/g
+
+/**
+ * The first YouTube video link in what was copied or pasted, or null. The YouTube app copies the
+ * bare link, but other apps copy the title with it, or a sentence around it (SHIG 50, 46).
+ */
+export function findYouTubeUrl(text: string): string | null {
+  for (const [link] of text.slice(0, PASTE_SCAN_MAX).matchAll(LINK)) {
+    if (parseYouTubeId(link)) return link
+  }
+  return null
+}

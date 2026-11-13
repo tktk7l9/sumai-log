@@ -11,6 +11,7 @@ import { Fab } from '../components/Fab'
 import { FormDrawer } from '../components/FormDrawer'
 import { usePendingDeletes } from '../components/undoableDelete'
 import { PageShell } from '../components/PageShell'
+import { QuickVideoAdd } from '../components/videos/QuickVideoAdd'
 import { VideoCard } from '../components/videos/VideoCard'
 import { VideoForm } from '../components/videos/VideoForm'
 import { VisitCard } from '../components/visits/VisitCard'
@@ -144,6 +145,11 @@ function Page() {
   const router = useRouter()
   const [opened, setOpened] = useState(fromEvent !== undefined)
   const [videoFormOpened, setVideoFormOpened] = useState(fromVideo !== undefined)
+  // `?video=` can also arrive while this page is open (the quick add hands over a video whose
+  // title it could not read): the form opens then too, not only on the first render
+  useEffect(() => {
+    if (fromVideo !== undefined) setVideoFormOpened(true)
+  }, [fromVideo])
   const fromEventRow = fromEvent
     ? (options.events.find((e) => e.id === fromEvent) ?? loadedFromEventRow)
     : undefined
@@ -199,11 +205,13 @@ function Page() {
             { value: 'videos', label: `動画 ${videos.length}` },
           ]}
         />
+        {/* The quick way first; the add button at the bottom right opens the full form */}
+        {tab === 'videos' ? <QuickVideoAdd /> : null}
         {tab === 'videos' ? (
           videos.length === 0 ? (
             <EmptyState
               title="観た動画のメモを残しましょう"
-              description="右下の追加から書けます。"
+              description="YouTube でリンクをコピーして、上のボタンを押すと保存できます。右下の追加からも書けます。"
             />
           ) : (
             <Stack gap="sm">

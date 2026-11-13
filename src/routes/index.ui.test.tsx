@@ -9,6 +9,7 @@ import { listVendorNews } from '../server/news'
 import { getRoadmap, saveRoadmap } from '../server/roadmap'
 import { getMembers } from '../server/settings'
 import { listHomeTodos } from '../server/todos'
+import { addVideoFromLink } from '../server/videos'
 import { MEMBERS, event, mockOf, news, stub } from '../../test/ui/fixtures'
 import { renderRoute } from '../../test/ui/render'
 
@@ -228,5 +229,27 @@ describe('home route', () => {
     expect(screen.queryByRole('link', { name: 'すべて見る' })).not.toBeInTheDocument()
     const newsSection = screen.getByRole('heading', { name: 'お知らせ' }).parentElement!
     expect(within(newsSection).getByText('お知らせはありません')).toBeInTheDocument()
+  })
+
+  it('adds the video whose link was copied with one press, at the top of the page', async () => {
+    stub(addVideoFromLink, {
+      status: 'saved',
+      id: '00000000-0000-4000-8000-000000000007',
+      title: '平屋のルームツアー',
+      markedWatched: false,
+    })
+    const { user } = await renderRoute('/')
+    const add = await screen.findByRole('button', { name: 'コピーしたリンクから動画を追加' })
+    // Above the roadmap: reachable without scrolling
+    const roadmap = screen.getByRole('heading', { name: '家づくりのロードマップ' })
+    expect(add.compareDocumentPosition(roadmap) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await navigator.clipboard.writeText('https://youtu.be/dQw4w9WgXcQ?si=abcDEF123')
+    const loads = mockOf(recentFeed).mock.calls.length
+
+    await user.click(add)
+
+    expect(await screen.findByText('保存しました：平屋のルームツアー')).toBeInTheDocument()
+    // 「最近の更新」 at the bottom of the page shows the new memo
+    expect(mockOf(recentFeed).mock.calls.length).toBeGreaterThan(loads)
   })
 })
